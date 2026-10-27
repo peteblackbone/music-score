@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>music-score — lead riff</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f4f3f1; margin: 0; padding: 32px; }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { color: #666; margin: 0 0 24px; font-size: 14px; }
+  #score { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 8px 4px; overflow-x: auto; }
+  .music-score text { user-select: none; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>lead-riff.js</h1>
+    <p class="sub">An original 11-measure lead-guitar line in A minor — header text, instrument names, measure numbers at system starts, chord symbols, triplets and a quintuplet, a grace-note hammer-on, hammer-ons and pull-offs, slides, "1/2" and "full" bends, and vibrato. See README.md.</p>
+    <div id="score"></div>
+  </div>
+
+  <script type="module">
+    import { MusicScoreRenderer } from './index.js';
+    import { leadRiff } from './examples/lead-riff.js';
+
+    const el = document.getElementById('score');
+    const renderer = new MusicScoreRenderer(el, leadRiff, { width: 860 });
+
+    function draw() { renderer.render(); }
+
+    if (document.fonts && document.fonts.ready) {
+      draw();
+      document.fonts.load('40px Bravura').then(draw).catch(draw);
+      document.fonts.ready.then(draw);
+    } else {
+      draw();
+    }
+  </script>
+</body>
+</html>

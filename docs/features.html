@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>music-score features</title>
+<style>
+  :root {
+    --bg: #f4f3f1;
+    --card: #ffffff;
+    --ink: #1d1d1f;
+    --muted: #62636a;
+    --line: #dddcd8;
+    --accent: #3b5bdb;
+    --code-bg: #f6f6f4;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--ink); margin: 0; line-height: 1.5; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 16px 64px; }
+  header h1 { font-size: 28px; margin: 0 0 6px; }
+  header p { color: var(--muted); margin: 0 0 4px; max-width: 70ch; }
+  nav { margin: 24px 0 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+  nav a { font-size: 13px; color: var(--accent); text-decoration: none; background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
+  nav a:hover { border-color: var(--accent); }
+  h2 { font-size: 20px; margin: 40px 0 6px; }
+  h2 + p { margin-top: 0; }
+  p, li { max-width: 75ch; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin: 16px 0; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+  .tile b { display: block; font-size: 14px; margin-bottom: 2px; }
+  .tile span { font-size: 13px; color: var(--muted); }
+  .demo { background: var(--card); border: 1px solid var(--line); border-radius: 8px; margin: 12px 0 4px; overflow: hidden; }
+  .demo .score { padding: 8px 4px; overflow-x: auto; min-height: 60px; }
+  .demo .score .music-score text { user-select: none; }
+  .demo .err { color: #b42318; font-size: 13px; padding: 8px 12px; }
+  details { border-top: 1px solid var(--line); background: var(--code-bg); }
+  summary { cursor: pointer; font-size: 13px; color: var(--muted); padding: 6px 12px; }
+  pre { margin: 0; padding: 8px 12px 12px; font-size: 12px; overflow-x: auto; }
+  code { font-family: ui-monospace, Consolas, monospace; }
+  p code, li code, td code { background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; font-size: 0.92em; }
+  ul.points { padding-left: 20px; margin: 8px 0; }
+  ul.points li { margin: 2px 0; }
+  table { border-collapse: collapse; font-size: 14px; margin: 8px 0; background: var(--card); }
+  th, td { border: 1px solid var(--line); padding: 4px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  .note { font-size: 13px; color: var(--muted); }
+  .file-warning { display: none; background: #fff4e5; border: 1px solid #f5c26b; border-radius: 8px; padding: 10px 14px; margin: 16px 0; font-size: 14px; }
+  footer { margin-top: 48px; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>music-score features</h1>
+  <p>A small vanilla JavaScript library that draws music notation and guitar tablature as SVG, from a plain JSON score, using the Bravura (SMuFL) music font. No build step, no dependencies.</p>
+  <p class="note">Every example on this page is rendered live by the library. Expand "Score JSON" under an example to see its input. Full field reference: <a href="../README.md">README.md</a>.</p>
+</header>
+
+<div class="file-warning" id="file-warning">
+  This page loads ES modules and a font file, so it must be served over http. From the project folder run
+  <code>python -m http.server 8765 --bind 127.0.0.1</code> and open
+  <code>http://127.0.0.1:8765/docs/features.html</code>.
+</div>
+
+<nav aria-label="Sections">
+  <a href="#overview">Overview</a>
+  <a href="#quick-start">Quick start</a>
+  <a href="#notation-tab">Notation + tab</a>
+  <a href="#systems">Multi-instrument systems</a>
+  <a href="#page">Page header</a>
+  <a href="#layout">Line breaks &amp; justification</a>
+  <a href="#barlines">Barlines &amp; repeats</a>
+  <a href="#navigation">Endings &amp; navigation</a>
+  <a href="#rhythm">Rhythm &amp; beaming</a>
+  <a href="#pitch">Pitch &amp; accidentals</a>
+  <a href="#curves">Ties &amp; slurs</a>
+  <a href="#marks">Marks</a>
+  <a href="#chord-diagrams">Chord diagrams</a>
+  <a href="#techniques">Guitar techniques</a>
+  <a href="#harmonics">Harmonics</a>
+  <a href="#directions">Picking &amp; directions</a>
+  <a href="#tab-rhythm">Rhythm on tab</a>
+  <a href="#theme">Theming</a>
+  <a href="#limits">Not included</a>
+</nav>
+
+<h2 id="overview">Overview</h2>
+<div class="grid">
+  <div class="tile"><b>JSON in, SVG out</b><span>Score → tracks → measures → beats → notes. Rendered into any container.</span></div>
+  <div class="tile"><b>Notation, tab or both</b><span>Per track. Tab pitch is worked out from string, fret and tuning.</span></div>
+  <div class="tile"><b>Real engraving layout</b><span>Justified systems, aligned beats across staves, content-aware spacing.</span></div>
+  <div class="tile"><b>Guitar conventions</b><span>8vb clefs, SMuFL TAB clef, hammer-ons, slides, bends, palm mute, harmonics, let ring, pick strokes, tapping, whammy dips.</span></div>
+  <div class="tile"><b>Rhythm on tab</b><span>Tab-only tracks show stems, beams, flags, dots, tuplets and rests on the TAB staff.</span></div>
+  <div class="tile"><b>Full notation basics</b><span>Keys, meters, tuplets, dots, ties, slurs, accidentals, chords.</span></div>
+  <div class="tile"><b>Marks</b><span>Articulations, fermatas, dynamics, chord symbols, vibrato, tremolo.</span></div>
+  <div class="tile"><b>Themeable</b><span>Colours, fonts and spacing; everything scales with one key.</span></div>
+  <div class="tile"><b>Accessible SVG</b><span><code>role="img"</code> with a <code>&lt;title&gt;</code> and <code>&lt;desc&gt;</code>.</span></div>
+  <div class="tile"><b>Zero dependencies</b><span>Plain ES modules; Bravura font shipped locally.</span></div>
+</div>
+
+<h2 id="quick-start">Quick start</h2>
+<pre style="background:var(--card);border:1px solid var(--line);border-radius:8px"><code>import { MusicScoreRenderer, defaultTheme } from './index.js';
+
+const renderer = new MusicScoreRenderer(document.getElementById('score'), score, { width: 860 });
+renderer.render();          // draws (and redraws) the whole SVG; returns the renderer
+renderer.setScore(other);   // swap the score, then call render() again</code></pre>
+
+<h2 id="notation-tab">Notation and tablature</h2>
+<p>A track can show a notation staff, a tab staff, or both. Notes given by <code>string</code> and <code>fret</code> get their pitch from the track's <code>tuning</code> and are written an octave above sounding pitch, as guitar music is, under an 8vb clef. Six- and four-string tabs use the SMuFL TAB clef. A tab-only track shows its rhythm below the tab staff (stems, beams, flags, dots, tuplets, with rests inside the staff); set <code>tabRhythm: false</code> to hide it, or <code>tabRhythm: true</code> to add it to a tab staff under notation.</p>
+<div class="demo" data-demo="notationTab" data-width="560"></div>
+
+<h2 id="systems">Multi-instrument systems</h2>
+<p>Tracks stack into systems. Beats that start at the same time line up on every staff. Staves are joined by a line; a notation + tab pair is bracketed when the system holds two or more instruments. The full <code>name</code> is drawn on the first system and the short <code>label</code> after that. Bass parts can use <code>writtenOctaveUp</code> to be written an octave above sounding pitch.</p>
+<div class="demo" data-demo="systems" data-width="680"></div>
+
+<h2 id="page">Page header</h2>
+<p><code>title</code> is centred, <code>composer</code> is right-aligned, <code>tuningLabel</code> sits at the left under the title, and <code>tempoText</code> sits above the first system at the time signature.</p>
+<div class="demo" data-demo="header" data-width="600"></div>
+
+<h2 id="layout">Line breaks and justification</h2>
+<ul class="points">
+  <li>Measures are spaced by duration and broken into systems to fit the width. Every system except a short last one is stretched to full width.</li>
+  <li>The time signature appears only at the start and where it changes; clef and key repeat on each system.</li>
+  <li>A key or time change at a line break gets a courtesy signature at the end of the previous system.</li>
+  <li>Measure numbers mark the start of systems 2 onward.</li>
+  <li>Vertical gaps follow the content, so tall passages get more room.</li>
+</ul>
+<div class="demo" data-demo="layout" data-width="620"></div>
+
+<h2 id="barlines">Barlines and repeats</h2>
+<p>Barline types: <code>single</code>, <code>double</code>, <code>final</code>, <code>repeatStart</code>, <code>repeatEnd</code>. Barlines are drawn per staff, so they never run through the gap between notation and tab. A barline just before a repeat start merges into the repeat sign, and an end repeat followed by a start repeat becomes one combined sign.</p>
+<div class="demo" data-demo="barlines"></div>
+
+<h2 id="navigation">Endings and navigation</h2>
+<p>Measure fields for volta brackets and navigation marks. They apply to the whole measure column, so you can set them on any track; on a conflict the lowest track wins. They are drawn above the top staff of each system and do not change the horizontal spacing.</p>
+<table>
+  <tr><th>Field</th><th>Drawn as</th></tr>
+  <tr><td><code>ending</code></td><td>Volta bracket labelled "1." or "1., 2.": <code>1</code>, <code>[1, 2]</code>, or <code>{ numbers, text, open }</code> (<code>text</code> replaces the label, <code>open</code> overrides the closing hook)</td></tr>
+  <tr><td><code>segno: true</code></td><td>Segno sign at the start of the measure</td></tr>
+  <tr><td><code>coda: true</code></td><td>Coda sign at the start of the measure</td></tr>
+  <tr><td><code>jump</code></td><td>Bold italic text ending at the closing barline: <code>D.C.</code>, <code>D.C. al Fine</code>, <code>D.C. al Coda</code>, <code>D.S.</code>, <code>D.S. al Fine</code>, <code>D.S. al Coda</code>, <code>To Coda</code> (with a small coda sign), <code>Fine</code>; other text is drawn as written</td></tr>
+</table>
+<ul class="points">
+  <li>Consecutive measures with the same ending share one bracket. A different ending, a measure without one, or a repeat start begins a new one.</li>
+  <li>A bracket gets a closing hook when its last measure ends with an end repeat; otherwise it stays open.</li>
+  <li>A bracket that crosses a line break continues on the next system without a number.</li>
+  <li>Brackets sit above chord symbols, chord diagrams and fermatas, and the signs and jump texts sit above the brackets. The tempo stays on top.</li>
+  <li>Nothing is played or unrolled: the marks are drawn as written.</li>
+</ul>
+<div class="demo" data-demo="navigation" data-width="620"></div>
+
+<h2 id="rhythm">Rhythm and beaming</h2>
+<p>Durations from whole to 64th, dots, rests and tuplets. Eighths and shorter beam within each beat; compound meters such as 6/8 and 12/8 beam by dotted beat. An empty measure draws a centred whole-measure rest.</p>
+<div class="demo" data-demo="rhythm"></div>
+
+<h2 id="pitch">Pitch, keys and accidentals</h2>
+<p>Key signatures from 7 flats to 7 sharps, changeable mid-score. Accidentals follow standard rules: they last to the end of the measure, a cancelling natural is added when needed, and stacked accidentals in chords are spread into columns. Notes a second apart in a chord sit on either side of the stem.</p>
+<div class="demo" data-demo="pitch"></div>
+
+<h2 id="curves">Ties and slurs</h2>
+<p>Ties connect notes of the same pitch (enharmonic spellings count), slurs span phrases. Both sit opposite the stems, and both are split into two arcs when they cross a line break.</p>
+<div class="demo" data-demo="curves" data-width="520"></div>
+
+<h2 id="marks">Articulations, fermatas, dynamics, chord symbols</h2>
+<p>Staccato, tenuto and accent go on the side opposite the stem and stack in a fixed order. Fermatas sit above everything on the beat. Chord symbols share one line above each system and dynamics one line below, both kept clear of the notes.</p>
+<div class="demo" data-demo="marks" data-width="640"></div>
+
+<h2 id="chord-diagrams">Chord diagrams</h2>
+<p>Fretboard boxes above the chord symbols, as in lead sheets and guitar books. List the shapes once in the score's <code>chordShapes</code>, keyed by chord name; every beat whose <code>chord</code> matches gets a diagram with the name centred above it.</p>
+<table>
+  <tr><th>Field</th><th>Meaning</th></tr>
+  <tr><td><code>frets</code></td><td>One entry per string, low to high like <code>tuning</code>: a fret from 0 to 24, or <code>'x'</code> / <code>null</code> for a muted string</td></tr>
+  <tr><td><code>fingers</code></td><td>Optional, low to high: 1 to 4 or <code>'T'</code>, drawn under the grid</td></tr>
+  <tr><td><code>barre</code></td><td>Optional <code>{ fret, from, to }</code>. Strings are numbered like notes (1 = highest); the default runs from the lowest string to string 1</td></tr>
+  <tr><td><code>baseFret</code></td><td>Optional first fret of the grid. By default the grid starts at the nut, or at the lowest fret with "5fr" beside it when a fret is above 4</td></tr>
+</table>
+<ul class="points">
+  <li>Tracks with TAB show diagrams by default. A notation-only lead sheet opts in with <code>showChordDiagrams: true</code>; <code>false</code> turns them off for a track.</li>
+  <li>A beat's <code>chordDiagram</code> replaces the dictionary shape for that beat, and <code>chordDiagram: false</code> keeps a plain chord symbol.</li>
+  <li>An invalid shape (wrong number of strings, a bad fret, more than 5 frets apart) falls back to the plain chord symbol.</li>
+  <li>The diagrams of a system's staff sit in one row above the music, and their names share one line with the plain chord symbols. Fermatas, endings, signs and the tempo sit above them.</li>
+  <li>On a tab-only track the diagrams go above the TAB, outside pick strokes, labels and bends. Diagrams take no horizontal space, so close chord changes can overlap.</li>
+</ul>
+<div class="demo" data-demo="chordDiagrams" data-width="680"></div>
+
+<h2 id="techniques">Guitar techniques</h2>
+<table>
+  <tr><th>Field</th><th>Drawn as</th></tr>
+  <tr><td><code>hammerPull</code></td><td>Slur with H or P to the next note on the string</td></tr>
+  <tr><td><code>slide</code></td><td>Diagonal stroke to the next note</td></tr>
+  <tr><td><code>bend</code></td><td>Arrow with amount (<code>1/2</code>, <code>full</code>, <code>1 1/2</code>…), optional release or hold</td></tr>
+  <tr><td><code>palmMute</code></td><td>"P.M." with a dashed line over consecutive beats</td></tr>
+  <tr><td><code>vibrato</code>, <code>tremolo</code></td><td>Wavy line; tremolo slashes</td></tr>
+  <tr><td><code>mute</code>, <code>ghost</code></td><td>x notehead / x on tab; parentheses</td></tr>
+  <tr><td><code>type: 'grace'</code></td><td>Small slashed note slurred to the next beat</td></tr>
+  <tr><td><code>harmonic</code>, <code>harmonicFret</code></td><td>Natural: diamond and <code>&lt;12&gt;</code> on tab. Artificial, tapped, pinch, semi: <code>A.H.</code>, <code>T.H.</code>, <code>P.H.</code>, <code>S.H.</code> label; <code>harmonicFret</code> gives the touched fret, e.g. <code>5(17)</code></td></tr>
+  <tr><td><code>letRing</code></td><td>Dashed "let ring" label over consecutive beats, like P.M.; a rest inside the run keeps it going</td></tr>
+  <tr><td><code>pickStroke</code></td><td><code>'down'</code> or <code>'up'</code>: ⊓ or ∨ above the beat</td></tr>
+  <tr><td><code>tap</code> (on a note)</td><td>"T" above the note on notation, or above the fret on TAB</td></tr>
+  <tr><td><code>whammy</code></td><td>Whammy-bar dip on TAB: a V with <code>-1/2</code> above it (<code>true</code> means <code>1/2</code>)</td></tr>
+  <tr><td><code>tabRhythm</code> (track)</td><td>Stems, beams, flags, dots, tuplets and rests under the TAB staff. On by default for tab-only tracks; <code>false</code> hides it, <code>true</code> adds it to a track that also shows notation. See <a href="#tab-rhythm">Rhythm on tab</a></td></tr>
+</table>
+<div class="demo" data-demo="techniques"></div>
+
+<h2 id="harmonics">Harmonics</h2>
+<p>Set <code>harmonic</code> on a note. Natural harmonics (<code>true</code> or <code>'natural'</code>) get a diamond notehead and a <code>&lt;12&gt;</code> fret on tab, with no label. Artificial, tapped, pinch and semi harmonics keep a normal notehead and get an <code>A.H.</code>, <code>T.H.</code>, <code>P.H.</code> or <code>S.H.</code> label above the tab. <code>harmonicFret</code> adds the touched fret, as in <code>5(17)</code>.</p>
+<ul class="points">
+  <li>Consecutive beats with the same label share one dashed line, as palm mute does. P.M. sits nearest the staff, and a harmonic label sits outside it.</li>
+  <li>Labels move clear of bends. A muted note is drawn as an x, with no harmonic.</li>
+  <li>Grace notes get a diamond or TAB text, but no harmonic label.</li>
+</ul>
+<div class="demo" data-demo="harmonics" data-width="680"></div>
+
+<h2 id="directions">Picking and playing directions</h2>
+<p>Beat fields for the marks players read: <code>letRing</code> for a let-ring run, <code>pickStroke</code> for down and up picks, <code>tap</code> on a note for tapping, and <code>whammy</code> for a whammy-bar dip. None of them change the rhythm or the note spacing.</p>
+<ul class="points">
+  <li>Consecutive <code>letRing</code> beats share one dashed "let ring" label, and an unmarked rest between them keeps the run going. The label sits outside any P.M. or harmonic label.</li>
+  <li>Pick strokes sit above the notation staff, one per beat, and beats in one beam group share a height. On a tab-only track they sit above the TAB.</li>
+  <li>A tapped note gets a "T" above its note or fret. A tapped harmonic shows only its <code>T.H.</code> label.</li>
+  <li>A whammy dip is drawn on the TAB staff only, as a V with its amount above it. <code>true</code> means <code>1/2</code>.</li>
+  <li>Rests and grace notes ignore pick strokes, taps and whammy dips.</li>
+</ul>
+<div class="demo" data-demo="directions" data-width="680"></div>
+
+<h2 id="tab-rhythm">Rhythm on tab</h2>
+<p>A tab-only track (<code>showStandardNotation: false</code>, <code>showTablature: true</code>) shows its rhythm under the TAB staff by default, as in tab books: stems, beams, flags, augmentation dots, tuplets and rests. Set <code>tabRhythm: false</code> to keep plain fret numbers. A track that also shows notation gets this only with <code>tabRhythm: true</code>.</p>
+<ul class="points">
+  <li>Stems hang below the strings, one per note or chord. Half notes get a short stem, and whole notes none.</li>
+  <li>Eighths and shorter beam as in notation. Unbeamed eighths to 64ths get smaller flags.</li>
+  <li>A tuplet shows its number under a single beam, or a bracket otherwise.</li>
+  <li>Rests sit inside the staff. An empty measure (<code>beats: []</code>) shows a whole-measure rest.</li>
+  <li>The band adds height below the TAB staff. Marks above the staff keep their place.</li>
+</ul>
+<div class="demo" data-demo="tabRhythm" data-width="680"></div>
+
+<h2 id="theme">Theming</h2>
+<p>Pass <code>options.theme</code> to override any key of <code>defaultTheme</code>: colours (<code>noteColor</code>, <code>staffLineColor</code>, <code>tabFretColor</code>, <code>background</code>), fonts, line widths and spacing. Spacing keys ending in <code>Sp</code> are in staff spaces, so <code>staffLineSpacing</code> scales the whole score. Rhythm on tab uses <code>tabStemGapSp</code>, <code>tabStemLengthSp</code>, <code>tabHalfStemLengthSp</code>, <code>tabFlagScale</code> and <code>tabFretColor</code>.</p>
+<div class="demo" data-demo="theme" data-width="640" data-theme='{"staffLineSpacing":13,"noteColor":"#1f3a8a","staffLineColor":"#64748b","tabFretColor":"#1f3a8a","background":"#fbfaf6"}'></div>
+
+<h2 id="limits">Not included</h2>
+<ul class="points">
+  <li>Playback, an editor, and import/export of other formats (design notes for these are in <a href="ARCHITECTURE.md">ARCHITECTURE.md</a>).</li>
+  <li>Multiple voices in one track, and different time signatures across tracks in the same measure.</li>
+  <li>Glyph and text widths are estimated, not measured from the font.</li>
+</ul>
+<p class="note">See "Known limitations" in the README for the full list.</p>
+
+<footer>
+  Bravura font © Steinberg Media Technologies, SIL Open Font License. Tests: <code>node tests/run.js</code>.
+</footer>
+</div>
+
+<script type="module">
+  import { MusicScoreRenderer } from '../index.js';
+
+  // Small helpers for writing compact demo scores.
+  const n = (duration, pitch, extra = {}) => ({ type: 'note', duration, notes: [{ pitch }], ...extra });
+  const chord = (duration, pitches, extra = {}) => ({ type: 'note', duration, notes: pitches.map(p => ({ pitch: p })), ...extra });
+  const t = (duration, string, fret, noteExtra = {}, beatExtra = {}) => ({ type: 'note', duration, notes: [{ string, fret, ...noteExtra }], ...beatExtra });
+  const r = (duration, extra = {}) => ({ type: 'rest', duration, ...extra });
+
+  const demos = {
+    notationTab: {
+      tracks: [{
+        showStandardNotation: true, showTablature: true,
+        measures: [
+          { beats: [t('quarter', 5, 3), t('8th', 4, 2), t('8th', 4, 4), t('quarter', 3, 2), t('quarter', 2, 3)] },
+          { beats: [{ type: 'note', duration: 'half', notes: [{ string: 4, fret: 2 }, { string: 3, fret: 2 }, { string: 2, fret: 3 }, { string: 1, fret: 2 }] }, t('8th', 1, 5), t('8th', 1, 3), t('quarter', 2, 5)] },
+        ],
+      }],
+    },
+
+    systems: {
+      keySignature: 2,
+      tracks: [
+        {
+          name: 'Guitar', label: 'Gtr.', showStandardNotation: true, showTablature: true,
+          measures: [
+            { beats: [t('8th', 4, 0), t('8th', 3, 2), t('8th', 2, 3), t('8th', 3, 2), t('quarter', 2, 3), t('quarter', 1, 2)] },
+            { beats: [t('16th', 2, 2), t('16th', 2, 3), t('16th', 2, 5), t('16th', 1, 2), t('quarter', 1, 5), t('half', 1, 2)] },
+            { beats: [t('quarter', 3, 2), t('quarter', 3, 4), t('half', 2, 3)] },
+          ],
+        },
+        {
+          name: 'Bass', label: 'Bs.', clef: 'bass', writtenOctaveUp: true,
+          measures: [
+            { beats: [n('half', 'D2'), n('half', 'A1')] },
+            { beats: [n('quarter', 'B1'), n('quarter', 'F#2'), n('half', 'B1')] },
+            { beats: [n('whole', 'G1')] },
+          ],
+        },
+      ],
+    },
+
+    header: {
+      title: 'Morning Study', composer: 'A. Composer', tuningLabel: 'Standard tuning', tempoText: '♩ = 96',
+      tracks: [{
+        measures: [
+          { beats: [n('quarter', 'C5'), n('quarter', 'E5'), n('quarter', 'G5'), n('quarter', 'E5')] },
+          { beats: [n('half', 'D5'), n('half', 'B4')] },
+          { beats: [n('whole', 'C5')] },
+        ],
+      }],
+    },
+
+    layout: {
+      tracks: [{
+        name: 'Melody',
+        measures: [
+          { beats: [n('quarter', 'G4'), n('quarter', 'A4'), n('quarter', 'B4'), n('quarter', 'C5')] },
+          { beats: [n('8th', 'D5'), n('8th', 'C5'), n('8th', 'B4'), n('8th', 'A4'), n('half', 'G4')] },
+          { beats: [n('quarter', 'E5'), n('quarter', 'D5'), n('half', 'C5')] },
+          { beats: [n('8th', 'B4'), n('8th', 'C5'), n('8th', 'D5'), n('8th', 'E5'), n('quarter', 'F#5'), n('quarter', 'D5')] },
+          { keySignature: -2, beats: [n('quarter', 'Bb4'), n('quarter', 'C5'), n('half', 'D5')] },
+          { timeSignature: { beats: 3, beatType: 4 }, beats: [n('quarter', 'Eb5'), n('quarter', 'D5'), n('quarter', 'C5')] },
+          { beats: [n('half', 'Bb4', { dots: 1 })] },
+        ],
+      }],
+    },
+
+    barlines: {
+      tracks: [{
+        measures: [
+          { barline: 'double', beats: [n('half', 'E4'), n('half', 'G4')] },
+          { barline: 'single', beats: [n('half', 'A4'), n('half', 'B4')] },
+          { barline: 'repeatStart', beats: [n('quarter', 'C5'), n('quarter', 'B4'), n('half', 'A4')] },
+          { barline: 'repeatEnd', beats: [n('whole', 'G4')] },
+          { barline: 'repeatStart', beats: [n('half', 'F4'), n('half', 'E4')] },
+          { barline: 'repeatEnd', beats: [n('whole', 'D4')] },
+          { beats: [n('whole', 'C4')] },
+        ],
+      }],
+    },
+
+    rhythm: {
+      tracks: [{
+        measures: [
+          { beats: [n('quarter', 'G4', { dots: 1 }), n('8th', 'A4'), n('16th', 'B4'), n('16th', 'C5'), n('16th', 'D5'), n('16th', 'E5'), r('quarter')] },
+          { beats: [n('8th', 'C5', { tuplet: 3 }), n('8th', 'D5', { tuplet: 3 }), n('8th', 'E5', { tuplet: 3 }), n('8th', 'F5'), r('8th'), n('half', 'G5')] },
+          { timeSignature: { beats: 6, beatType: 8 }, beats: [n('8th', 'E5'), n('8th', 'D5'), n('8th', 'C5'), n('8th', 'B4'), n('8th', 'A4'), n('8th', 'G4')] },
+          { beats: [n('quarter', 'A4', { dots: 1 }), r('quarter', { dots: 1 })] },
+          { beats: [] },
+        ],
+      }],
+    },
+
+    pitch: {
+      keySignature: 3,
+      tracks: [{
+        measures: [
+          { beats: [n('quarter', 'F#4'), n('quarter', 'F4'), n('quarter', 'F4'), n('quarter', 'F#4')] },
+          { beats: [chord('half', ['C#4', 'E4', 'G4', 'B4']), chord('half', ['D4', 'E4', 'G#4'])] },
+          { keySignature: -3, beats: [n('quarter', 'Eb5'), n('quarter', 'E5'), n('quarter', 'Ab4'), n('quarter', 'Bb4')] },
+          { beats: [chord('whole', ['G4', 'A4', 'C5', 'D5'])] },
+        ],
+      }],
+    },
+
+    curves: {
+      tracks: [{
+        measures: [
+          { beats: [n('half', 'E5'), { type: 'note', duration: 'half', notes: [{ pitch: 'G5', tieStart: true }] }] },
+          { beats: [{ type: 'note', duration: 'quarter', notes: [{ pitch: 'G5', tieEnd: true }] }, n('quarter', 'F5', { slurStart: true }), n('quarter', 'E5'), n('quarter', 'D5', { slurEnd: true })] },
+          { beats: [n('quarter', 'C4', { slurStart: true }), n('quarter', 'D4'), n('quarter', 'E4'), { type: 'note', duration: 'quarter', notes: [{ pitch: 'F4', tieStart: true }] }] },
+          { beats: [{ type: 'note', duration: 'half', notes: [{ pitch: 'F4', tieEnd: true }] }, n('quarter', 'E4'), n('quarter', 'C4', { slurEnd: true })] },
+        ],
+      }],
+    },
+
+    marks: {
+      tracks: [{
+        measures: [
+          { beats: [n('quarter', 'E4', { articulations: ['staccato'], dynamic: 'p', chord: 'C' }), n('quarter', 'G4', { articulations: ['tenuto'] }), n('quarter', 'C5', { articulations: ['accent'] }), n('quarter', 'E5', { articulations: ['staccato', 'accent'] })] },
+          { beats: [n('half', 'D5', { chord: 'G7', dynamic: 'mf' }), n('half', 'B4', { fermata: true })] },
+          { beats: [chord('quarter', ['C4', 'E4', 'G4'], { chord: 'C', dynamic: 'f', articulations: ['accent'] }), r('quarter', { fermata: true }), n('half', 'C5', { dynamic: 'sfz', fermata: true })] },
+        ],
+      }],
+    },
+
+    techniques: {
+      tracks: [{
+        showStandardNotation: true, showTablature: true,
+        measures: [
+          { beats: [t('8th', 3, 5, { hammerPull: true }), t('8th', 3, 7), t('8th', 2, 8, { hammerPull: true }), t('8th', 2, 5), t('quarter', 3, 5, { slide: true }), t('quarter', 3, 9)] },
+          { beats: [t('quarter', 2, 7, { bend: 'full' }), t('quarter', 2, 7, { bend: '1/2 hold' }), t('half', 1, 8, {}, { vibrato: true })] },
+          { beats: [t('8th', 6, 0, {}, { palmMute: true }), t('8th', 6, 0, {}, { palmMute: true }), t('8th', 6, 0, {}, { palmMute: true }), t('8th', 6, 0, { mute: true }), t('quarter', 5, 2, { ghost: true }), t('quarter', 4, 2, {}, { tremolo: true })] },
+          { beats: [{ type: 'grace', notes: [{ string: 3, fret: 5 }] }, t('quarter', 3, 7), t('quarter', 2, 8, { bend: 'full release' }), t('half', 2, 5)] },
+        ],
+      }],
+    },
+
+    harmonics: {
+      tracks: [{
+        showStandardNotation: true, showTablature: true,
+        measures: [
+          { beats: [t('quarter', 1, 12, { harmonic: true }), t('quarter', 2, 7, { harmonic: true }),
+                    { type: 'note', duration: 'half', notes: [{ string: 3, fret: 5, harmonic: true }, { string: 4, fret: 5, harmonic: true }] }] },
+          { beats: [t('quarter', 3, 5, { harmonic: 'artificial', harmonicFret: 17 }), t('quarter', 2, 3, { harmonic: 'tapped', harmonicFret: 15 }),
+                    t('quarter', 3, 7, { harmonic: 'pinch' }), t('quarter', 3, 9, { harmonic: 'pinch' })] },
+          { beats: [t('quarter', 6, 0, {}, { palmMute: true }), t('quarter', 6, 0, {}, { palmMute: true }),
+                    t('quarter', 6, 5, { harmonic: 'artificial', harmonicFret: 17 }, { palmMute: true }), t('quarter', 6, 0, {}, { palmMute: true })] },
+        ],
+      }],
+    },
+
+    navigation: {
+      tracks: [{
+        measures: [
+          { segno: true, barline: 'repeatStart', beats: [n('quarter', 'E4'), n('quarter', 'G4'), n('half', 'B4')] },
+          { ending: 1, barline: 'repeatEnd', beats: [n('quarter', 'A4', { chord: 'Am' }), n('quarter', 'C5'), n('half', 'E5')] },
+          { ending: 2, jump: 'To Coda', beats: [n('quarter', 'G4', { chord: 'G' }), n('quarter', 'B4'), n('half', 'D5', { fermata: true })] },
+          { jump: 'D.S. al Coda', beats: [n('whole', 'C5')] },
+          { coda: true, beats: [n('half', 'E4'), n('half', 'G4')] },
+          { beats: [n('whole', 'C4')] },
+        ],
+      }],
+    },
+
+    directions: {
+      tracks: [{
+        showStandardNotation: true, showTablature: true,
+        measures: [
+          { beats: [t('quarter', 5, 3, {}, { letRing: true }), r('quarter'), t('quarter', 4, 2, {}, { letRing: true }), t('quarter', 3, 2)] },
+          { beats: [t('8th', 2, 3, {}, { pickStroke: 'down' }), t('8th', 2, 5, {}, { pickStroke: 'up' }), t('8th', 3, 5, {}, { pickStroke: 'down' }), t('8th', 3, 7, {}, { pickStroke: 'up' }), t('quarter', 1, 5, { tap: true, hammerPull: 'p' }), t('quarter', 1, 3)] },
+          { beats: [t('quarter', 1, 5, {}, { whammy: true }), t('quarter', 1, 7, {}, { whammy: '-1' }), t('half', 2, 5)] },
+          { beats: [t('8th', 6, 0, {}, { palmMute: true }), t('8th', 6, 0, {}, { palmMute: true }), t('8th', 6, 0, {}, { palmMute: true }), t('8th', 6, 0, {}, { palmMute: true }), t('quarter', 5, 2), t('quarter', 5, 2)] },
+        ],
+      }],
+    },
+
+    chordDiagrams: {
+      chordShapes: {
+        C: { frets: ['x', 3, 2, 0, 1, 0], fingers: [0, 3, 2, 0, 1, 0] },
+        Am: { frets: ['x', 0, 2, 2, 1, 0], fingers: [0, 0, 2, 3, 1, 0] },
+        F: { frets: [1, 3, 3, 2, 1, 1], fingers: [1, 3, 4, 2, 1, 1], barre: { fret: 1 } },
+        G: { frets: [3, 2, 0, 0, 0, 3], fingers: [2, 1, 0, 0, 0, 3] },
+        D: { frets: ['x', 5, 7, 7, 7, 5], fingers: [0, 1, 3, 3, 3, 1], barre: { fret: 5, from: 5 } },
+      },
+      tracks: [{
+        showStandardNotation: true, showTablature: true,
+        measures: [
+          { beats: [t('whole', 5, 3, {}, { chord: 'C' })] },
+          { beats: [t('whole', 5, 0, {}, { chord: 'Am' })] },
+          { beats: [t('whole', 6, 1, {}, { chord: 'F' })] },
+          { beats: [t('whole', 6, 3, {}, { chord: 'G' })] },
+          { beats: [t('whole', 5, 5, {}, { chord: 'D' })] },
+          { beats: [t('half', 6, 0, {}, { chord: 'Em', chordDiagram: { frets: [0, 2, 2, 0, 0, 0] } }), t('half', 4, 2, {}, { chord: 'Em7', fermata: true })] },
+        ],
+      }],
+    },
+
+    tabRhythm: {
+      tracks: [{
+        showStandardNotation: false, showTablature: true,
+        measures: [
+          { beats: [t('quarter', 3, 2), t('8th', 3, 4), t('8th', 2, 3), t('quarter', 2, 5), t('quarter', 1, 3)] },
+          { beats: [t('16th', 1, 3), t('16th', 1, 5), t('16th', 2, 3), t('16th', 2, 5), t('quarter', 3, 2, {}, { dots: 1 }), t('8th', 3, 4), r('quarter')] },
+          { beats: [t('quarter', 3, 2, {}, { tuplet: 3 }), t('quarter', 3, 4, {}, { tuplet: 3 }), t('quarter', 2, 5, {}, { tuplet: 3 }), t('half', 2, 3)] },
+          { beats: [t('whole', 4, 3)] },
+        ],
+      }],
+    },
+
+    theme: {
+      title: 'Same score, different theme',
+      tracks: [{
+        showStandardNotation: true, showTablature: true,
+        measures: [
+          { beats: [t('quarter', 3, 2), t('8th', 3, 4), t('8th', 2, 3), t('half', 2, 5)] },
+          { beats: [t('quarter', 1, 3), t('quarter', 1, 2), t('half', 2, 3)] },
+        ],
+      }],
+    },
+  };
+
+  if (location.protocol === 'file:') document.getElementById('file-warning').style.display = 'block';
+
+  const renderers = [];
+  for (const host of document.querySelectorAll('.demo[data-demo]')) {
+    const score = demos[host.dataset.demo];
+    const scoreEl = document.createElement('div');
+    scoreEl.className = 'score';
+    host.appendChild(scoreEl);
+
+    const details = document.createElement('details');
+    details.innerHTML = '<summary>Score JSON</summary><pre><code></code></pre>';
+    details.querySelector('code').textContent = JSON.stringify(score, null, 2);
+    host.appendChild(details);
+
+    const options = {};
+    if (host.dataset.width) options.width = Number(host.dataset.width);
+    if (host.dataset.theme) {
+      options.theme = JSON.parse(host.dataset.theme);
+      details.querySelector('code').textContent =
+        '// options.theme\n' + JSON.stringify(options.theme, null, 2) + '\n\n// score\n' + details.querySelector('code').textContent;
+    }
+    renderers.push({ scoreEl, score, options });
+  }
+
+  function draw() {
+    for (const d of renderers) {
+      try {
+        const avail = Math.max(320, d.scoreEl.clientWidth - 8);
+        const width = Math.min(d.options.width ?? 900, avail);
+        new MusicScoreRenderer(d.scoreEl, d.score, { ...d.options, width }).render();
+      } catch (err) {
+        d.scoreEl.innerHTML = '';
+        const msg = document.createElement('div');
+        msg.className = 'err';
+        msg.textContent = 'Render error: ' + err.message;
+        d.scoreEl.appendChild(msg);
+      }
+    }
+  }
+
+  draw();
+  if (document.fonts) {
+    document.fonts.load('40px Bravura').then(draw).catch(draw);
+    document.fonts.ready.then(draw);
+  }
+  let resizeTimer;
+  addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(draw, 150); });
+</script>
+</body>
+</html>

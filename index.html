@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>music-score — vanilla JS music score renderer</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f4f3f1; margin: 0; padding: 32px; }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { color: #666; margin: 0 0 24px; font-size: 14px; }
+  #score, #score2 { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 8px 4px; overflow-x: auto; }
+  #score2 { margin-top: 28px; }
+  .music-score text { user-select: none; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>music-score.js demo</h1>
+    <p class="sub">Vanilla JS + SVG + the Bravura SMuFL music font. See README.md for the score JSON schema and API.</p>
+    <div id="score"></div>
+    <div id="score2"></div>
+  </div>
+
+  <script type="module">
+    import { MusicScoreRenderer } from './index.js';
+    import { exampleScore } from './examples/example-score.js';
+    import { articulationsScore } from './examples/articulations-demo.js';
+
+    const el = document.getElementById('score');
+    const renderer = new MusicScoreRenderer(el, exampleScore, { width: 860 });
+    const renderer2 = new MusicScoreRenderer(document.getElementById('score2'), articulationsScore, { width: 860 });
+
+    function draw() { renderer.render(); renderer2.render(); }
+
+    if (document.fonts && document.fonts.ready) {
+      // Draw once immediately (fallback glyphs may show briefly), then redraw once Bravura is ready.
+      draw();
+      document.fonts.load('40px Bravura').then(draw).catch(draw);
+      document.fonts.ready.then(draw);
+    } else {
+      draw();
+    }
+  </script>
+</body>
+</html>

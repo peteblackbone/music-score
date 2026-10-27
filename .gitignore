@@ -1,0 +1,21 @@
+# Local AI-pipeline tooling and run logs (kept on disk, not published)
+.claude/
+.12sp/
+CLAUDE.md
+CLAUDE.template.md
+
+# Test runner output for failed snapshot comparisons
+tests/snapshots/*.tmp
+
+# Dependencies and tooling (none are required; ignored if a tool creates them)
+node_modules/
+*.log
+.npm/
+
+# Editors and OS files
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+Desktop.ini

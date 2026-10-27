@@ -1,0 +1,3 @@
+# Snapshot SVGs are compared byte for byte by tests/run.js; keep them LF on
+# every checkout, whatever core.autocrlf says.
+tests/snapshots/*.svg text eol=lf

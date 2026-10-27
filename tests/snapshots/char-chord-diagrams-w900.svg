@@ -1,0 +1,498 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" class="music-score" style="font-synthesis: none; background:#ffffff" role="img" height="536.32" viewBox="0 0 900 536.32">
+  <title>Music score</title>
+  <desc>2 instruments: Lead, Guitar. 4 measures, 4/4.</desc>
+  <g class="system system-0">
+    <g class="staff staff-notation" data-track="0" transform="translate(0,146.25)">
+      <g class="staff-lines">
+        <line x1="84.56" y1="40" x2="870" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="84.56" y1="30" x2="870" y2="30" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="84.56" y1="20" x2="870" y2="20" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="84.56" y1="10" x2="870" y2="10" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="84.56" y1="0" x2="870" y2="0" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="94.56" y="30" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a"></text>
+      <g class="time-signature">
+        <text x="131.4" y="10" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a"></text>
+        <text x="131.4" y="30" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a"></text>
+      </g>
+      <text x="170.3" y="5" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="164.4" y1="6.68" x2="164.4" y2="40" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="211.83" y="-5" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="205.93" y1="-3.32" x2="205.93" y2="30" stroke="#1a1a1a" stroke-width="1.3"/>
+      <line x1="244.46" y1="-10" x2="262.26" y2="-10" stroke="#1a1a1a" stroke-width="1"/>
+      <text x="253.36" y="-10" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="247.46" y1="-8.32" x2="247.46" y2="25" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="294.89" y="5" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="288.99" y1="6.68" x2="288.99" y2="40" stroke="#1a1a1a" stroke-width="1.3"/>
+      <g class="barline">
+        <line x1="330.93" y1="0" x2="330.93" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="349.83" y="0" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="343.93" y1="1.68" x2="343.93" y2="35" stroke="#1a1a1a" stroke-width="1.3"/>
+      <line x1="382.46" y1="-10" x2="400.26" y2="-10" stroke="#1a1a1a" stroke-width="1"/>
+      <text x="391.36" y="-10" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="385.46" y1="-8.32" x2="385.46" y2="25" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="432.89" y="-5" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="426.99" y1="-3.32" x2="426.99" y2="30" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="474.42" y="10" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="468.52" y1="11.68" x2="468.52" y2="45" stroke="#1a1a1a" stroke-width="1.3"/>
+      <g class="barline">
+        <line x1="510.45" y1="0" x2="510.45" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="529.35" y="5" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="523.45" y1="6.68" x2="523.45" y2="40" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="570.88" y="20" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="564.98" y1="21.68" x2="564.98" y2="55" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="612.41" y="10" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="606.51" y1="11.68" x2="606.51" y2="45" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="653.94" y="0" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="648.04" y1="1.68" x2="648.04" y2="35" stroke="#1a1a1a" stroke-width="1.3"/>
+      <g class="barline">
+        <line x1="689.98" y1="0" x2="689.98" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="708.88" y="-5" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="702.98" y1="-3.28" x2="702.98" y2="30" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="791.94" y="15" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="786.04" y1="16.72" x2="786.04" y2="50" stroke="#1a1a1a" stroke-width="1.3"/>
+      <g class="barline">
+        <line x1="867.5" y1="0" x2="867.5" y2="40" stroke="#1a1a1a" stroke-width="5"/>
+        <line x1="860.5" y1="0" x2="860.5" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <g class="chord-diagram">
+        <g class="chord-diagram-grid">
+          <line x1="153.4" y1="-84" x2="153.4" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="163.4" y1="-84" x2="163.4" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="173.4" y1="-84" x2="173.4" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="183.4" y1="-84" x2="183.4" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="193.4" y1="-84" x2="193.4" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="203.4" y1="-84" x2="203.4" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="152.9" y1="-72" x2="203.9" y2="-72" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="152.9" y1="-60" x2="203.9" y2="-60" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="152.9" y1="-48" x2="203.9" y2="-48" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="152.9" y1="-36" x2="203.9" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="152.9" y1="-86" x2="203.9" y2="-86" class="chord-diagram-nut" stroke="#1a1a1a" stroke-width="4" stroke-linecap="butt"/>
+        </g>
+        <path d="M 150.4 -97 L 156.4 -91 M 150.4 -91 L 156.4 -97" class="chord-diagram-muted" fill="none" stroke="#1a1a1a" stroke-width="1.2"/>
+        <circle cx="163.4" cy="-54" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="173.4" cy="-66" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="183.4" cy="-94" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="193.4" cy="-78" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="203.4" cy="-94" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <text x="163.4" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">3</text>
+        <text x="173.4" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">2</text>
+        <text x="193.4" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">1</text>
+        <text x="178.4" y="-104.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="middle" fill="#1a1a1a">C</text>
+      </g>
+      <g class="chord-diagram">
+        <g class="chord-diagram-grid">
+          <line x1="228.36" y1="-84" x2="228.36" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="238.36" y1="-84" x2="238.36" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="248.36" y1="-84" x2="248.36" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="258.36" y1="-84" x2="258.36" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="268.36" y1="-84" x2="268.36" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="278.36" y1="-84" x2="278.36" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="227.86" y1="-72" x2="278.86" y2="-72" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="227.86" y1="-60" x2="278.86" y2="-60" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="227.86" y1="-48" x2="278.86" y2="-48" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="227.86" y1="-36" x2="278.86" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="227.86" y1="-86" x2="278.86" y2="-86" class="chord-diagram-nut" stroke="#1a1a1a" stroke-width="4" stroke-linecap="butt"/>
+        </g>
+        <path d="M 225.36 -97 L 231.36 -91 M 225.36 -91 L 231.36 -97" class="chord-diagram-muted" fill="none" stroke="#1a1a1a" stroke-width="1.2"/>
+        <circle cx="238.36" cy="-94" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="248.36" cy="-66" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="258.36" cy="-66" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="268.36" cy="-78" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="278.36" cy="-94" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <text x="248.36" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">2</text>
+        <text x="258.36" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">3</text>
+        <text x="268.36" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">1</text>
+        <text x="253.36" y="-104.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="middle" fill="#1a1a1a">Am</text>
+      </g>
+      <g class="chord-diagram">
+        <g class="chord-diagram-grid">
+          <line x1="324.83" y1="-84" x2="324.83" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="334.83" y1="-84" x2="334.83" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="344.83" y1="-84" x2="344.83" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="354.83" y1="-84" x2="354.83" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="364.83" y1="-84" x2="364.83" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="374.83" y1="-84" x2="374.83" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="324.33" y1="-72" x2="375.33" y2="-72" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="324.33" y1="-60" x2="375.33" y2="-60" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="324.33" y1="-48" x2="375.33" y2="-48" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="324.33" y1="-36" x2="375.33" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="324.33" y1="-86" x2="375.33" y2="-86" class="chord-diagram-nut" stroke="#1a1a1a" stroke-width="4" stroke-linecap="butt"/>
+        </g>
+        <rect x="320.83" y="-82" width="58" height="8" class="chord-diagram-barre" rx="4" ry="4" fill="#1a1a1a"/>
+        <circle cx="334.83" cy="-54" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="344.83" cy="-54" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="354.83" cy="-66" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <text x="324.83" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">1</text>
+        <text x="334.83" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">3</text>
+        <text x="344.83" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">4</text>
+        <text x="354.83" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">2</text>
+        <text x="364.83" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">1</text>
+        <text x="374.83" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">1</text>
+        <text x="349.83" y="-104.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="middle" fill="#1a1a1a">F</text>
+      </g>
+      <g class="chord-diagram">
+        <g class="chord-diagram-grid">
+          <line x1="407.89" y1="-84" x2="407.89" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="417.89" y1="-84" x2="417.89" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="427.89" y1="-84" x2="427.89" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="437.89" y1="-84" x2="437.89" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="447.89" y1="-84" x2="447.89" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="457.89" y1="-84" x2="457.89" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="407.39" y1="-72" x2="458.39" y2="-72" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="407.39" y1="-60" x2="458.39" y2="-60" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="407.39" y1="-48" x2="458.39" y2="-48" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="407.39" y1="-36" x2="458.39" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="407.39" y1="-86" x2="458.39" y2="-86" class="chord-diagram-nut" stroke="#1a1a1a" stroke-width="4" stroke-linecap="butt"/>
+        </g>
+        <circle cx="407.89" cy="-54" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="417.89" cy="-66" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="427.89" cy="-94" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="437.89" cy="-94" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="447.89" cy="-94" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="457.89" cy="-54" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <text x="407.89" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">2</text>
+        <text x="417.89" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">1</text>
+        <text x="457.89" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">3</text>
+        <text x="432.89" y="-104.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="middle" fill="#1a1a1a">G</text>
+      </g>
+      <g class="chord-diagram">
+        <g class="chord-diagram-grid">
+          <line x1="504.35" y1="-84" x2="504.35" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="514.35" y1="-84" x2="514.35" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="524.35" y1="-84" x2="524.35" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="534.35" y1="-84" x2="534.35" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="544.35" y1="-84" x2="544.35" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="554.35" y1="-84" x2="554.35" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="503.85" y1="-72" x2="554.85" y2="-72" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="503.85" y1="-60" x2="554.85" y2="-60" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="503.85" y1="-48" x2="554.85" y2="-48" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="503.85" y1="-36" x2="554.85" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="503.85" y1="-86" x2="554.85" y2="-86" class="chord-diagram-nut" stroke="#1a1a1a" stroke-width="4" stroke-linecap="butt"/>
+        </g>
+        <circle cx="504.35" cy="-94" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="514.35" cy="-66" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="524.35" cy="-66" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="534.35" cy="-94" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="544.35" cy="-94" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="554.35" cy="-94" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <text x="529.35" y="-104.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="middle" fill="#1a1a1a">Em</text>
+      </g>
+      <text x="612.41" y="-104.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="start" fill="#1a1a1a">Dm</text>
+      <g class="chord-diagram">
+        <g class="chord-diagram-grid">
+          <line x1="683.88" y1="-84" x2="683.88" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="693.88" y1="-84" x2="693.88" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="703.88" y1="-84" x2="703.88" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="713.88" y1="-84" x2="713.88" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="723.88" y1="-84" x2="723.88" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="733.88" y1="-84" x2="733.88" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="683.38" y1="-72" x2="734.38" y2="-72" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="683.38" y1="-60" x2="734.38" y2="-60" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="683.38" y1="-48" x2="734.38" y2="-48" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="683.38" y1="-36" x2="734.38" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="683.38" y1="-86" x2="734.38" y2="-86" class="chord-diagram-nut" stroke="#1a1a1a" stroke-width="4" stroke-linecap="butt"/>
+        </g>
+        <circle cx="683.88" cy="-54" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="693.88" cy="-66" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="703.88" cy="-94" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="713.88" cy="-94" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="723.88" cy="-94" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="733.88" cy="-78" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <text x="708.88" y="-104.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="middle" fill="#1a1a1a">G7</text>
+      </g>
+      <g class="chord-diagram">
+        <g class="chord-diagram-grid">
+          <line x1="766.94" y1="-84" x2="766.94" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="776.94" y1="-84" x2="776.94" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="786.94" y1="-84" x2="786.94" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="796.94" y1="-84" x2="796.94" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="806.94" y1="-84" x2="806.94" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="816.94" y1="-84" x2="816.94" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="766.44" y1="-72" x2="817.44" y2="-72" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="766.44" y1="-60" x2="817.44" y2="-60" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="766.44" y1="-48" x2="817.44" y2="-48" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="766.44" y1="-36" x2="817.44" y2="-36" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="766.44" y1="-86" x2="817.44" y2="-86" class="chord-diagram-nut" stroke="#1a1a1a" stroke-width="4" stroke-linecap="butt"/>
+        </g>
+        <path d="M 763.94 -97 L 769.94 -91 M 763.94 -91 L 769.94 -97" class="chord-diagram-muted" fill="none" stroke="#1a1a1a" stroke-width="1.2"/>
+        <circle cx="776.94" cy="-54" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="786.94" cy="-66" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="796.94" cy="-94" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="806.94" cy="-78" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="816.94" cy="-94" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <text x="776.94" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">3</text>
+        <text x="786.94" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">2</text>
+        <text x="806.94" y="-25" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">1</text>
+        <text x="791.94" y="-104.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="middle" fill="#1a1a1a">C</text>
+      </g>
+    </g>
+    <g class="staff staff-notation" data-track="1" transform="translate(0,328.82)">
+      <g class="staff-lines">
+        <line x1="84.56" y1="40" x2="870" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="84.56" y1="30" x2="870" y2="30" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="84.56" y1="20" x2="870" y2="20" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="84.56" y1="10" x2="870" y2="10" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="84.56" y1="0" x2="870" y2="0" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="94.56" y="30" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a"></text>
+      <g class="time-signature">
+        <text x="131.4" y="10" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a"></text>
+        <text x="131.4" y="30" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a"></text>
+      </g>
+      <line x1="161.4" y1="50" x2="179.2" y2="50" stroke="#1a1a1a" stroke-width="1"/>
+      <text x="170.3" y="50" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="176.2" y1="48.32" x2="176.2" y2="15" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="211.83" y="40" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="217.73" y1="38.32" x2="217.73" y2="5" stroke="#1a1a1a" stroke-width="1.3"/>
+      <line x1="244.46" y1="50" x2="262.26" y2="50" stroke="#1a1a1a" stroke-width="1"/>
+      <line x1="244.46" y1="60" x2="262.26" y2="60" stroke="#1a1a1a" stroke-width="1"/>
+      <text x="253.36" y="60" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="259.26" y1="58.32" x2="259.26" y2="20" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="294.89" y="25" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="300.79" y1="23.32" x2="300.79" y2="-10" stroke="#1a1a1a" stroke-width="1.3"/>
+      <g class="barline">
+        <line x1="330.93" y1="0" x2="330.93" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="349.83" y="35" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="355.73" y1="33.32" x2="355.73" y2="0" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="391.36" y="25" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="397.26" y1="23.32" x2="397.26" y2="-10" stroke="#1a1a1a" stroke-width="1.3"/>
+      <line x1="423.99" y1="50" x2="441.79" y2="50" stroke="#1a1a1a" stroke-width="1"/>
+      <line x1="423.99" y1="60" x2="441.79" y2="60" stroke="#1a1a1a" stroke-width="1"/>
+      <text x="432.89" y="65" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="438.79" y1="63.32" x2="438.79" y2="20" stroke="#1a1a1a" stroke-width="1.3"/>
+      <line x1="465.52" y1="50" x2="483.32" y2="50" stroke="#1a1a1a" stroke-width="1"/>
+      <text x="474.42" y="55" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="480.32" y1="53.32" x2="480.32" y2="20" stroke="#1a1a1a" stroke-width="1.3"/>
+      <g class="barline">
+        <line x1="510.45" y1="0" x2="510.45" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <line x1="520.45" y1="50" x2="538.25" y2="50" stroke="#1a1a1a" stroke-width="1"/>
+      <line x1="520.45" y1="60" x2="538.25" y2="60" stroke="#1a1a1a" stroke-width="1"/>
+      <line x1="520.45" y1="70" x2="538.25" y2="70" stroke="#1a1a1a" stroke-width="1"/>
+      <text x="529.35" y="75" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="535.25" y1="73.32" x2="535.25" y2="20" stroke="#1a1a1a" stroke-width="1.3"/>
+      <line x1="561.98" y1="50" x2="579.78" y2="50" stroke="#1a1a1a" stroke-width="1"/>
+      <text x="570.88" y="55" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="576.78" y1="53.32" x2="576.78" y2="20" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="612.41" y="45" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="618.31" y1="43.32" x2="618.31" y2="10" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="653.94" y="25" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="659.84" y1="23.32" x2="659.84" y2="-10" stroke="#1a1a1a" stroke-width="1.3"/>
+      <g class="barline">
+        <line x1="689.98" y1="0" x2="689.98" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <line x1="699.98" y1="50" x2="717.78" y2="50" stroke="#1a1a1a" stroke-width="1"/>
+      <line x1="699.98" y1="60" x2="717.78" y2="60" stroke="#1a1a1a" stroke-width="1"/>
+      <text x="708.88" y="65" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="714.78" y1="63.32" x2="714.78" y2="20" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="750.41" y="0" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="744.51" y1="1.68" x2="744.51" y2="35" stroke="#1a1a1a" stroke-width="1.3"/>
+      <line x1="783.04" y1="50" x2="800.84" y2="50" stroke="#1a1a1a" stroke-width="1"/>
+      <text x="791.94" y="50" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="797.84" y1="48.32" x2="797.84" y2="15" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="833.47" y="15" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="827.57" y1="16.68" x2="827.57" y2="50" stroke="#1a1a1a" stroke-width="1.3"/>
+      <g class="barline">
+        <line x1="867.5" y1="0" x2="867.5" y2="40" stroke="#1a1a1a" stroke-width="5"/>
+        <line x1="860.5" y1="0" x2="860.5" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <g class="chord-diagram">
+        <g class="chord-diagram-grid">
+          <line x1="153.4" y1="-79" x2="153.4" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="163.4" y1="-79" x2="163.4" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="173.4" y1="-79" x2="173.4" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="183.4" y1="-79" x2="183.4" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="193.4" y1="-79" x2="193.4" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="203.4" y1="-79" x2="203.4" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="152.9" y1="-67" x2="203.9" y2="-67" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="152.9" y1="-55" x2="203.9" y2="-55" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="152.9" y1="-43" x2="203.9" y2="-43" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="152.9" y1="-31" x2="203.9" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="152.9" y1="-81" x2="203.9" y2="-81" class="chord-diagram-nut" stroke="#1a1a1a" stroke-width="4" stroke-linecap="butt"/>
+        </g>
+        <path d="M 150.4 -92 L 156.4 -86 M 150.4 -86 L 156.4 -92" class="chord-diagram-muted" fill="none" stroke="#1a1a1a" stroke-width="1.2"/>
+        <circle cx="163.4" cy="-49" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="173.4" cy="-61" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="183.4" cy="-89" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="193.4" cy="-73" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="203.4" cy="-89" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <text x="163.4" y="-20" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">3</text>
+        <text x="173.4" y="-20" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">2</text>
+        <text x="193.4" y="-20" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">1</text>
+        <text x="178.4" y="-99.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="middle" fill="#1a1a1a">C</text>
+      </g>
+      <g class="chord-diagram">
+        <g class="chord-diagram-grid">
+          <line x1="228.36" y1="-79" x2="228.36" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="238.36" y1="-79" x2="238.36" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="248.36" y1="-79" x2="248.36" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="258.36" y1="-79" x2="258.36" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="268.36" y1="-79" x2="268.36" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="278.36" y1="-79" x2="278.36" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="227.86" y1="-67" x2="278.86" y2="-67" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="227.86" y1="-55" x2="278.86" y2="-55" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="227.86" y1="-43" x2="278.86" y2="-43" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="227.86" y1="-31" x2="278.86" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="227.86" y1="-81" x2="278.86" y2="-81" class="chord-diagram-nut" stroke="#1a1a1a" stroke-width="4" stroke-linecap="butt"/>
+        </g>
+        <path d="M 225.36 -92 L 231.36 -86 M 225.36 -86 L 231.36 -92" class="chord-diagram-muted" fill="none" stroke="#1a1a1a" stroke-width="1.2"/>
+        <circle cx="238.36" cy="-89" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="248.36" cy="-61" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="258.36" cy="-61" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="268.36" cy="-73" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="278.36" cy="-89" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <text x="248.36" y="-20" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">2</text>
+        <text x="258.36" y="-20" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">3</text>
+        <text x="268.36" y="-20" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">1</text>
+        <text x="253.36" y="-99.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="middle" fill="#1a1a1a">Am</text>
+      </g>
+      <g class="chord-diagram">
+        <g class="chord-diagram-grid">
+          <line x1="324.83" y1="-79" x2="324.83" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="334.83" y1="-79" x2="334.83" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="344.83" y1="-79" x2="344.83" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="354.83" y1="-79" x2="354.83" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="364.83" y1="-79" x2="364.83" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="374.83" y1="-79" x2="374.83" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="324.33" y1="-67" x2="375.33" y2="-67" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="324.33" y1="-55" x2="375.33" y2="-55" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="324.33" y1="-43" x2="375.33" y2="-43" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="324.33" y1="-31" x2="375.33" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="324.33" y1="-81" x2="375.33" y2="-81" class="chord-diagram-nut" stroke="#1a1a1a" stroke-width="4" stroke-linecap="butt"/>
+        </g>
+        <path d="M 321.83 -92 L 327.83 -86 M 321.83 -86 L 327.83 -92" class="chord-diagram-muted" fill="none" stroke="#1a1a1a" stroke-width="1.2"/>
+        <path d="M 331.83 -92 L 337.83 -86 M 331.83 -86 L 337.83 -92" class="chord-diagram-muted" fill="none" stroke="#1a1a1a" stroke-width="1.2"/>
+        <circle cx="344.83" cy="-49" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="354.83" cy="-61" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="364.83" cy="-73" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="374.83" cy="-73" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <text x="344.83" y="-20" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">3</text>
+        <text x="354.83" y="-20" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">2</text>
+        <text x="364.83" y="-20" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">1</text>
+        <text x="374.83" y="-20" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">1</text>
+        <text x="349.83" y="-99.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="middle" fill="#1a1a1a">F</text>
+      </g>
+      <text x="432.89" y="-99.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="start" fill="#1a1a1a">G</text>
+      <text x="529.35" y="-99.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="start" fill="#1a1a1a">Em</text>
+      <text x="612.41" y="-99.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="start" fill="#1a1a1a">Dm</text>
+      <g class="chord-diagram">
+        <g class="chord-diagram-grid">
+          <line x1="683.88" y1="-79" x2="683.88" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="693.88" y1="-79" x2="693.88" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="703.88" y1="-79" x2="703.88" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="713.88" y1="-79" x2="713.88" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="723.88" y1="-79" x2="723.88" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="733.88" y1="-79" x2="733.88" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="683.38" y1="-67" x2="734.38" y2="-67" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="683.38" y1="-55" x2="734.38" y2="-55" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="683.38" y1="-43" x2="734.38" y2="-43" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="683.38" y1="-31" x2="734.38" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="683.38" y1="-81" x2="734.38" y2="-81" class="chord-diagram-nut" stroke="#1a1a1a" stroke-width="4" stroke-linecap="butt"/>
+        </g>
+        <circle cx="683.88" cy="-49" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="693.88" cy="-61" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="703.88" cy="-89" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="713.88" cy="-89" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="723.88" cy="-89" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="733.88" cy="-73" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <text x="708.88" y="-99.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="middle" fill="#1a1a1a">G7</text>
+      </g>
+      <g class="chord-diagram">
+        <g class="chord-diagram-grid">
+          <line x1="766.94" y1="-79" x2="766.94" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="776.94" y1="-79" x2="776.94" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="786.94" y1="-79" x2="786.94" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="796.94" y1="-79" x2="796.94" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="806.94" y1="-79" x2="806.94" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="816.94" y1="-79" x2="816.94" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="766.44" y1="-67" x2="817.44" y2="-67" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="766.44" y1="-55" x2="817.44" y2="-55" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="766.44" y1="-43" x2="817.44" y2="-43" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="766.44" y1="-31" x2="817.44" y2="-31" stroke="#1a1a1a" stroke-width="1" stroke-linecap="butt"/>
+          <line x1="766.44" y1="-81" x2="817.44" y2="-81" class="chord-diagram-nut" stroke="#1a1a1a" stroke-width="4" stroke-linecap="butt"/>
+        </g>
+        <path d="M 763.94 -92 L 769.94 -86 M 763.94 -86 L 769.94 -92" class="chord-diagram-muted" fill="none" stroke="#1a1a1a" stroke-width="1.2"/>
+        <circle cx="776.94" cy="-49" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="786.94" cy="-61" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="796.94" cy="-89" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <circle cx="806.94" cy="-73" r="4" class="chord-diagram-fret" fill="#1a1a1a"/>
+        <circle cx="816.94" cy="-89" r="3" class="chord-diagram-open" fill="none" stroke="#1a1a1a" stroke-width="1"/>
+        <text x="776.94" y="-20" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">3</text>
+        <text x="786.94" y="-20" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">2</text>
+        <text x="806.94" y="-20" class="chord-diagram-finger" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" fill="#1a1a1a" text-anchor="middle">1</text>
+        <text x="791.94" y="-99.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="middle" fill="#1a1a1a">C</text>
+      </g>
+    </g>
+    <g class="staff staff-tab" data-track="1" transform="translate(0,423.32)">
+      <g class="tab-lines">
+        <line x1="84.56" y1="75" x2="870" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="84.56" y1="60" x2="870" y2="60" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="84.56" y1="45" x2="870" y2="45" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="84.56" y1="30" x2="870" y2="30" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="84.56" y1="15" x2="870" y2="15" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="84.56" y1="0" x2="870" y2="0" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <g class="tab-clef">
+        <text x="94.56" y="37.5" font-family="Bravura, BravuraFallback, serif" font-size="38.46" fill="#1a1a1a"></text>
+      </g>
+      <rect x="165.8" y="53" width="9" height="14" fill="#ffffff"/>
+      <text x="170.3" y="65" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">3</text>
+      <rect x="207.33" y="38" width="9" height="14" fill="#ffffff"/>
+      <text x="211.83" y="50" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">2</text>
+      <rect x="248.86" y="53" width="9" height="14" fill="#ffffff"/>
+      <text x="253.36" y="65" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">0</text>
+      <rect x="290.39" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="294.89" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">2</text>
+      <g class="barline">
+        <line x1="330.93" y1="0" x2="330.93" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <rect x="345.33" y="38" width="9" height="14" fill="#ffffff"/>
+      <text x="349.83" y="50" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">3</text>
+      <rect x="386.86" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="391.36" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">2</text>
+      <rect x="428.39" y="68" width="9" height="14" fill="#ffffff"/>
+      <text x="432.89" y="80" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">3</text>
+      <rect x="469.92" y="53" width="9" height="14" fill="#ffffff"/>
+      <text x="474.42" y="65" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">2</text>
+      <g class="barline">
+        <line x1="510.45" y1="0" x2="510.45" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <rect x="524.85" y="68" width="9" height="14" fill="#ffffff"/>
+      <text x="529.35" y="80" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">0</text>
+      <rect x="566.38" y="53" width="9" height="14" fill="#ffffff"/>
+      <text x="570.88" y="65" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">2</text>
+      <rect x="607.91" y="38" width="9" height="14" fill="#ffffff"/>
+      <text x="612.41" y="50" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">0</text>
+      <rect x="649.44" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="653.94" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">2</text>
+      <g class="barline">
+        <line x1="689.98" y1="0" x2="689.98" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <rect x="704.38" y="68" width="9" height="14" fill="#ffffff"/>
+      <text x="708.88" y="80" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">3</text>
+      <rect x="745.91" y="-7" width="9" height="14" fill="#ffffff"/>
+      <text x="750.41" y="5" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">1</text>
+      <rect x="787.44" y="53" width="9" height="14" fill="#ffffff"/>
+      <text x="791.94" y="65" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">3</text>
+      <rect x="828.97" y="8" width="9" height="14" fill="#ffffff"/>
+      <text x="833.47" y="20" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">1</text>
+      <g class="barline">
+        <line x1="867.5" y1="0" x2="867.5" y2="75" stroke="#1a1a1a" stroke-width="5"/>
+        <line x1="860.5" y1="0" x2="860.5" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+    </g>
+    <line x1="85.06" y1="146.25" x2="85.06" y2="498.32" class="system-join" stroke="#1a1a1a" stroke-width="1"/>
+    <g class="bracket">
+      <rect x="74.56" y="326.32" width="5" height="174.5" fill="#1a1a1a"/>
+      <rect x="74.56" y="326.32" width="15" height="2.5" fill="#1a1a1a"/>
+      <rect x="74.56" y="498.32" width="15" height="2.5" fill="#1a1a1a"/>
+    </g>
+    <text x="64.56" y="170.45" class="instrument-name" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="end" fill="#1a1a1a">Lead</text>
+    <text x="64.56" y="417.77" class="instrument-name" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="end" fill="#1a1a1a">Guitar</text>
+  </g>
+</svg>
