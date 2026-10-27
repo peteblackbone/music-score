@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="900" class="music-score" style="font-synthesis: none; background:#ffffff" role="img" height="876.89" viewBox="0 0 900 876.89">
+<svg xmlns="http://www.w3.org/2000/svg" width="900" class="music-score" style="font-synthesis: none; background:#ffffff" role="img" height="881.89" viewBox="0 0 900 881.89">
   <title>Music score</title>
   <desc>4 instruments: Gt., Gt. 2, Bass, Ens.. 4 measures, 4/4.</desc>
   <g class="system system-0">
-    <g class="staff staff-notation" data-track="0" transform="translate(0,71.81)">
+    <g class="staff staff-notation" data-track="0" transform="translate(0,76.81)">
       <g class="staff-lines">
         <line x1="76.28" y1="40" x2="870" y2="40" stroke="#1a1a1a" stroke-width="1"/>
         <line x1="76.28" y1="30" x2="870" y2="30" stroke="#1a1a1a" stroke-width="1"/>
@@ -100,21 +100,21 @@
       <path d="M 714.45 4 C 719.46 -5, 727.33 -5, 732.35 4 C 727.33 -3.6, 719.46 -3.6, 714.45 4 Z" class="slur" fill="#1a1a1a" stroke="none"/>
       <g class="trill">
         <text x="321.13" y="-15.63" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
-        <path d="M 334.26 -20.63 Q 336.01 -22.63 337.76 -20.63 Q 339.51 -18.63 341.26 -20.63 Q 343.01 -22.63 344.76 -20.63 Q 346.51 -18.63 348.26 -20.63 Q 348.53 -22.63 348.8 -20.63" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M 334.26 -20.63 Q 336.01 -22.63 337.76 -20.63 Q 339.51 -18.63 341.26 -20.63 Q 342.47 -22.63 343.67 -20.63" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
       </g>
       <g class="trill">
-        <text x="356.8" y="-10.63" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
-        <path d="M 369.92 -15.63 Q 371.67 -17.63 373.42 -15.63 Q 375.17 -13.63 376.92 -15.63 Q 378.67 -17.63 380.42 -15.63 Q 382.17 -13.63 383.92 -15.63 Q 384.19 -17.63 384.46 -15.63" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="356.8" y="-15.63" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+        <path d="M 369.92 -20.63 Q 371.67 -22.63 373.42 -20.63 Q 375.17 -18.63 376.92 -20.63 Q 378.13 -22.63 379.34 -20.63" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
       </g>
       <g class="trill">
-        <text x="392.46" y="-10.63" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
-        <path d="M 405.59 -15.63 Q 407.34 -17.63 409.09 -15.63 Q 410.84 -13.63 412.59 -15.63 Q 414.34 -17.63 416.09 -15.63 Q 417.84 -13.63 419.59 -15.63 Q 419.86 -17.63 420.13 -15.63" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="392.46" y="-15.63" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+        <path d="M 405.59 -20.63 Q 407.34 -22.63 409.09 -20.63 Q 410.84 -18.63 412.59 -20.63 Q 414.34 -22.63 416.09 -20.63 Q 417.84 -18.63 419.59 -20.63 Q 419.86 -22.63 420.13 -20.63" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
       </g>
       <g class="tap">
-        <text x="356.8" y="-33.01" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="11" text-anchor="middle" fill="#1a1a1a">T</text>
+        <text x="356.8" y="-38.01" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="11" text-anchor="middle" fill="#1a1a1a">T</text>
       </g>
     </g>
-    <g class="staff staff-tab" data-track="0" transform="translate(0,194.52)">
+    <g class="staff staff-tab" data-track="0" transform="translate(0,199.52)">
       <g class="tab-lines">
         <line x1="76.28" y1="75" x2="870" y2="75" stroke="#1a1a1a" stroke-width="1"/>
         <line x1="76.28" y1="60" x2="870" y2="60" stroke="#1a1a1a" stroke-width="1"/>
@@ -200,14 +200,14 @@
       </g>
       <g class="trill">
         <text x="356.8" y="-18.43" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
-        <path d="M 369.92 -23.43 Q 371.67 -25.43 373.42 -23.43 Q 375.17 -21.43 376.92 -23.43 Q 378.67 -25.43 380.42 -23.43 Q 382.17 -21.43 383.92 -23.43 Q 384.19 -25.43 384.46 -23.43" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M 369.92 -23.43 Q 371.67 -25.43 373.42 -23.43 Q 375.17 -21.43 376.92 -23.43 Q 378.13 -25.43 379.34 -23.43" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+      <g class="trill">
+        <text x="392.46" y="-18.43" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+        <text x="404.59" y="-18.43" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" text-anchor="start" fill="#1a1a1a">(7)</text>
       </g>
       <g class="tap">
         <text x="356.8" y="-40.81" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="11" text-anchor="middle" fill="#1a1a1a">T</text>
-      </g>
-      <g class="trill">
-        <text x="392.46" y="-30.06" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
-        <text x="404.59" y="-30.06" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" text-anchor="start" fill="#1a1a1a">(7)</text>
       </g>
       <g class="whammy whammy-dive whammy-return">
         <path d="M 168.08 -17 L 194.74 -5 L 275.07 -5 L 303.07 -17" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linejoin="round" stroke-linecap="round"/>
@@ -242,7 +242,7 @@
         <line x1="762.01" y1="-42.27" x2="762.01" y2="-36.77" stroke="#1a1a1a" stroke-width="1"/>
       </g>
     </g>
-    <g class="staff staff-tab" data-track="1" transform="translate(0,357.78)">
+    <g class="staff staff-tab" data-track="1" transform="translate(0,362.78)">
       <g class="tab-lines">
         <line x1="76.28" y1="75" x2="870" y2="75" stroke="#1a1a1a" stroke-width="1"/>
         <line x1="76.28" y1="60" x2="870" y2="60" stroke="#1a1a1a" stroke-width="1"/>
@@ -375,7 +375,7 @@
         <text x="321.13" y="-28.26" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
       </g>
     </g>
-    <g class="staff staff-notation" data-track="2" transform="translate(0,534.33)">
+    <g class="staff staff-notation" data-track="2" transform="translate(0,539.33)">
       <g class="staff-lines">
         <line x1="76.28" y1="40" x2="870" y2="40" stroke="#1a1a1a" stroke-width="1"/>
         <line x1="76.28" y1="30" x2="870" y2="30" stroke="#1a1a1a" stroke-width="1"/>
@@ -456,7 +456,7 @@
         <text x="803.67" y="-12.75" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="11" text-anchor="middle" fill="#1a1a1a">S</text>
       </g>
     </g>
-    <g class="staff staff-tab" data-track="2" transform="translate(0,627.33)">
+    <g class="staff staff-tab" data-track="2" transform="translate(0,632.33)">
       <g class="tab-lines">
         <line x1="76.28" y1="45" x2="870" y2="45" stroke="#1a1a1a" stroke-width="1"/>
         <line x1="76.28" y1="30" x2="870" y2="30" stroke="#1a1a1a" stroke-width="1"/>
@@ -544,7 +544,7 @@
         <text x="544.63" y="-22.5" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-style="italic" font-size="10" text-anchor="middle" fill="#1a1a1a">-1</text>
       </g>
     </g>
-    <g class="staff staff-notation" data-track="3" transform="translate(0,771.14)">
+    <g class="staff staff-notation" data-track="3" transform="translate(0,776.14)">
       <g class="staff-lines">
         <line x1="76.28" y1="40" x2="870" y2="40" stroke="#1a1a1a" stroke-width="1"/>
         <line x1="76.28" y1="30" x2="870" y2="30" stroke="#1a1a1a" stroke-width="1"/>
@@ -623,8 +623,8 @@
         <line x1="762.01" y1="66.73" x2="762.01" y2="72.23" stroke="#1a1a1a" stroke-width="1"/>
       </g>
       <g class="trill">
-        <text x="165.08" y="-13.63" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
-        <path d="M 178.21 -18.63 Q 179.96 -20.63 181.71 -18.63 Q 183.46 -16.63 185.21 -18.63 Q 186.96 -20.63 188.71 -18.63 Q 190.46 -16.63 192.21 -18.63 Q 193.96 -20.63 195.71 -18.63 Q 197.46 -16.63 199.21 -18.63 Q 200.96 -20.63 202.71 -18.63 Q 204.46 -16.63 206.21 -18.63 Q 207.96 -20.63 209.71 -18.63 Q 211.46 -16.63 213.21 -18.63 Q 214.96 -20.63 216.71 -18.63 Q 218.46 -16.63 220.21 -18.63 Q 221.96 -20.63 223.71 -18.63 Q 225.46 -16.63 227.21 -18.63 Q 228.96 -20.63 230.71 -18.63 Q 232.46 -16.63 234.21 -18.63 Q 235.96 -20.63 237.71 -18.63 Q 239.46 -16.63 241.21 -18.63 Q 242.96 -20.63 244.71 -18.63 Q 246.46 -16.63 248.21 -18.63 Q 249.96 -20.63 251.71 -18.63 Q 253.46 -16.63 255.21 -18.63 Q 256.96 -20.63 258.71 -18.63 Q 260.46 -16.63 262.21 -18.63 Q 263.96 -20.63 265.71 -18.63 Q 267.46 -16.63 269.21 -18.63 Q 270.96 -20.63 272.71 -18.63 Q 274.46 -16.63 276.21 -18.63 Q 277.96 -20.63 279.71 -18.63 Q 281.46 -16.63 283.21 -18.63 Q 284.96 -20.63 286.71 -18.63 Q 288.46 -16.63 290.21 -18.63 Q 291.96 -20.63 293.71 -18.63 Q 295.46 -16.63 297.21 -18.63 Q 298.96 -20.63 300.71 -18.63 Q 302.46 -16.63 304.21 -18.63 Q 305.96 -20.63 307.71 -18.63 Q 309.46 -16.63 311.21 -18.63 Q 312.17 -20.63 313.13 -18.63" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="165.08" y="-23.91" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+        <path d="M 178.21 -28.91 Q 179.96 -30.91 181.71 -28.91 Q 183.46 -26.91 185.21 -28.91 Q 186.96 -30.91 188.71 -28.91 Q 190.46 -26.91 192.21 -28.91 Q 193.96 -30.91 195.71 -28.91 Q 197.46 -26.91 199.21 -28.91 Q 200.96 -30.91 202.71 -28.91 Q 204.46 -26.91 206.21 -28.91 Q 207.96 -30.91 209.71 -28.91 Q 211.46 -26.91 213.21 -28.91 Q 214.96 -30.91 216.71 -28.91 Q 218.46 -26.91 220.21 -28.91 Q 221.96 -30.91 223.71 -28.91 Q 225.46 -26.91 227.21 -28.91 Q 228.96 -30.91 230.71 -28.91 Q 232.46 -26.91 234.21 -28.91 Q 235.96 -30.91 237.71 -28.91 Q 239.46 -26.91 241.21 -28.91 Q 242.96 -30.91 244.71 -28.91 Q 246.46 -26.91 248.21 -28.91 Q 249.96 -30.91 251.71 -28.91 Q 253.46 -26.91 255.21 -28.91 Q 256.96 -30.91 258.71 -28.91 Q 260.46 -26.91 262.21 -28.91 Q 263.96 -30.91 265.71 -28.91 Q 267.46 -26.91 269.21 -28.91 Q 270.96 -30.91 272.71 -28.91 Q 274.46 -26.91 276.21 -28.91 Q 277.96 -30.91 279.71 -28.91 Q 281.46 -26.91 283.21 -28.91 Q 284.96 -30.91 286.71 -28.91 Q 288.46 -26.91 290.21 -28.91 Q 291.96 -30.91 293.71 -28.91 Q 295.46 -26.91 297.21 -28.91 Q 298.96 -30.91 300.71 -28.91 Q 302.46 -26.91 304.21 -28.91 Q 305.96 -30.91 307.71 -28.91" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
       </g>
       <g class="trill">
         <text x="321.13" y="-23.91" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
@@ -647,20 +647,20 @@
         <text x="502.41" y="-55.81" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
       </g>
     </g>
-    <line x1="76.78" y1="71.81" x2="76.78" y2="811.14" class="system-join" stroke="#1a1a1a" stroke-width="1"/>
+    <line x1="76.78" y1="76.81" x2="76.78" y2="816.14" class="system-join" stroke="#1a1a1a" stroke-width="1"/>
     <g class="bracket">
-      <rect x="66.28" y="69.31" width="5" height="202.71" fill="#1a1a1a"/>
-      <rect x="66.28" y="69.31" width="15" height="2.5" fill="#1a1a1a"/>
-      <rect x="66.28" y="269.52" width="15" height="2.5" fill="#1a1a1a"/>
+      <rect x="66.28" y="74.31" width="5" height="202.71" fill="#1a1a1a"/>
+      <rect x="66.28" y="74.31" width="15" height="2.5" fill="#1a1a1a"/>
+      <rect x="66.28" y="274.52" width="15" height="2.5" fill="#1a1a1a"/>
     </g>
     <g class="bracket">
-      <rect x="66.28" y="531.83" width="5" height="143" fill="#1a1a1a"/>
-      <rect x="66.28" y="531.83" width="15" height="2.5" fill="#1a1a1a"/>
-      <rect x="66.28" y="672.33" width="15" height="2.5" fill="#1a1a1a"/>
+      <rect x="66.28" y="536.83" width="5" height="143" fill="#1a1a1a"/>
+      <rect x="66.28" y="536.83" width="15" height="2.5" fill="#1a1a1a"/>
+      <rect x="66.28" y="677.33" width="15" height="2.5" fill="#1a1a1a"/>
     </g>
-    <text x="56.28" y="174.86" class="instrument-name" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="end" fill="#1a1a1a">Gt.</text>
-    <text x="56.28" y="399.48" class="instrument-name" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="end" fill="#1a1a1a">Gt. 2</text>
-    <text x="56.28" y="607.53" class="instrument-name" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="end" fill="#1a1a1a">Bass</text>
-    <text x="56.28" y="795.34" class="instrument-name" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="end" fill="#1a1a1a">Ens.</text>
+    <text x="56.28" y="179.86" class="instrument-name" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="end" fill="#1a1a1a">Gt.</text>
+    <text x="56.28" y="404.48" class="instrument-name" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="end" fill="#1a1a1a">Gt. 2</text>
+    <text x="56.28" y="612.53" class="instrument-name" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="end" fill="#1a1a1a">Bass</text>
+    <text x="56.28" y="800.34" class="instrument-name" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="end" fill="#1a1a1a">Ens.</text>
   </g>
 </svg>

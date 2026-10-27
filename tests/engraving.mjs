@@ -4389,6 +4389,31 @@ test('techniques11', 'trill on the notation staff: above vibrato / tremolo, T ab
   ok(trs[4].bottom <= tall.y - 1 * SP + EPS, `trill bottom ${trs[4].bottom} vs tall note head ${tall.y}`);
 });
 
+test('techniques11', 'trill runs: consecutive trills on a system share one glyph baseline per staff (graces don\'t break a run, a plain note or rest does), raised to the run\'s highest, and their glyphs / suffixes / waves never overlap', () => {
+  const score = { tracks: [{ name: 'G', showTablature: true, measures: [
+    { beats: [bt(3, 5, {}, { trill: 7 }), gr(), bt(1, 12, { vibrato: true }, { trill: true }), bt(2, 8, {}, { trill: true }), bt(3, 5)] },
+    { beats: [bt(3, 5, {}, { trill: true }), rst(), bt(1, 12, { vibrato: true }, { trill: true }), bt(3, 5, {}, { trill: 7 })] },
+  ] }] };
+  const svg = renderTree(score, 1400);
+  const runs = [[0, 1, 2], [3], [4, 5]];
+  [tabStg(svg), notStg(svg)].forEach((stg, k) => {
+    const name = k ? 'notation' : 'TAB';
+    const trs = trillsOf(stg);
+    ok(trs.length === 6, `${name}: ${trs.length} trills`);
+    if (trs.length !== 6) return;
+    const ys = trs.map((t) => num(tg(stg, 'trill').find((g) => trillInfo(g).x === t.x).children[0], 'y'));
+    runs.forEach((run) => run.slice(1).forEach((i) => {
+      near(ys[i], ys[run[0]], EPS, `${name}: trill ${i} baseline vs run start ${run[0]}`);
+      const prev = trs[i - 1];
+      const right = prev.waveBox ? prev.waveBox.x2 : (prev.sufBox ? prev.sufBox.x2 : prev.glyph.x2);
+      ok(right < trs[i].glyph.x1 - EPS, `${name}: trill ${i - 1} ink ends ${right}, trill ${i} glyph starts ${trs[i].glyph.x1}`);
+    }));
+    // A plain note (trill 2 -> 3) and a rest (3 -> 4) end a run: the lone low trill 3 keeps its own, lower line.
+    ok(ys[3] > ys[2] + 0.3 * SP, `${name}: trill 3 baseline ${ys[3]} vs run before it ${ys[2]}`);
+    ok(ys[3] > ys[4] + 0.3 * SP, `${name}: trill 3 baseline ${ys[3]} vs run after it ${ys[4]}`);
+  });
+});
+
 test('techniques11', 'trill: deterministic, input untouched, garbage trill / slap / pop / rake / whammy values never throw', () => {
   const garbage = [null, undefined, NaN, Infinity, -1, 2.5, '', 'zz', [], [1], {}, { fret: 'x', pitch: 7 }, () => 1, false, 0];
   garbage.forEach((v) => {

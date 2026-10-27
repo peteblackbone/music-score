@@ -13,7 +13,7 @@ import { TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../../layout/ink.js';
 import { estimateTextWidth, fretLabel, fretLabelWidth } from '../../textMetrics.js';
 import { isNaturalHarmonic, decoratesFretLabel } from '../../harmonics.js';
 import { beatTapMark, beatWhammy, beatTrill, trillTabFret, TAP_MARK_LETTERS } from '../../directions.js';
-import { trillEndX, trillGeometry, renderTrill } from '../trill.js';
+import { trillEndX, trillRunEndX, trillGeometry, trillRuns, renderTrill } from '../trill.js';
 import { planWhammyLines, renderWhammyLine } from '../whammy.js';
 import { flattenRuns, tabTopY, inkTopInSpan, breakEndX, breakStartX } from './common.js';
 
@@ -71,7 +71,10 @@ const WHAMMY_FRET_HALF_SP = 1; // horizontal reach assumed for another beat's fr
  * - a trill (`note.trill`) draws "tr" and a wavy line (draw/trill.js) above
  *   the beat's frets and marks and the TAB top line, "(n)" after the glyph
  *   when the fret it alternates with is known; the wave ends 0.8 sp before
- *   the next beat and never past the system's last barline;
+ *   the next beat and never past the system's last barline; consecutive
+ *   trills on a system (graces between them allowed; trillRuns) share one
+ *   line, the highest of their own, each wave ending before the next "tr",
+ *   drawn before the run's T / S / P and dips;
  * - a tapped note (`note.tap`, not a tapped harmonic) puts one bold "T"
  *   above the beat, above the TAB top line, the beat's topmost fret label
  *   and its tab tremolo / vibrato, raised above any hammer-on/pull-off
@@ -183,7 +186,11 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
     // boxes join the bend boxes, so technique labels (and later dips) clear them.
     const beats = [];
     flattenRuns(trackRuns, track, (layoutEl, run) => beats.push({ layoutEl, run }));
-    beats.forEach(({ layoutEl, run }) => {
+    // Consecutive trills on a system share one line: drawn together at the run's first beat, at the highest of their own bottoms.
+    const runs = trillRuns(beats, (b) => !!beatTrill(b.layoutEl.el), (b) => b.run.sysIdx, (b) => b.layoutEl.el.type === 'grace');
+    const trillTops = new Map();
+    beats.forEach((beat) => {
+      const { layoutEl, run } = beat;
       const el = layoutEl.el;
       const x = layoutEl.x;
       const mark = beatTapMark(el);
@@ -193,27 +200,16 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
       const tabTop = tabTopY(run, stringCount, theme);
       const fretTop = layoutEl.tabRendered?.fretTopY ?? Infinity;
       const marksTop = layoutEl.tabRendered?.marksTopY ?? Infinity;
-      let trillTop = Infinity;
-      if (trilled) {
-        // Wave to just before the next note on the system; "(n)" after "tr" when the other fret is known.
-        const next = flat.find((c) => c.sysIdx === run.sysIdx && c.x > x)?.x;
-        const endX = trillEndX(x, next ?? Infinity, breakEndX(systems, run.sysIdx, theme), theme);
-        const fret = trillTabFret(trilled.note, trilled.trill);
-        const suffix = fret != null ? `(${fret})` : null;
-        const span = trillGeometry(x, 0, endX, theme, suffix);
-        // Ink under the trill: this beat's frets and marks, nearby beats' frets and marks, and every bend / T / dip / H-P box in its span.
-        const inkTop = Math.min(
-          inkTopInSpan(span.x1, span.x2, { fretTopY: fretTop, marksTopY: marksTop, boxLists: [run.tabInkBoxes, run.hpBoxes] }),
-          ...beats.filter((o) => o.run === run && o.layoutEl !== layoutEl).flatMap(({ layoutEl: ol }) => [
-            ol.x - WHAMMY_FRET_HALF_SP * s < span.x2 && ol.x + WHAMMY_FRET_HALF_SP * s > span.x1 ? (ol.tabRendered?.fretTopY ?? Infinity) : Infinity,
-            ol.x - TRILL_MARKS_LEFT_SP * s < span.x2 && ol.x + TRILL_MARKS_REACH_SP * s > span.x1 ? (ol.tabRendered?.marksTopY ?? Infinity) : Infinity,
-          ]),
-        );
-        const bottomY = Math.min(tabTop - TRILL_TAB_STAFF_CLEAR_SP * s, inkTop - TRILL_TAB_CLEAR_SP * s);
-        const drawn = renderTrill(run.tabG, x, bottomY, endX, theme.tabFretColor, theme, suffix);
-        drawn.boxes.forEach((b) => run.tabInkBoxes.push({ ...b, noteX: x }));
-        trillTop = drawn.top;
+      if (trilled && !trillTops.has(beat)) {
+        const plans = runs.get(beat).map((m, i, all) => trillPlan(m, all[i + 1], beats, flat, stringCount, systems, theme));
+        const bottomY = Math.min(...plans.map((pl) => pl.bottomY));
+        plans.forEach((pl) => {
+          const drawn = renderTrill(pl.run.tabG, pl.x, bottomY, pl.endX, theme.tabFretColor, theme, pl.suffix);
+          drawn.boxes.forEach((b) => pl.run.tabInkBoxes.push({ ...b, noteX: pl.x }));
+          trillTops.set(pl.beat, drawn.top);
+        });
       }
+      const trillTop = trilled ? trillTops.get(beat) : Infinity;
       if (mark) {
         const size = techniqueLabelSize(theme);
         let baselineY = Math.min(tabTop - TAP_STAFF_CLEAR_SP * s, fretTop - TAP_FRET_CLEAR_SP * s, marksTop - TAP_MARK_CLEAR_SP * s,
@@ -265,4 +261,37 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
       renderWhammyLine(run.tabG, seg, bottomY, theme).forEach((b) => run.tabInkBoxes.push(b));
     });
   });
+}
+
+/**
+ * A trill on TAB beat `beat` (from renderTabArticulations' `beats`) as it
+ * would sit alone: `{ beat, run, x, endX, suffix, bottomY }`. The wave runs
+ * to just before the next note on the system (and the run's next trill,
+ * `nextTrill`, when there is one); "(n)" follows "tr" when the
+ * other fret is known; `bottomY` clears the TAB top line and the ink under
+ * the trill - the beat's frets and marks, nearby beats' frets and marks,
+ * and every bend / T / dip / H-P box drawn so far in its span.
+ */
+function trillPlan(beat, nextTrill, beats, flat, stringCount, systems, theme) {
+  const s = theme.staffLineSpacing;
+  const { layoutEl, run } = beat;
+  const x = layoutEl.x;
+  const trilled = beatTrill(layoutEl.el);
+  const next = flat.find((c) => c.sysIdx === run.sysIdx && c.x > x)?.x;
+  const endX = trillRunEndX(trillEndX(x, next ?? Infinity, breakEndX(systems, run.sysIdx, theme), theme), nextTrill?.layoutEl.x, theme);
+  const fret = trillTabFret(trilled.note, trilled.trill);
+  const suffix = fret != null ? `(${fret})` : null;
+  const span = trillGeometry(x, 0, endX, theme, suffix);
+  const inkTop = Math.min(
+    inkTopInSpan(span.x1, span.x2, {
+      fretTopY: layoutEl.tabRendered?.fretTopY ?? Infinity, marksTopY: layoutEl.tabRendered?.marksTopY ?? Infinity,
+      boxLists: [run.tabInkBoxes, run.hpBoxes],
+    }),
+    ...beats.filter((o) => o.run === run && o.layoutEl !== layoutEl).flatMap(({ layoutEl: ol }) => [
+      ol.x - WHAMMY_FRET_HALF_SP * s < span.x2 && ol.x + WHAMMY_FRET_HALF_SP * s > span.x1 ? (ol.tabRendered?.fretTopY ?? Infinity) : Infinity,
+      ol.x - TRILL_MARKS_LEFT_SP * s < span.x2 && ol.x + TRILL_MARKS_REACH_SP * s > span.x1 ? (ol.tabRendered?.marksTopY ?? Infinity) : Infinity,
+    ]),
+  );
+  const bottomY = Math.min(tabTopY(run, stringCount, theme) - TRILL_TAB_STAFF_CLEAR_SP * s, inkTop - TRILL_TAB_CLEAR_SP * s);
+  return { beat, run, x, endX, suffix, bottomY };
 }

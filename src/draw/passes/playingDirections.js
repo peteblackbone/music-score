@@ -11,7 +11,7 @@ import { estimateTextWidth } from '../../textMetrics.js';
 import { beatTapMark, beatPickStroke, beatTrill, TAP_MARK_LETTERS } from '../../directions.js';
 import { glyphBox } from '../../glyphMetrics.js';
 import { pickStrokeGlyph, Glyph } from '../../glyphs.js';
-import { trillEndX, renderTrill } from '../trill.js';
+import { trillEndX, trillRunEndX, trillRuns, renderTrill } from '../trill.js';
 import { flattenRuns, tabTopY, inkTopInSpan, breakEndX, breakStartX } from './common.js';
 import { collectBeats, findSlurs, beatClearTop } from './notationBeats.js';
 
@@ -41,7 +41,9 @@ const PICK_TAB_CLEAR_SP = 0.4;
  *   of their own; a T stays on its beat (so at least DIRECTION_STACK_GAP_SP
  *   below that line). A trill spans from its beat to 0.8 sp before the next
  *   beat (never past the last barline), sits above the vibrato / tremolo and
- *   below the next rendered note's top by TRILL_NEXT_CLEAR_SP. The top of the stack is recorded as
+ *   below the next rendered note's top by TRILL_NEXT_CLEAR_SP; consecutive
+ *   trills on a system (graces between them allowed; trillRuns) share one
+ *   line, the highest of their own, each wave ending before the next "tr". The top of the stack is recorded as
  *   `info.directionTopY` for renderFermatas. A track with a notation staff
  *   shows pick strokes there only.
  * - tab-only track: the pick stroke above the TAB staff, at least
@@ -61,19 +63,27 @@ export function renderPlayingDirections(score, trackRuns, theme, systems) {
       slurAboveCurves(beats, systems, theme);
       const tapSize = techniqueLabelSize(theme);
       const trillHalf = (glyphBox(Glyph.ornamentTrill).width / 2) * sp;
+      // Each trill's own bottom (the other trills' ink never counts), then one shared line per run of trills.
+      const trilled = marked.filter((item) => item.trill);
+      const runs = trillRuns(beats, (b) => trilled.includes(b), (b) => b.sysIdx, (b) => !!b.info?.isGrace);
+      trilled.forEach((item) => {
+        const at = beats.indexOf(item);
+        const later = beats.filter((b, bi) => bi > at && b.sysIdx === item.sysIdx);
+        const nextOn = later[0];
+        const run = runs.get(item);
+        item.trillEndX = trillRunEndX(trillEndX(item.x, nextOn ? nextOn.x : Infinity, breakEndX(systems, item.sysIdx, theme), theme),
+          run[run.indexOf(item) + 1]?.x, theme);
+        const nextNote = later.find((b) => b.info && !b.info.isRest);
+        item.trillBottomY = Math.min(
+          beatClearTop(item, sp, slurClearSpan(item, item.x - trillHalf, item.trillEndX, sp)),
+          nextNote ? nextNote.topY - TRILL_NEXT_CLEAR_SP * sp : Infinity,
+        );
+      });
       // Each beat's own stack: trill, then T / S / P on the ink under it, then the pick stroke's own baseline.
       marked.forEach((item) => {
         if (item.trill) {
-          const at = beats.indexOf(item);
-          const later = beats.filter((b, bi) => bi > at && b.sysIdx === item.sysIdx);
-          const nextOn = later[0];
-          const endX = trillEndX(item.x, nextOn ? nextOn.x : Infinity, breakEndX(systems, item.sysIdx, theme), theme);
-          const nextNote = later.find((b) => b.info && !b.info.isRest);
-          const bottomY = Math.min(
-            beatClearTop(item, sp, slurClearSpan(item, item.x - trillHalf, endX, sp)),
-            nextNote ? nextNote.topY - TRILL_NEXT_CLEAR_SP * sp : Infinity,
-          );
-          item.trillTop = renderTrill(item.g, item.x, bottomY, endX, theme.noteColor, theme, null).top;
+          const bottomY = Math.min(...runs.get(item).map((m) => m.trillBottomY));
+          item.trillTop = renderTrill(item.g, item.x, bottomY, item.trillEndX, theme.noteColor, theme, null).top;
         }
         if (item.tapMark) {
           const tapHalf = estimateTextWidth(TAP_MARK_LETTERS[item.tapMark], tapSize, { bold: true }) / 2;

@@ -23,9 +23,43 @@ const TRILL_MIN_WAVE_SP = 0.7;    // shorter waves are left out
 const TRILL_SUFFIX_GAP_SP = 0.15; // glyph -> suffix text
 const TRILL_STROKE_WIDTH = 1.1;
 
+/**
+ * Runs of consecutive trilled beats on one system, which share one trill
+ * line: `beats` in score order; `trilled(b)`, `sysOf(b)` and `isGrace(b)`
+ * read a beat. A beat that is neither trilled nor a grace (a plain note or
+ * a rest) or a new system ends the run; grace notes don't. Returns a Map
+ * trilled beat -> its run (the run's trilled beats in order; a single
+ * trill is a run of one).
+ */
+export function trillRuns(beats, trilled, sysOf, isGrace) {
+  const out = new Map();
+  let cur = null;
+  beats.forEach((b) => {
+    if (cur && sysOf(b) !== sysOf(cur[0])) cur = null;
+    if (trilled(b)) {
+      if (!cur) cur = [];
+      cur.push(b);
+      out.set(b, cur);
+    } else if (!isGrace(b)) cur = null;
+  });
+  return out;
+}
+
 /** Right end of a trill's wave: 0.8 sp before the next beat (`nextX`, Infinity when none), never past `breakEnd`. */
 export function trillEndX(x, nextX, breakEnd, theme) {
   return Math.min(nextX - TRILL_NEXT_GAP_SP * theme.staffLineSpacing, breakEnd);
+}
+
+/**
+ * Wave end `endX` (trillEndX) of a trill followed in its run (trillRuns)
+ * by the trill at `nextTrillX`: also TRILL_WAVE_GAP_SP before that trill's
+ * glyph, which sits on the same line. Unchanged when `nextTrillX` is
+ * undefined (the run's last trill).
+ */
+export function trillRunEndX(endX, nextTrillX, theme) {
+  if (nextTrillX === undefined) return endX;
+  const sp = theme.staffLineSpacing;
+  return Math.min(endX, nextTrillX - (glyphBox(Glyph.ornamentTrill).width / 2 + TRILL_WAVE_GAP_SP) * sp);
 }
 
 /**
