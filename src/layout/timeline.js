@@ -8,7 +8,7 @@
  * - each onset has a left and right extent (max over all staves) from
  *   layoutChord / rest glyph boxes / fret-label widths, and, on TAB staves
  *   with rhythm (track.tabRhythm), the band's flags, dots and rests
- *   (layout/tabRhythm.js);
+ *   (layout/tabRhythm.js), and room for an arpeggio line left of a chord;
  * - the gap from onset i to i+1 is max(ideal, collision minimum), with
  *   ideal = max(minNoteSpacing, quarterSpacing · √(Δt / ¼)) and minimum =
  *   rightExt(i) + leftExt(i+1) + 0.3 sp; the last onset → barline gap
@@ -26,11 +26,12 @@ import { staffPosition } from '../pitch.js';
 import { noteheadForDuration, restForDuration, flagForDuration } from '../glyphs.js';
 import { glyphBox } from '../glyphMetrics.js';
 import { groupBeams } from './beams.js';
-import { layoutChord, DOT_GAP_SP, DOT_STEP_SP, DOT_RADIUS_SP } from './chord.js';
+import { layoutChord, arpeggioInnerLeft, DOT_GAP_SP, DOT_STEP_SP, DOT_RADIUS_SP, ARPEGGIO_ROOM_SP } from './chord.js';
 import { resolveMeasureAccidentals } from './accidentals.js';
 import { fretLabel, fretLabelWidth } from '../textMetrics.js';
 import { layoutHeadGlyph } from '../harmonics.js';
 import { tabRhythmExtents } from './tabRhythm.js';
+import { beatArpeggio } from '../directions.js';
 
 const COLLISION_PAD_SP = 0.3;
 const TAIL_IDEAL_REDUCTION_SP = 0.5;
@@ -76,7 +77,7 @@ function notationExtents(el, positions, stemUp, accNames, beamed, theme) {
 }
 
 /** Tab-staff extents (px) of one beat: half the widest fret-label knock-out. */
-function tabExtents(el, theme) {
+export function tabExtents(el, theme) {
   if (el.type === 'rest') return { left: 0, right: 0 };
   let half = 0;
   (el.notes || []).forEach((n) => {
@@ -154,6 +155,13 @@ function trackEvents(track, mi, theme) {
         left = Math.max(left, rx.left); right = Math.max(right, rx.right);
         leftFirst = Math.max(leftFirst, rx.left);
       }
+    }
+    // An arpeggio line sits left of the chord's notation and TAB ink.
+    if (beatArpeggio(el)) {
+      const room = ARPEGGIO_ROOM_SP * theme.staffLineSpacing;
+      const tabIn = track.showTablature ? tabExtents(el, theme).left : 0;
+      left = Math.max(left, arpeggioInnerLeft(chord) + room, tabIn + room);
+      leftFirst = Math.max(leftFirst, arpeggioInnerLeft(chordFirst) + room, tabIn + room);
     }
     const graceLead = pending.length ? pending.length * graceW + graceHalf : 0;
     const ev = {

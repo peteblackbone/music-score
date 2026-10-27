@@ -908,6 +908,52 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- arpeggio room (layout/timeline.js buildColumn) ----------
+{
+  const { buildColumn, tabExtents } = await imp('src/layout/timeline.js');
+  const { arpeggioInnerLeft, ARPEGGIO_ROOM_SP } = await imp('src/layout/chord.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const theme = resolveTheme();
+  const sp = theme.staffLineSpacing;
+  const close = (a, b, m) => { if (Math.abs(a - b) > 1e-9) throw new Error(`${m}: expected ${b}, got ${a}`); };
+  const column = (beats, extra = {}) => {
+    const score = normalizeScore({ tracks: [{ showTablature: true, ...extra, measures: [{ beats }] }] });
+    return buildColumn(0, score, theme).tracks[0].events;
+  };
+  const chordNotes = [{ string: 4, fret: 4 }, { string: 3, fret: 3 }, { string: 2, fret: 2 }];
+  const q = (extra, notes = chordNotes) => ({ type: 'note', duration: 'quarter', notes, ...extra });
+  test('arpeggio room: ownLeft / ownLeftFirst = max(arpeggioInnerLeft, TAB left) + 1.0 sp on an arpeggio chord', () => {
+    const plain = column([q({}), q({}), q({}), q({})]);
+    const marked = column([q({ arpeggio: true }), q({ arpeggio: 'up' }), q({ arpeggio: 'down' }), q({})]);
+    const tabIn = tabExtents(q({}), theme).left;
+    eq(tabIn > 0, true);
+    for (let i = 0; i < 3; i++) {
+      const ev = marked[i];
+      const want = Math.max(arpeggioInnerLeft(ev.chord), tabIn) + ARPEGGIO_ROOM_SP * sp;
+      close(ev.ownLeft, Math.max(plain[i].ownLeft, want), `ownLeft ${i}`);
+      close(ev.ownLeftFirst, Math.max(plain[i].ownLeftFirst, Math.max(arpeggioInnerLeft(ev.chordFirst), tabIn) + ARPEGGIO_ROOM_SP * sp), `ownLeftFirst ${i}`);
+      eq(ev.ownLeft > plain[i].ownLeft, true, 'room added');
+    }
+    close(marked[3].ownLeft, plain[3].ownLeft, 'unmarked beat');
+  });
+  test('arpeggio room: restated tied accidental widens ownLeftFirst only; single notes, rests and graces reserve nothing', () => {
+    const tied = [{ type: 'note', duration: 'quarter', arpeggio: true, notes: [{ pitch: 'F#4', tieEnd: true }, { pitch: 'A4' }, { pitch: 'C5' }] }];
+    const [ev] = column(tied, { showTablature: false });
+    close(ev.ownLeft, arpeggioInnerLeft(ev.chord) + ARPEGGIO_ROOM_SP * sp, 'ownLeft');
+    close(ev.ownLeftFirst, arpeggioInnerLeft(ev.chordFirst) + ARPEGGIO_ROOM_SP * sp, 'ownLeftFirst');
+    eq(ev.ownLeftFirst > ev.ownLeft, true, 'restated sharp is further left');
+    const beats = [
+      { type: 'grace', duration: '16th', arpeggio: true, notes: chordNotes },
+      q({ arpeggio: true }, [{ string: 2, fret: 1 }]),
+      { type: 'rest', duration: 'quarter', arpeggio: true },
+      q({ arpeggio: 'bogus' }), q({ arpeggio: false }),
+    ];
+    const stripped = beats.map(({ arpeggio, ...b }) => b);
+    const a = column(beats); const b = column(stripped);
+    a.forEach((ev2, i) => { close(ev2.ownLeft, b[i].ownLeft, `ownLeft ${i}`); close(ev2.left, b[i].left, `left ${i}`); close(ev2.ownLeftFirst ?? 0, b[i].ownLeftFirst ?? 0, `first ${i}`); });
+  });
+}
+
 // ---------- rest glyphs ----------
 {
   const { restForDuration } = await imp('src/glyphs.js');
