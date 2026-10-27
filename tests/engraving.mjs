@@ -4012,6 +4012,103 @@ test('chordDiagrams', 'determinism: fixtures render identically twice; inputs un
 });
 }
 
+// ======================= techniques 1.1 (slap / pop, rake, trill, whammy dive / return / pre-dive) =======================
+// Raw-score oracles, geometry recomputed from the rendered SVG (local staff coordinates). Fixtures `techniques-11`
+// (w900) and `techniques-11-break` (w600) are in tests/fixtures/characterization.js; unit tables live in units.mjs.
+{
+const SP = DEF.staffLineSpacing;
+const tg = (root, c) => all(root).filter(({ n }) => n.tag === 'g' && cls(n).split(' ').includes(c)).map(({ n }) => n);
+const tAny = (...beats) => ({ tracks: [{ name: 'G', showTablature: true, measures: [{ beats }] }] });
+const tOnly = (beats, extra = {}) => ({ tracks: [{ name: 'G', showStandardNotation: false, showTablature: true, measures: [{ beats }], ...extra }] });
+const nOnly = (beats, extra = {}) => ({ tracks: [{ name: 'N', measures: [{ beats }], ...extra }] });
+const bt = (string, fret, extra = {}, note = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string, fret, ...note }], ...extra });
+const nt = (pitch, extra = {}, note = {}) => ({ type: 'note', duration: 'quarter', notes: [{ pitch, ...note }], ...extra });
+const rst = () => ({ type: 'rest', duration: 'quarter' });
+// x of every layout element (graces included) of track `ti`, in score order, with its system index.
+const elXs = (score, width, ti = 0) => layoutOf(score, width).systems.flatMap((sys, si) => sys.tracks[ti].measures.flatMap((m) => m.elements.map((le) => ({ si, x: le.x, type: le.el.type }))));
+const tabStg = (svg, si = 0, ti = 0) => staffOfTrack(svg, si, ti, true);
+const notStg = (svg, si = 0, ti = 0) => staffOfTrack(svg, si, ti, false);
+const letterBox = (g) => ({ ...tbox(g.children[0], { bold: true }), x: num(g.children[0], 'x'), letter: g.children[0]._text });
+const hpLetters = (stg) => tg(stg, 'hammer-pull').map((g) => g.children.find((c) => c.tag === 'rect')).filter(Boolean).map(rectBox);
+
+// ---------- slap / pop ----------
+test('techniques11', 'slap / pop: one bold letter per beat by priority tap > slap > pop, class slap / pop, centred on the beat, TAB and notation both; none on rests, graces or tapped harmonics', () => {
+  const score = tAny(
+    bt(3, 5, {}, { slap: true }),
+    bt(3, 5, {}, { pop: true }),
+    hq([{ string: 3, fret: 5, pop: true }, { string: 2, fret: 3, slap: true }]),
+    bt(3, 5, {}, { tap: true, slap: true, pop: true }),
+    { ...rst(), slap: true },
+    { type: 'grace', duration: '16th', notes: [{ string: 3, fret: 5, slap: true }] },
+    bt(3, 5, {}, { slap: true, tap: true, harmonic: 'tapped', harmonicFret: 17 }),
+    bt(3, 5),
+  );
+  const svg = renderTree(score, 1200);
+  const xs = elXs(score, 1200).filter((e) => e.type !== 'grace' || true);
+  const want = [['slap', 'S', xs[0].x], ['pop', 'P', xs[1].x], ['slap', 'S', xs[2].x], ['tap', 'T', xs[3].x]];
+  const slapTH = xs[6].x;
+  [tabStg(svg), notStg(svg)].forEach((stg, k) => {
+    const got = ['slap', 'pop', 'tap'].flatMap((c) => tg(stg, c).map((g) => ({ c, ...letterBox(g) }))).sort((a, b) => a.x - b.x);
+    // the tapped harmonic + slap beat shows S (T.H. already says tapped); beats 4 shows T
+    const exp = [...want, ['slap', 'S', slapTH]];
+    ok(got.length === exp.length, `${k ? 'notation' : 'TAB'}: ${got.length} letters, expected ${exp.length}`);
+    got.forEach((g, i) => {
+      ok(g.c === exp[i][0] && g.letter === exp[i][1], `letter ${i}: ${g.c} "${g.letter}" vs ${exp[i][0]} "${exp[i][1]}"`);
+      near(g.x, exp[i][2], EPS, `letter ${i} x`);
+      const t = tg(stg, g.c).find((q_) => Math.abs(num(q_.children[0], 'x') - g.x) < EPS).children[0];
+      ok(t.getAttribute('font-weight') === 'bold' && t.getAttribute('text-anchor') === 'middle' && !t.getAttribute('font-style'), 'bold upright centred');
+    });
+  });
+});
+
+test('techniques11', 'slap / pop on TAB: baseline >= 0.4 sp above the top line and every fret ink under it, >= 0.5 sp clear of a hammer-on/pull-off letter; notation pick stroke >= 0.4 sp above the letter', () => {
+  const score = tAny(
+    bt(3, 5, { pickStroke: 'down' }, { slap: true }),
+    bt(2, 12, { pickStroke: 'up' }, { pop: true }),
+    bt(1, 15, { pickStroke: 'down', hammerPull: true }, { pop: true, hammerPull: 'p' }),
+    bt(1, 12, {}, {}),
+  );
+  const svg = renderTree(score, 1200);
+  const stg = tabStg(svg);
+  const info = staffInfo(stg);
+  const frets = tabInk(stg).filter((b) => b.kind === 'fret');
+  const letters = hpLetters(stg);
+  const marks = ['slap', 'pop'].flatMap((c) => tg(stg, c).map(letterBox));
+  ok(marks.length === 3 && letters.length >= 1, `${marks.length} TAB letters, ${letters.length} H/P letters`);
+  marks.forEach((m) => {
+    const t = tg(stg, m.letter === 'S' ? 'slap' : 'pop').find((g) => Math.abs(num(g.children[0], 'x') - m.x) < EPS).children[0];
+    ok(num(t, 'y') <= info.localTop - 0.4 * SP + EPS, `TAB letter at ${m.x}: baseline ${num(t, 'y')} vs top line ${info.localTop}`);
+    frets.filter((f) => xover(m, f)).forEach((f) => ok(num(t, 'y') <= f.top - 0.4 * SP + EPS, `fret ink ${f.top} under letter at ${m.x}`));
+    letters.forEach((l) => {
+      const pad = { x1: l.x1 - 0.5 * SP + EPS, x2: l.x2 + 0.5 * SP - EPS, top: l.top - 0.5 * SP + EPS, bottom: l.bottom + 0.5 * SP - EPS };
+      ok(!boxesHit(pad, m), `letter at ${m.x} within 0.5 sp of an H/P letter`);
+    });
+  });
+  const ns = notStg(svg);
+  const picks = dgroups(ns, 'pick-stroke').map(pickBox);
+  const nmarks = ['slap', 'pop'].flatMap((c) => tg(ns, c).map(letterBox));
+  ok(nmarks.length === 3 && picks.length === 3, `${nmarks.length} notation letters, ${picks.length} picks`);
+  nmarks.forEach((m) => {
+    const p = picks.find((q_) => Math.abs(q_.x - m.x) < EPS);
+    ok(p && p.bottom <= m.top - 0.4 * SP + EPS, `pick bottom ${p && p.bottom} not 0.4 sp above letter top ${m.top}`);
+  });
+});
+
+test('techniques11', 'slap / pop on a 4-string bass track (E1 A1 D2 G2): letters drawn on TAB and notation, nothing below the staff, no NaN', () => {
+  const bass = { tuning: ['E1', 'A1', 'D2', 'G2'], clef: 'bass' };
+  const score = { tracks: [{ name: 'B', ...bass, showTablature: true, measures: [{ beats: [bt(4, 3, {}, { slap: true }), bt(3, 2, {}, { pop: true }), bt(2, 0, {}, { tap: true }), bt(1, 5)] }] }] };
+  const svg = renderTree(score, 900);
+  ok(tg(tabStg(svg), 'slap').length === 1 && tg(tabStg(svg), 'pop').length === 1 && tg(tabStg(svg), 'tap').length === 1, 'TAB S P T');
+  ok(tg(notStg(svg), 'slap').length === 1 && tg(notStg(svg), 'pop').length === 1 && tg(notStg(svg), 'tap').length === 1, 'notation S P T');
+  const s = serialize(svg);
+  ok(!/NaN|undefined|Infinity/.test(s), 'no NaN/undefined/Infinity');
+  const info = staffInfo(tabStg(svg));
+  tg(tabStg(svg), 'slap').forEach((g) => ok(num(g.children[0], 'y') < info.localTop, 'above the staff'));
+});
+
+// @@T11-END
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

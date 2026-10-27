@@ -8,7 +8,7 @@ import { renderPickStroke, curveOuterPoints } from '../notation.js';
 import { renderTapMark, techniqueLabelSize } from '../tab.js';
 import { TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../../layout/ink.js';
 import { estimateTextWidth } from '../../textMetrics.js';
-import { beatTaps, beatPickStroke } from '../../directions.js';
+import { beatTapMark, beatPickStroke, TAP_MARK_LETTERS } from '../../directions.js';
 import { glyphBox } from '../../glyphMetrics.js';
 import { pickStrokeGlyph } from '../../glyphs.js';
 import { flattenRuns, tabTopY, inkTopInSpan, breakEndX, breakStartX } from './common.js';
@@ -27,7 +27,8 @@ const PICK_TAB_CLEAR_SP = 0.4;
  * after the technique labels and before chord symbols (which then clear
  * them through the staff's ink) and fermatas:
  *
- * - notation staff: a tap "T" (`note.tap`) then the pick stroke
+ * - notation staff: a tap "T" (`note.tap`; or "S" / "P" for `note.slap` /
+ *   `note.pop`, one letter per beat, `beatTapMark`) then the pick stroke
  *   (`pickStroke` 'down' | 'up'), stacked DIRECTION_STACK_GAP_SP apart
  *   upward, clear of the staff, stem, articulations, vibrato / tremolo and
  *   tuplet bracket, and SLUR_DIRECTION_CLEAR_SP above a slur's outer edge
@@ -47,16 +48,16 @@ export function renderPlayingDirections(score, trackRuns, theme, systems) {
   score.tracks.forEach((track) => {
     if (track.showStandardNotation) {
       const beats = collectBeats(trackRuns, track, theme);
-      beats.forEach((item) => { item.taps = beatTaps(item.el); item.pick = beatPickStroke(item.el); });
+      beats.forEach((item) => { item.tapMark = beatTapMark(item.el); item.pick = beatPickStroke(item.el); });
       const marked = beats.filter((item) => item.info && !item.info.isRest && !item.info.isGrace
-        && (item.taps || item.pick));
+        && (item.tapMark || item.pick));
       if (!marked.length) return;
       slurAboveCurves(beats, systems, theme);
       const tapSize = techniqueLabelSize(theme);
-      const tapHalf = estimateTextWidth('T', tapSize, { bold: true }) / 2;
-      // Each beat's own stack: T on the ink under it, then the pick stroke's own baseline.
+      // Each beat's own stack: T / S / P on the ink under it, then the pick stroke's own baseline.
       marked.forEach((item) => {
-        if (item.taps) {
+        if (item.tapMark) {
+          const tapHalf = estimateTextWidth(TAP_MARK_LETTERS[item.tapMark], tapSize, { bold: true }) / 2;
           item.tapBaselineY = beatClearTop(item, sp, slurClearTop(item, tapHalf, sp)) - TEXT_DESCENT_EM * tapSize;
           item.tapTop = item.tapBaselineY - TEXT_ASCENT_EM * tapSize;
         }
@@ -64,7 +65,7 @@ export function renderPlayingDirections(score, trackRuns, theme, systems) {
           const pickHalf = (glyphBox(pickStrokeGlyph(item.pick)).width / 2) * sp;
           item.pickBottomY = Math.min(
             beatClearTop(item, sp, slurClearTop(item, pickHalf, sp)),
-            item.taps ? item.tapTop - DIRECTION_STACK_GAP_SP * sp : Infinity,
+            item.tapMark ? item.tapTop - DIRECTION_STACK_GAP_SP * sp : Infinity,
           );
         }
       });
@@ -77,7 +78,7 @@ export function renderPlayingDirections(score, trackRuns, theme, systems) {
       });
       marked.forEach((item) => {
         let top;
-        if (item.taps) top = renderTapMark(item.g, item.x, item.tapBaselineY, theme.noteColor, theme).top;
+        if (item.tapMark) top = renderTapMark(item.g, item.x, item.tapBaselineY, theme.noteColor, theme, item.tapMark).top;
         if (item.pick) {
           const key = groups.get(item.layoutEl);
           top = renderPickStroke(item.g, item.x, key ? shared.get(key) : item.pickBottomY, item.pick, theme.noteColor, theme);

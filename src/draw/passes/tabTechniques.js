@@ -12,12 +12,12 @@ import {
 import { TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../../layout/ink.js';
 import { estimateTextWidth, fretLabel, fretLabelWidth } from '../../textMetrics.js';
 import { isNaturalHarmonic, decoratesFretLabel } from '../../harmonics.js';
-import { beatTaps, beatWhammy } from '../../directions.js';
+import { beatTapMark, beatWhammy, TAP_MARK_LETTERS } from '../../directions.js';
 import { flattenRuns, tabTopY, inkTopInSpan, breakEndX, breakStartX } from './common.js';
 
 const SLIDE_STUB_SP = 2;         // outgoing slide stroke across a system break (horizontal length)
 const SLIDE_LABEL_CLEAR_SP = 0.2; // slide end -> edge of a wide (harmonic) fret-label knock-out
-// Tap "T" on the TAB staff: baseline at least this far above the top line, the beat's topmost fret label and its tremolo / vibrato.
+// Tap "T" / slap "S" / pop "P" on the TAB staff: baseline at least this far above the top line, the beat's topmost fret label and its tremolo / vibrato.
 const TAP_STAFF_CLEAR_SP = 0.4;
 const TAP_FRET_CLEAR_SP = 0.4;
 const TAP_MARK_CLEAR_SP = 0.3;
@@ -62,7 +62,9 @@ const WHAMMY_FRET_HALF_SP = 1; // horizontal reach assumed for another beat's fr
  * - a tapped note (`note.tap`, not a tapped harmonic) puts one bold "T"
  *   above the beat, above the TAB top line, the beat's topmost fret label
  *   and its tab tremolo / vibrato, raised above any hammer-on/pull-off
- *   letter it would come within TAP_HP_CLEAR_SP of;
+ *   letter it would come within TAP_HP_CLEAR_SP of; a slapped / popped note
+ *   (`note.slap` / `note.pop`) gets an "S" / "P" the same way, in the same
+ *   slot (one letter per beat, priority T > S > P; `beatTapMark`);
  * - `whammy` draws a dip ("V" plus "-1/2") above the TAB staff, its width
  *   limited like a bend's, stacked above the beat's frets, marks, "T" and
  *   any bend under it.
@@ -167,18 +169,18 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
     beats.forEach(({ layoutEl, run }) => {
       const el = layoutEl.el;
       const x = layoutEl.x;
-      const taps = beatTaps(el);
+      const mark = beatTapMark(el);
       const dip = beatWhammy(el);
-      if (!taps && !dip) return;
+      if (!mark && !dip) return;
       const tabTop = tabTopY(run, stringCount, theme);
       const fretTop = layoutEl.tabRendered?.fretTopY ?? Infinity;
       const marksTop = layoutEl.tabRendered?.marksTopY ?? Infinity;
-      if (taps) {
+      if (mark) {
         let baselineY = Math.min(tabTop - TAP_STAFF_CLEAR_SP * s, fretTop - TAP_FRET_CLEAR_SP * s, marksTop - TAP_MARK_CLEAR_SP * s);
         // Raise the T above any H/P letter its box comes within TAP_HP_CLEAR_SP of (lowest letter first, so a raise
         // that reaches a higher letter clears that one too).
         const size = techniqueLabelSize(theme);
-        const half = estimateTextWidth('T', size, { bold: true }) / 2;
+        const half = estimateTextWidth(TAP_MARK_LETTERS[mark], size, { bold: true }) / 2;
         const pad = TAP_HP_CLEAR_SP * s;
         run.hpBoxes.filter((b) => b.letter && b.letter.x1 < x + half + pad && b.letter.x2 > x - half - pad)
           .map((b) => b.letter).sort((a, b) => b.top - a.top)
@@ -187,7 +189,7 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
               baselineY = l.top - pad - TEXT_DESCENT_EM * size;
             }
           });
-        run.tabInkBoxes.push({ ...renderTapMark(run.tabG, x, baselineY, theme.tabFretColor, theme), noteX: x });
+        run.tabInkBoxes.push({ ...renderTapMark(run.tabG, x, baselineY, theme.tabFretColor, theme, mark), noteX: x });
       }
       if (dip) {
         // Width limited like a bend's: the next note in the system, never past the last barline.
