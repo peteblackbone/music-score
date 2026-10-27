@@ -10,6 +10,7 @@ import {
 } from './tab.js';
 import { fretLabel, fretLabelWidth } from '../textMetrics.js';
 import { isNaturalHarmonic, decoratesFretLabel } from '../harmonics.js';
+import { linkTarget } from '../directions.js';
 
 const SLIDE_STUB_SP = 2;         // outgoing slide stroke across a system break (horizontal length)
 const SLIDE_LABEL_CLEAR_SP = 0.2; // slide end -> edge of a wide (harmonic) fret-label knock-out
@@ -72,7 +73,7 @@ export function renderTabLinks(track, trackRuns, systems, theme, { flattenRuns, 
 
   flat.forEach((item, i) => {
     if (!item.hammerPull && !item.slide && !item.bend) return;
-    const target = flat.slice(i + 1).find((c) => c.string === item.string);
+    const target = flat[linkTarget(flat, i)];
     const sameSystem = target && target.sysIdx === item.sysIdx;
     const ascending = target && target.fret != null && item.fret != null ? target.fret > item.fret : true;
     const endX = breakEndX(systems, item.sysIdx, theme);

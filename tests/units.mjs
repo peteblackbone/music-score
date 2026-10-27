@@ -1603,6 +1603,15 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- legato and slides (1.3.0) ----------
+{
+  const { linkTarget } = await imp('src/directions.js');
+  test('linkTarget: next item on the same string, -1 when none or no string', () => {
+    const items = [{ string: 1 }, { string: 2 }, { string: 1 }, { string: null }, { string: 2 }, {}];
+    eq([0, 1, 2, 3, 4, 5].map((i) => linkTarget(items, i)), [2, 4, -1, -1, -1, -1]);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

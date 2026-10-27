@@ -40,6 +40,18 @@ const WHAMMY_TYPES = ['dip', 'dive', 'return', 'predive'];
 export const RAKE_LABEL = 'rake';
 const DEFAULT_DIP_AMOUNT = '1/2';
 
+/**
+ * Index of the note `items[i]` links to with a hammer-on/pull-off or slide:
+ * the first later item on the same `string` (items in score order), or -1
+ * (none, or `items[i]` has no string).
+ */
+export function linkTarget(items, i) {
+  const string = items[i].string;
+  if (string == null) return -1;
+  for (let k = i + 1; k < items.length; k++) if (items[k].string === string) return k;
+  return -1;
+}
+
 /** Whether `el` is a main (non-grace) beat with at least one note. */
 export function isMainNoteBeat(el) {
   return !!el && el.type !== 'rest' && el.type !== 'grace' && (el.notes || []).length > 0;
