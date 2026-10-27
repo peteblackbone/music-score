@@ -8,14 +8,17 @@ import { renderPickStroke, curveOuterPoints } from '../notation.js';
 import { renderTapMark, techniqueLabelSize } from '../tab.js';
 import { TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../../layout/ink.js';
 import { estimateTextWidth } from '../../textMetrics.js';
-import { beatTapMark, beatPickStroke, TAP_MARK_LETTERS } from '../../directions.js';
+import { beatTapMark, beatPickStroke, beatTrill, TAP_MARK_LETTERS } from '../../directions.js';
 import { glyphBox } from '../../glyphMetrics.js';
-import { pickStrokeGlyph } from '../../glyphs.js';
+import { pickStrokeGlyph, Glyph } from '../../glyphs.js';
+import { trillEndX, renderTrill } from '../trill.js';
 import { flattenRuns, tabTopY, inkTopInSpan, breakEndX, breakStartX } from './common.js';
 import { collectBeats, findSlurs, beatClearTop } from './notationBeats.js';
 
-// Playing directions above the notation staff: tap "T" then pick stroke, this far apart.
+// Playing directions above the notation staff: trill, tap "T" then pick stroke, this far apart.
 const DIRECTION_STACK_GAP_SP = 0.4;
+// A trill's bottom stays this far below the next rendered note's top.
+const TRILL_NEXT_CLEAR_SP = 1;
 // ...each this far above the slur's outer edge where it crosses the mark (not the slur's apex).
 const SLUR_DIRECTION_CLEAR_SP = 0.5;
 // Pick strokes on a tab-only track: bottom at least this far above the TAB top line, and above the ink under it.
@@ -27,7 +30,8 @@ const PICK_TAB_CLEAR_SP = 0.4;
  * after the technique labels and before chord symbols (which then clear
  * them through the staff's ink) and fermatas:
  *
- * - notation staff: a tap "T" (`note.tap`; or "S" / "P" for `note.slap` /
+ * - notation staff: a trill ("tr" and a wavy line, `note.trill`; draw/trill.js),
+ *   then a tap "T" (`note.tap`; or "S" / "P" for `note.slap` /
  *   `note.pop`, one letter per beat, `beatTapMark`) then the pick stroke
  *   (`pickStroke` 'down' | 'up'), stacked DIRECTION_STACK_GAP_SP apart
  *   upward, clear of the staff, stem, articulations, vibrato / tremolo and
@@ -35,7 +39,9 @@ const PICK_TAB_CLEAR_SP = 0.4;
  *   where it crosses the mark (its local height, not its apex). Pick
  *   strokes on the beats of one beam group share one baseline, the highest
  *   of their own; a T stays on its beat (so at least DIRECTION_STACK_GAP_SP
- *   below that line). The top of the stack is recorded as
+ *   below that line). A trill spans from its beat to 0.8 sp before the next
+ *   beat (never past the last barline), sits above the vibrato / tremolo and
+ *   below the next rendered note's top by TRILL_NEXT_CLEAR_SP. The top of the stack is recorded as
  *   `info.directionTopY` for renderFermatas. A track with a notation staff
  *   shows pick strokes there only.
  * - tab-only track: the pick stroke above the TAB staff, at least
@@ -48,17 +54,31 @@ export function renderPlayingDirections(score, trackRuns, theme, systems) {
   score.tracks.forEach((track) => {
     if (track.showStandardNotation) {
       const beats = collectBeats(trackRuns, track, theme);
-      beats.forEach((item) => { item.tapMark = beatTapMark(item.el); item.pick = beatPickStroke(item.el); });
+      beats.forEach((item) => { item.tapMark = beatTapMark(item.el); item.pick = beatPickStroke(item.el); item.trill = beatTrill(item.el); });
       const marked = beats.filter((item) => item.info && !item.info.isRest && !item.info.isGrace
-        && (item.tapMark || item.pick));
+        && (item.tapMark || item.pick || item.trill));
       if (!marked.length) return;
       slurAboveCurves(beats, systems, theme);
       const tapSize = techniqueLabelSize(theme);
-      // Each beat's own stack: T / S / P on the ink under it, then the pick stroke's own baseline.
+      const trillHalf = (glyphBox(Glyph.ornamentTrill).width / 2) * sp;
+      // Each beat's own stack: trill, then T / S / P on the ink under it, then the pick stroke's own baseline.
       marked.forEach((item) => {
+        if (item.trill) {
+          const at = beats.indexOf(item);
+          const later = beats.filter((b, bi) => bi > at && b.sysIdx === item.sysIdx);
+          const nextOn = later[0];
+          const endX = trillEndX(item.x, nextOn ? nextOn.x : Infinity, breakEndX(systems, item.sysIdx, theme), theme);
+          const nextNote = later.find((b) => b.info && !b.info.isRest);
+          const bottomY = Math.min(
+            beatClearTop(item, sp, slurClearSpan(item, item.x - trillHalf, endX, sp)),
+            nextNote ? nextNote.topY - TRILL_NEXT_CLEAR_SP * sp : Infinity,
+          );
+          item.trillTop = renderTrill(item.g, item.x, bottomY, endX, theme.noteColor, theme, null).top;
+        }
         if (item.tapMark) {
           const tapHalf = estimateTextWidth(TAP_MARK_LETTERS[item.tapMark], tapSize, { bold: true }) / 2;
-          item.tapBaselineY = beatClearTop(item, sp, slurClearTop(item, tapHalf, sp)) - TEXT_DESCENT_EM * tapSize;
+          item.tapBaselineY = Math.min(beatClearTop(item, sp, slurClearTop(item, tapHalf, sp)),
+            item.trill ? item.trillTop - DIRECTION_STACK_GAP_SP * sp : Infinity) - TEXT_DESCENT_EM * tapSize;
           item.tapTop = item.tapBaselineY - TEXT_ASCENT_EM * tapSize;
         }
         if (item.pick) {
@@ -66,6 +86,7 @@ export function renderPlayingDirections(score, trackRuns, theme, systems) {
           item.pickBottomY = Math.min(
             beatClearTop(item, sp, slurClearTop(item, pickHalf, sp)),
             item.tapMark ? item.tapTop - DIRECTION_STACK_GAP_SP * sp : Infinity,
+            item.trill ? item.trillTop - DIRECTION_STACK_GAP_SP * sp : Infinity,
           );
         }
       });
@@ -77,7 +98,7 @@ export function renderPlayingDirections(score, trackRuns, theme, systems) {
         if (key && item.pick) shared.set(key, Math.min(shared.get(key) ?? Infinity, item.pickBottomY));
       });
       marked.forEach((item) => {
-        let top;
+        let top = item.trill ? item.trillTop : undefined;
         if (item.tapMark) top = renderTapMark(item.g, item.x, item.tapBaselineY, theme.noteColor, theme, item.tapMark).top;
         if (item.pick) {
           const key = groups.get(item.layoutEl);

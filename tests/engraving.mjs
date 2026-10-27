@@ -4237,6 +4237,169 @@ test('techniques11', 'rake: a run never crosses a system break - a rake beat ope
   ok(tg(svg, 'rake').length === want.length, `${tg(svg, 'rake').length} rake groups for ${want.length} rake beats`);
 });
 
+// ---------- trill ----------
+const { glyphBox: gbox } = await imp('src/glyphMetrics.js');
+const TRILL_HALF = (gbox('').width / 2) * SP;
+// A drawn trill: glyph (centre x, ink box), optional suffix text, wave extent (null when too short).
+const trillInfo = (g) => {
+  const gl = g.children.find((c) => c.tag === 'text' && cpOf(c) === 0xE566);
+  const suf = g.children.find((c) => c.tag === 'text' && cpOf(c) !== 0xE566);
+  const p = g.children.find((c) => c.tag === 'path');
+  const v = p ? pathNums(p.getAttribute('d')) : null;
+  const ink = [nodeBox(gl), ...(suf ? [tbox(suf)] : [])];
+  const waveBox = p ? hullOf(p.getAttribute('d')) : null;
+  return {
+    x: num(gl, 'x'), glyph: nodeBox(gl), anchor: gl.getAttribute('text-anchor'), suffix: suf ? suf._text : null, sufBox: suf ? tbox(suf) : null,
+    waveX1: v ? v[0] : null, waveX2: v ? v[v.length - 2] : null, waveY: v ? v[1] : null, wave: p, waveBox,
+    top: Math.min(...ink.map((b) => b.top), ...(waveBox ? [waveBox.top] : [])), bottom: nodeBox(gl).bottom,
+  };
+};
+const trillsOf = (stg) => tg(stg, 'trill').map(trillInfo).sort((a, b) => a.x - b.x);
+const trillBeat = (extra = {}, note = {}, pitch = 'E4') => ({ type: 'note', duration: 'quarter', notes: [{ pitch, trill: true, ...note }], ...extra });
+
+test('techniques11', 'trill: one trill per trilled main beat on notation and TAB (glyph U+E566 centred on the beat, class trill), none on rests / graces / garbage values, one per chord', () => {
+  const score = tAny(
+    bt(3, 5, {}, { trill: 7 }),
+    hq([{ string: 3, fret: 5, trill: true }, { string: 2, fret: 3, trill: 4 }]),
+    { ...rst(), notes: [{ string: 3, fret: 5, trill: true }] },
+    { type: 'grace', duration: '16th', notes: [{ string: 3, fret: 5, trill: true }] },
+    bt(3, 5, {}, { trill: false }), bt(3, 5, {}, { trill: 0 }), bt(3, 5, {}, { trill: 'H9' }), bt(3, 5, {}, { trill: -1 }), bt(3, 5, {}, { trill: '' }),
+    bt(3, 5, {}, { trill: { fret: 0 } }),
+    bt(3, 5, {}, { trill: [7] }), bt(3, 5),
+  );
+  const width = 1500;
+  const svg = renderTree(score, width);
+  const xs = elXs(score, width);
+  [tabStg(svg), notStg(svg)].forEach((stg, k) => {
+    const got = trillsOf(stg);
+    const want = [xs[0].x, xs[1].x, xs[9].x];
+    ok(got.length === 3, `${k ? 'notation' : 'TAB'}: ${got.length} trills`);
+    got.forEach((t, i) => { near(t.x, want[i], EPS, 'glyph x'); ok(t.anchor === 'middle', 'centred'); });
+  });
+  const tabs = trillsOf(tabStg(svg));
+  ok(tabs[0].suffix === '(7)' && tabs[1].suffix === null && tabs[2].suffix === '(0)', `suffixes ${tabs.map((t) => t.suffix)} (a chord uses its first trilled note: a plain trill)`);
+  ok(trillsOf(notStg(svg)).every((t) => t.suffix === null), 'no suffix on the notation staff');
+  const out = serialize(svg);
+  ok(!/NaN|undefined|Infinity/.test(out), 'no NaN');
+});
+
+test('techniques11', 'trill on TAB: "(n)" is the given fret, or the trill pitch\'s nearest interval from the note\'s fret (A3 = string 4 fret 7 -> B3 / B4 / B2 = 9, Ab3 = 6, E4 = 2); none for a plain trill or a negative result', () => {
+  const t = (note) => bt(4, 7, {}, note);
+  const score = tOnly([t({ trill: 'B3' }), t({ trill: 'B4' }), t({ trill: 'Ab3' }), t({ trill: true }), t({ trill: ' b2 ' }),
+    bt(4, 1, {}, { trill: 'B2' }), t({ trill: 3 }), t({ trill: 'E4' })]);
+  const got = trillsOf(tabStg(renderTree(score, 1600))).map((x) => x.suffix);
+  ok(JSON.stringify(got) === JSON.stringify(['(9)', '(9)', '(6)', null, '(9)', null, '(3)', '(2)']), `suffixes ${JSON.stringify(got)}`);
+});
+
+test('techniques11', 'trill wave: after the glyph (and suffix) + 0.25 sp, Q segments, ends <= next beat - 0.8 sp and last barline - 0.5 sp; left out when shorter than 0.7 sp; never continues on the next system', () => {
+  const width = 420;
+  const measures = Array.from({ length: 5 }, (_, i) => ({ beats: [bt(3, 5), bt(3, 7, {}, { trill: i % 2 ? 7 : true }), bt(3, 5), bt(3, 7, {}, { trill: 5 })] }));
+  const score = { tracks: [{ name: 'G', showTablature: true, measures }] };
+  const seq = seqOf(score, width);
+  const layout = layoutOf(score, width);
+  const svg = renderTree(score, width);
+  const want = seq.filter((b) => b.raw.notes && b.raw.notes[0].trill);
+  ok(new Set(seq.map((b) => b.si)).size >= 2, 'several systems');
+  let waves = 0; let lastOnSystem = 0;
+  [tabStg, notStg].forEach((stgOf) => {
+    ok(tg(svg, 'trill').length === 2 * want.length, `${tg(svg, 'trill').length} trill groups for ${want.length} beats`);
+    layout.systems.forEach((sys, si) => {
+      const stg = stgOf(svg, si);
+      const mine = want.filter((b) => b.si === si);
+      const got = trillsOf(stg);
+      ok(got.length === mine.length, `system ${si}: ${got.length} trills for ${mine.length} trilled beats`);
+      got.forEach((tr, i) => {
+        const idx = seq.indexOf(mine[i]);
+        const next = seq[idx + 1] && seq[idx + 1].si === si ? seq[idx + 1].x : Infinity;
+        const right = tr.sufBox ? tr.sufBox.x2 : mine[i].x + TRILL_HALF;
+        if (tr.wave) {
+          ok(tr.wave.getAttribute('d').includes(' Q '), 'Q segments');
+          ok(tr.waveX1 >= right + 0.25 * SP - EPS, `wave starts ${tr.waveX1}, glyph/suffix right ${right}`);
+          ok(tr.waveX2 <= next - 0.8 * SP + EPS, `wave end ${tr.waveX2} vs next ${next}`);
+          ok(tr.waveX2 <= sys.lastBarlineX - 0.5 * SP + EPS, 'wave inside the last barline');
+          waves++;
+        } else {
+          ok(Math.min(next - 0.8 * SP, sys.lastBarlineX - 0.5 * SP) - (right + 0.25 * SP) < 0.7 * SP + EPS, 'wave dropped only when too short');
+        }
+      });
+      if (mine.length && mine.at(-1).x === Math.max(...seq.filter((b) => b.si === si).map((b) => b.x))) lastOnSystem++;
+    });
+  });
+  ok(waves >= 4, `${waves} waves checked`);
+  ok(lastOnSystem >= 2, `${lastOnSystem} trills on the last beat of a system`);
+});
+
+test('techniques11', 'trill on TAB: bottom >= 0.4 sp above the top line, the beat\'s frets and its vibrato / tremolo; T / S / P letter >= 0.4 sp above the trill; whammy dip above it', () => {
+  const score = tOnly([
+    bt(3, 5, {}, { trill: 7 }),
+    bt(1, 12, { vibrato: true }, { trill: 'B5' }),
+    bt(2, 8, { tremolo: 2 }, { trill: true, tap: true }),
+    bt(6, 3, { whammy: '1' }, { trill: 7, slap: true }),
+    bt(3, 5, { pickStroke: 'down' }, { trill: 7, pop: true }),
+  ]);
+  const svg = renderTree(score, 1400);
+  const stg = tabStg(svg);
+  const info = staffInfo(stg);
+  const ink = tabInk(stg);
+  const trs = trillsOf(stg);
+  ok(trs.length === 5, `${trs.length} trills`);
+  const frets = ink.filter((b) => b.kind === 'fret');
+  const marks = [...tg(stg, 'tab-vibrato'), ...tg(stg, 'tab-tremolo')].map((g) => {
+    const bs = all(g).map(({ n }) => nodeBox(n)).filter(Boolean);
+    return { x1: Math.min(...bs.map((q_) => q_.x1)), x2: Math.max(...bs.map((q_) => q_.x2)), top: Math.min(...bs.map((q_) => q_.top)) };
+  });
+  ok(marks.length === 2, `${marks.length} vibrato / tremolo groups`);
+  trs.forEach((t, i) => {
+    const span = { x1: t.glyph.x1, x2: t.waveBox ? t.waveBox.x2 : t.glyph.x2 };
+    ok(t.bottom <= info.localTop - 0.4 * SP + EPS, `trill ${i}: bottom ${t.bottom} vs top line ${info.localTop}`);
+    frets.filter((f) => xover(span, f)).forEach((f) => ok(t.bottom <= f.top - 0.4 * SP + EPS, `trill ${i}: fret ink ${f.top}`));
+    marks.filter((m) => xover(span, m)).forEach((m) => ok(t.bottom <= m.top - 0.4 * SP + EPS, `trill ${i}: vibrato / tremolo ${m.top}`));
+  });
+  [['tap', 2], ['slap', 3], ['pop', 4]].forEach(([c, i]) => {
+    const l = tg(stg, c).map(letterBox)[0];
+    ok(!!l && l.bottom <= trs[i].top - 0.4 * SP + EPS, `${c}: letter bottom ${l && l.bottom} vs trill top ${trs[i].top}`);
+  });
+  const dip = tg(stg, 'whammy').map(dipBox)[0];
+  ok(dip.vBox.bottom <= trs[3].top - 0.4 * SP + EPS, `dip bottom ${dip.vBox.bottom} vs trill top ${trs[3].top}`);
+});
+
+test('techniques11', 'trill on the notation staff: above vibrato / tremolo, T above the trill, pick stroke above both, fermata >= 0.5 sp above the stack, above the next tall note by 1 sp', () => {
+  const score = nOnly([
+    { ...nt('E4', { vibrato: true }, { trill: true }) },
+    { ...nt('G4', { tremolo: 2, duration: 'half' }, { trill: 7 }) },
+    { ...nt('E4', { pickStroke: 'down' }, { trill: true, tap: true }) },
+    { ...nt('E4', { fermata: true }, { trill: true }) },
+    nt('E4', {}, { trill: true }), nt('A6'),
+  ]);
+  const svg = renderTree(score, 1400);
+  const stg = notStg(svg);
+  const trs = trillsOf(stg);
+  ok(trs.length === 5, `${trs.length} trills`);
+  const vib = tg(stg, 'vibrato').map((g) => hullOf(g.children[0].getAttribute('d')))[0];
+  ok(trs[0].bottom <= vib.top - 0.5 * SP + EPS, `trill bottom ${trs[0].bottom} vs vibrato top ${vib.top}`);
+  const tapB = tg(stg, 'tap').map(letterBox)[0];
+  ok(tapB.bottom <= trs[2].top - 0.4 * SP + EPS, 'T above trill');
+  const pk = dgroups(stg, 'pick-stroke').map(pickBox)[0];
+  ok(pk.bottom <= trs[2].top - 0.4 * SP + EPS && pk.bottom <= tapB.top - 0.4 * SP + EPS, 'pick above the trill and the T');
+  const fer = num(tg(stg, 'fermata')[0].children[0], 'y'); // the gap is measured from the glyph origin
+  ok(fer <= trs[3].top - 0.5 * SP + EPS, `fermata origin ${fer} vs trill top ${trs[3].top}`);
+  const heads = glyphs(stg, 0xE0A4).concat(glyphs(stg, 0xE0A3)).map((n) => ({ x: num(n, 'x'), y: num(n, 'y') }));
+  const tall = heads.reduce((a, b) => (b.y < a.y ? b : a));
+  ok(trs[4].bottom <= tall.y - 1 * SP + EPS, `trill bottom ${trs[4].bottom} vs tall note head ${tall.y}`);
+});
+
+test('techniques11', 'trill: deterministic, input untouched, garbage trill / slap / pop / rake / whammy values never throw', () => {
+  const garbage = [null, undefined, NaN, Infinity, -1, 2.5, '', 'zz', [], [1], {}, { fret: 'x', pitch: 7 }, () => 1, false, 0];
+  garbage.forEach((v) => {
+    const score = tAny(bt(3, 5, { rake: v, whammy: v }, { trill: v, slap: v, pop: v }), gr(), bt(3, 7, { whammy: { type: 'return', amount: v } }));
+    const before = JSON.stringify(score);
+    const a = serialize(renderTree(score, 900));
+    ok(a === serialize(renderTree(score, 900)), 'deterministic');
+    ok(!/NaN|undefined|Infinity/.test(a), `NaN for garbage ${String(v)}`);
+    ok(JSON.stringify(score) === before, 'input untouched');
+  });
+});
+
 // @@T11-END
 }
 
