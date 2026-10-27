@@ -1,13 +1,13 @@
 /**
  * draw/passes/techniqueLabels.js — pass 4 (draw/passes.js): palm mute,
- * harmonic and let-ring label runs, stacked in lanes beside the staff.
+ * harmonic, let-ring and rake label runs, stacked in lanes beside the staff.
  * Reads `run.tabInkBoxes` (pass 3); writes `run.labelBoxes` for pass 5.
  */
 import { renderTechniqueLabel, techniqueLabelSize, techniqueLabelDash } from '../tab.js';
 import { TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../../layout/ink.js';
 import { estimateTextWidth } from '../../textMetrics.js';
 import { HARMONIC_LABELS, beatHarmonicLabelKind } from '../../harmonics.js';
-import { LET_RING_LABEL } from '../../directions.js';
+import { LET_RING_LABEL, RAKE_LABEL, beatRake } from '../../directions.js';
 import { flattenRuns, breakEndX } from './common.js';
 
 const LABEL_LANE_GAP_SP = 0.4;   // vertical gap between stacked technique-label lanes
@@ -16,10 +16,11 @@ const BEND_LABEL_CLEAR_SP = 0.2; // min gap between a technique label (text / da
 const BEND_LABEL_MIN_DASH_SP = 1; // min dash length left for a label moved right of its first beat's bend
 
 /**
- * Technique-label runs of every track — three kinds, each a label plus a
+ * Technique-label runs of every track — four kinds, each a label plus a
  * dashed line over consecutive beats (renderTechniqueLabel): palm mute
- * ("P.M."), harmonics ("A.H." / "T.H." / "P.H." / "S.H.") and let ring
- * ("let ring"), stacked in lanes in that order outward from the staff.
+ * ("P.M."), harmonics ("A.H." / "T.H." / "P.H." / "S.H."), let ring
+ * ("let ring") and rake ("rake"), stacked in lanes in that order outward
+ * from the staff.
  *
  * Palm mute: `palmMute: true` on a beat (not per note — it's a
  * right-hand technique that applies to the whole strike, not individual
@@ -56,6 +57,13 @@ const BEND_LABEL_MIN_DASH_SP = 1; // min dash length left for a label moved righ
  * note ends it. Tap "T" and whammy-dip ink (recorded with the bends by
  * renderTabArticulations) is avoided the same way as bend ink.
  *
+ * Rake (`rake` on a beat; directions.js): a run of the beat and the grace
+ * notes directly before it on the same system (the dead-note "x" graces the
+ * author writes), labelled "rake", drawn after everything else and outside
+ * every run (of any kind) it overlaps, in lane 0 when free. Each rake beat
+ * is its own run, so adjacent rakes never merge, and a run never crosses a
+ * system break. Graces take part in no other kind of run.
+ *
  * Records every drawn run's text and dash boxes on its run
  * (`run.labelBoxes`) for renderPlayingDirections.
  */
@@ -77,9 +85,11 @@ export function renderTechniqueLabelRuns(score, trackRuns, theme, systems) {
       flat.push({
         run, sysIdx: run.sysIdx, g: run.tabG || run.notationG, x: layoutEl.x, labelY, palmMute: !!layoutEl.el.palmMute, harmonic,
         letRing: !!layoutEl.el.letRing, bridge: layoutEl.el.type === 'rest', tabInkBoxes: run.tabInkBoxes || [],
+        grace: layoutEl.el.type === 'grace', rake: beatRake(layoutEl.el),
       });
     });
     markRinging(flat);
+    markRakes(flat);
 
     // Horizontal extent of a drawn run (label text or dashed line, whichever is longer).
     const extent = (r, labelX, label) => ({
@@ -127,8 +137,12 @@ export function renderTechniqueLabelRuns(score, trackRuns, theme, systems) {
       .map((r) => draw(r, HARMONIC_LABELS[r.kind], `harmonic harmonic-${r.kind}`, pmBoxes));
     // Let ring last, outside every P.M. and harmonic run it overlaps.
     const placed = [...pmBoxes, ...harmonicBoxes];
-    labelRuns(flat, (it) => (it.ringing ? 'let-ring' : null), systems, theme)
-      .forEach((r) => draw(r, LET_RING_LABEL, 'let-ring', placed));
+    const ringBoxes = labelRuns(flat, (it) => (it.ringing ? 'let-ring' : null), systems, theme)
+      .map((r) => draw(r, LET_RING_LABEL, 'let-ring', placed));
+    // Rakes last, outside every run they overlap.
+    const stack = [...placed, ...ringBoxes];
+    labelRuns(flat, (it) => it.rakeKey ?? null, systems, theme)
+      .forEach((r) => stack.push(draw(r, RAKE_LABEL, 'rake', stack)));
   });
 }
 
@@ -146,6 +160,19 @@ function markRinging(flat) {
     let a = i - 1; while (isGap(a)) a--;
     let b = i + 1; while (isGap(b)) b++;
     it.ringing = ringsAt(a, it.sysIdx) && ringsAt(b, it.sysIdx);
+  });
+}
+
+/**
+ * Sets `rakeKey` on every label item (renderTechniqueLabelRuns) that belongs
+ * to a rake run: each rake beat, and the grace notes directly before it on
+ * the same system. Every rake beat has its own key, so rakes never merge.
+ */
+function markRakes(flat) {
+  flat.forEach((it, i) => {
+    if (!it.rake) return;
+    it.rakeKey = `rake-${i}`;
+    for (let k = i - 1; k >= 0 && flat[k].grace && flat[k].sysIdx === it.sysIdx; k--) flat[k].rakeKey = it.rakeKey;
   });
 }
 

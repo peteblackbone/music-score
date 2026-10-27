@@ -102,6 +102,7 @@ export const Glyph = {
   repeatDot: '',
   segno: '',
   coda: '',
+  ornamentTrill: '',
   fermataAbove: '',
   fermataBelow: '',
 

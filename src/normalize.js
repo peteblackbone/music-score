@@ -48,7 +48,7 @@
  */
 import { pitchFromFret, transposeOctaves } from './pitch.js';
 import { harmonicKind } from './harmonics.js';
-import { withDirections } from './directions.js';
+import { withDirections, trillOf } from './directions.js';
 import { mergeNavigation } from './navigation.js';
 
 const sameTime = (a, b) => a.beats === b.beats && a.beatType === b.beatType;
@@ -125,7 +125,8 @@ export function normalizeScore(score) {
               out = n.pitch != null ? { ...n, soundingPitch: n.pitch } : n;
             }
             // Canonical harmonic kind (`harmonicFret` passes through untouched).
-            return n.harmonic ? { ...out, harmonic: harmonicKind(n.harmonic) } : out;
+            const x = n.harmonic ? { ...out, harmonic: harmonicKind(n.harmonic) } : out;
+            return n.trill !== undefined ? { ...x, trill: trillOf(n.trill) } : x;
           }),
         })),
       });

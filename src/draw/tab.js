@@ -6,7 +6,7 @@ import { line, group, text, glyphText, path, rect, wavyPathD, svgD } from './svg
 import { tabClefMetrics } from '../layout/systems.js';
 import { fretLabel, fretLabelWidth, estimateTextWidth } from '../textMetrics.js';
 import { TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../layout/ink.js';
-import { whammyLabel } from '../directions.js';
+import { whammyLabel, TAP_MARK_LETTERS } from '../directions.js';
 import { tabFretKnockoutHalf } from '../layout/tabRhythm.js';
 
 /** Draw the tab staff lines for `stringCount` strings, baseline = bottom (highest-numbered) string. */
@@ -295,16 +295,19 @@ export function renderTechniqueLabel(g, x1, x2, labelY, label, cls, color, theme
 }
 
 /**
- * Draw a tap mark: a bold upright "T" at the technique-label size, centred
- * on `x`, baseline `baselineY` (resolved by the caller), in `<g class="tap">`.
- * Used above the TAB staff (renderTabArticulations) and above the notation
- * staff (renderPlayingDirections). Returns its ink box
+ * Draw a tap mark: a bold upright letter ("T" for `kind` 'tap', "S" 'slap',
+ * "P" 'pop'; directions.js TAP_MARK_LETTERS) at the technique-label size,
+ * centred on `x`, baseline `baselineY` (resolved by the caller), in
+ * `<g class="tap">` (class = `kind`). Used above the TAB staff
+ * (renderTabArticulations) and above the notation staff
+ * (renderPlayingDirections). Returns its ink box
  * `{ x1, x2, top, bottom, text: true }` (estimated text extents).
  */
-export function renderTapMark(g, x, baselineY, color, theme) {
+export function renderTapMark(g, x, baselineY, color, theme, kind = 'tap') {
   const size = techniqueLabelSize(theme);
-  const gEl = group({ class: 'tap' });
-  gEl.appendChild(text(x, baselineY, 'T', {
+  const letter = TAP_MARK_LETTERS[kind];
+  const gEl = group({ class: kind });
+  gEl.appendChild(text(x, baselineY, letter, {
     'font-family': theme.textFontFamily,
     'font-weight': 'bold',
     'font-size': size,
@@ -312,7 +315,7 @@ export function renderTapMark(g, x, baselineY, color, theme) {
     fill: color,
   }));
   g.appendChild(gEl);
-  const w = estimateTextWidth('T', size, { bold: true });
+  const w = estimateTextWidth(letter, size, { bold: true });
   return { x1: x - w / 2, x2: x + w / 2, top: baselineY - TEXT_ASCENT_EM * size, bottom: baselineY + TEXT_DESCENT_EM * size, text: true };
 }
 
@@ -321,8 +324,25 @@ const WHAMMY_MIN_WIDTH_SP = 1.6;  // dip width clamp
 const WHAMMY_MAX_WIDTH_SP = 2.8;
 const WHAMMY_NEXT_GAP_SP = 0.9;   // dip width = room to the next note less this
 const WHAMMY_DEPTH_SP = 0.8;      // fixed depth of the "V"
-const WHAMMY_TEXT_GAP_SP = 0.3;   // amount text bottom -> top of the "V"
-const WHAMMY_STROKE_WIDTH = 1.1;
+export const WHAMMY_TEXT_GAP_SP = 0.3;   // amount text bottom -> top of the "V"
+export const WHAMMY_STROKE_WIDTH = 1.1;
+
+/**
+ * Horizontal extent `{ x1, x2 }` of a whammy slope for the beat at `x`:
+ * starts WHAMMY_START_SP right of the note, its width the room to `nextX`
+ * less WHAMMY_NEXT_GAP_SP, clamped to WHAMMY_MIN_WIDTH_SP..WHAMMY_MAX_WIDTH_SP.
+ */
+export function whammySpanX(x, nextX, theme) {
+  const sp = theme.staffLineSpacing;
+  const x1 = x + WHAMMY_START_SP * sp;
+  const width = Math.max(WHAMMY_MIN_WIDTH_SP * sp, Math.min(WHAMMY_MAX_WIDTH_SP * sp, nextX - x - WHAMMY_NEXT_GAP_SP * sp));
+  return { x1, x2: x1 + width };
+}
+
+/** Font size of the whammy amount text. */
+export function whammyTextSize(theme) {
+  return Math.max(0.9 * theme.staffLineSpacing, theme.tabFontSize - 0.2 * theme.staffLineSpacing);
+}
 
 /**
  * Geometry of a whammy-bar dip as renderWhammyDip draws it (same
@@ -338,13 +358,11 @@ const WHAMMY_STROKE_WIDTH = 1.1;
  */
 export function whammyDipGeometry(x, bottomY, dip, theme, nextX) {
   const sp = theme.staffLineSpacing;
-  const x1 = x + WHAMMY_START_SP * sp;
-  const width = Math.max(WHAMMY_MIN_WIDTH_SP * sp, Math.min(WHAMMY_MAX_WIDTH_SP * sp, nextX - x - WHAMMY_NEXT_GAP_SP * sp));
-  const x2 = x1 + width;
+  const { x1, x2 } = whammySpanX(x, nextX, theme);
   const xm = (x1 + x2) / 2;
   const yTop = bottomY - WHAMMY_DEPTH_SP * sp;
   const label = whammyLabel(dip);
-  const size = Math.max(0.9 * sp, theme.tabFontSize - 0.2 * sp);
+  const size = whammyTextSize(theme);
   const textY = yTop - WHAMMY_TEXT_GAP_SP * sp - TEXT_DESCENT_EM * size;
   const tw = estimateTextWidth(label, size);
   return {

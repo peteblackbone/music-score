@@ -651,6 +651,114 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const again = D.withDirections(out);
     eq(again, out);
   });
+  test('directions: whammyOf canonical table (dip forms unchanged, dive / return / predive objects)', () => {
+    const w = (type, amount) => ({ type, amount });
+    const cases = [
+      [true, w('dip', '1/2')], ['-1', w('dip', '1')], [2, w('dip', '2')], [{ type: 'dive' }, w('dive', '1/2')],
+      [{ type: ' DIVE ', amount: '-1' }, w('dive', '1')], [{ type: 'return' }, w('return', '1/2')],
+      [{ type: 'predive', amount: 'full' }, w('predive', 'full')], [{ type: 'dive', amount: '1 1/2' }, w('dive', '1 1/2')],
+      [{ type: 'dive', amount: '' }, w('dive', '1/2')], [{ type: 'dive', amount: '-' }, null], [{ type: 'pre-dive' }, null],
+      [{ type: 'scoop' }, null], [{ type: 7 }, null], [{}, w('dip', '1/2')], [false, null], [null, null], [undefined, null],
+      [[1], null], ['', null], [NaN, null],
+    ];
+    cases.forEach(([raw, want]) => eq(D.whammyOf(raw), want, `whammyOf(${JSON.stringify(raw)})`));
+    cases.forEach(([raw]) => { const once = D.whammyOf(raw); eq(D.whammyOf(once), once, 'idempotent'); });
+    eq(D.whammyDip({ type: 'dive' }), null);
+    eq(D.whammyDip({ type: 'dip', amount: '1' }), w('dip', '1'));
+    const dive = { type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }], whammy: { type: 'dive' } };
+    eq([D.beatWhammy(dive), D.beatWhammyAny(dive)], [null, w('dive', '1/2')]);
+    eq(D.beatWhammyAny({ type: 'rest', whammy: true }), null);
+    eq(D.beatWhammyAny({ type: 'grace', notes: [{ pitch: 'E4' }], whammy: true }), null);
+  });
+  const { whammyDepthSp } = await imp('src/draw/whammy.js');
+  test('whammyDepthSp: 1.2 sp per whole step clamped to 0.8..2.4 (half .8, full / whole / unknown 1.2, 1 1/2 1.8, 2 and up 2.4)', () => {
+    const cases = [['1/2', 0.8], ['1/4', 0.8], ['1', 1.2], ['full', 1.2], [' FULL ', 1.2], ['3/4', 0.9], ['1 1/2', 1.8], ['2', 2.4], ['2 1/2', 2.4], ['3', 2.4], ['0', 0.8], ['weird', 1.2], ['', 1.2]];
+    cases.forEach(([amount, want]) => eq(Math.round(whammyDepthSp(amount) * 1e6) / 1e6, want, `whammyDepthSp(${JSON.stringify(amount)})`));
+  });
+  test('whammyDepthSp: a NaN amount (0/0, 0 0/0) falls back to the default 1.2 sp; a division by zero (1/0) clamps to 2.4', () => {
+    [['0/0', 1.2], ['0 0/0', 1.2], ['1/0', 2.4]].forEach(([amount, want]) => {
+      const d = whammyDepthSp(amount);
+      eq(Number.isFinite(d), true, `whammyDepthSp(${JSON.stringify(amount)}) finite`);
+      eq(Math.round(d * 1e6) / 1e6, want, `whammyDepthSp(${JSON.stringify(amount)})`);
+    });
+  });
+  test('directions: rakeOf canonical table and beatRake', () => {
+    const cases = [['down', 'down'], [' UP ', 'up'], [true, true], ['rake', true], [1, true], [{}, true], ['', null],
+      [false, null], [null, null], [undefined, null], [0, null]];
+    cases.forEach(([raw, want]) => { eq(D.rakeOf(raw), want, `rakeOf(${JSON.stringify(raw)})`); eq(D.rakeOf(D.rakeOf(raw)), want); });
+    const note = (extra = {}) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }], ...extra });
+    eq([D.beatRake(note({ rake: true })), D.beatRake(note({ rake: 'up' })), D.beatRake(note()), D.beatRake(note({ rake: false }))], [true, true, false, false]);
+    eq([D.beatRake({ type: 'rest', rake: true }), D.beatRake({ type: 'grace', notes: [{ pitch: 'E4' }], rake: true })], [false, false]);
+    eq(D.RAKE_LABEL, 'rake');
+  });
+  test('directions: beatTapMark priority tap > slap > pop, main beats only', () => {
+    const beat = (notes, extra = {}) => ({ type: 'note', duration: 'quarter', notes, ...extra });
+    eq(D.beatTapMark(beat([{ pitch: 'E2', slap: true }])), 'slap');
+    eq(D.beatTapMark(beat([{ pitch: 'E2', pop: true }])), 'pop');
+    eq(D.beatTapMark(beat([{ pitch: 'E2', pop: true }, { pitch: 'G2', slap: true }])), 'slap');
+    eq(D.beatTapMark(beat([{ pitch: 'E2', slap: true, pop: true, tap: true }])), 'tap');
+    eq(D.beatTapMark(beat([{ pitch: 'E2', tap: true }, { pitch: 'G2', pop: true }])), 'tap');
+    eq(D.beatTapMark(beat([{ pitch: 'E2', tap: true, harmonic: 'tapped', slap: true }])), 'slap', 'tapped harmonic gives way');
+    eq(D.beatTapMark(beat([{ pitch: 'E2' }])), null);
+    eq(D.beatTapMark({ type: 'rest', duration: 'quarter' }), null);
+    eq(D.beatTapMark({ type: 'grace', duration: '16th', notes: [{ pitch: 'E2', slap: true }] }), null);
+    eq(D.beatTapMark(beat([])), null);
+    eq(D.TAP_MARK_LETTERS, { tap: 'T', slap: 'S', pop: 'P' });
+  });
+  test('directions: trillOf canonical table, idempotent, garbage -> null', () => {
+    const t = (fret, pitch) => ({ fret, pitch });
+    const cases = [
+      [true, t(null, null)], [7, t(7, null)], [1, t(1, null)], ['7', t(7, null)], [' 12 ', t(12, null)], [0, null], ['0', null],
+      ['B3', t(null, 'B3')], [' b3 ', t(null, 'B3')], ['F#4', t(null, 'F#4')], ['bb2', t(null, 'Bb2')],
+      [{ fret: 0 }, t(0, null)], [{ fret: 7 }, t(7, null)], [{ pitch: 'c4' }, t(null, 'C4')], [{ fret: 3, pitch: 'D4' }, t(3, 'D4')],
+      [{}, t(null, null)], [{ fret: -1 }, t(null, null)], [{ fret: 2.5, pitch: 'H9' }, t(null, null)],
+      [false, null], ['', null], ['H9', null], [-1, null], [2.5, null], [NaN, null], [Infinity, null], [[7], null],
+      [() => 1, null], [null, null], [undefined, null], ['  ', null], ['7x', null],
+    ];
+    cases.forEach(([raw, want]) => eq(D.trillOf(raw), want, `trillOf(${String(raw)})`));
+    cases.forEach(([raw]) => { const once = D.trillOf(raw); eq(D.trillOf(once), once, 'idempotent'); });
+    const note = (notes, extra = {}) => ({ type: 'note', duration: 'quarter', notes, ...extra });
+    eq(D.beatTrill(note([{ pitch: 'E4' }])), null);
+    eq(D.beatTrill(note([{ pitch: 'E4', trill: false }, { pitch: 'G4', trill: 7 }, { pitch: 'B4', trill: true }])).note.pitch, 'G4');
+    eq(D.beatTrill(note([{ pitch: 'E4', trill: 7 }])).trill, t(7, null));
+    eq(D.beatTrill({ type: 'rest', notes: [{ pitch: 'E4', trill: true }] }), null);
+    eq(D.beatTrill({ type: 'grace', duration: '16th', notes: [{ pitch: 'E4', trill: true }] }), null);
+  });
+  test('directions: trillTabFret nearest interval from the note', () => {
+    const n = { string: 3, fret: 5, pitch: 'A3' };
+    const f = (note, pitch) => D.trillTabFret(note, D.trillOf(pitch));
+    eq(f(n, 'B3'), 7);
+    eq(f(n, 'B4'), 7);
+    eq(f(n, 'B2'), 7);
+    eq(f(n, 'Ab3'), 4);
+    eq(f(n, 'A3'), 5);
+    eq(f(n, 'E4'), 0, 'a fifth up is -5 (nearest)');
+    eq(f({ ...n, soundingPitch: 'A3', pitch: 'A4' }, 'B3'), 7, 'soundingPitch first');
+    eq(f({ ...n, fret: undefined }, 'B3'), null);
+    eq(f({ ...n, fret: 1 }, 'F3'), null, 'negative');
+    eq(f({ string: 3, fret: 5 }, 'B3'), null, 'no pitch');
+    eq(f({ ...n, pitch: 'x' }, 'B3'), null, 'unparseable pitch');
+    eq(f(n, true), null);
+    eq(D.trillTabFret(n, D.trillOf(9)), 9);
+    eq(D.trillTabFret({}, D.trillOf({ fret: 0 })), 0);
+  });
+  test('directions: withDirections canonicalizes rake and every whammy type; fast path needs all three absent', () => {
+    const b = { type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }] };
+    eq(D.withDirections(b) === b, true);
+    eq(D.withDirections({ ...b, rake: 'Down' }).rake, 'down');
+    eq(D.withDirections({ ...b, rake: 0 }).rake, null);
+    eq(D.withDirections({ ...b, whammy: { type: 'dive', amount: '-1' } }).whammy, { type: 'dive', amount: '1' });
+    eq(D.withDirections({ ...b, whammy: { type: 'return' } }).whammy, { type: 'return', amount: '1/2' });
+    const raw = { ...b, rake: true };
+    eq(D.withDirections(raw) !== raw && !('whammy' in D.withDirections(raw)), true);
+  });
+  test('normalizeScore: note.trill canonicalized in place, slap / pop untouched, absent trill keeps the note shape', () => {
+    const notes = [{ pitch: 'E4', trill: ' 7 ', slap: true }, { pitch: 'G4', trill: 'zz' }, { pitch: 'B4', pop: true }, { string: 2, fret: 3, trill: true }];
+    const out = normalizeScore({ tracks: [{ measures: [{ beats: [{ type: 'note', duration: 'quarter', notes }] }] }] }).tracks[0].measures[0].beats[0].notes;
+    eq([out[0].trill, out[0].slap, out[1].trill, out[2].pop, out[3].trill], [{ fret: 7, pitch: null }, true, null, true, { fret: null, pitch: null }]);
+    eq('trill' in out[2], false);
+    eq(notes[0].trill, ' 7 ', 'input untouched');
+  });
   test('directions: normalizeScore keeps beats without the fields in the same shape; canonicalizes present ones', () => {
     const beats = [
       { type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 5, tap: true }], letRing: true },

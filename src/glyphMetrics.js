@@ -103,6 +103,7 @@ export const GLYPH_BOX = {
   repeatDot: { bBoxNE: [0.4, 0.2], bBoxSW: [0, -0.2] },
   segno: { bBoxNE: [2.2, 3.0], bBoxSW: [0, -0.1] },
   coda: { bBoxNE: [3.8, 3.62], bBoxSW: [0, -0.62] }, // measured from Bravura.woff2 ink (canvas measureText)
+  ornamentTrill: { bBoxNE: [2.125, 1.563], bBoxSW: [0, -0.063] }, // measured the same way
 };
 
 const BY_CHAR = new Map();
