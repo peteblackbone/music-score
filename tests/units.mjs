@@ -670,6 +670,11 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(D.beatWhammyAny({ type: 'rest', whammy: true }), null);
     eq(D.beatWhammyAny({ type: 'grace', notes: [{ pitch: 'E4' }], whammy: true }), null);
   });
+  const { whammyDepthSp } = await imp('src/draw/whammy.js');
+  test('whammyDepthSp: 1.2 sp per whole step clamped to 0.8..2.4 (half .8, full / whole / unknown 1.2, 1 1/2 1.8, 2 and up 2.4)', () => {
+    const cases = [['1/2', 0.8], ['1/4', 0.8], ['1', 1.2], ['full', 1.2], [' FULL ', 1.2], ['3/4', 0.9], ['1 1/2', 1.8], ['2', 2.4], ['2 1/2', 2.4], ['3', 2.4], ['0', 0.8], ['weird', 1.2], ['', 1.2]];
+    cases.forEach(([amount, want]) => eq(Math.round(whammyDepthSp(amount) * 1e6) / 1e6, want, `whammyDepthSp(${JSON.stringify(amount)})`));
+  });
   test('directions: rakeOf canonical table and beatRake', () => {
     const cases = [['down', 'down'], [' UP ', 'up'], [true, true], ['rake', true], [1, true], [{}, true], ['', null],
       [false, null], [null, null], [undefined, null], [0, null]];

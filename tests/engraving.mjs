@@ -1607,14 +1607,15 @@ function tabInk(stg) {
     else if (c.tag === 'g') {
       if (/tab-lines|tab-clef|barline/.test(k)) return;
       if (dcls(c, 'bend')) c.children.forEach((b) => { if (b.tag === 'rect') out.push({ kind: 'bend', ...rectBox(b), text: true }); else if (b.tag === 'path') out.push({ kind: 'bend', ...hullOf(b.getAttribute('d')), text: false }); });
-      else if (dcls(c, 'tap')) out.push({ kind: 'tap', ...tapBox(c), text: true });
+      else if (dcls(c, 'tap') || dcls(c, 'slap') || dcls(c, 'pop')) out.push({ kind: 'tap', ...tapBox(c), text: true });
+      else if (dcls(c, 'whammy') && !dcls(c, 'whammy-dip')) { /* dive / hold / return / pre-dive lines: techniques11 tests read them directly */ }
       else if (dcls(c, 'whammy')) { const d = dipBox(c); out.push({ kind: 'dip', ...d.vBox, text: true }, { kind: 'dip', ...d.tBox, text: true }); }
       else if (dcls(c, 'hammer-pull')) c.children.forEach((b) => { if (b.tag === 'path') out.push({ kind: 'hp', ...hullOf(b.getAttribute('d')) }); else if (b.tag === 'rect') out.push({ kind: 'hp', ...rectBox(b) }); });
       else if (dcls(c, 'let-ring') || dcls(c, 'palm-mute') || dcls(c, 'harmonic')) { const li = labelInk(c); out.push({ kind: 'label', ...li.text, text: true }); if (li.dash) out.push({ kind: 'label', ...li.dash, text: true }); }
       else if (dcls(c, 'pick-stroke')) out.push({ ...pickBox(c), kind: 'pick' });
       else {
         all(c).forEach(({ n }) => {
-          const b = n.tag === 'path' ? hullOf(n.getAttribute('d')) : n.tag === 'text' ? tbox(n) : n.tag === 'line'
+          const b = n.tag === 'path' ? hullOf(n.getAttribute('d')) : n.tag === 'text' ? (cpOf(n) >= 0xE000 ? nodeBox(n) : tbox(n)) : n.tag === 'line'
             ? { x1: Math.min(num(n, 'x1'), num(n, 'x2')), x2: Math.max(num(n, 'x1'), num(n, 'x2')), top: Math.min(num(n, 'y1'), num(n, 'y2')), bottom: Math.max(num(n, 'y1'), num(n, 'y2')) } : null;
           if (b) out.push({ kind: 'mark', ...b });
         });
@@ -4397,6 +4398,156 @@ test('techniques11', 'trill: deterministic, input untouched, garbage trill / sla
     ok(a === serialize(renderTree(score, 900)), 'deterministic');
     ok(!/NaN|undefined|Infinity/.test(a), `NaN for garbage ${String(v)}`);
     ok(JSON.stringify(score) === before, 'input untouched');
+  });
+});
+
+// ---------- whammy dive / hold / return ----------
+const dv = (amount = '1', extra = {}, string = 3, fret = 5, note = {}) => bt(string, fret, { whammy: { type: 'dive', amount }, ...extra }, note);
+const rt = (extra = {}, string = 3, fret = 5) => bt(string, fret, { whammy: { type: 'return' }, ...extra });
+const DEPTH = { '1/2': 0.8, '1': 1.2, full: 1.2, '1 1/2': 1.8, '2': 2.4, '3': 2.4, '0.25': 0.8, weird: 1.2 };
+// A whammy line group: its polyline points and (when drawn) its text.
+function lineOf(g) {
+  const v = pathNums(g.children.find((c) => c.tag === 'path').getAttribute('d'));
+  const pts = []; for (let i = 0; i < v.length; i += 2) pts.push({ x: v[i], y: v[i + 1] });
+  const t = g.children.find((c) => c.tag === 'text');
+  return { g, pts, cls: cls(g), text: t ? t._text : null, tBox: t ? tbox(t) : null, tx: t ? num(t, 'x') : null };
+}
+const linesOf = (stg) => all(stg).filter(({ n }) => n.tag === 'g' && dcls(n, 'whammy') && !dcls(n, 'whammy-dip')).map(({ n }) => lineOf(n)).sort((a, b) => a.pts[0].x - b.pts[0].x);
+const lineBoxes = (l) => l.pts.slice(1).map((p, i) => ({ x1: Math.min(l.pts[i].x, p.x), x2: Math.max(l.pts[i].x, p.x), top: Math.min(l.pts[i].y, p.y), bottom: Math.max(l.pts[i].y, p.y) }));
+const widthRule = (x, next) => Math.max(1.6 * SP, Math.min(2.8 * SP, next - x - 0.9 * SP));
+
+test('techniques11', 'dive: path from x + 0.3 sp at the top level down to the deep level, depth by amount (0.8 / 1.2 / 1.8 / 2.4 sp), width as a dip\'s, text "-" + amount centred above the slope, class whammy whammy-dive', () => {
+  Object.entries(DEPTH).forEach(([amount, depth]) => {
+    const score = tOnly([dv(amount), bt(3, 7), bt(3, 5), bt(3, 7)]);
+    const width = 900;
+    const xs = elXs(score, width);
+    const [l] = linesOf(tabStg(renderTree(score, width)));
+    ok(l && l.cls === 'whammy whammy-dive', `${amount}: class "${l && l.cls}"`);
+    near(l.pts[0].x, xs[0].x + 0.3 * SP, EPS, `${amount}: start x`);
+    near(l.pts[1].x - l.pts[0].x, widthRule(xs[0].x, xs[1].x), EPS, `${amount}: slope width`);
+    near(l.pts[1].y - l.pts[0].y, depth * SP, EPS, `${amount}: depth`);
+    ok(l.text === `-${amount}`, `${amount}: text "${l.text}"`);
+    near(l.tx, (l.pts[0].x + l.pts[1].x) / 2, EPS, `${amount}: text centred on the slope`);
+    ok(l.tBox.bottom <= l.pts[0].y - 0.3 * SP + EPS && l.tBox.bottom >= l.pts[0].y - 0.3 * SP - 1.5, `${amount}: text sits 0.3 sp above the slope top`);
+    const t = tg(tabStg(renderTree(score, width)), 'whammy-dive')[0].children.find((c) => c.tag === 'text');
+    ok(t.getAttribute('font-style') === 'italic', 'italic text');
+  });
+});
+
+test('techniques11', 'dive hold: horizontal at the deep level to 0.5 sp before the last barline, >= 0.5 sp above the TAB top line and >= 0.4 sp above every fret / mark / bend / T / S / P / trill / H-P ink under it, one level', () => {
+  const beats = [
+    dv('1', {}, 3, 5), bt(3, 7, { vibrato: true }), bt(3, 5, {}, { bend: 'full' }), bt(2, 9, {}, { tap: true }), bt(2, 5, {}, { slap: true, trill: 7 }),
+    bt(1, 12, { pickStroke: 'up' }, { hammerPull: 'h' }), bt(1, 14), bt(1, 15, { tremolo: 2 }), bt(3, 5), bt(3, 5), bt(3, 5), bt(3, 5),
+  ];
+  const score = tOnly(beats);
+  const width = 1400;
+  const svg = renderTree(score, width);
+  const layout = layoutOf(score, width);
+  ok(layout.systems.length === 1, 'one system');
+  const stg = tabStg(svg);
+  const info = staffInfo(stg);
+  const [l] = linesOf(stg);
+  ok(linesOf(stg).length === 1, 'one line');
+  const deepY = l.pts[1].y;
+  l.pts.slice(1).forEach((p) => near(p.y, deepY, EPS, 'hold at one level'));
+  near(l.pts.at(-1).x, layout.systems[0].lastBarlineX - 0.5 * SP, EPS, 'ends 0.5 sp before the last barline');
+  ok(deepY <= info.localTop - 0.5 * SP + EPS, `deep level ${deepY} vs top line ${info.localTop}`);
+  const span = { x1: l.pts[0].x, x2: l.pts.at(-1).x };
+  let under = 0;
+  tabInk(stg).filter((b) => b.kind !== 'pick' && xover(span, b)).forEach((b) => {
+    ok(deepY <= b.top - 0.4 * SP + EPS, `${b.kind} ink at ${b.x1}..${b.x2} top ${b.top} within 0.4 sp of the hold at ${deepY}`);
+    under++;
+  });
+  ok(under >= 15, `${under} ink pieces checked`);
+  const kinds = new Set(tabInk(stg).filter((b) => xover(span, b)).map((b) => b.kind));
+  ['fret', 'bend', 'tap', 'hp', 'mark'].forEach((k) => ok(kinds.has(k), `no ${k} ink under the hold`));
+  // pass 5: a tab-only pick stroke clears the line
+  const pk = dgroups(stg, 'pick-stroke').map(pickBox)[0];
+  ok(pk.bottom <= deepY - 0.4 * SP + EPS || pk.x < span.x1 || pk.x > span.x2, `pick bottom ${pk.bottom} vs hold ${deepY}`);
+});
+
+test('techniques11', 'dive return: the hold runs to the return beat and rises by the depth, starting >= 0.3 sp after the beat, class adds whammy-return; an orphan return draws nothing; a dip / dive ends the hold without a rise', () => {
+  const width = 1200;
+  const score = tOnly([dv('1/2'), bt(3, 7), bt(3, 5), rt(), bt(3, 5), bt(3, 7)]);
+  const xs = elXs(score, width);
+  const stg = tabStg(renderTree(score, width));
+  const [l] = linesOf(stg);
+  ok(linesOf(stg).length === 1 && l.cls === 'whammy whammy-dive whammy-return', `class "${l.cls}"`);
+  const rise = l.pts.slice(-2);
+  near(rise[0].y - rise[1].y, 0.8 * SP, EPS, 'rise = depth');
+  ok(rise[0].x >= xs[3].x + 0.3 * SP - EPS, `rise starts ${rise[0].x} before beat ${xs[3].x} + 0.3 sp`);
+  ok(rise[1].x >= rise[0].x, 'rise goes right');
+  ok(rise[1].x <= layoutOf(score, width).systems[0].lastBarlineX - 0.5 * SP + EPS, 'rise inside the barline');
+  ok(l.pts.slice(1, -1).every((p) => Math.abs(p.y - l.pts[1].y) < EPS), 'hold level up to the rise');
+  // orphan return
+  ok(linesOf(tabStg(renderTree(tOnly([bt(3, 5), rt(), bt(3, 7)]), width))).length === 0, 'orphan return draws something');
+  ok(linesOf(tabStg(renderTree(tOnly([dv('1'), rt(), rt(), bt(3, 7)]), width))).length === 1, 'a second return is ignored');
+  // a dip and a dive end the hold 0.9 sp before them, no rise
+  const dipScore = tOnly([dv('1'), bt(3, 7), bt(3, 5, { whammy: '1/2' }), bt(3, 7), rt(), bt(3, 7)]);
+  const dxs = elXs(dipScore, width);
+  const dl = linesOf(tabStg(renderTree(dipScore, width)));
+  ok(dl.length === 1 && dl[0].cls === 'whammy whammy-dive', `dip: ${dl.length} lines, class "${dl[0] && dl[0].cls}"`);
+  ok(dl[0].pts.slice(1).every((p) => Math.abs(p.y - dl[0].pts[1].y) < EPS), 'no rise before the dip');
+  near(dl[0].pts.at(-1).x, Math.max(dl[0].pts[1].x, dxs[2].x - 0.9 * SP), EPS, 'hold stops 0.9 sp before the dip');
+  const twice = tOnly([dv('1'), bt(3, 7), dv('2', {}, 3, 5), bt(3, 7), rt(), bt(3, 7)]);
+  const txs = elXs(twice, width);
+  const tl = linesOf(tabStg(renderTree(twice, width)));
+  ok(tl.length === 2 && !tl[0].cls.includes('return') && tl[1].cls === 'whammy whammy-dive whammy-return', `dive then dive: classes ${tl.map((x) => x.cls)}`);
+  near(tl[0].pts.at(-1).x, txs[2].x - 0.9 * SP, EPS, 'first hold stops 0.9 sp before the second dive');
+  near(tl[1].pts[1].y - tl[1].pts[0].y, 2.4 * SP, EPS, 'second dive depth');
+});
+
+test('techniques11', 'whammy lines vs labels: P.M. / let-ring / harmonic runs never hit a whammy line or its text (they move a lane out), tab-only picks stay >= 0.4 sp above the lines', () => {
+  const beats = [
+    dv('1', { palmMute: true, letRing: true }), bt(3, 7, { palmMute: true, letRing: true }), bt(3, 5, { palmMute: true, letRing: true, pickStroke: 'down' }), bt(3, 5, { palmMute: true, whammy: { type: 'return' } }),
+    bt(3, 7, {}, { harmonic: 'artificial', harmonicFret: 17 }), bt(3, 7, { pickStroke: 'up' }),
+  ];
+  [900, 1400].forEach((width) => {
+    const svg = renderTree(tOnly(beats), width);
+    const stg = tabStg(svg);
+    const lines = linesOf(stg);
+    ok(lines.length === 1, `${lines.length} lines`);
+    const wb = [...lineBoxes(lines[0]), ...(lines[0].tBox ? [lines[0].tBox] : [])];
+    const labels = tabInk(stg).filter((b) => b.kind === 'label');
+    ok(labels.length >= 4, `${labels.length} label boxes`);
+    labels.forEach((b) => wb.forEach((w) => ok(!boxesHit(b, w), `label box ${JSON.stringify(b)} hits the whammy line ${JSON.stringify(w)}`)));
+    dgroups(stg, 'pick-stroke').map(pickBox).forEach((p) => wb.forEach((w) => ok(!xover(p, w) || p.bottom <= w.top - 0.4 * SP + EPS || p.top >= w.bottom, `pick ${p.x} too close to the line`)));
+  });
+});
+
+test('techniques11', 'whammy breaks: a hold ends 0.5 sp before the last barline, resumes as whammy-hold 0.5 sp after the next header without text, returns on beat 2 of the next system, two breaks give three segments, no return runs to the end of the track', () => {
+  const width = 420;
+  const mkm = (beats) => ({ beats });
+  const four = () => [bt(3, 5), bt(3, 7), bt(3, 5), bt(3, 7)];
+  // dive on the last beat of system 1, return on beat 2 of system 2
+  const probeScore = { tracks: [{ name: 'G', showStandardNotation: false, showTablature: true, measures: Array.from({ length: 8 }, () => mkm(four())) }] };
+  const seq0 = seqOf(probeScore, width);
+  const lastOfSys0 = seq0.findLastIndex((b) => b.si === 0);
+  const firstOfSys1 = lastOfSys0 + 1;
+  ok(seq0.at(-1).si >= 2, 'at least three systems');
+  const flatBeats = probeScore.tracks[0].measures.flatMap((m) => m.beats);
+  const withMarks = (marks) => ({ tracks: [{ name: 'G', showStandardNotation: false, showTablature: true, measures: probeScore.tracks[0].measures.map((m, mi) => ({ beats: m.beats.map((b, bi) => { const i = mi * 4 + bi; return marks[i] ? { ...b, whammy: marks[i] } : b; }) })) }] });
+  const layout = layoutOf(probeScore, width);
+  const svg1 = renderTree(withMarks({ [lastOfSys0]: { type: 'dive', amount: '1' }, [firstOfSys1 + 1]: { type: 'return' } }), width);
+  const s0 = linesOf(tabStg(svg1, 0)); const s1 = linesOf(tabStg(svg1, 1));
+  ok(s0.length === 1 && s1.length === 1 && !linesOf(tabStg(svg1, 2)).length, `${s0.length} / ${s1.length} lines on systems 0 / 1`);
+  ok(s0[0].cls === 'whammy whammy-dive' && s1[0].cls === 'whammy whammy-hold whammy-return', `classes ${s0[0].cls} | ${s1[0].cls}`);
+  near(s0[0].pts.at(-1).x, layout.systems[0].lastBarlineX - 0.5 * SP, EPS, 'first segment ends 0.5 sp before the last barline');
+  near(s1[0].pts[0].x, layout.systems[1].contentStartX + 0.5 * SP, EPS, 'continuation starts 0.5 sp after the header');
+  ok(s1[0].text === null, 'no text on the continuation');
+  near(s1[0].pts[0].y - s1[0].pts.at(-1).y, 1.2 * SP, EPS, 'rise = depth');
+  const xs1 = seqOf(probeScore, width)[firstOfSys1 + 1].x;
+  ok(s1[0].pts.at(-2).x >= xs1 + 0.3 * SP - EPS, 'rise starts after the return beat');
+  // two breaks: dive on system 0, never returns -> hold segments on systems 1 and 2 (last system ends at its last barline - 0.5 sp)
+  const svg2 = renderTree(withMarks({ [lastOfSys0 - 1]: { type: 'dive', amount: '1 1/2' } }), width);
+  const per = layout.systems.map((_, si) => linesOf(tabStg(svg2, si)));
+  ok(per.every((p) => p.length === 1), `lines per system ${per.map((p) => p.length)}`);
+  ok(per.slice(1).every((p) => p[0].cls === 'whammy whammy-hold' && p[0].text === null), 'continuations are whammy-hold without text');
+  ok(per.length >= 3, `${per.length} systems`);
+  layout.systems.forEach((sys, si) => {
+    near(per[si][0].pts.at(-1).x, sys.lastBarlineX - 0.5 * SP, EPS, `system ${si}: segment end`);
+    if (si > 0) near(per[si][0].pts[0].x, sys.contentStartX + 0.5 * SP, EPS, `system ${si}: segment start`);
+    ok(per[si][0].pts.slice(si ? 0 : 1).every((p) => Math.abs(p.y - per[si][0].pts.at(-1).y) < EPS), `system ${si}: one level`);
   });
 });
 

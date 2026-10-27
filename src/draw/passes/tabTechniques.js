@@ -14,6 +14,7 @@ import { estimateTextWidth, fretLabel, fretLabelWidth } from '../../textMetrics.
 import { isNaturalHarmonic, decoratesFretLabel } from '../../harmonics.js';
 import { beatTapMark, beatWhammy, beatTrill, trillTabFret, TAP_MARK_LETTERS } from '../../directions.js';
 import { trillEndX, trillGeometry, renderTrill } from '../trill.js';
+import { planWhammyLines, renderWhammyLine } from '../whammy.js';
 import { flattenRuns, tabTopY, inkTopInSpan, breakEndX, breakStartX } from './common.js';
 
 const SLIDE_STUB_SP = 2;         // outgoing slide stroke across a system break (horizontal length)
@@ -79,8 +80,11 @@ const WHAMMY_FRET_HALF_SP = 1; // horizontal reach assumed for another beat's fr
  *   same way, in the same slot (one letter per beat, priority T > S > P;
  *   `beatTapMark`);
  * - `whammy` draws a dip ("V" plus "-1/2") above the TAB staff, its width
- *   limited like a bend's, stacked above the beat's frets, marks, "T" and
- *   any bend under it.
+ *   limited like a bend's, stacked above the beat's frets, marks, "T" / "S" /
+ *   "P", trill and any bend under it;
+ * - after all beats, whammy dives, returns and pre-dives (draw/whammy.js):
+ *   one line per system segment, each at one level above the frets, marks,
+ *   letters, trills, bends and dips under it, 0.5 sp above the TAB top line.
  *
  * Bend, trill, tap "T" and whammy-dip ink boxes are recorded on the run
  * (`run.tabInkBoxes`, each tagged with its note's x as `noteX`),
@@ -245,6 +249,20 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
         renderWhammyDip(run.tabG, x, bottomY, dip, theme, nextX)
           .forEach((b) => run.tabInkBoxes.push({ ...b, noteX: x }));
       }
+    });
+
+    // Whammy dive / hold / return lines last, above every per-beat mark under them, one level per segment.
+    planWhammyLines(trackRuns.filter((r) => r.track === track), systems, theme).forEach((seg) => {
+      const run = seg.run;
+      const lx1 = Math.min(...seg.pts.map((p) => p.x));
+      const lx2 = Math.max(...seg.pts.map((p) => p.x));
+      const inkTop = Math.min(
+        inkTopInSpan(lx1, lx2, { boxLists: [run.tabInkBoxes, run.hpBoxes] }),
+        ...beats.filter((o) => o.run === run && o.layoutEl.x > lx1 - WHAMMY_FRET_HALF_SP * s && o.layoutEl.x < lx2 + WHAMMY_FRET_HALF_SP * s)
+          .flatMap((o) => [o.layoutEl.tabRendered?.fretTopY ?? Infinity, o.layoutEl.tabRendered?.marksTopY ?? Infinity]),
+      );
+      const bottomY = Math.min(tabTopY(run, stringCount, theme) - WHAMMY_STAFF_CLEAR_SP * s, inkTop - WHAMMY_CLEAR_SP * s);
+      renderWhammyLine(run.tabG, seg, bottomY, theme).forEach((b) => run.tabInkBoxes.push(b));
     });
   });
 }
