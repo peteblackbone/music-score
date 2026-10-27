@@ -4,6 +4,7 @@ import { register } from 'node:module';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 
 register('./hooks.mjs', import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -54,6 +55,23 @@ for (const c of cases) {
   let i = 0; while (i < a.length && a[i] === b[i]) i++;
   console.log(`FAIL ${c.id}: first diff at line ${i + 1}\n  expected: ${a[i]}\n  actual:   ${b[i]}`);
   fs.writeFileSync(path.join(snapDir, `${c.id}.actual.svg.tmp`), out);
+}
+// Opt-out guard: with hammerPullSlurs:false every pre-1.3 render must stay byte-identical to the 1.2.0 baseline.
+{
+  const hashes = JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'pre-1.3-hashes.json'), 'utf8'));
+  for (const c of cases) {
+    const want = hashes[c.id];
+    if (!want) continue;
+    const box = makeContainer();
+    const opts = { width: c.width, ...(c.options || {}), theme: { ...(c.options?.theme), hammerPullSlurs: false } };
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(c.score)), opts).render();
+    const out = serialize(box.children[0]);
+    if (crypto.createHash('sha256').update(out).digest('hex') === want) { console.log(`PASS optout-1.2.0 ${c.id}`); continue; }
+    fail++;
+    console.log(`FAIL optout-1.2.0 ${c.id}
+  baseline: git show a825edc:tests/snapshots/${c.id}.svg`);
+    fs.writeFileSync(path.join(snapDir, `${c.id}.optout.actual.svg.tmp`), out);
+  }
 }
 // Determinism: render the same case twice in-process
 {
