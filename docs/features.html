@@ -90,7 +90,7 @@
   <div class="tile"><b>JSON in, SVG out</b><span>Score → tracks → measures → beats → notes. Rendered into any container.</span></div>
   <div class="tile"><b>Notation, tab or both</b><span>Per track. Tab pitch is worked out from string, fret and tuning.</span></div>
   <div class="tile"><b>Real engraving layout</b><span>Justified systems, aligned beats across staves, content-aware spacing.</span></div>
-  <div class="tile"><b>Guitar conventions</b><span>8vb clefs, SMuFL TAB clef, hammer-ons, slides, bends, palm mute, harmonics, let ring, pick strokes, strum arrows, arpeggios, tapping, slap and pop, whammy dips and dives, rakes, trills.</span></div>
+  <div class="tile"><b>Guitar conventions</b><span>8vb clefs, SMuFL TAB clef, hammer-ons and pull-offs (slurred on notation too), slides, slide-ins and slide-outs, bends, pre-bends and releases, palm mute, harmonics, let ring, pick strokes, strum arrows, arpeggios, tapping, slap and pop, whammy dips and dives, rakes, trills.</span></div>
   <div class="tile"><b>Rhythm on tab</b><span>Tab-only tracks show stems, beams, flags, dots, tuplets and rests on the TAB staff.</span></div>
   <div class="tile"><b>Full notation basics</b><span>Keys, meters, tuplets, dots, ties, slurs, accidentals, chords.</span></div>
   <div class="tile"><b>Marks</b><span>Articulations, fermatas, dynamics, chord symbols, vibrato, tremolo.</span></div>
@@ -187,9 +187,11 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 <h2 id="techniques">Guitar techniques</h2>
 <table>
   <tr><th>Field</th><th>Drawn as</th></tr>
-  <tr><td><code>hammerPull</code></td><td>Slur with H or P to the next note on the string</td></tr>
+  <tr><td><code>hammerPull</code></td><td>Slur with H or P to the next note on the string, on tab and on notation (<code>hammerPullSlurs: false</code> in the theme turns the notation slurs off)</td></tr>
   <tr><td><code>slide</code></td><td>Diagonal stroke to the next note</td></tr>
-  <tr><td><code>bend</code></td><td>Arrow with amount (<code>1/2</code>, <code>full</code>, <code>1 1/2</code>…), optional release or hold</td></tr>
+  <tr><td><code>slideIn</code></td><td>Short slide into the note: <code>true</code>, <code>'up'</code> or <code>'below'</code> from below; <code>'down'</code> or <code>'above'</code> from above</td></tr>
+  <tr><td><code>slideOut</code></td><td>Short slide off the note: <code>true</code> or <code>'down'</code> downward; <code>'up'</code> upward</td></tr>
+  <tr><td><code>bend</code></td><td>Arrow with amount (<code>1/2</code>, <code>full</code>, <code>1 1/2</code>…), optional release or hold; <code>'prebend full'</code> (or <code>'pb 1/2'</code>) bends before the pick; <code>'release'</code> is a note that falls back to the unbent pitch</td></tr>
   <tr><td><code>palmMute</code></td><td>"P.M." with a dashed line over consecutive beats</td></tr>
   <tr><td><code>vibrato</code>, <code>tremolo</code></td><td>Wavy line; tremolo slashes</td></tr>
   <tr><td><code>mute</code>, <code>ghost</code></td><td>x notehead / x on tab; parentheses</td></tr>
@@ -206,6 +208,13 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <tr><td><code>trill</code> (on a note)</td><td>"tr" with a wavy line on notation and TAB; <code>7</code> or <code>'B3'</code> adds <code>(7)</code> on TAB</td></tr>
   <tr><td><code>tabRhythm</code> (track)</td><td>Stems, beams, flags, dots, tuplets and rests under the TAB staff. On by default for tab-only tracks; <code>false</code> hides it, <code>true</code> adds it to a track that also shows notation. See <a href="#tab-rhythm">Rhythm on tab</a></td></tr>
 </table>
+<ul class="points">
+  <li>A run of hammer-ons and pull-offs on one string shares one slur on notation, as well as the H and P arcs on tab. Notes need <code>string</code>.</li>
+  <li><code>slideIn</code> and <code>slideOut</code> draw a short slide on tab and notation. They take no horizontal room. A slide-in is left out when a slide or hammer-on already leads into the note, and a slide-out when the note has its own <code>slide</code> to another note or a <code>bend</code>.</li>
+  <li>A pre-bend is bent before the note is picked. On tab it is a rising shaft with the amount and no landing fret. Add <code>release</code> to bend back down.</li>
+  <li>A release note (<code>'release'</code>) falls back to the unbent pitch, with its fret in parentheses. Its amount is the last bend on that string, or a full step.</li>
+  <li>Pre-bends and releases are drawn on tab only.</li>
+</ul>
 <div class="demo" data-demo="techniques"></div>
 
 <h2 id="harmonics">Harmonics</h2>
@@ -235,6 +244,7 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 <div class="demo" data-demo="directions" data-width="680"></div>
 <div class="demo" data-demo="techniques11" data-width="680"></div>
 <div class="demo" data-demo="strumArpeggio" data-width="680"></div>
+<div class="demo" data-demo="legatoSlides" data-width="680"></div>
 
 <h2 id="tab-rhythm">Rhythm on tab</h2>
 <p>A tab-only track (<code>showStandardNotation: false</code>, <code>showTablature: true</code>) shows its rhythm under the TAB staff by default, as in tab books: stems, beams, flags, augmentation dots, tuplets and rests. Set <code>tabRhythm: false</code> to keep plain fret numbers. A track that also shows notation gets this only with <code>tabRhythm: true</code>.</p>
@@ -480,6 +490,17 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
             { type: 'note', duration: 'quarter', strum: 'down', notes: [{ string: 4, fret: 2 }, { string: 3, fret: 1 }, { string: 2, fret: 0 }] },
             { type: 'note', duration: 'quarter', strum: 'up', arpeggio: 'up', notes: [{ string: 4, fret: 2 }, { string: 3, fret: 1 }, { string: 2, fret: 0 }] },
           ] },
+        ],
+      }],
+    },
+
+    legatoSlides: {
+      tracks: [{
+        name: 'Gt.', showStandardNotation: true, showTablature: true,
+        measures: [
+          { beats: [t('8th', 3, 5, { hammerPull: true }), t('8th', 3, 7, { hammerPull: true }), t('8th', 3, 9), t('8th', 3, 7, { hammerPull: 'p' }), t('half', 3, 5)] },
+          { beats: [t('quarter', 2, 7, { slideIn: 'below' }), t('quarter', 2, 9, { slideOut: 'up' }), t('quarter', 2, 7, { slideIn: 'above' }), t('quarter', 2, 5, { slideOut: 'down' })] },
+          { beats: [t('quarter', 1, 7, { bend: 'prebend full' }), t('quarter', 1, 5, { bend: 'pb 1/2 release' }), t('quarter', 1, 7, { bend: 'release' }), t('quarter', 1, 5, { bend: { type: 'release', amount: 'full' } })] },
         ],
       }],
     },
