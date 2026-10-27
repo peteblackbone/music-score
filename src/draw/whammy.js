@@ -26,9 +26,11 @@ const PREDIVE_PREV_CLEAR_SP = 0.9; // lead-in start -> the previous beat's x
 const HOLD_STOP_GAP_SP = 0.9;     // a hold ended by another whammy mark stops this far before it
 const START_SP = 0.3;             // slope / release start -> right of the note's x (as for the dip)
 
-/** Depth (sp) of a dive / pre-dive of `amount`: 1.2 sp per whole step, clamped to 0.8..2.4 ('1/2' .8, '1' / 'full' / unknown 1.2, '1 1/2' 1.8, '2' and up 2.4). */
+/** Depth (sp) of a dive / pre-dive of `amount`: 1.2 sp per whole step, clamped to 0.8..2.4 ('1/2' .8, '1' / 'full' / unknown 1.2, '1 1/2' 1.8, '2' and up 2.4; a NaN amount such as '0/0' 1.2). */
 export function whammyDepthSp(amount) {
-  return Math.max(DIVE_MIN_DEPTH_SP, Math.min(DIVE_MAX_DEPTH_SP, (bendSemitones(amount) / 2) * DIVE_SP_PER_STEP));
+  const semitones = bendSemitones(amount);
+  const steps = Number.isNaN(semitones) ? 1 : semitones / 2;
+  return Math.max(DIVE_MIN_DEPTH_SP, Math.min(DIVE_MAX_DEPTH_SP, steps * DIVE_SP_PER_STEP));
 }
 
 /**
