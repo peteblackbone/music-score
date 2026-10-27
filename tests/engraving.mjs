@@ -528,7 +528,9 @@ test('scaling', 'x2 scaling with fixed stroke widths (default staffLineWidth/ste
   // are the measured maxima plus ~10-20% headroom; a layout that stopped scaling would drift by tens or hundreds of px.
   // y raised 1.6 -> 2.4 with the ink-based chord-symbol/dynamic baselines (acceptance fix C1): they follow fixed-width
   // stem/beam ink, and the per-system drift accumulates into the SVG height (measured 2.01 px on an earlier, 6-system lead-riff example; the current corpus measures 1.50 px).
-  const TOL = { x: 2, y: 2.4, pathX: 0.8, pathY: 11 };
+  // pathY raised 11 -> 16 with the lead-solo-f example's 32nd-note triplet: its third beam stacks another fixed beamWidth
+  // (measured 15 px).
+  const TOL = { x: 2, y: 2.4, pathX: 0.8, pathY: 16 };
   const mx = scaleDrift(SCALED, 'fixed-strokes');
   for (const [k, v] of Object.entries(mx)) ok(v <= TOL[k], `fixed-strokes max drift ${k} = ${v.toFixed(3)} > ${TOL[k]}`);
   results.push({ ok: true, name: `[scaling] info: fixed strokes, max drift x ${mx.x.toFixed(2)} y ${mx.y.toFixed(2)} path x ${mx.pathX.toFixed(2)} y ${mx.pathY.toFixed(2)} (tolerances ${JSON.stringify(TOL)})`, n: 0, info: true });

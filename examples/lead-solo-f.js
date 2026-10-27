@@ -6,7 +6,7 @@
  * Progression: (pickup) | F | F | G | Bb | F C/E | Dm | Bb | Gm C | F | (F) | (end)
  *
  * It stays around the 8th-15th position. Each measure shows a few of the
- * features: a 16th-note pickup run, 16th- and 8th-note triplets, a
+ * features: a 16th-note pickup run, 32nd- and 8th-note triplets, a
  * hammer-on and pull-off, dotted rhythms, grace-note slides up and down,
  * ties across a beat and across a barline, 3rds and 6ths as dyads, "full"
  * and "full release" bends, a chromatic neighbour note, vibrato, and a
@@ -46,12 +46,13 @@ export const leadSoloF = {
             { type: 'note', duration: '16th', notes: [{ string: 3, fret: 9 }] },
           ],
         },
-        { // 2 — F. A quick 16th-note triplet with hammer-on and pull-off, a dotted 8th.
+        { // 2 — F. A quick 32nd-note triplet with hammer-on and pull-off, a dotted 8th.
           beats: [
             { type: 'note', duration: '8th', chord: 'F', notes: [{ string: 3, fret: 10 }] },
-            { type: 'note', duration: '16th', tuplet: 3, notes: [{ string: 2, fret: 10, hammerPull: true }] },
-            { type: 'note', duration: '16th', tuplet: 3, notes: [{ string: 2, fret: 11, pitch: 'Bb4', hammerPull: true }] },
-            { type: 'note', duration: '16th', tuplet: 3, notes: [{ string: 2, fret: 10 }] },
+            { type: 'note', duration: '16th', notes: [{ string: 3, fret: 12 }] },
+            { type: 'note', duration: '32nd', tuplet: 3, notes: [{ string: 2, fret: 10, hammerPull: true }] },
+            { type: 'note', duration: '32nd', tuplet: 3, notes: [{ string: 2, fret: 11, pitch: 'Bb4', hammerPull: true }] },
+            { type: 'note', duration: '32nd', tuplet: 3, notes: [{ string: 2, fret: 10 }] },
 
             { type: 'note', duration: '8th', dots: 1, notes: [{ string: 3, fret: 12 }] },
             { type: 'note', duration: '16th', notes: [{ string: 3, fret: 10 }] },
