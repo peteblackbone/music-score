@@ -85,7 +85,7 @@ export class MusicScoreRenderer {
     renderGraceSlurs(score, trackRuns, theme);
     renderTabArticulations(score, trackRuns, theme, layout.systems);
     renderTechniqueLabelRuns(score, trackRuns, theme, layout.systems);
-    // Pick strokes and notation tap "T" (above everything but chord symbols and fermatas).
+    // Pick strokes, notation tap "T" / slap / pop and trills (above everything but chord symbols and fermatas).
     renderPlayingDirections(score, trackRuns, theme, layout.systems);
     // Chord symbols / dynamics once everything they must clear is drawn.
     renderChordSymbolsAndDynamics(score, trackRuns, theme, layout.systems);

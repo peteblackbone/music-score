@@ -90,7 +90,7 @@
   <div class="tile"><b>JSON in, SVG out</b><span>Score → tracks → measures → beats → notes. Rendered into any container.</span></div>
   <div class="tile"><b>Notation, tab or both</b><span>Per track. Tab pitch is worked out from string, fret and tuning.</span></div>
   <div class="tile"><b>Real engraving layout</b><span>Justified systems, aligned beats across staves, content-aware spacing.</span></div>
-  <div class="tile"><b>Guitar conventions</b><span>8vb clefs, SMuFL TAB clef, hammer-ons, slides, bends, palm mute, harmonics, let ring, pick strokes, tapping, whammy dips.</span></div>
+  <div class="tile"><b>Guitar conventions</b><span>8vb clefs, SMuFL TAB clef, hammer-ons, slides, bends, palm mute, harmonics, let ring, pick strokes, tapping, slap and pop, whammy dips and dives, rakes, trills.</span></div>
   <div class="tile"><b>Rhythm on tab</b><span>Tab-only tracks show stems, beams, flags, dots, tuplets and rests on the TAB staff.</span></div>
   <div class="tile"><b>Full notation basics</b><span>Keys, meters, tuplets, dots, ties, slurs, accidentals, chords.</span></div>
   <div class="tile"><b>Marks</b><span>Articulations, fermatas, dynamics, chord symbols, vibrato, tremolo.</span></div>
@@ -198,7 +198,10 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <tr><td><code>letRing</code></td><td>Dashed "let ring" label over consecutive beats, like P.M.; a rest inside the run keeps it going</td></tr>
   <tr><td><code>pickStroke</code></td><td><code>'down'</code> or <code>'up'</code>: ⊓ or ∨ above the beat</td></tr>
   <tr><td><code>tap</code> (on a note)</td><td>"T" above the note on notation, or above the fret on TAB</td></tr>
-  <tr><td><code>whammy</code></td><td>Whammy-bar dip on TAB: a V with <code>-1/2</code> above it (<code>true</code> means <code>1/2</code>)</td></tr>
+  <tr><td><code>slap</code>, <code>pop</code> (on a note)</td><td>"S" or "P" in the tap "T" place, on notation and TAB (tap wins over slap, slap over pop)</td></tr>
+  <tr><td><code>whammy</code></td><td>Whammy-bar mark on TAB: <code>true</code>, a string or <code>{ type: 'dip' }</code> is a V with <code>-1/2</code> above it (<code>true</code> means <code>1/2</code>); <code>{ type: 'dive', amount }</code> slopes down and is held until a <code>{ type: 'return' }</code> beat rises again, across line breaks; <code>{ type: 'predive', amount }</code> is a level lead-in before the note, then the rise</td></tr>
+  <tr><td><code>rake</code></td><td>Dashed "rake" label over the beat and the dead-note grace notes just before it</td></tr>
+  <tr><td><code>trill</code> (on a note)</td><td>"tr" with a wavy line on notation and TAB; <code>7</code> or <code>'B3'</code> adds <code>(7)</code> on TAB</td></tr>
   <tr><td><code>tabRhythm</code> (track)</td><td>Stems, beams, flags, dots, tuplets and rests under the TAB staff. On by default for tab-only tracks; <code>false</code> hides it, <code>true</code> adds it to a track that also shows notation. See <a href="#tab-rhythm">Rhythm on tab</a></td></tr>
 </table>
 <div class="demo" data-demo="techniques"></div>
@@ -213,15 +216,20 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 <div class="demo" data-demo="harmonics" data-width="680"></div>
 
 <h2 id="directions">Picking and playing directions</h2>
-<p>Beat fields for the marks players read: <code>letRing</code> for a let-ring run, <code>pickStroke</code> for down and up picks, <code>tap</code> on a note for tapping, and <code>whammy</code> for a whammy-bar dip. None of them change the rhythm or the note spacing.</p>
+<p>Beat fields for the marks players read: <code>letRing</code> for a let-ring run, <code>pickStroke</code> for down and up picks, <code>tap</code>, <code>slap</code>, <code>pop</code> and <code>trill</code> on a note, and <code>whammy</code> and <code>rake</code> on a beat. None of them change the rhythm or the note spacing.</p>
 <ul class="points">
   <li>Consecutive <code>letRing</code> beats share one dashed "let ring" label, and an unmarked rest between them keeps the run going. The label sits outside any P.M. or harmonic label.</li>
   <li>Pick strokes sit above the notation staff, one per beat, and beats in one beam group share a height. On a tab-only track they sit above the TAB.</li>
   <li>A tapped note gets a "T" above its note or fret. A tapped harmonic shows only its <code>T.H.</code> label.</li>
   <li>A whammy dip is drawn on the TAB staff only, as a V with its amount above it. <code>true</code> means <code>1/2</code>.</li>
-  <li>Rests and grace notes ignore pick strokes, taps and whammy dips.</li>
+  <li>A whammy dive slopes down (0.8 to 2.4 sp deep, by amount) and stays held, as a level line, until a beat with <code>{ type: 'return' }</code>, where it rises again. A dip, another dive or a pre-dive ends the hold early with no rise. A hold carries over a line break, stopping 0.5 sp before the barline and resuming after the next header without text. A pre-dive is a short level lead-in before its note, then the rise. The line is lifted above any frets, marks, letters, trills and bends under it.</li>
+  <li>A slapped or popped bass note gets an "S" or "P" above it, in the same place as the "T". One letter per beat: tap, then slap, then pop.</li>
+  <li>A rake is a dashed "rake" label over its beat and the grace notes right before it. Write those dead-note grace notes yourself. The label sits outside any P.M. or let-ring label it overlaps.</li>
+  <li>A trill is "tr" and a wavy line above the beat, on notation and TAB, above any vibrato or tremolo and below a "T", pick stroke or fermata. On TAB, a fret or pitch target adds <code>(7)</code>. The wave stops before the next beat and at a line break.</li>
+  <li>Rests and grace notes ignore pick strokes, taps, slaps, pops, trills, whammy marks and rakes.</li>
 </ul>
 <div class="demo" data-demo="directions" data-width="680"></div>
+<div class="demo" data-demo="techniques11" data-width="680"></div>
 
 <h2 id="tab-rhythm">Rhythm on tab</h2>
 <p>A tab-only track (<code>showStandardNotation: false</code>, <code>showTablature: true</code>) shows its rhythm under the TAB staff by default, as in tab books: stems, beams, flags, augmentation dots, tuplets and rests. Set <code>tabRhythm: false</code> to keep plain fret numbers. A track that also shows notation gets this only with <code>tabRhythm: true</code>.</p>
@@ -427,6 +435,30 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
           { beats: [t('8th', 6, 0, {}, { palmMute: true }), t('8th', 6, 0, {}, { palmMute: true }), t('8th', 6, 0, {}, { palmMute: true }), t('8th', 6, 0, {}, { palmMute: true }), t('quarter', 5, 2), t('quarter', 5, 2)] },
         ],
       }],
+    },
+
+    techniques11: {
+      tracks: [
+        {
+          name: 'Gt.', showStandardNotation: true, showTablature: true,
+          measures: [
+            { beats: [t('quarter', 3, 5, {}, { whammy: { type: 'dive', amount: '1' }, palmMute: true }), t('quarter', 3, 7, {}, { palmMute: true }), r('quarter'), t('quarter', 3, 5, {}, { whammy: { type: 'return' } })] },
+            { beats: [t('quarter', 2, 5, { trill: 7 }), t('quarter', 2, 7, { trill: true, tap: true }), t('8th', 3, 5, {}, { whammy: { type: 'predive', amount: '1/2' } }), t('8th', 3, 7), t('quarter', 3, 5)] },
+            { beats: [
+              { type: 'grace', duration: '16th', notes: [{ string: 3, fret: 7, mute: true }] }, { type: 'grace', duration: '16th', notes: [{ string: 3, fret: 7, mute: true }] },
+              t('quarter', 3, 7, {}, { rake: 'down' }), t('quarter', 3, 5), t('quarter', 3, 7), t('quarter', 3, 5),
+            ] },
+          ],
+        },
+        {
+          name: 'Bass', clef: 'bass', tuning: ['E1', 'A1', 'D2', 'G2'], showStandardNotation: true, showTablature: true,
+          measures: [
+            { beats: [t('quarter', 4, 3, { slap: true }), t('quarter', 3, 2, { pop: true }), t('quarter', 4, 3, { slap: true }), t('quarter', 3, 2, { pop: true })] },
+            { beats: [t('quarter', 2, 7, { tap: true, slap: true }), t('quarter', 3, 5, { pop: true, hammerPull: 'p' }), t('quarter', 3, 3), t('quarter', 4, 3)] },
+            { beats: [t('quarter', 4, 3), t('quarter', 3, 2), t('quarter', 3, 2), t('quarter', 3, 2)] },
+          ],
+        },
+      ],
     },
 
     chordDiagrams: {

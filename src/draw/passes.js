@@ -10,10 +10,11 @@
  * - notationBeats.js — rendered notation beats with slur anchors, slurs, and
  *   the lowest y a mark may reach above a beat
  * - curves.js — ties and slurs, grace-note slurs
- * - tabTechniques.js — tab hammer-on/pull-off, slide, bend, tap "T" and
- *   whammy dip
- * - techniqueLabels.js — palm mute / harmonic / let-ring label runs
- * - playingDirections.js — pick strokes and notation tap "T"
+ * - tabTechniques.js — tab hammer-on/pull-off, slide, bend, tap "T" / slap /
+ *   pop, trill, whammy dip and dive / return / pre-dive lines
+ * - techniqueLabels.js — palm mute / harmonic / let-ring / rake label runs
+ * - playingDirections.js — pick strokes, notation tap "T" / slap / pop and
+ *   trills
  * - chordsFermatas.js — chord symbols, chord diagrams and dynamics, and fermatas
  *
  * `trackRuns` holds one entry per system per track:
@@ -35,16 +36,17 @@
  * renderChordSymbolsAndDynamics, 7 renderFermatas. Later passes read what
  * earlier ones record:
  *
- * - `run.tabInkBoxes` (bend, tap "T", whammy-dip ink): written by 3, read
- *   by 3 (whammy-dip placement), 4 and 5
+ * - `run.tabInkBoxes` (bend, tap "T" / slap "S" / pop "P", trill, whammy
+ *   dip and dive / return / pre-dive line ink): written by 3, read by 3
+ *   (trill, dip and line placement), 4 and 5
  * - `run.hpBoxes` (hammer-on/pull-off ink): written by 3, read by 3 (tap
- *   "T") and 5
+ *   "T", trill, whammy line) and 5
  * - `run.labelBoxes` (technique-label text and dashes): written by 4, read
  *   by 5
  * - `run.chordBoxes` (chord symbols and chord diagrams): written by 6, read by 7 through
  *   collectBeats (empty before 6)
- * - `info.directionTopY` (top of a beat's pick stroke / tap "T"): written by
- *   5, read by 7
+ * - `info.directionTopY` (top of a beat's pick stroke / tap "T" / trill):
+ *   written by 5, read by 7
  * - pass 6 measures the notation staff's ink, so it must follow the passes
  *   that draw there (1, 2 and 5).
  */

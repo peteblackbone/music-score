@@ -1,6 +1,6 @@
 # music-score
 
-Version 1.0.0 · MIT licence
+Version 1.1.0 · MIT licence
 
 A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL).
 
@@ -228,7 +228,8 @@ Beats are the rhythmic events in a measure, in order. Each beat is one note, one
 | `fermata` | boolean | See [Articulations and fermata](#articulations-and-fermata). |
 | `letRing` | truthy | Let-ring run: consecutive beats share one dashed "let ring" label. See [Picking and playing directions](#picking-and-playing-directions). |
 | `pickStroke` | `'down'` or `'up'` | Down-bow ⊓ or up-bow ∨ above the beat. Case-insensitive. Other values are ignored. |
-| `whammy` | `true`, a string or number, or `{ type: 'dip', amount }` | Whammy-bar dip on the TAB staff, shown as a V with `-amount` above it. `true` means `'1/2'`. Other `type` values are ignored. TAB only. |
+| `whammy` | `true`, a string or number, or `{ type, amount }` | Whammy-bar mark on the TAB staff. `type` is `'dip'` (the default), `'dive'`, `'return'` or `'predive'`, in any case. `true`, a string and a number are dips. `amount` such as `'1/2'`, `'1'`, `'1 1/2'`, `'2'` is shown as `-amount`; a missing amount means `'1/2'`. `'return'` takes no text. Other `type` values are ignored. TAB only. See [Picking and playing directions](#picking-and-playing-directions). |
+| `rake` | truthy, `'down'` or `'up'` | Rake: a dashed "rake" label over this beat and the grace notes right before it. Both directions draw the same. See [Picking and playing directions](#picking-and-playing-directions). |
 
 Notes: eighth notes and shorter are beamed automatically within each beat (the beat unit set by the time signature). A `grace` beat is a small ornament with no duration. It is drawn just before the next beat and automatically slurred to it.
 
@@ -251,6 +252,8 @@ Each entry in a beat's `notes` array.
 | `harmonic` | `true`, `'natural'`, `'artificial'`, `'pinch'`, `'tapped'`, or `'semi'` | Guitar harmonic (see [Harmonics](#harmonics)). Case-insensitive. `true` and unknown strings count as `'natural'`. `false` or omitted means no harmonic. A muted note is never a harmonic. |
 | `harmonicFret` | integer | Touched fret of an `'artificial'` or `'tapped'` harmonic, shown on tab as `5(17)`. Ignored for other kinds, and when not an integer. |
 | `tap` | truthy | Tap "T" above the beat, on notation and TAB (one per beat). A tapped harmonic shows only its `T.H.` label. See [Picking and playing directions](#picking-and-playing-directions). |
+| `slap`, `pop` | truthy | Bass slap "S" or pop "P" above the beat, on notation and TAB, in the same place as the tap "T". One letter per beat: tap wins over slap, and slap over pop. See [Picking and playing directions](#picking-and-playing-directions). |
+| `trill` | `true`, a fret, a pitch, or `{ fret, pitch }` | "tr" and a wavy line above the beat, on notation and TAB. A fret (whole number, 1 or more; `{ fret: 0 }` is the open string) or a pitch such as `'B3'` gives the other note; TAB then shows it as `(7)` after the "tr". `0`, `false` and invalid values draw nothing. See [Picking and playing directions](#picking-and-playing-directions). |
 
 Example: a tab-only note needs no `pitch`.
 
@@ -300,17 +303,27 @@ Example: the note is fretted at the 5th fret on string 5, and the harmonic is to
 
 ### Picking and playing directions
 
-Four optional fields draw playing marks: `letRing` and `pickStroke` on a beat, `whammy` on a beat, and `tap` on a note. None of them change the rhythm or the note spacing.
+Optional fields draw playing marks: `letRing`, `pickStroke`, `whammy` and `rake` on a beat, and `tap`, `slap`, `pop` and `trill` on a note. None of them change the rhythm or the note spacing.
 
 - **Let ring** (`letRing`): consecutive beats with `letRing` share one dashed "let ring" label, drawn like the P.M. line. An unmarked rest between two let-ring beats of the same system continues the run. A note or grace note without `letRing` ends it, and so does a line break. On a track with TAB, the label sits in the outermost lane, outside any P.M. or harmonic label it overlaps. On a notation-only staff it sits below the staff.
 - **Pick strokes** (`pickStroke`): `'down'` draws ⊓ and `'up'` draws ∨, one per beat. Values are case-insensitive, and other values are ignored. On a track with a notation staff, the stroke sits above the staff. It stacks above stems, articulations, slurs (just above the slur at that beat), tuplet brackets and any tap "T". Chord symbols and fermatas sit above it. Strokes on the beats of one beam group share one height. On a tab-only track, the stroke sits above the TAB staff. Pick strokes are not drawn on the TAB staff when the track also shows notation.
 - **Tapping** (`tap` on a note): draws a bold "T" once per beat, above the note on notation and above the fret on TAB. On TAB it is raised above an H or P letter when they would touch. A tapped harmonic already shows `T.H.`, so it gets no extra "T".
 - **Whammy dip** (`whammy`): a V with `-amount` above it, drawn on the TAB staff only. Notation-only tracks ignore it. The V starts just right of its note, as a bend does, and is shortened before the next beat or barline. A dip on a beat that also has a bend stacks above the bend. `true` means `'1/2'`. Leading minus signs are removed and one "-" is shown, so `'-1'` and `1` both show `-1`.
-- Rests and grace notes ignore `pickStroke`, `tap` and `whammy`.
+- **Whammy dive, return and pre-dive** (`whammy: { type: 'dive' | 'return' | 'predive', amount }`): TAB staff only. A dive slopes down from just right of its note, as a dip starts, to a held level and is held until a `'return'` beat: the line runs level to the return beat and rises again. The depth follows the amount, 1.2 sp per whole step, from 0.8 sp (`'1/2'`) to 2.4 sp (`'2'` or more). A dip, another dive or a pre-dive ends the hold early, 0.9 sp before it, with no rise. A `'return'` with nothing held is ignored. A dive with no return is held to the end of the track. A held line crosses a line break: it stops 0.5 sp before the last barline and starts again 0.5 sp after the next system's header, without the text, on every system up to the return. A pre-dive is self-contained: a short level lead-in before the note (1.0 to 1.5 sp, kept 0.9 sp from the previous beat and clear of the header), then the rise. Each line sits at one height, 0.5 sp above the TAB top line and 0.4 sp above the frets, marks, letters, trills, bends and dips under it, so a tall bend lifts the whole line. Technique labels move out a lane if a line is in their way.
+- **Slap and pop** (`slap`, `pop` on a note): a bold "S" or "P" once per beat, above the note on notation and above the fret on TAB, in the same place as the tap "T" and stacked the same way. One letter per beat: tap wins over slap, and slap over pop (a tapped harmonic shows `T.H.` and gives way to a slap). Rests and grace notes ignore them. Letters are drawn above the staff only.
+- **Rake** (`rake` on a beat): a dashed "rake" label over the beat and the grace notes directly before it in the same system. Write the dead-note grace notes (`mute: true`) yourself; none are generated. The label sits in a lane outside any P.M., harmonic or let-ring label it overlaps, and in the lane next to the staff when nothing else is there. Two rakes in a row stay two labels, and a rake never reaches across a line break. `'down'` and `'up'` draw the same; the direction is not shown.
+- **Trill** (`trill` on a note): the "tr" glyph and a wavy line, centred on the beat, above the notation and TAB staves. It sits above vibrato and tremolo and below a tap, slap or pop letter, a pick stroke, a dip and a fermata. On notation its bottom also stays 1 sp above the next note's top. On TAB, `(7)` after the "tr" shows the other fret. A fret is used as given. A pitch is placed at the nearest interval (up to a fourth down or a tritone up) from the note's fret: A3 at fret 5 with `trill: 'B3'` or `'B4'` shows `(7)`. A plain `true`, a pitch without a fret, or a result below fret 0 shows no `(n)`. The wave ends 0.8 sp before the next beat and never passes the last barline. It is not continued on the next system. When a beat has several trilled notes, the first one decides.
+- Rests and grace notes ignore `pickStroke`, `tap`, `slap`, `pop`, `trill`, `whammy` and `rake`.
 
 ```json
 { "type": "note", "duration": "8th", "pickStroke": "down", "notes": [{ "string": 1, "fret": 5, "tap": true }] }
 ```
+
+```json
+{ "type": "note", "duration": "quarter", "whammy": { "type": "dive", "amount": "1" }, "notes": [{ "string": 3, "fret": 5, "trill": 7 }] }
+```
+
+SVG classes: `tap`, `slap`, `pop` (one group per letter), `rake` (one group per run), `trill` (glyph, optional fret text and wave) and `whammy` with one of `whammy-dip`, `whammy-dive`, `whammy-hold` (a continuation on a following system) or `whammy-predive`, plus `whammy-return` on a line that rises again.
 
 ### Rhythm on TAB staves
 
@@ -481,9 +494,12 @@ These fields do not change the API or the theme.
 - **Harmonics: grace notes.** A grace note with `harmonic` gets its diamond (natural) and its TAB text, but no A.H., T.H., P.H. or S.H. label. TAB labels on grace notes get no extra spacing, and grace diamonds sit slightly short of the stem.
 - **Harmonics: tuplets.** Tuplet brackets use the oval notehead width, so around a diamond they sit slightly wide.
 - **Harmonics and bends.** A palm-mute dashed line may cross a bend arrow in the middle of a run. It never crosses the bend's amount text.
-- **Whammy dips only.** Dive, return, scoop, pre-dive and "w/bar" are not drawn. The dip depth is fixed.
+- **Whammy.** Dip, dive, return and pre-dive only. Scoop and "w/bar" are not drawn. A dip has a fixed depth. A return with nothing held is ignored. A hold that another whammy mark ends gets no rise. A held line rises over the tallest mark under it as one level, not following each beat.
+- **Rake.** The pick direction is not drawn, and the dead-note grace notes are not generated.
+- **Slap and pop.** Drawn above the staff only.
+- **Trill.** No speed, accidental or target notehead, and the wave does not continue across a line break. The trill glyph's size is estimated from the font, like other glyphs.
 - **Pick strokes and TAB.** Pick strokes are not drawn on the TAB staff when the track also shows notation.
-- **Playing directions take no extra room.** Pick strokes, "T" marks and dips get no extra horizontal space, so a dense beat can crowd. Examples: a pick stroke next to a vibrato, or a dip close to the next note.
+- **Playing directions take no extra room.** Pick strokes, "T" / "S" / "P" letters, trills, whammy lines and dips get no extra horizontal space, so a dense beat can crowd. Examples: a pick stroke next to a vibrato, or a dip close to the next note.
 - **Let ring has no ties.** A let-ring run is a dashed label only. There are no per-note ring-out ties.
 - **Navigation is drawn, not played.** Repeats, endings and jumps are not unrolled or checked for sense. There are no repeat counts ("x3") or rehearsal marks.
 - **Coda layout.** A coda does not force a line break or leave a gap before it.
@@ -516,6 +532,16 @@ It prints `ALL PASSED` and exits with code 0 on success.
 - To run one group on its own: `node tests/units.mjs`, `node tests/engraving.mjs`, or `node tests/articulations.mjs`.
 
 ## Changelog
+
+### 1.1.0 — 2026-10-27
+
+New playing marks. Nothing changes for scores that do not use them.
+
+- Whammy bar: `dive` (held until a `return`, drawn across line breaks), `return` and `predive`, next to the existing dip. A beat with `whammy: { type: 'dive' }` was ignored before and now draws a dive.
+- Bass `slap` ("S") and `pop` ("P") on a note, with `tap` ("T") winning over `slap` and `slap` over `pop`.
+- `rake` on a beat: a dashed "rake" label over the beat and the grace notes before it.
+- `trill` on a note: "tr" and a wavy line on notation and TAB, with `(n)` on TAB for a fret or pitch target.
+- New SVG classes: `slap`, `pop`, `rake`, `trill`, `whammy-dive`, `whammy-hold`, `whammy-predive`, `whammy-return`.
 
 ### 1.0.0 — 2026-10-27
 
@@ -568,7 +594,7 @@ Initial public release.
   - `MusicScoreRenderer.js`: the entry point (the `MusicScoreRenderer` class). It runs the pipeline and mounts the SVG.
   - `normalize.js`: fills in score defaults (sticky time and key signatures, barlines, measure count, pitch from string and fret, written and sounding pitch, `tabRhythm`, padded measures).
   - `harmonics.js`: guitar harmonic kinds and the helpers that layout, drawing and labels share.
-  - `directions.js`: the playing direction fields (let ring, pick strokes, tap, whammy dip) and their canonical values.
+  - `directions.js`: the playing direction fields (let ring, pick strokes, tap, slap, pop, whammy, rake, trill) and their canonical values.
   - `chordShapes.js`: chord-diagram shapes. Validates an author's shape against the track and picks the shape a beat shows.
   - `navigation.js`: the navigation fields (`ending`, `segno`, `coda`, `jump`), their canonical values and the merge across tracks.
   - `layout/`: positioning, no drawing.
@@ -586,16 +612,18 @@ Initial public release.
     - `system.js`: draws one system and its measures.
     - `staff.js`: staff lines, clefs, key and time signatures, barlines.
     - `notation.js`: notes, stems, beams, articulations, fermatas, tuplets, chord symbols, ties and slurs.
-    - `tab.js`: tab staff, fret numbers, tab clef, hammer-ons, slides, bends and palm mutes.
+    - `tab.js`: tab staff, fret numbers, tab clef, hammer-ons, slides, bends, palm mutes, tap letters and whammy dips.
+    - `whammy.js`: whammy dive, hold, return and pre-dive lines (planning and drawing).
+    - `trill.js`: the trill mark ("tr" and a wavy line).
     - `tabRhythm.js`: rhythm on TAB staves (stems, beams, flags, dots, tuplets and rests), drawn per measure.
     - `chordDiagram.js`: one chord diagram (the fretboard box with its dots, barres, fingers and name).
     - `passes.js`: the score-wide passes, drawn after all systems; re-exports them from `passes/` and documents their order.
       - `passes/common.js`: helpers shared by the passes.
       - `passes/notationBeats.js`: notation beats, slurs and the space above a beat, shared by several passes.
       - `passes/curves.js`: ties, slurs and grace-note slurs.
-      - `passes/tabTechniques.js`: tab techniques (hammer-ons, slides, bends, tap "T", whammy dips).
-      - `passes/techniqueLabels.js`: technique labels (P.M., harmonics, let ring).
-      - `passes/playingDirections.js`: pick strokes and notation tap "T".
+      - `passes/tabTechniques.js`: tab techniques (hammer-ons, slides, bends, tap / slap / pop letters, trills, whammy dips and lines).
+      - `passes/techniqueLabels.js`: technique labels (P.M., harmonics, let ring, rake).
+      - `passes/playingDirections.js`: pick strokes, notation tap / slap / pop letters and trills.
       - `passes/chordsFermatas.js`: chord symbols and dynamics, and fermatas.
     - `header.js`: title, composer and tuning rows.
     - `navigation.js`: volta brackets, segno, coda and jump texts above each system's top staff, drawn after the fermatas and before the tempo.
