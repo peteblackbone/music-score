@@ -13,6 +13,8 @@ const tabh = (string, fret, note = {}, extra = {}) => ({ type: 'note', duration:
 const AH19 = { harmonic: 'artificial', harmonicFret: 19 };
 const PH = { harmonic: 'pinch' };
 const PM = { palmMute: true };
+const tabe = (string, fret, extra = {}) => ({ type: 'note', duration: '8th', notes: [{ string, fret }], ...extra });
+const tabg = (string, fret, extra = {}) => ({ type: 'grace', duration: '16th', notes: [{ string, fret, mute: true }], ...extra });
 
 export const characterizationCases = [
   {
@@ -748,6 +750,114 @@ export const characterizationCases = [
           { jump: 'D.S. al Coda', beats: [tabq(6, 3, { chord: 'G' }), tabq(5, 2), tabq(4, 0), tabq(3, 0)] },
           { coda: true, beats: [tabq(5, 3, { chord: 'C' }), tabq(4, 2), tabq(3, 0, { chord: 'G' }), tabq(2, 0)] },
           { beats: [{ type: 'note', duration: 'whole', notes: [{ string: 5, fret: 3 }, { string: 4, fret: 2 }, { string: 2, fret: 1 }], chord: 'C', fermata: true }] },
+        ],
+      }],
+    },
+  },
+  {
+    // Techniques 1.1: whammy dive (held, returned, pre-dive), bass slap / pop, rake and trill. Guitar with notation +
+    // TAB (dive held over a vibrato beat and a rest under P.M., trills with vibrato / tremolo / tap, a pre-dive after a
+    // close beat, a rake with three muted graces inside P.M. + let ring runs), a tab-only guitar (dive under pick
+    // strokes with an H letter beneath, a pitch-target trill, a lone rake and two rakes in a row), a 4-string bass
+    // (slap / pop / tap letters, a pull-off next to a pop, a dive) and a notation-only staff (trills on a whole note
+    // with tremolo, under a slur, in a beam group with tap and pick; a rake label below the staff). No harmonics.
+    name: 'techniques-11', width: 900,
+    score: {
+      tracks: [
+        {
+          name: 'Gt.', showTablature: true,
+          measures: [
+            { beats: [
+              tabh(3, 5, {}, { whammy: { type: 'dive', amount: '1' }, ...PM }), tabh(3, 7, {}, { vibrato: true, ...PM }),
+              { type: 'rest', duration: 'quarter', ...PM }, tabh(3, 5, {}, { whammy: { type: 'return' } }),
+            ] },
+            { beats: [
+              tabh(2, 5, { trill: { fret: 7 } }, { vibrato: true, tremolo: 2 }), tabh(2, 7, { trill: true, tap: true }),
+              tabh(2, 5, { trill: 'F#4' }), tabq(2, 3),
+            ] },
+            { beats: [
+              tabe(3, 5), tabe(3, 7, { whammy: { type: 'predive', amount: '1' } }), tabe(3, 5), tabe(3, 7),
+              tabe(3, 5), tabe(3, 7), tabe(3, 5, { whammy: { type: 'dive', amount: '1/2' } }), tabe(3, 7, { whammy: { type: 'return' } }),
+            ] },
+            { beats: [
+              tabg(3, 7, { palmMute: true, letRing: true }), tabg(3, 7, { palmMute: true, letRing: true }), tabg(3, 7, { palmMute: true, letRing: true }),
+              tabh(3, 7, {}, { rake: 'down', palmMute: true, letRing: true }), tabh(3, 9, {}, { palmMute: true, letRing: true }), tabq(3, 5), tabq(3, 5),
+            ] },
+          ],
+        },
+        {
+          name: 'Gt. 2', showStandardNotation: false, showTablature: true,
+          measures: [
+            { beats: [
+              tabh(3, 5, {}, { whammy: { type: 'dive', amount: '1 1/2' }, pickStroke: 'down' }),
+              tabh(3, 7, { hammerPull: 'h' }, { pickStroke: 'up' }), tabh(3, 9, {}, { pickStroke: 'down' }), tabq(3, 5, { pickStroke: 'up' }),
+            ] },
+            { beats: [
+              tabh(2, 5, {}, { pickStroke: 'down' }), tabh(2, 5, {}, { whammy: { type: 'return' } }), tabh(2, 3, { trill: 'F4' }), tabq(2, 3),
+            ] },
+            { beats: [tabh(3, 5, {}, { rake: true }), tabq(3, 5), tabh(3, 5, {}, { rake: 'up' }), tabh(3, 5, {}, { rake: 'down' })] },
+            { beats: [tabq(3, 5), tabq(3, 7), tabh(3, 5, { trill: 2 }), tabq(3, 5)] },
+          ],
+        },
+        {
+          name: 'Bass', clef: 'bass', tuning: ['E1', 'A1', 'D2', 'G2'], showTablature: true,
+          measures: [
+            { beats: [
+              tabh(4, 3, { slap: true }), tabh(3, 2, { pop: true }),
+              { type: 'note', duration: 'quarter', notes: [{ string: 4, fret: 3, slap: true }, { string: 2, fret: 5, pop: true }] },
+              tabh(3, 2, { pop: true }),
+            ] },
+            { beats: [
+              tabh(2, 7, { tap: true, slap: true }), tabh(3, 5, { pop: true, hammerPull: 'p' }), tabq(3, 3), tabq(4, 3),
+            ] },
+            { beats: [tabq(4, 3), tabh(3, 2, {}, { whammy: { type: 'dive', amount: '1' } }), tabq(3, 2), tabq(3, 2)] },
+            { beats: [tabq(4, 3), tabh(3, 2, {}, { whammy: { type: 'return' } }), tabh(4, 3, { slap: true }), tabq(4, 3)] },
+          ],
+        },
+        {
+          name: 'Ens.',
+          measures: [
+            { beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'C5', trill: true }], tremolo: 2 }] },
+            { beats: [
+              { type: 'note', duration: 'quarter', notes: [{ pitch: 'E5', trill: true }], slurStart: true }, q('G5'),
+              { type: 'note', duration: 'quarter', notes: [{ pitch: 'E5', trill: 'F5' }], slurEnd: true }, q('C5'),
+            ] },
+            { beats: [
+              { type: 'note', duration: '8th', notes: [{ pitch: 'G4', trill: true, tap: true }], pickStroke: 'down' },
+              { type: 'note', duration: '8th', notes: [{ pitch: 'A4' }], pickStroke: 'up' }, e('B4'), e('C5'), q('D5'), q('E5'),
+            ] },
+            { beats: [
+              { type: 'grace', duration: '16th', notes: [{ pitch: 'E4', mute: true }] }, { type: 'grace', duration: '16th', notes: [{ pitch: 'E4', mute: true }] },
+              { type: 'note', duration: 'quarter', notes: [{ pitch: 'E4', mute: true }], rake: 'down' }, q('G4'), q('B4'), q('E4'),
+            ] },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Techniques 1.1 across system breaks at 600: 10 measures, systems of measures 1-2, 3-5, 6-8, 9-10 (notation +
+    // TAB). A pre-dive on the very first beat; a dive on the last beat of system 1 returned on beat 2 of system 2,
+    // whose first beat is a rake with its three graces; trills on the last beat of a measure inside a system and on
+    // the last beat of system 2; a dive in system 2 held across two breaks to the end of the track.
+    name: 'techniques-11-break', width: 600,
+    score: {
+      tracks: [{
+        name: 'Gt.', showTablature: true,
+        measures: [
+          { beats: [tabh(3, 5, {}, { whammy: { type: 'predive', amount: '1' } }), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabh(3, 7, {}, { whammy: { type: 'dive', amount: '1' } })] },
+          { beats: [
+            tabg(3, 7), tabg(3, 7), tabg(3, 7), tabh(3, 7, {}, { rake: 'down' }), tabh(3, 5, {}, { whammy: { type: 'return' } }),
+            tabq(3, 7), tabh(3, 5, { trill: 7 }),
+          ] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabh(3, 5, {}, { whammy: { type: 'dive', amount: '1 1/2' } }), tabq(3, 7)] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabh(3, 7, { trill: 9 })] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
         ],
       }],
     },

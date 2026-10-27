@@ -4,7 +4,7 @@
 //
 // Areas (assertion counts are printed per area at the end):
 //   align, justify, signatures, measure-numbers, barlines, repeats, vertical, numbers,
-//   scaling, octave, beaming, accidentals, ties, tab-clef, a11y, theme, robustness, header, collisions, harmonics, directions, tab-rhythm, navigation, chordDiagrams
+//   scaling, octave, beaming, accidentals, ties, tab-clef, a11y, theme, robustness, header, collisions, harmonics, directions, tab-rhythm, navigation, chordDiagrams, techniques11
 //
 // Most geometric checks read the rendered SVG tree (class names + transforms); a few read the
 // layout model (computeLayout) for facts that are not observable in the SVG (onset times,
@@ -1667,7 +1667,7 @@ const dirLabelStaff = (m, si, tr) => staffOf(m, si, tr, tr.tab);
 test('directions', 'AC1: every pre-existing fixture/example emits no let-ring / pick-stroke / tap / whammy group and no U+E610 / U+E612 glyph', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams')) continue; // newer fixtures using directions on purpose
+    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams') || name.startsWith('char-techniques-11')) continue; // newer fixtures using directions on purpose
     for (const width of [600, 900]) {
       all(renderTree(score, width, options)).forEach(({ n }) => {
         const c = cls(n).split(' ');
@@ -4621,6 +4621,87 @@ test('techniques11', 'pre-dive on a system\'s first beat starts 0.5 sp after the
     ok(deepY <= info.localTop - 0.5 * SP + EPS, 'above the top line');
     tabInk(bstg).filter((b) => b.kind !== 'pick' && xover(span, b)).forEach((b) => ok(deepY <= b.top - 0.4 * SP + EPS, `${b.kind} ink top ${b.top} vs pre-dive level ${deepY}`));
   });
+});
+
+// ---------- fixtures: techniques-11, techniques-11-break ----------
+const T11 = characterizationCases.find((c) => c.name === 'techniques-11');
+const T11B = characterizationCases.find((c) => c.name === 'techniques-11-break');
+const T11FIX = [[T11, 900], [T11B, 600]];
+const T11_CLASSES = ['slap', 'pop', 'rake', 'trill'];
+
+test('techniques11', 'AC1: no pre-existing fixture / example emits a slap / pop / rake / trill group, a dive / hold / return / pre-dive line or a U+E566 glyph', () => {
+  let checked = 0;
+  for (const [name, score, options] of SCORES) {
+    if (name.startsWith('char-techniques-11')) continue;
+    for (const width of [600, 900]) {
+      all(renderTree(score, width, options)).forEach(({ n }) => {
+        const c = cls(n).split(' ');
+        ok(!c.some((x) => T11_CLASSES.includes(x) || /^whammy-(dive|hold|return|predive)$/.test(x)), `${name}@${width}: class "${cls(n)}"`);
+        if (n.tag === 'text') ok(cpOf(n) !== 0xE566, `${name}@${width}: trill glyph`);
+      });
+      checked++;
+    }
+  }
+  ok(checked >= 20, `${checked} renders checked`);
+});
+
+test('techniques11', 'AC2: every old whammy dip form draws the same SVG as its canonical object form (true, amounts, { type: "dip" } with any case / spacing)', () => {
+  const mk = (w) => tOnly([bt(3, 5, { whammy: w }), bt(3, 7), bt(3, 5)]);
+  const groups = [
+    [true, { type: 'dip' }, { type: ' DIP ', amount: '' }, '1/2', '-1/2', { type: 'dip', amount: '1/2' }],
+    ['1', 1, { amount: '-1' }, { type: 'dip', amount: '1' }],
+    ['1 1/2', { type: 'dip', amount: '1 1/2' }],
+  ];
+  groups.forEach((forms) => {
+    const ref = serialize(renderTree(mk(forms[0]), 900));
+    forms.forEach((f) => ok(serialize(renderTree(mk(f), 900)) === ref, `form ${JSON.stringify(f)} differs`));
+  });
+  ok(tg(renderTree(mk(true), 900), 'whammy-dip').length === 1, 'a dip is drawn');
+});
+
+test('techniques11', 'AC3: horizontal layout is unchanged by the new fields - x of every element and the system breaks equal those of the same fixture with slap / pop / rake / trill / whammy stripped', () => {
+  T11FIX.forEach(([fx, width]) => {
+    const strip = (score) => ({
+      ...score,
+      tracks: score.tracks.map((t) => ({ ...t, measures: t.measures.map((m) => ({ ...m, beats: m.beats.map((b) => {
+        const { rake, whammy, ...rest } = b;
+        return { ...rest, ...(b.notes ? { notes: b.notes.map(({ slap, pop, trill, ...n }) => n) } : {}) };
+      }) })) })),
+    });
+    const shape = (score) => layoutOf(score, width).systems.map((sys) => ({
+      m: sys.measureIndices, last: sys.lastBarlineX, start: sys.contentStartX,
+      xs: sys.tracks.map((tr) => tr.measures.map((m) => m.elements.map((le) => le.x))),
+    }));
+    ok(JSON.stringify(shape(fx.score)) === JSON.stringify(shape(strip(fx.score))), `${fx.name}: layout differs without the new fields`);
+    ok(JSON.stringify(strip(fx.score)).includes('trill') === false, 'strip removed the trills');
+  });
+});
+
+test('techniques11', 'AC5: fixtures render deterministically twice, the input score is not mutated, a direct render equals the cloned one, and no NaN / undefined / Infinity appears', () => {
+  T11FIX.forEach(([fx, width]) => {
+    const a = serialize(renderTree(fx.score, width, fx.options || {}));
+    ok(a === serialize(renderTree(fx.score, width, fx.options || {})), `${fx.name}: two renders differ`);
+    const before = JSON.stringify(fx.score);
+    const box = makeContainer(); new MusicScoreRenderer(box, fx.score, { width }).render();
+    ok(JSON.stringify(fx.score) === before, `${fx.name}: input mutated`);
+    ok(serialize(box.children[0]) === a, `${fx.name}: direct render differs`);
+    ok(!/NaN|undefined|Infinity/.test(a), `${fx.name}: NaN / undefined / Infinity in the SVG`);
+  });
+});
+
+test('techniques11', 'fixture content: techniques-11 draws every new mark (12 trills over 3 TAB + notation staves, 5 rake runs, 4 dives / 1 pre-dive / 4 returns, S / P / T letters) and the break fixture its hold continuations', () => {
+  const svg = renderTree(T11.score, 900);
+  const count = (c) => tg(svg, c).length;
+  const staves = (t) => (t.showTablature ? 1 : 0) + (t.showStandardNotation === false ? 0 : 1);
+  const trilled = T11.score.tracks.reduce((s, t) => s + staves(t) * t.measures.flatMap((m) => m.beats).filter((b) => b.type !== 'grace' && (b.notes || []).some((n) => n.trill)).length, 0);
+  ok(trilled === 12 && count('trill') === 12, `${count('trill')} trills, oracle ${trilled}`);
+  ok(count('rake') === 5, `${count('rake')} rake runs`);
+  ok(count('whammy-dive') === 4 && count('whammy-predive') === 1 && count('whammy-return') === 4 && count('whammy-hold') === 0, `dive ${count('whammy-dive')}, predive ${count('whammy-predive')}, return ${count('whammy-return')}`);
+  ok(count('slap') === 6 && count('pop') === 6 && count('tap') === 5, `slap ${count('slap')}, pop ${count('pop')}, tap ${count('tap')}`);
+  const b = renderTree(T11B.score, 600);
+  ok(tg(b, 'whammy-hold').length === 3, `${tg(b, 'whammy-hold').length} hold continuations`);
+  ok(tg(b, 'whammy-predive').length === 1 && tg(b, 'rake').length === 1 && tg(b, 'trill').length === 4, `predive ${tg(b, 'whammy-predive').length}, rake ${tg(b, 'rake').length}, trill ${tg(b, 'trill').length}`);
+  ok(tg(b, 'whammy-dive').length === 2 && tg(b, 'whammy-return').length === 1, 'dives and the one return');
 });
 
 // @@T11-END
