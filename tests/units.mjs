@@ -1556,6 +1556,53 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- examples/lead-solo-f.js data invariants (independent arithmetic) ----------
+{
+  const { leadSoloF } = await imp('examples/lead-solo-f.js');
+  const measures = leadSoloF.tracks[0].measures;
+  const DEN = { whole: 1, half: 2, quarter: 4, '8th': 8, '16th': 16, '32nd': 32 };
+  const LCM = 32 * 3 * 2; // common denominator, in units of 1/192 whole
+  const units = (b) => {
+    if (b.type === 'grace') return 0;
+    const base = LCM / DEN[b.duration];
+    let u = base, add = base;
+    for (let i = 0; i < (b.dots || 0); i++) { add /= 2; u += add; }
+    return b.tuplet === 3 ? (u * 2) / 3 : u;
+  };
+  test('lead-solo-f: JSON round-trip identical', () => {
+    eq(JSON.parse(JSON.stringify(leadSoloF)), leadSoloF);
+  });
+  test('lead-solo-f: 12 measures, each sums to exactly one whole', () => {
+    eq(measures.length, 12);
+    measures.forEach((m, i) => eq(m.beats.reduce((s, b) => s + units(b), 0), LCM, `m${i + 1}`));
+  });
+  const notes = measures.flatMap((m) => m.beats.flatMap((b) => b.notes || []));
+  test('lead-solo-f: strings 1-6 and frets 0-24', () => {
+    eq(notes.length > 0, true);
+    for (const n of notes) {
+      eq(Number.isInteger(n.string) && n.string >= 1 && n.string <= 6, true, `string ${n.string}`);
+      eq(Number.isInteger(n.fret) && n.fret >= 0 && n.fret <= 24, true, `fret ${n.fret}`);
+    }
+  });
+  test('lead-solo-f: chord symbol order', () => {
+    eq(measures.flatMap((m) => m.beats.filter((b) => b.chord).map((b) => b.chord)),
+      ['F', 'F', 'G', 'Bb', 'F', 'C/E', 'Dm', 'Bb', 'Gm', 'C', 'F']);
+  });
+  test('lead-solo-f: tieStart/tieEnd pair on same string and fret', () => {
+    const beats = measures.flatMap((m) => m.beats).filter((b) => b.notes);
+    let starts = 0, ends = 0;
+    beats.forEach((b, i) => b.notes.forEach((n) => {
+      if (n.tieEnd) ends++;
+      if (!n.tieStart) return;
+      starts++;
+      const next = beats.slice(i + 1).find((c) => c.notes.some((x) => x.string === n.string));
+      const t = next && next.notes.find((x) => x.string === n.string);
+      eq(!!t && t.fret === n.fret && t.tieEnd === true, true, `tie s${n.string} f${n.fret}`);
+    }));
+    eq(starts > 0 && starts === ends, true, `starts ${starts} ends ${ends}`);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
