@@ -1667,7 +1667,7 @@ const dirLabelStaff = (m, si, tr) => staffOf(m, si, tr, tr.tab);
 test('directions', 'AC1: every pre-existing fixture/example emits no let-ring / pick-stroke / tap / whammy group and no U+E610 / U+E612 glyph', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams') || name.startsWith('char-techniques-11')) continue; // newer fixtures using directions on purpose
+    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams') || name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio')) continue; // newer fixtures using directions on purpose
     for (const width of [600, 900]) {
       all(renderTree(score, width, options)).forEach(({ n }) => {
         const c = cls(n).split(' ');
@@ -4657,7 +4657,7 @@ const T11_CLASSES = ['slap', 'pop', 'rake', 'trill'];
 test('techniques11', 'AC1: no pre-existing fixture / example emits a slap / pop / rake / trill group, a dive / hold / return / pre-dive line or a U+E566 glyph', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-techniques-11')) continue;
+    if (name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio')) continue;
     for (const width of [600, 900]) {
       all(renderTree(score, width, options)).forEach(({ n }) => {
         const c = cls(n).split(' ');
@@ -5043,6 +5043,95 @@ test('strumArpeggio', 'E10 rests, graces, single-note beats and garbage values d
     ok(tg(svg, 'arpeggio').length === 0 && tg(svg, 'strum').length === 0, `@${width}: nothing drawn`);
     ok(all(svg).filter(({ n }) => n.tag === 'g' && !n.children.length).length === 0, 'no empty <g>');
   });
+});
+
+// ---------- fixtures: strum-arpeggio, strum-arpeggio-break ----------
+const SA = characterizationCases.find((c) => c.name === 'strum-arpeggio');
+const SAB = characterizationCases.find((c) => c.name === 'strum-arpeggio-break');
+const SAFIX = [[SA, 900], [SAB, 600]];
+const mapBeats = (score, f) => ({ ...score, tracks: score.tracks.map((t) => ({ ...t, measures: t.measures.map((m) => ({ ...m, beats: m.beats.map(f) })) })) });
+
+test('strumArpeggio', 'E1: no pre-existing fixture / example emits an arpeggio or strum group', () => {
+  let checked = 0;
+  for (const [name, score, options] of SCORES) {
+    if (name.startsWith('char-strum-arpeggio')) continue;
+    for (const width of [600, 900]) {
+      all(renderTree(score, width, options)).forEach(({ n }) => {
+        ok(!cls(n).split(' ').some((x) => /^(arpeggio|strum)(-up|-down)?$/.test(x)), `${name}@${width}: class "${cls(n)}"`);
+      });
+      checked++;
+    }
+  }
+  ok(checked >= 20, `${checked} renders checked`);
+});
+
+test('strumArpeggio', 'E2: x of every element and the system breaks are unchanged with every strum stripped and with the arpeggio stripped from beats that ignore it; an arpeggio adds room; ink left of each wave is a grace\'s or >= 0.3 sp away', () => {
+  const shape = (score, width) => JSON.stringify(layoutOf(score, width).systems.map((sys) => ({
+    m: sys.measureIndices, last: sys.lastBarlineX, start: sys.contentStartX,
+    xs: sys.tracks.map((tr) => tr.measures.map((m) => m.elements.map((le) => le.x))),
+  })));
+  SAFIX.forEach(([fx, width]) => {
+    const base = shape(fx.score, width);
+    const noStrum = mapBeats(fx.score, ({ strum, ...b }) => b);
+    ok(shape(noStrum, width) === base, `${fx.name}: layout differs without strums`);
+    ok(!JSON.stringify(noStrum).includes('strum'), 'strums stripped');
+    const ignored = mapBeats(fx.score, (b) => { if (rawArp(b) || b.arpeggio === undefined) return b; const { arpeggio, ...rest } = b; return rest; });
+    ok(shape(ignored, width) === base, `${fx.name}: layout differs without the ignored arpeggios`);
+    ok(shape(mapBeats(fx.score, ({ arpeggio, ...b }) => b), width) !== base, `${fx.name}: arpeggios add room`);
+    const svg = renderTree(fx.score, width);
+    fx.score.tracks.forEach((track, ti) => {
+      const seq = arpSeq(fx.score, width, ti).map((b, i, list) => ({ ...b, grace: i > 0 && list[i - 1].raw.type === 'grace' }));
+      systemsOf(svg).forEach((_, si) => [false, true].forEach((tab) => {
+        const stg = staffOfTrack(svg, si, ti, tab);
+        if (!stg) return;
+        const marked = seq.filter((b) => b.si === si && rawArp(b.raw) && (!tab || b.raw.notes.some((nn) => nn.string != null && nn.fret != null)));
+        const drawn = arpsOf(stg);
+        ok(drawn.length === marked.length, `${fx.name} t${ti} sys${si} ${tab ? 'TAB' : 'notation'}: ${drawn.length} vs ${marked.length}`);
+        drawn.forEach((a, i) => checkLeftOfWave(stg, a, marked[i].grace, `${fx.name} t${ti} sys${si} ${tab ? 'TAB' : 'notation'} arpeggio ${i}`));
+      }));
+    });
+  });
+});
+
+test('strumArpeggio', 'E11: fixtures render deterministically, the input is not mutated, a direct render equals the cloned one, no NaN / undefined / Infinity; garbage arpeggio / strum values never throw', () => {
+  SAFIX.forEach(([fx, width]) => {
+    const a = serialize(renderTree(fx.score, width, fx.options || {}));
+    ok(a === serialize(renderTree(fx.score, width, fx.options || {})), `${fx.name}: two renders differ`);
+    const before = JSON.stringify(fx.score);
+    const box = makeContainer(); new MusicScoreRenderer(box, fx.score, { width }).render();
+    ok(JSON.stringify(fx.score) === before, `${fx.name}: input mutated`);
+    ok(serialize(box.children[0]) === a, `${fx.name}: direct render differs`);
+    ok(!/NaN|undefined|Infinity/.test(a), `${fx.name}: NaN / undefined / Infinity in the SVG`);
+  });
+  const garbage = [null, undefined, NaN, Infinity, -1, 2.5, '', 'zz', [], ['up'], {}, { up: true }, () => 1, false, 0, 'UPWARD', ' down '];
+  garbage.forEach((v) => {
+    const chord = (extra) => ({ type: 'note', duration: 'quarter', notes: [{ string: 3, fret: 2 }, { string: 2, fret: 3 }], arpeggio: v, strum: v, ...extra });
+    [true, false].forEach((notation) => {
+      const beats = [chord(), { type: 'grace', duration: '16th', notes: [{ string: 3, fret: 2 }], arpeggio: v, strum: v }, chord({ pickStroke: 'down' }), { type: 'rest', duration: 'half', arpeggio: v, strum: v }];
+      const score = { tracks: [{ name: 'G', showTablature: true, showStandardNotation: notation, measures: [{ beats }] }] };
+      const before = JSON.stringify(score);
+      const out = serialize(renderTree(score, 900));
+      ok(out === serialize(renderTree(score, 900)), 'deterministic');
+      ok(!/NaN|undefined|Infinity/.test(out), `NaN for garbage ${String(v)}`);
+      ok(JSON.stringify(score) === before, 'input untouched');
+    });
+  });
+});
+
+test('strumArpeggio', 'E12 fixture content: strum-arpeggio draws 16 arpeggios (5 chords on notation + TAB, 3 tab-only, 3 notation-only) and 34 strums with no pick stroke; the break fixture 6 arpeggios and 10 strums over 3 systems', () => {
+  const svg = renderTree(SA.score, 900);
+  const staves = (t) => (t.showTablature ? 1 : 0) + (t.showStandardNotation === false ? 0 : 1);
+  const arps = SA.score.tracks.reduce((s, t) => s + t.measures.flatMap((m) => m.beats).filter((b) => rawArp(b)).length * staves(t), 0);
+  const strums = SA.score.tracks.reduce((s, t) => s + t.measures.flatMap((m) => m.beats).filter((b) => rawStrum(b)).length, 0);
+  ok(arps === 16 && tg(svg, 'arpeggio').length === 16, `${tg(svg, 'arpeggio').length} arpeggios, oracle ${arps}`);
+  ok(strums === 34 && tg(svg, 'strum').length === 34, `${tg(svg, 'strum').length} strums, oracle ${strums}`);
+  ok(tg(svg, 'arpeggio-up').length === 6 && tg(svg, 'arpeggio-down').length === 6, `up ${tg(svg, 'arpeggio-up').length}, down ${tg(svg, 'arpeggio-down').length}`);
+  ok(tg(svg, 'strum-down').length === 18 && tg(svg, 'strum-up').length === 16, `down ${tg(svg, 'strum-down').length}, up ${tg(svg, 'strum-up').length}`);
+  ok(tg(svg, 'pick-stroke').length === 0, 'every pick stroke is on a strummed beat');
+  ok(tg(svg, 'rake').length === 1 && tg(svg, 'trill').length === 3 && tg(svg, 'tap').length === 3 && tg(svg, 'slap').length === 1, `rake ${tg(svg, 'rake').length}, trill ${tg(svg, 'trill').length}, tap ${tg(svg, 'tap').length}, slap ${tg(svg, 'slap').length}`);
+  const b = renderTree(SAB.score, 600);
+  ok(systemsOf(b).length === 3, `${systemsOf(b).length} systems`);
+  ok(tg(b, 'arpeggio').length === 6 && tg(b, 'strum').length === 10, `break: ${tg(b, 'arpeggio').length} arpeggios, ${tg(b, 'strum').length} strums`);
 });
 }
 
