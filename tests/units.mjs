@@ -857,6 +857,55 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(glyphBox(pickStrokeGlyph('down')), { left: 0, right: 1.248, top: 1.3, bottom: 0, width: 1.248 });
     eq(glyphBox(pickStrokeGlyph('up')), { left: 0, right: 1, top: 2, bottom: 0, width: 1 });
   });
+  test('directions: arpeggioOf canonical table, idempotent, garbage -> null', () => {
+    const raws = [true, 'up', 'down', ' Up ', 'DOWN', 'upward', '', 'u', false, 1, 0, null, undefined, {}, ['up'], NaN];
+    const out = raws.map(D.arpeggioOf);
+    eq(out, [true, 'up', 'down', 'up', 'down', null, null, null, null, null, null, null, null, null, null, null]);
+    eq(out.map(D.arpeggioOf), out);
+  });
+  test('directions: strumOf canonical table (true -> null), idempotent', () => {
+    const raws = ['down', 'up', ' Down ', 'UP', true, 'strum', '', false, 1, null, undefined, {}, ['up']];
+    const out = raws.map(D.strumOf);
+    eq(out, ['down', 'up', 'down', 'up', null, null, null, null, null, null, null, null, null]);
+    eq(out.map(D.strumOf), out);
+  });
+  test('directions: beatArpeggio needs a main beat of two or more notes; beatStrum a main note beat', () => {
+    const two = [{ pitch: 'E4' }, { pitch: 'G4' }];
+    const note = (extra, notes = two) => ({ type: 'note', duration: 'quarter', notes, ...extra });
+    eq([D.beatArpeggio(note({ arpeggio: true })), D.beatArpeggio(note({ arpeggio: ' UP ' })), D.beatArpeggio(note({ arpeggio: 'down' }))], [true, 'up', 'down']);
+    eq(D.beatArpeggio(note({ arpeggio: 'sideways' })), null);
+    eq(D.beatArpeggio(note({ arpeggio: true }, [{ pitch: 'E4' }])), null, 'single note');
+    eq(D.beatArpeggio(note({ arpeggio: true }, [])), null, 'no notes');
+    eq(D.beatArpeggio({ type: 'rest', duration: 'quarter', arpeggio: true }), null);
+    eq(D.beatArpeggio({ type: 'grace', duration: '16th', notes: two, arpeggio: true }), null);
+    eq(D.beatArpeggio(note({ arpeggio: true }, undefined)), true);
+    eq([D.beatStrum(note({ strum: 'Down' })), D.beatStrum(note({ strum: 'up' }, [{ pitch: 'E4' }])), D.beatStrum(note({ strum: true }))], ['down', 'up', null]);
+    eq(D.beatStrum({ type: 'rest', duration: 'quarter', strum: 'down' }), null);
+    eq(D.beatStrum({ type: 'grace', duration: '16th', notes: two, strum: 'down' }), null);
+    eq(D.beatStrum(note({ strum: 'down' }, [])), null);
+  });
+  test('directions: beatPickStroke is suppressed by a strum, unchanged otherwise', () => {
+    const note = (extra) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }], ...extra });
+    eq(D.beatPickStroke(note({ pickStroke: 'down', strum: 'up' })), null);
+    eq(D.beatPickStroke(note({ pickStroke: 'up', strum: ' DOWN ' })), null);
+    eq(D.beatPickStroke(note({ pickStroke: 'down', strum: true })), 'down', 'garbage strum keeps the pick stroke');
+    eq(D.beatPickStroke(note({ pickStroke: 'down', strum: null })), 'down');
+    eq(D.beatPickStroke(note({ pickStroke: 'up' })), 'up');
+  });
+  test('directions: withDirections handles arpeggio / strum; fast path needs all five absent; idempotent', () => {
+    const b = { type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }, { pitch: 'G4' }] };
+    eq(D.withDirections(b) === b, true);
+    const raw = { ...b, arpeggio: ' Down ', strum: 'UP' };
+    const out = D.withDirections(raw);
+    eq(out !== raw && raw.arpeggio === ' Down ' && raw.strum === 'UP', true, 'copy, input untouched');
+    eq([out.arpeggio, out.strum], ['down', 'up']);
+    eq(D.withDirections(out), out);
+    eq(D.withDirections({ ...b, arpeggio: true }), { ...b, arpeggio: true });
+    eq(D.withDirections({ ...b, strum: true }), { ...b, strum: null });
+    eq(D.withDirections({ ...b, arpeggio: 'x' }), { ...b, arpeggio: null });
+    eq('arpeggio' in D.withDirections({ ...b, strum: 'down' }), false);
+    eq('strum' in D.withDirections({ ...b, arpeggio: 'up' }), false);
+  });
 }
 
 // ---------- rest glyphs ----------
