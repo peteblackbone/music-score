@@ -76,19 +76,16 @@ export const leadSoloF = {
             { type: 'note', duration: 'quarter', notes: [{ string: 3, fret: 12, bend: 'full' }] },
           ],
         },
-        { // 4 — G. 3rds as dyads (G/B, F/A, G/B), two 16th-note triplets down the G triad.
+        { // 4 — G. 3rds as dyads (G/B, F/A, G/B), an 8th-note triplet down the G triad.
           beats: [
             { type: 'note', duration: 'quarter', chord: 'G', notes: [{ string: 3, fret: 12 }, { string: 2, fret: 12 }] },
 
             { type: 'note', duration: '8th', notes: [{ string: 3, fret: 10 }, { string: 2, fret: 10 }] },
             { type: 'note', duration: '8th', notes: [{ string: 3, fret: 12 }, { string: 2, fret: 12 }] },
 
-            { type: 'note', duration: '16th', tuplet: 3, notes: [{ string: 1, fret: 10 }] },
-            { type: 'note', duration: '16th', tuplet: 3, notes: [{ string: 2, fret: 12 }] },
-            { type: 'note', duration: '16th', tuplet: 3, notes: [{ string: 3, fret: 12 }] },
-            { type: 'note', duration: '16th', tuplet: 3, notes: [{ string: 2, fret: 12 }] },
-            { type: 'note', duration: '16th', tuplet: 3, notes: [{ string: 3, fret: 12 }] },
-            { type: 'note', duration: '16th', tuplet: 3, notes: [{ string: 4, fret: 12 }] },
+            { type: 'note', duration: '8th', tuplet: 3, notes: [{ string: 1, fret: 10 }] },
+            { type: 'note', duration: '8th', tuplet: 3, notes: [{ string: 2, fret: 12 }] },
+            { type: 'note', duration: '8th', tuplet: 3, notes: [{ string: 3, fret: 12 }] },
 
             { type: 'note', duration: 'quarter', notes: [{ string: 3, fret: 10 }] },
           ],
