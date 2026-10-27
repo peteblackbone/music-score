@@ -6,6 +6,7 @@
  */
 
 import { isNaturalHarmonic, touchFret } from './harmonics.js';
+import { bendOf } from './directions.js';
 
 const NARROW =new Set("il.,:;'!|()[]");
 const WIDE = new Set('MWmw');
@@ -34,13 +35,14 @@ export function estimateTextWidth(str, fontSizePx, opts = {}) {
  * Text shown on the tab staff for a note: the fret number, "x" for a
  * dead/muted note, "<12>" for a natural harmonic, "5(17)" for an
  * artificial/tapped harmonic with a touched fret, wrapped in parentheses
- * for a ghost note.
+ * for a ghost note and a release note (`bend` of type 'release').
  */
 export function fretLabel(note) {
   if (note.mute) return note.ghost ? '(x)' : 'x';
   const tf = touchFret(note);
   const core = isNaturalHarmonic(note) ? `<${note.fret}>` : (tf != null ? `${note.fret}(${tf})` : String(note.fret));
-  return note.ghost ? `(${core})` : core;
+  const paren = note.ghost || bendOf(note.bend)?.type === 'release';
+  return paren ? `(${core})` : core;
 }
 
 /** Width in px of a fret label's knock-out (estimated text width + 0.15 sp each side). */

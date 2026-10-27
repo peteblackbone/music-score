@@ -10,7 +10,7 @@ import {
 } from './tab.js';
 import { fretLabel, fretLabelWidth } from '../textMetrics.js';
 import { isNaturalHarmonic, decoratesFretLabel } from '../harmonics.js';
-import { linkTarget, slideMarks } from '../directions.js';
+import { linkTarget, slideMarks, bendOf } from '../directions.js';
 
 const SLIDE_STUB_SP = 2;         // outgoing slide stroke across a system break (horizontal length)
 const SLIDE_LABEL_CLEAR_SP = 0.2; // slide end -> edge of a wide (harmonic) fret-label knock-out
@@ -72,9 +72,9 @@ export function renderTabLinks(track, trackRuns, systems, theme, { flattenRuns, 
     (elDef.notes || []).forEach((n) => {
       if (n.string == null) return;
       const y = run.tabBaselineY - (stringCount - n.string) * theme.tabStaffLineSpacing;
-      // A decorated harmonic label ("<12>", "5(17)") is wider than the
-      // default slide inset allows for: clear its knock-out instead.
-      const slideInset = n.fret != null && decoratesFretLabel(n)
+      // A decorated harmonic label ("<12>", "5(17)") or a release note's "(7)"
+      // is wider than the default slide inset allows for: clear its knock-out instead.
+      const slideInset = n.fret != null && (decoratesFretLabel(n) || bendOf(n.bend)?.type === 'release')
         ? Math.max(SLIDE_END_INSET_SP * s, fretLabelWidth(fretLabel(n), theme) / 2 + SLIDE_LABEL_CLEAR_SP * s)
         : SLIDE_END_INSET_SP * s;
       flat.push({
@@ -86,6 +86,7 @@ export function renderTabLinks(track, trackRuns, systems, theme, { flattenRuns, 
     });
   });
   const marks = slideMarks(flat);
+  const lastBendAmount = new Map(); // string -> amount of its latest bend / pre-bend, a release note's default
   // Nearest other note x on the item's system before (-1) / after (+1) it, or -/+Infinity.
   const neighbourX = (item, dir) => (dir < 0 ? Math.max : Math.min)(
     dir * Infinity, ...flat.filter((c) => c.sysIdx === item.sysIdx && dir * (c.x - item.x) > 0).map((c) => c.x));
@@ -148,6 +149,8 @@ export function renderTabLinks(track, trackRuns, systems, theme, { flattenRuns, 
 
     if (item.bend) {
       const bendInfo = normalizeBend(item.bend);
+      if (bendInfo.type === 'release' && bendInfo.amount == null) bendInfo.amount = lastBendAmount.get(item.string) ?? 'full';
+      else if (bendInfo.type !== 'release') lastBendAmount.set(item.string, bendInfo.amount);
       const semitones = bendSemitones(bendInfo.amount);
       // Scale the arc's height to the bend amount (a "full" step is the
       // 1.0 baseline) so a half bend visibly reads as smaller than a
@@ -162,8 +165,9 @@ export function renderTabLinks(track, trackRuns, systems, theme, { flattenRuns, 
       // the next note (shown by the dashed tie instead), so neither
       // needs it — and both would collide with it anyway, since it
       // shares the same spot as their end-of-arc marks. A natural
-      // harmonic's landing "fret" would be meaningless, so it has none.
-      const targetFret = item.fret != null && !bendInfo.release && !bendInfo.hold && !item.naturalHarmonic
+      // harmonic's landing "fret" would be meaningless, so it has none; nor
+      // does a pre-bend (already bent when picked) or a release note.
+      const targetFret = item.fret != null && bendInfo.type === 'bend' && !bendInfo.release && !bendInfo.hold && !item.naturalHarmonic
         ? Math.round(item.fret + semitones) : null;
       // Record its ink on the run (tagged with the note's x) for the technique-label pass.
       renderBend(item.g, item.x, item.y, bendInfo, theme, nextX, targetFret)

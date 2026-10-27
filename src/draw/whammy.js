@@ -10,7 +10,7 @@
  * starts and the return ends, with the amount text above it). Every
  * segment is one polyline between points at those two levels.
  */
-import { whammySpanX, whammyTextSize, bendSemitones, WHAMMY_TEXT_GAP_SP, WHAMMY_STROKE_WIDTH } from './tab.js';
+import { whammySpanX, whammyTextSize, amountSemitones, WHAMMY_TEXT_GAP_SP, WHAMMY_STROKE_WIDTH } from './tab.js';
 import { beatWhammyAny, whammyLabel } from '../directions.js';
 import { breakEndX, breakStartX } from './passes/common.js';
 import { group, text, path, svgD } from './svgUtil.js';
@@ -28,7 +28,7 @@ const START_SP = 0.3;             // slope / release start -> right of the note'
 
 /** Depth (sp) of a dive / pre-dive of `amount`: 1.2 sp per whole step, clamped to 0.8..2.4 ('1/2' .8, '1' / 'full' / unknown 1.2, '1 1/2' 1.8, '2' and up 2.4; a NaN amount such as '0/0' 1.2). */
 export function whammyDepthSp(amount) {
-  const semitones = bendSemitones(amount);
+  const semitones = amountSemitones(amount);
   const steps = Number.isNaN(semitones) ? 1 : semitones / 2;
   return Math.max(DIVE_MIN_DEPTH_SP, Math.min(DIVE_MAX_DEPTH_SP, steps * DIVE_SP_PER_STEP));
 }

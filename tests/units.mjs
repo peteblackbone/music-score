@@ -1694,6 +1694,68 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+{
+  const { bendOf } = await imp('src/directions.js');
+  const { normalizeBend, bendSemitones, amountSemitones } = await imp('src/draw/tab.js');
+  const { fretLabel } = await imp('src/textMetrics.js');
+  const b = (type, amount, release = false, hold = false) => ({ type, amount, release, hold });
+  test('bendOf: plain bends parse as before (amount, " release", " hold"), with type "bend"', () => {
+    eq(bendOf(true), b('bend', 'full'));
+    eq(bendOf('1/2'), b('bend', '1/2'));
+    eq(bendOf(' full release '), b('bend', 'full', true));
+    eq(bendOf('1 1/2 hold'), b('bend', '1 1/2', false, true));
+    eq(bendOf('hold'), b('bend', 'hold'));
+    eq(bendOf(''), null);
+    eq(bendOf(undefined), null);
+    eq(bendOf(5), b('bend', 'full'));
+  });
+  test('bendOf: pre-bend strings', () => {
+    eq(bendOf('prebend full'), b('prebend', 'full'));
+    eq(bendOf('Pre-Bend 1/2'), b('prebend', '1/2'));
+    eq(bendOf('pb 1/2 release'), b('prebend', '1/2', true));
+    eq(bendOf('pb'), b('prebend', 'full'));
+    eq(bendOf('pb release'), b('prebend', 'full', true));
+    eq(bendOf('pb full hold'), b('prebend', 'full'));
+    eq(bendOf('pbx').type, 'bend');
+  });
+  test('bendOf: release strings (amount null when not given)', () => {
+    eq(bendOf('release'), b('release', null, true));
+    eq(bendOf('Release 1/2'), b('release', '1/2', true));
+    eq(bendOf('releases').type, 'bend');
+  });
+  test('bendOf: objects (type aliases, amount as a string, release / hold flags)', () => {
+    eq(bendOf({ amount: 'full', release: true }), b('bend', 'full', true));
+    eq(bendOf({ amount: '1/2', hold: true }), b('bend', '1/2', false, true));
+    eq(bendOf({ release: true, hold: true }), b('bend', 'full', true));
+    eq(bendOf({ type: ' PB ', amount: '1/2' }), b('prebend', '1/2'));
+    eq(bendOf({ type: 'pre-bend', release: true }), b('prebend', 'full', true));
+    eq(bendOf({ type: 'prebend', hold: true }), b('prebend', 'full'));
+    eq(bendOf({ type: 'release' }), b('release', null, true));
+    eq(bendOf({ type: 'release', amount: 'full' }), b('release', 'full', true));
+    eq(bendOf({ type: 'nope', amount: 1 }), b('bend', '1'));
+    eq(bendOf({ amount: 1 }).amount, '1');
+  });
+  test('normalizeBend delegates to bendOf', () => {
+    ['full', 'pb 1/2 release', 'release', { type: 'release', amount: 'full' }, true].forEach((v) => eq(normalizeBend(v), bendOf(v)));
+  });
+  test('bendSemitones: as before for readable amounts; infinite / NaN -> 2 (amountSemitones keeps the raw parse)', () => {
+    eq(['full', '1/2', '1 1/2', '2', '1/4', 'what'].map(bendSemitones), [2, 1, 3, 4, 0.5, 2]);
+    eq(bendSemitones('1/0'), 2);
+    eq(Number.isFinite(bendSemitones('0/0')), true);
+    eq(Number.isFinite(bendSemitones('0 0/0')), true);
+    eq(bendSemitones(null), 2);
+    eq(amountSemitones('1/0'), Infinity);
+  });
+  test('fretLabel: a release note is in parentheses (once with ghost); mute stays x', () => {
+    eq(fretLabel({ fret: 7, bend: 'release' }), '(7)');
+    eq(fretLabel({ fret: 7, bend: { type: 'release' } }), '(7)');
+    eq(fretLabel({ fret: 7, bend: 'release', ghost: true }), '(7)');
+    eq(fretLabel({ fret: 7, bend: 'full release' }), '7');
+    eq(fretLabel({ fret: 7, bend: 'pb full' }), '7');
+    eq(fretLabel({ fret: 7, mute: true, bend: 'release' }), 'x');
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

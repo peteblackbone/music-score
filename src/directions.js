@@ -24,7 +24,8 @@
  * - `note.slideIn` 'below' | 'above' (true / 'up' = 'below', 'down' =
  *   'above') and `note.slideOut` 'down' | 'up' (true = 'down'): a short
  *   slide into the note from below / above, or off it downward / upward
- *   (slideMarks decides which are drawn; withNoteSlides canonicalizes).
+ *   (slideMarks decides which are drawn; withNoteSlides canonicalizes);
+ * - `note.bend`: a bend, pre-bend or release note (bendOf).
  *
  * Rests and grace notes carry no pick stroke, tap, whammy, rake, arpeggio
  * or strum. Every
@@ -101,6 +102,50 @@ export function slideMarks(items) {
     slideIn: targeted.has(i) ? null : slideInOf(it.slideIn),
     slideOut: (it.slide && linkTarget(items, i) >= 0) || it.bend ? null : slideOutOf(it.slideOut),
   }));
+}
+
+/**
+ * A note's `bend` as `{ type, amount, release, hold }`, or null (falsy).
+ * `type`: 'bend' (bent after picking), 'prebend' (bent before picking:
+ * 'prebend' | 'pre-bend' | 'pb' + amount, optionally + ' release') or
+ * 'release' (its own note returning to the unbent pitch: 'release' +
+ * optional amount; `release` is always true, `amount` null when not given).
+ * Other strings: the amount (empty → 'full'), optionally + ' release' (a
+ * bend-and-release) or ' hold'. `true` and other non-objects → a full
+ * bend. An object takes `type` ('bend', 'prebend' / 'pb' / 'pre-bend',
+ * 'release'; trimmed, any case; else 'bend'), `amount` (as a string; else
+ * 'full', or null for a release) and `release` / `hold` flags (`hold`
+ * only on a plain bend that doesn't release).
+ */
+export function bendOf(raw) {
+  if (!raw) return null;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    const pre = /^(prebend|pre-bend|pb)\b\s*(.*)$/i.exec(trimmed);
+    if (pre) {
+      const suffix = /(?:^|\s+)(release|hold)$/i.exec(pre[2]);
+      const amount = (suffix ? pre[2].slice(0, suffix.index) : pre[2]).trim() || 'full';
+      return { type: 'prebend', amount, release: !!suffix && suffix[1].toLowerCase() === 'release', hold: false };
+    }
+    const rel = /^release\b\s*(.*)$/i.exec(trimmed);
+    if (rel) return { type: 'release', amount: rel[1] || null, release: true, hold: false };
+    const release = /\s+release$/i.test(trimmed);
+    const hold = !release && /\s+hold$/i.test(trimmed);
+    const amount = trimmed.replace(/\s+(release|hold)$/i, '') || 'full';
+    return { type: 'bend', amount, release, hold };
+  }
+  if (typeof raw === 'object') {
+    const t = typeof raw.type === 'string' ? raw.type.trim().toLowerCase() : '';
+    const type = ['prebend', 'pb', 'pre-bend'].includes(t) ? 'prebend' : (t === 'release' ? 'release' : 'bend');
+    const release = type === 'release' || !!raw.release;
+    return {
+      type,
+      amount: raw.amount ? String(raw.amount) : (type === 'release' ? null : 'full'),
+      release,
+      hold: type === 'bend' && !release && !!raw.hold,
+    };
+  }
+  return { type: 'bend', amount: 'full', release: false, hold: false };
 }
 
 /** Whether `el` is a main (non-grace) beat with at least one note. */
