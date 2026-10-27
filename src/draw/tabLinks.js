@@ -49,7 +49,11 @@ const SLIDE_MARK_MIN_SP = 0.4;   // ...and skipped when clamping leaves less tha
  *   `release: true` (or the shorthand string ending in " release", e.g.
  *   `'full release'`) adds a second arrow curving back down, for a
  *   bend-and-release. Its width is limited by the next note on the system
- *   and by the system's last barline.
+ *   and by the system's last barline. A pre-bend ('prebend …' / 'pb …' or
+ *   `type: 'prebend'`) is a straight vertical arrow over the fret; a release
+ *   note ('release [amount]' or `type: 'release'`) is only the falling
+ *   arrow, its fret in parentheses, its amount defaulting to the last bend
+ *   on the same string (see bendOf in directions.js).
  *
  * A note could in principle set more than one of these (rare in
  * practice); each is drawn independently off the same string-position
