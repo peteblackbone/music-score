@@ -117,22 +117,33 @@ export function slideMarks(items) {
  * 'full', or null for a release) and `release` / `hold` flags (`hold`
  * only on a plain bend that doesn't release).
  */
+/**
+ * Split a trailing ' release' / ' hold' word (any case) off a bend string:
+ * [rest (trimmed), 'release' | 'hold' | null]. `whole` also accepts the word
+ * with nothing before it (a pre-bend's 'release'). A plain scan rather than
+ * /\s+release$/, whose backtracking is quadratic on long runs of spaces.
+ */
+function splitBendSuffix(str, whole) {
+  let i = str.length;
+  while (i > 0 && !/\s/.test(str[i - 1])) i--;
+  const word = str.slice(i).toLowerCase();
+  if ((word === 'release' || word === 'hold') && (i > 0 || whole)) return [str.slice(0, i).trim(), word];
+  return [str.trim(), null];
+}
+
 export function bendOf(raw) {
   if (!raw) return null;
   if (typeof raw === 'string') {
     const trimmed = raw.trim();
     const pre = /^(prebend|pre-bend|pb)\b\s*(.*)$/i.exec(trimmed);
     if (pre) {
-      const suffix = /(?:^|\s+)(release|hold)$/i.exec(pre[2]);
-      const amount = (suffix ? pre[2].slice(0, suffix.index) : pre[2]).trim() || 'full';
-      return { type: 'prebend', amount, release: !!suffix && suffix[1].toLowerCase() === 'release', hold: false };
+      const [rest, word] = splitBendSuffix(pre[2], true);
+      return { type: 'prebend', amount: rest || 'full', release: word === 'release', hold: false };
     }
     const rel = /^release\b\s*(.*)$/i.exec(trimmed);
     if (rel) return { type: 'release', amount: rel[1] || null, release: true, hold: false };
-    const release = /\s+release$/i.test(trimmed);
-    const hold = !release && /\s+hold$/i.test(trimmed);
-    const amount = trimmed.replace(/\s+(release|hold)$/i, '') || 'full';
-    return { type: 'bend', amount, release, hold };
+    const [rest, word] = splitBendSuffix(trimmed, false);
+    return { type: 'bend', amount: rest || 'full', release: word === 'release', hold: word === 'hold' };
   }
   if (typeof raw === 'object') {
     const t = typeof raw.type === 'string' ? raw.type.trim().toLowerCase() : '';

@@ -452,7 +452,7 @@ export function bendGeometry(x, y, bend, theme, nextX, targetFret) {
   // distance.
   const peakX = onNote ? x : startX + Math.min(1.6 * spacing, width * 0.5);
   // Scaled by the bend amount (a "full" step is the 1.0 baseline — see
-  // renderTabArticulations in passes/tabTechniques.js) so a half bend's arc is visibly smaller than a
+  // renderTabLinks in tabLinks.js) so a half bend's arc is visibly smaller than a
   // full bend's, not the same size with a different label.
   const heightFrac = bend.heightFrac ?? 1;
   const bendHeight = theme.tabStaffLineSpacing * 1.8 * heightFrac;
