@@ -223,6 +223,17 @@ export function renderSlide(g, x1, x2, y, direction, theme, startInset, endInset
   }));
 }
 
+/**
+ * Draw a slide-in / slide-out mark: renderSlide's diagonal (direction
+ * 'up' | 'down') from `x1 + startInset` to `x2 - endInset` exactly, in a
+ * group of class `cls` (e.g. 'slide-in slide-in-below').
+ */
+export function renderSlideMark(g, x1, x2, y, direction, theme, startInset, endInset, cls) {
+  const gEl = group({ class: cls });
+  renderSlide(gEl, x1 + startInset, x2 - endInset, y, direction, theme, 0, 0);
+  g.appendChild(gEl);
+}
+
 /** Font size (px) of the technique labels ("P.M.", "A.H.", ...) above the TAB staff. */
 export function techniqueLabelSize(theme) {
   return Math.max(0.9 * theme.staffLineSpacing, theme.tabFontSize - 0.1 * theme.staffLineSpacing);

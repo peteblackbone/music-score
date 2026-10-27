@@ -635,6 +635,13 @@ export function renderTupletBracket(g, x1, x2, y, count, theme) {
   tupletBracket(g, x1, x2, y, count, { tickDir: 1, color: theme.noteColor, className: 'tuplet' }, theme);
 }
 
+/** A slide-in / slide-out line on the notation staff, (x1, y1) → (x2, y2), in a group of class `cls`. */
+export function renderNoteSlide(g, x1, y1, x2, y2, cls, theme) {
+  g.appendChild(group({ class: cls }, [
+    line(x1, y1, x2, y2, { stroke: theme.noteColor, 'stroke-width': 1.3, 'stroke-linecap': 'round' }),
+  ]));
+}
+
 /** Font size (px) of chord symbols. */
 export const chordSymbolFontSize = (theme) => theme.dynamicFontSize;
 

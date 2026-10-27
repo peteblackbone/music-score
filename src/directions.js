@@ -20,7 +20,11 @@
  * - `beat.arpeggio` true | 'up' | 'down': a vertical wavy line left of a
  *   chord of two or more notes ('up' / 'down' add an arrowhead);
  * - `beat.strum` 'down' | 'up': a strum arrow above the beat; it replaces
- *   the beat's pick stroke.
+ *   the beat's pick stroke;
+ * - `note.slideIn` 'below' | 'above' (true / 'up' = 'below', 'down' =
+ *   'above') and `note.slideOut` 'down' | 'up' (true = 'down'): a short
+ *   slide into the note from below / above, or off it downward / upward
+ *   (slideMarks decides which are drawn; withNoteSlides canonicalizes).
  *
  * Rests and grace notes carry no pick stroke, tap, whammy, rake, arpeggio
  * or strum. Every
@@ -50,6 +54,53 @@ export function linkTarget(items, i) {
   if (string == null) return -1;
   for (let k = i + 1; k < items.length; k++) if (items[k].string === string) return k;
   return -1;
+}
+
+/** Canonical slide-in ('below' | 'above') of a raw `note.slideIn`: true / 'up' / 'below' → 'below', 'down' / 'above' → 'above' (trimmed, any case), else null. Idempotent. */
+export function slideInOf(raw) {
+  if (raw === true) return 'below';
+  if (typeof raw !== 'string') return null;
+  const k = raw.trim().toLowerCase();
+  if (k === 'up' || k === 'below') return 'below';
+  return k === 'down' || k === 'above' ? 'above' : null;
+}
+
+/** Canonical slide-out ('down' | 'up') of a raw `note.slideOut`: true / 'down' → 'down', 'up' → 'up' (trimmed, any case), else null. Idempotent. */
+export function slideOutOf(raw) {
+  if (raw === true) return 'down';
+  if (typeof raw !== 'string') return null;
+  const k = raw.trim().toLowerCase();
+  return PICK_KINDS.includes(k) ? k : null;
+}
+
+/** `note` itself unless it has a `slideIn` or `slideOut` field; then a copy with those (present) fields canonicalized (null when not understood). */
+export function withNoteSlides(note) {
+  const hasIn = note.slideIn !== undefined;
+  const hasOut = note.slideOut !== undefined;
+  if (!hasIn && !hasOut) return note;
+  const out = { ...note };
+  if (hasIn) out.slideIn = slideInOf(note.slideIn);
+  if (hasOut) out.slideOut = slideOutOf(note.slideOut);
+  return out;
+}
+
+/**
+ * Slide-in / slide-out marks drawn for `items` (one per note of a track, in
+ * score order: `{ string, slide, hammerPull, bend, slideIn, slideOut, grace }`),
+ * `[{ slideIn, slideOut }]` (canonical or null). A grace note gets neither;
+ * a slide-out is dropped when the note's own `slide` reaches a target or it
+ * bends; a slide-in when the note is the target of an earlier slide or
+ * hammer-on / pull-off (linkTarget; notes without a string are never targets).
+ */
+export function slideMarks(items) {
+  const targeted = new Set();
+  items.forEach((it, i) => {
+    if (it.slide || it.hammerPull) targeted.add(linkTarget(items, i));
+  });
+  return items.map((it, i) => (it.grace ? { slideIn: null, slideOut: null } : {
+    slideIn: targeted.has(i) ? null : slideInOf(it.slideIn),
+    slideOut: (it.slide && linkTarget(items, i) >= 0) || it.bend ? null : slideOutOf(it.slideOut),
+  }));
 }
 
 /** Whether `el` is a main (non-grace) beat with at least one note. */

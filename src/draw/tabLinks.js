@@ -1,19 +1,22 @@
 /**
  * draw/tabLinks.js — the per-note TAB links of pass 3
- * (draw/passes/tabTechniques.js): hammer-on/pull-off, slide and bend, drawn
- * into each run's TAB group. Writes `run.hpBoxes` (hammer-on/pull-off ink)
+ * (draw/passes/tabTechniques.js): hammer-on/pull-off, slide, slide in / out
+ * and bend, drawn into each run's TAB group. Writes `run.hpBoxes` (hammer-on/pull-off ink)
  * and `run.tabInkBoxes` (bend ink). Lives outside draw/passes/ and imports
  * nothing from it: the pass hands in the run / break helpers it needs.
  */
 import {
-  renderHammerPull, renderSlide, renderBend, normalizeBend, bendSemitones, SLIDE_END_INSET_SP,
+  renderHammerPull, renderSlide, renderSlideMark, renderBend, normalizeBend, bendSemitones, SLIDE_END_INSET_SP,
 } from './tab.js';
 import { fretLabel, fretLabelWidth } from '../textMetrics.js';
 import { isNaturalHarmonic, decoratesFretLabel } from '../harmonics.js';
-import { linkTarget } from '../directions.js';
+import { linkTarget, slideMarks } from '../directions.js';
 
 const SLIDE_STUB_SP = 2;         // outgoing slide stroke across a system break (horizontal length)
 const SLIDE_LABEL_CLEAR_SP = 0.2; // slide end -> edge of a wide (harmonic) fret-label knock-out
+const TAB_SLIDE_MARK_SP = 1.5;   // slide-in / slide-out stroke (horizontal length) beside the fret label
+const SLIDE_MARK_EDGE_SP = 0.3;  // ...never closer than this to the measure's barlines
+const SLIDE_MARK_MIN_SP = 0.4;   // ...and skipped when clamping leaves less than this
 
 /**
  * Tab-only legato/slide/bend articulations of `track`.
@@ -29,6 +32,14 @@ const SLIDE_LABEL_CLEAR_SP = 0.2; // slide end -> edge of a wide (harmonic) fret
  *   infers the direction the same way (ascending fret = slide up). Across
  *   a system break only a short outgoing stub (SLIDE_STUB_SP long) is
  *   drawn, never past 0.5 sp before the last barline.
+ *
+ * `slideIn` / `slideOut` (directions.js slideMarks) are drawn on the note
+ * itself: a TAB_SLIDE_MARK_SP diagonal rising into the fret label from
+ * below ('below') or falling into it from above ('above'), or leaving it
+ * downward / upward, on the string line; shortened so it stays
+ * SLIDE_END_INSET_SP clear of the neighbouring notes' x, SLIDE_MARK_EDGE_SP
+ * inside the measure and inside the system's break ends, and skipped when
+ * less than SLIDE_MARK_MIN_SP is left.
  *
  * `bend` is drawn on the note itself (no target note needed):
  *
@@ -52,6 +63,9 @@ const SLIDE_LABEL_CLEAR_SP = 0.2; // slide end -> edge of a wide (harmonic) fret
 export function renderTabLinks(track, trackRuns, systems, theme, { flattenRuns, breakEndX, breakStartX }) {
   const s = theme.staffLineSpacing;
   const stringCount = track.tuning.length;
+  const measureOf = new Map();
+  trackRuns.filter((r) => r.track === track).forEach((run) => run.measures
+    .forEach((m) => m.elements.forEach((le) => measureOf.set(le, m))));
   const flat = [];
   flattenRuns(trackRuns, track, (layoutEl, run) => {
     const elDef = layoutEl.el;
@@ -67,16 +81,31 @@ export function renderTabLinks(track, trackRuns, systems, theme, { flattenRuns, 
         run, sysIdx: run.sysIdx, g: run.tabG, x: layoutEl.x, y,
         string: n.string, fret: n.fret, hammerPull: n.hammerPull, slide: n.slide, bend: n.bend,
         naturalHarmonic: isNaturalHarmonic(n), slideInset,
+        grace: elDef.type === 'grace', slideIn: n.slideIn, slideOut: n.slideOut, measure: measureOf.get(layoutEl),
       });
     });
   });
+  const marks = slideMarks(flat);
+  // Nearest other note x on the item's system before (-1) / after (+1) it, or -/+Infinity.
+  const neighbourX = (item, dir) => (dir < 0 ? Math.max : Math.min)(
+    dir * Infinity, ...flat.filter((c) => c.sysIdx === item.sysIdx && dir * (c.x - item.x) > 0).map((c) => c.x));
 
   flat.forEach((item, i) => {
-    if (!item.hammerPull && !item.slide && !item.bend) return;
+    const { slideIn, slideOut } = marks[i];
+    if (!item.hammerPull && !item.slide && !item.bend && !slideIn && !slideOut) return;
     const target = flat[linkTarget(flat, i)];
     const sameSystem = target && target.sysIdx === item.sysIdx;
     const ascending = target && target.fret != null && item.fret != null ? target.fret > item.fret : true;
     const endX = breakEndX(systems, item.sysIdx, theme);
+
+    if (slideIn) {
+      const left = Math.max(neighbourX(item, -1) + SLIDE_END_INSET_SP * s, item.measure.contentX + SLIDE_MARK_EDGE_SP * s,
+        breakStartX(systems, item.sysIdx, theme));
+      const x1 = Math.max(item.x - item.slideInset - TAB_SLIDE_MARK_SP * s, left);
+      if (item.x - item.slideInset - x1 >= SLIDE_MARK_MIN_SP * s) {
+        renderSlideMark(item.g, x1, item.x, item.y, slideIn === 'below' ? 'up' : 'down', theme, 0, item.slideInset, `slide-in slide-in-${slideIn}`);
+      }
+    }
 
     if (item.hammerPull && target) {
       const raw = typeof item.hammerPull === 'string' ? item.hammerPull.toLowerCase() : '';
@@ -107,6 +136,14 @@ export function renderTabLinks(track, trackRuns, systems, theme, { flattenRuns, 
         endX + SLIDE_END_INSET_SP * s);
       renderSlide(item.g, item.x, sameSystem ? target.x : stubEnd, item.y, direction, theme,
         item.slideInset, sameSystem ? target.slideInset : undefined);
+    }
+
+    if (slideOut) {
+      const right = Math.min(neighbourX(item, 1) - SLIDE_END_INSET_SP * s, item.measure.endX - SLIDE_MARK_EDGE_SP * s, endX);
+      const x2 = Math.min(item.x + item.slideInset + TAB_SLIDE_MARK_SP * s, right);
+      if (x2 - item.x - item.slideInset >= SLIDE_MARK_MIN_SP * s) {
+        renderSlideMark(item.g, item.x, x2, item.y, slideOut, theme, item.slideInset, 0, `slide-out slide-out-${slideOut}`);
+      }
     }
 
     if (item.bend) {

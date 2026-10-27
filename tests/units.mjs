@@ -1654,6 +1654,46 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+{
+  const { slideInOf, slideOutOf, withNoteSlides, slideMarks } = await imp('src/directions.js');
+  test('slideInOf / slideOutOf: canonical forms, trimmed and any case; garbage -> null; idempotent', () => {
+    const ins = [true, 'up', 'below', ' Below ', 'DOWN', 'above', 'sideways', '', false, 1, null, undefined, {}];
+    eq(ins.map(slideInOf), ['below', 'below', 'below', 'below', 'above', 'above', null, null, null, null, null, null, null]);
+    const outs = [true, 'down', ' UP ', 'up', 'below', 'above', '', false, 0, null, {}];
+    eq(outs.map(slideOutOf), ['down', 'down', 'up', 'up', null, null, null, null, null, null, null]);
+    ins.forEach((v) => eq(slideInOf(slideInOf(v)), slideInOf(v), `in ${String(v)}`));
+    outs.forEach((v) => eq(slideOutOf(slideOutOf(v)), slideOutOf(v), `out ${String(v)}`));
+  });
+  test('withNoteSlides: same object without the fields, else a canonical copy; input not mutated', () => {
+    const plain = { string: 1, fret: 5 };
+    eq(withNoteSlides(plain) === plain, true);
+    const raw = { string: 1, fret: 5, slideIn: 'Down', slideOut: 'nope' };
+    eq(withNoteSlides(raw), { string: 1, fret: 5, slideIn: 'above', slideOut: null });
+    eq(raw.slideIn, 'Down');
+    eq(withNoteSlides({ slideOut: true }), { slideOut: 'down' });
+    eq(withNoteSlides(withNoteSlides(raw)), withNoteSlides(raw));
+  });
+  test('normalizeScore canonicalizes note slideIn / slideOut', () => {
+    const s = normalizeScore({ tracks: [{ showTablature: true, measures: [{ beats: [
+      { type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 5, slideIn: 'UP', slideOut: 'x' }] }] }] }] });
+    const n = s.tracks[0].measures[0].beats[0].notes[0];
+    eq([n.slideIn, n.slideOut], ['below', null]);
+  });
+  test('slideMarks: conflicts with slides, H/P, bends and graces', () => {
+    const it = (o) => ({ string: 1, ...o });
+    eq(slideMarks([it({ slideIn: true, slideOut: true })]), [{ slideIn: 'below', slideOut: 'down' }]);
+    // own slide with a target drops the slide-out; its target drops the slide-in
+    eq(slideMarks([it({ slide: true, slideOut: 'up' }), it({ slideIn: 'down' })]), [{ slideIn: null, slideOut: null }, { slideIn: null, slideOut: null }]);
+    // a slide with no target keeps the slide-out
+    eq(slideMarks([it({ slide: true, slideOut: 'up' }), { string: 2, slideIn: true }]), [{ slideIn: null, slideOut: 'up' }, { slideIn: 'below', slideOut: null }]);
+    eq(slideMarks([it({ hammerPull: true }), it({ slideIn: true })]), [{ slideIn: null, slideOut: null }, { slideIn: null, slideOut: null }]);
+    eq(slideMarks([it({ bend: 'full', slideOut: true })]), [{ slideIn: null, slideOut: null }]);
+    eq(slideMarks([it({ grace: true, slideIn: true, slideOut: true })]), [{ slideIn: null, slideOut: null }]);
+    // notes without a string are never targets
+    eq(slideMarks([{ string: null, slide: true }, { string: null, slideIn: true }]), [{ slideIn: null, slideOut: null }, { slideIn: 'below', slideOut: null }]);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
