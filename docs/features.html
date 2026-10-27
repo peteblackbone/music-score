@@ -229,7 +229,7 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <li>A rake is a dashed "rake" label over its beat and the grace notes right before it. Write those dead-note grace notes yourself. The label sits outside any P.M. or let-ring label it overlaps.</li>
   <li>A trill is "tr" and a wavy line above the beat, on notation and TAB, above any vibrato or tremolo and below a "T", pick stroke or fermata. On TAB, a fret or pitch target adds <code>(7)</code>. Consecutive trills on a system share one height. The wave stops before the next beat (or the next "tr") and at a line break.</li>
   <li>A strum arrow (<code>'down'</code> ↓, <code>'up'</code> ↑) sits above the TAB staff, clear of the frets and marks under it, or above the notation staff on a track without TAB. Consecutive strums on a system share one height, so a rasgueado run reads as one line. A strum replaces the beat's pick stroke.</li>
-  <li>An arpeggio is a wavy line just left of a chord, on notation and TAB, spanning its notes. <code>'up'</code> adds an arrowhead at the top, <code>'down'</code> at the bottom. The chord gets 1 sp more room on its left, and grace notes stay left of the line.</li>
+  <li>An arpeggio is a wavy line just left of a chord, on notation and TAB, spanning its notes. <code>'up'</code> adds an arrowhead at the top, <code>'down'</code> at the bottom. The chord keeps room for the line, 1 sp beyond its leftmost ink, and grace notes stay left of the line.</li>
   <li>Rests and grace notes ignore pick strokes, strums, arpeggios, taps, slaps, pops, trills, whammy marks and rakes. A single note ignores an arpeggio.</li>
 </ul>
 <div class="demo" data-demo="directions" data-width="680"></div>
