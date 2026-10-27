@@ -1612,6 +1612,48 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+{
+  const { findSlurs } = await imp('src/draw/passes/notationBeats.js');
+  // Fake collectBeats items: notes [string, hammerPull], stems up unless `down`.
+  const fb = (notes, { grace = false, rest = false, down = false, slurStart, slurEnd, sys = 0, tupletAbove = Infinity } = {}) => ({
+    sysIdx: sys, x: 0, anchorAbove: 10, anchorBelow: 90, tupletAbove,
+    el: { type: rest ? 'rest' : grace ? 'grace' : 'note', slurStart, slurEnd, notes: rest ? undefined : notes.map(([string, hammerPull]) => ({ string, hammerPull })) },
+    info: { isRest: rest, isGrace: grace, stemUp: !down, noteheads: rest ? [] : [{}] },
+  });
+  const spans = (beats, auto = true) => findSlurs(beats, { auto }).map(({ i, j, above }) => [i, j, above]);
+  test('findSlurs auto: hammerPull chain on one string merges into one span; off by default', () => {
+    const beats = [fb([[1, true]]), fb([[1, 'p']]), fb([[1, true]]), fb([[1]]), fb([[1]])];
+    eq(spans(beats), [[0, 3, false]]);
+    eq(spans(beats, false), []);
+    eq(findSlurs(beats), []);
+  });
+  test('findSlurs auto: chord links on two strings to the same beat merge; side from stems', () => {
+    eq(spans([fb([[2, true], [3, true]], { down: true }), fb([[2], [3]], { down: true })]), [[0, 1, true]]);
+    eq(spans([fb([[2, true]]), fb([[2]], { down: true })]), [[0, 1, true]]);
+  });
+  test('findSlurs auto: links to the next note on the same string, skipping other strings', () => {
+    eq(spans([fb([[1, true]]), fb([[2]]), fb([[1]])]), [[0, 2, false]]);
+    eq(spans([fb([[1, true]]), fb([[2]])]), []);
+    eq(spans([fb([[null, true]]), fb([[null]])]), []);
+  });
+  test('findSlurs auto: grace ends drop the link; rest beats are never targets', () => {
+    eq(spans([fb([[1, true]], { grace: true }), fb([[1]])]), []);
+    eq(spans([fb([[1, true]]), fb([[1]], { grace: true }), fb([[1]])]), []);
+    eq(spans([fb([[1, true]]), fb([], { rest: true }), fb([[1]])]), [[0, 2, false]]);
+  });
+  test('findSlurs auto: spans sharing a beat with an explicit slur are dropped', () => {
+    const beats = [fb([[1]], { slurStart: true }), fb([[1, true]], { slurEnd: true }), fb([[1]]), fb([[2, true]]), fb([[2]])];
+    eq(spans(beats), [[0, 1, false], [3, 4, false]]);
+  });
+  test('findSlurs: ends at anchors; an auto slur above clears tuplet brackets, explicit ones keep 1.2.0 ends', () => {
+    const beats = [fb([[1, true]], { down: true, slurStart: true, tupletAbove: 4 }), fb([[1]], { down: true, slurEnd: true, tupletAbove: 4 })];
+    eq(findSlurs(beats, { auto: true }).map(({ y1, y2 }) => [y1, y2]), [[10, 10]]);
+    beats.forEach((b) => { b.el.slurStart = b.el.slurEnd = undefined; });
+    eq(findSlurs(beats, { auto: true }).map(({ y1, y2 }) => [y1, y2]), [[4, 4]]);
+    eq(findSlurs([fb([[1, true]]), fb([[1]])], { auto: true }).map(({ y1, y2 }) => [y1, y2]), [[90, 90]]);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

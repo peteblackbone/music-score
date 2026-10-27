@@ -200,6 +200,8 @@
         <line x1="1369.5" y1="0" x2="1369.5" y2="40" stroke="#1a1a1a" stroke-width="1"/>
       </g>
       <path d="M 798.37 -27.5 C 801.33 -36.5, 805.97 -36.5, 808.92 -27.5 C 805.97 -35.1, 801.33 -35.1, 798.37 -27.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <path d="M 486.49 -40 C 497.63 -49.55, 515.14 -49.55, 526.28 -40 C 515.14 -48.15, 497.63 -48.15, 486.49 -40 Z" class="slur" fill="#1a1a1a" stroke="none"/>
+      <path d="M 1186.04 -36 C 1197.18 -45.55, 1214.69 -45.55, 1225.83 -36 C 1214.69 -44.15, 1197.18 -44.15, 1186.04 -36 Z" class="slur" fill="#1a1a1a" stroke="none"/>
       <path d="M 704.44 -11 C 709.9 -20, 718.48 -25, 723.94 -16 C 718.48 -23.6, 709.9 -18.6, 704.44 -11 Z" class="slur" fill="#1a1a1a" stroke="none"/>
       <path d="M 1262.12 -46 C 1267.58 -55, 1276.16 -50, 1281.62 -41 C 1276.16 -48.6, 1267.58 -53.6, 1262.12 -46 Z" class="slur" fill="#1a1a1a" stroke="none"/>
       <text x="439.25" y="-66.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="start" fill="#1a1a1a">F</text>
@@ -566,6 +568,7 @@
       </g>
       <text x="68.8" y="-20" class="measure-number" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" font-style="italic" fill="#1a1a1a">6</text>
       <path d="M 1152.01 -2.5 C 1161.38 -11.5, 1176.12 -11.5, 1185.5 -2.5 C 1176.12 -10.1, 1161.38 -10.1, 1152.01 -2.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <path d="M 645.96 -26 C 652.95 -35, 663.93 -40, 670.92 -31 C 663.93 -38.6, 652.95 -33.6, 645.96 -26 Z" class="slur" fill="#1a1a1a" stroke="none"/>
       <text x="147.18" y="-59.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="start" fill="#1a1a1a">F</text>
       <text x="269.45" y="-59.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="start" fill="#1a1a1a">C/E</text>
       <text x="352.63" y="-59.25" class="chord-symbol" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-weight="bold" font-size="15" text-anchor="start" fill="#1a1a1a">Dm</text>

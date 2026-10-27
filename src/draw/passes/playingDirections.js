@@ -178,14 +178,14 @@ function slurAboveCurves(beats, systems, theme) {
       if (beats[k].sysIdx === sysIdx) beats[k].slurCurves.push(pts);
     }
   };
-  findSlurs(beats).forEach(({ i, j, above }) => {
+  findSlurs(beats, { auto: theme.hammerPullSlurs !== false }).forEach(({ i, j, above, y1, y2 }) => {
     if (!above) return;
     const a = beats[i]; const b = beats[j];
     if (a.sysIdx === b.sysIdx) {
-      over(i, j, a.sysIdx, a.x, a.anchorAbove, b.x, b.anchorAbove);
+      over(i, j, a.sysIdx, a.x, y1, b.x, y2);
     } else {
-      over(i, j, a.sysIdx, a.x, a.anchorAbove, breakEndX(systems, a.sysIdx, theme), a.anchorAbove);
-      over(i, j, b.sysIdx, breakStartX(systems, b.sysIdx, theme), b.anchorAbove, b.x, b.anchorAbove);
+      over(i, j, a.sysIdx, a.x, y1, breakEndX(systems, a.sysIdx, theme), y1);
+      over(i, j, b.sysIdx, breakStartX(systems, b.sysIdx, theme), y2, b.x, y2);
     }
   });
 }

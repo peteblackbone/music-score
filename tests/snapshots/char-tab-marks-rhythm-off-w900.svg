@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="900" class="music-score" style="font-synthesis: none; background:#ffffff" role="img" height="638.83" viewBox="0 0 900 638.83">
+<svg xmlns="http://www.w3.org/2000/svg" width="900" class="music-score" style="font-synthesis: none; background:#ffffff" role="img" height="655.17" viewBox="0 0 900 655.17">
   <title>Music score</title>
   <desc>3 instruments: Gt.1, TAB, Notation. 2 measures, 4/4.</desc>
   <g class="system system-0">
-    <g class="staff staff-notation" data-track="0" transform="translate(0,53)">
+    <g class="staff staff-notation" data-track="0" transform="translate(0,69.34)">
       <g class="staff-lines">
         <line x1="96.08" y1="40" x2="526.13" y2="40" stroke="#1a1a1a" stroke-width="1"/>
         <line x1="96.08" y1="30" x2="526.13" y2="30" stroke="#1a1a1a" stroke-width="1"/>
@@ -60,8 +60,10 @@
         <line x1="523.63" y1="0" x2="523.63" y2="40" stroke="#1a1a1a" stroke-width="5"/>
         <line x1="516.63" y1="0" x2="516.63" y2="40" stroke="#1a1a1a" stroke-width="1"/>
       </g>
+      <path d="M 216.82 -21 C 238.22 -39.34, 271.84 -39.34, 293.23 -21 C 271.84 -37.05, 238.22 -37.05, 216.82 -21 Z" class="slur" fill="#1a1a1a" stroke="none"/>
+      <path d="M 376.63 -21 C 383.56 -30, 394.45 -35, 401.38 -26 C 394.45 -33.6, 383.56 -28.6, 376.63 -21 Z" class="slur" fill="#1a1a1a" stroke="none"/>
     </g>
-    <g class="staff staff-tab" data-track="0" transform="translate(0,176.1)">
+    <g class="staff staff-tab" data-track="0" transform="translate(0,192.44)">
       <g class="tab-lines">
         <line x1="96.08" y1="75" x2="526.13" y2="75" stroke="#1a1a1a" stroke-width="1"/>
         <line x1="96.08" y1="60" x2="526.13" y2="60" stroke="#1a1a1a" stroke-width="1"/>
@@ -135,7 +137,7 @@
         <line x1="490.13" y1="-12.27" x2="490.13" y2="-6.77" stroke="#1a1a1a" stroke-width="1"/>
       </g>
     </g>
-    <g class="staff staff-tab" data-track="1" transform="translate(0,311.1)">
+    <g class="staff staff-tab" data-track="1" transform="translate(0,327.44)">
       <g class="tab-lines">
         <line x1="96.08" y1="75" x2="526.13" y2="75" stroke="#1a1a1a" stroke-width="1"/>
         <line x1="96.08" y1="60" x2="526.13" y2="60" stroke="#1a1a1a" stroke-width="1"/>
@@ -201,7 +203,7 @@
         <line x1="455.13" y1="-12.27" x2="455.13" y2="-6.77" stroke="#1a1a1a" stroke-width="1"/>
       </g>
     </g>
-    <g class="staff staff-notation" data-track="2" transform="translate(0,458.33)">
+    <g class="staff staff-notation" data-track="2" transform="translate(0,474.67)">
       <g class="staff-lines">
         <line x1="96.08" y1="40" x2="526.13" y2="40" stroke="#1a1a1a" stroke-width="1"/>
         <line x1="96.08" y1="30" x2="526.13" y2="30" stroke="#1a1a1a" stroke-width="1"/>
@@ -259,7 +261,7 @@
         <text x="376.63" y="-10" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
       </g>
     </g>
-    <g class="staff staff-tab" data-track="2" transform="translate(0,533.33)">
+    <g class="staff staff-tab" data-track="2" transform="translate(0,549.67)">
       <g class="tab-lines">
         <line x1="96.08" y1="75" x2="526.13" y2="75" stroke="#1a1a1a" stroke-width="1"/>
         <line x1="96.08" y1="60" x2="526.13" y2="60" stroke="#1a1a1a" stroke-width="1"/>
@@ -285,19 +287,19 @@
         <line x1="516.63" y1="0" x2="516.63" y2="75" stroke="#1a1a1a" stroke-width="1"/>
       </g>
     </g>
-    <line x1="96.58" y1="53" x2="96.58" y2="608.33" class="system-join" stroke="#1a1a1a" stroke-width="1"/>
+    <line x1="96.58" y1="69.34" x2="96.58" y2="624.67" class="system-join" stroke="#1a1a1a" stroke-width="1"/>
     <g class="bracket">
-      <rect x="86.08" y="50.5" width="5" height="203.1" fill="#1a1a1a"/>
-      <rect x="86.08" y="50.5" width="15" height="2.5" fill="#1a1a1a"/>
-      <rect x="86.08" y="251.1" width="15" height="2.5" fill="#1a1a1a"/>
+      <rect x="86.08" y="66.84" width="5" height="203.1" fill="#1a1a1a"/>
+      <rect x="86.08" y="66.84" width="15" height="2.5" fill="#1a1a1a"/>
+      <rect x="86.08" y="267.44" width="15" height="2.5" fill="#1a1a1a"/>
     </g>
     <g class="bracket">
-      <rect x="86.08" y="455.83" width="5" height="155" fill="#1a1a1a"/>
-      <rect x="86.08" y="455.83" width="15" height="2.5" fill="#1a1a1a"/>
-      <rect x="86.08" y="608.33" width="15" height="2.5" fill="#1a1a1a"/>
+      <rect x="86.08" y="472.17" width="5" height="155" fill="#1a1a1a"/>
+      <rect x="86.08" y="472.17" width="15" height="2.5" fill="#1a1a1a"/>
+      <rect x="86.08" y="624.67" width="15" height="2.5" fill="#1a1a1a"/>
     </g>
-    <text x="76.08" y="156.25" class="instrument-name" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="end" fill="#1a1a1a">Gt.1</text>
-    <text x="76.08" y="352.8" class="instrument-name" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="end" fill="#1a1a1a">TAB</text>
-    <text x="76.08" y="537.53" class="instrument-name" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="end" fill="#1a1a1a">Notation</text>
+    <text x="76.08" y="172.59" class="instrument-name" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="end" fill="#1a1a1a">Gt.1</text>
+    <text x="76.08" y="369.14" class="instrument-name" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="end" fill="#1a1a1a">TAB</text>
+    <text x="76.08" y="553.87" class="instrument-name" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="end" fill="#1a1a1a">Notation</text>
   </g>
 </svg>

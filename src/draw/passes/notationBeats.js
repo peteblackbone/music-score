@@ -7,9 +7,11 @@
  * chordsFermatas.js. Reads only; draws nothing.
  */
 import { elementTop, elementBottom } from '../notation.js';
+import { linkTarget } from '../../directions.js';
 import { flattenRuns } from './common.js';
 
 const SLUR_CLEARANCE_SP = 1.1;   // slur end -> note's top (above) / bottom (below)
+const TUPLET_SLUR_CLEAR_SP = 0.9; // slur end above a tuplet bracket under it -> the bracket line
 
 /** Every rendered beat of a notation track, in score order, with its slur anchors. */
 export function collectBeats(trackRuns, track, theme) {
@@ -25,30 +27,92 @@ export function collectBeats(trackRuns, track, theme) {
       topY: top,
       anchorAbove: (Number.isFinite(top) ? top : run.notationBaselineY - 4 * s) - SLUR_CLEARANCE_SP * s,
       anchorBelow: (Number.isFinite(bottom) ? bottom : run.notationBaselineY) + SLUR_CLEARANCE_SP * s,
+      tupletAbove: info?.tupletY != null ? info.tupletY - TUPLET_SLUR_CLEAR_SP * s : Infinity,
     });
   });
   return beats;
 }
 
 /**
- * Slurs of a track: each `slurStart` beat to the next `slurEnd` beat.
- * Side (ui.md §7): all stems up → below; all down → above; mixed → above
- * (stemless notes count with their notional direction; rests and grace
- * notes don't count). Returns `[{ i, j, above }]` (indices into `beats`).
+ * Slurs of a track: each `slurStart` beat to the next `slurEnd` beat and,
+ * with `auto` (theme `hammerPullSlurs`, default on), one slur per run of
+ * hammer-ons / pull-offs (hammerPullSpans). Returns `[{ i, j, above, y1,
+ * y2 }]` (indices into `beats`; end heights, slurEnds), explicit slurs
+ * first.
  */
-export function findSlurs(beats) {
+export function findSlurs(beats, { auto = false } = {}) {
   const out = [];
   beats.forEach((item, i) => {
     if (!item.el.slurStart) return;
     const j = beats.findIndex((c, k) => k > i && c.el.slurEnd);
     if (j === -1) return;
-    const dirs = beats.slice(i, j + 1)
-      .filter((b) => b.info && !b.info.isRest && !b.info.isGrace && b.info.noteheads?.length)
-      .map((b) => b.info.stemUp);
-    const above = !(dirs.length && dirs.every((up) => up));
-    out.push({ i, j, above });
+    out.push({ i, j, above: slurSide(beats, i, j) });
   });
-  return out;
+  const explicit = out.map((sl) => ({ ...sl, ...slurEnds(beats, sl, false) }));
+  return auto ? explicit.concat(hammerPullSpans(beats, out).map((sl) => ({ ...sl, ...slurEnds(beats, sl, true) }))) : explicit;
+}
+
+/**
+ * End heights `{ y1, y2 }` of slur `sl`: each end's anchor on its side.
+ * With `clearTuplets` (hammer-on / pull-off slurs; explicit slurs keep
+ * their 1.2.0 ends) a slur above also clears every tuplet bracket under it
+ * on the same system as that end (both ends on one system share the
+ * higher of the two).
+ */
+function slurEnds(beats, { i, j, above }, clearTuplets) {
+  const a = beats[i]; const b = beats[j];
+  if (!above) return { y1: a.anchorBelow, y2: b.anchorBelow };
+  if (!clearTuplets) return { y1: a.anchorAbove, y2: b.anchorAbove };
+  const tuplets = (sysIdx) => Math.min(...beats.slice(i, j + 1).filter((c) => c.sysIdx === sysIdx).map((c) => c.tupletAbove));
+  if (a.sysIdx !== b.sysIdx) return { y1: Math.min(a.anchorAbove, tuplets(a.sysIdx)), y2: Math.min(b.anchorAbove, tuplets(b.sysIdx)) };
+  const t = tuplets(a.sysIdx);
+  return { y1: Math.min(a.anchorAbove, t), y2: Math.min(b.anchorAbove, t) };
+}
+
+/**
+ * Side of a slur over beats i..j (ui.md §7): all stems up → below; all
+ * down → above; mixed → above (stemless notes count with their notional
+ * direction; rests and grace notes don't count). True = above.
+ */
+function slurSide(beats, i, j) {
+  const dirs = beats.slice(i, j + 1)
+    .filter((b) => b.info && !b.info.isRest && !b.info.isGrace && b.info.noteheads?.length)
+    .map((b) => b.info.stemUp);
+  return !(dirs.length && dirs.every((up) => up));
+}
+
+/**
+ * Automatic slurs for hammer-ons / pull-offs: each `note.hammerPull` links
+ * its beat to the beat of the next note on the same `string` (linkTarget,
+ * as the TAB arc does; notes without a string never link). Links from or to
+ * a grace note, or to a beat that isn't drawn as notes, are dropped;
+ * overlapping links merge into one span; a span sharing a beat with an
+ * explicit slur (`explicit`) is dropped. Returns `[{ i, j, above }]`.
+ */
+function hammerPullSpans(beats, explicit) {
+  const items = [];
+  beats.forEach((b, bi) => (b.el.notes || []).forEach((n) => {
+    if (n.string != null) items.push({ bi, string: n.string, hammerPull: n.hammerPull, grace: b.el.type === 'grace' });
+  }));
+  const links = [];
+  items.forEach((item, k) => {
+    if (!item.hammerPull) return;
+    const t = linkTarget(items, k);
+    if (t < 0 || item.grace || items[t].grace || items[t].bi === item.bi) return;
+    const info = beats[items[t].bi].info;
+    if (!info || info.isRest) return;
+    links.push({ i: item.bi, j: items[t].bi });
+  });
+  links.sort((a, b) => a.i - b.i);
+  const merged = [];
+  links.forEach((l) => {
+    const cur = merged[merged.length - 1];
+    if (cur && l.i <= cur.j) cur.j = Math.max(cur.j, l.j);
+    else merged.push({ ...l });
+  });
+  return merged
+    .filter((a) => !explicit.some((e) => a.i <= e.j && e.i <= a.j))
+    .map(({ i, j }) => ({ i, j, above: slurSide(beats, i, j) }));
 }
 
 /**

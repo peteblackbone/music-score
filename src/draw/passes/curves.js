@@ -80,15 +80,15 @@ export function renderTiesAndSlurs(score, trackRuns, theme, systems) {
       );
     });
 
-    // Slurs: element-level, slurStart to the next slurEnd, anchored to each
-    // end's own top (above) or bottom (below) plus a clearance.
+    // Slurs: element-level, slurStart to the next slurEnd (and hammer-on /
+    // pull-off runs, findSlurs), anchored to each end's own top (above) or
+    // bottom (below) plus a clearance.
     const beats = collectBeats(trackRuns, track, theme);
-    findSlurs(beats).forEach(({ i, j, above }) => {
+    findSlurs(beats, { auto: theme.hammerPullSlurs !== false }).forEach(({ i, j, above, y1, y2 }) => {
       const a = beats[i]; const b = beats[j];
-      const key = above ? 'anchorAbove' : 'anchorBelow';
       drawSplitArc(
-        { g: a.g, sysIdx: a.sysIdx, x: a.x, y: a[key] },
-        { g: b.g, sysIdx: b.sysIdx, x: b.x, y: b[key] },
+        { g: a.g, sysIdx: a.sysIdx, x: a.x, y: y1 },
+        { g: b.g, sysIdx: b.sysIdx, x: b.x, y: y2 },
         systems, theme,
         (g, x1, y1, x2, y2) => renderCurve(g, x1, y1, x2, y2, above, theme, 'slur'),
       );

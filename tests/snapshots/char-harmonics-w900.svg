@@ -376,6 +376,7 @@
         <line x1="869.5" y1="0" x2="869.5" y2="40" stroke="#1a1a1a" stroke-width="1"/>
       </g>
       <text x="30" y="-20" class="measure-number" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" font-style="italic" fill="#1a1a1a">5</text>
+      <path d="M 645.7 -21 C 652.77 -30, 663.88 -35, 670.95 -26 C 663.88 -33.6, 652.77 -28.6, 645.7 -21 Z" class="slur" fill="#1a1a1a" stroke="none"/>
       <path d="M 708.62 -21 C 715.92 -30, 727.41 -30, 734.72 -21 C 727.41 -28.6, 715.92 -28.6, 708.62 -21 Z" class="slur" fill="#1a1a1a" stroke="none"/>
     </g>
     <g class="staff staff-tab" data-track="0" transform="translate(0,724.1)">
