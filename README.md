@@ -44,6 +44,8 @@ The page shows two scores, each with its title drawn at the top:
 
 Open http://127.0.0.1:8765/lead-riff.html for "Lead Riff in A Minor" (`examples/lead-riff.js`): a single notation and tab lead-guitar track.
 
+Open http://127.0.0.1:8765/lead-solo-f.html for "Lead Solo in F" (`examples/lead-solo-f.js`): an original 12-measure lead solo at ♩ = 120 that combines triplets, hammer-ons and pull-offs, grace-note slides, ties, 3rds and 6ths, bends and chord symbols in one score.
+
 Any static file server works in place of Python.
 
 For a tour of every feature with live rendered examples and their score JSON, open http://127.0.0.1:8765/docs/features.html (`docs/features.html`).
@@ -654,7 +656,7 @@ Initial public release.
 - `examples/`: sample scores.
 - `fonts/`: the Bravura font (SIL Open Font License; see `fonts/BRAVURA-LICENSE.txt`).
 - `tests/`: snapshot tests, unit checks, engraving checks, assertions and structural guards (`run.js`, `units.mjs`, `engraving.mjs`, `articulations.mjs`, `structure.mjs`), the test hooks and DOM shim the runner uses (`hooks.mjs`, `dom-shim.mjs`), the characterization fixtures (`fixtures/characterization.js`), and the saved snapshots (`snapshots/`).
-- `index.html`: the demo page. `lead-riff.html`: a second demo page for the lead-riff example.
+- `index.html`: the demo page. `lead-riff.html` and `lead-solo-f.html`: demo pages for the lead-riff and lead-solo examples.
 - `docs/features.html`: feature summary page with live examples (serve over http, like the demo).
 - `docs/ARCHITECTURE.md`: design notes for a future editor, import and export layer (not built yet).
 
