@@ -10,6 +10,7 @@ const qr = () => ({ type: 'rest', duration: 'quarter' });
 const bar4 = (extra = {}) => ({ beats: [q('E4'), q('G4'), q('B4'), q('D5')], ...extra });
 const tabq = (string, fret, extra = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string, fret }], ...extra });
 const tabh = (string, fret, note = {}, extra = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string, fret, ...note }], ...extra });
+const tabd = (duration, string, fret, note = {}, extra = {}) => ({ type: 'note', duration, notes: [{ string, fret, ...note }], ...extra });
 const AH19 = { harmonic: 'artificial', harmonicFret: 19 };
 const PH = { harmonic: 'pinch' };
 const PM = { palmMute: true };
@@ -952,6 +953,101 @@ export const characterizationCases = [
             tabc(E_TOP, { strum: 'up' }), tabc(E_TOP), tabc(E_TOP)] },
           { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabc([[4, 2], [3, 2], [2, 3]], { arpeggio: 'down' })] },
           { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+        ],
+      }],
+    },
+  },
+  {
+    // Legato and slides (1.3.0). Guitar with notation + TAB: m1 a 5h7p5h7 eighth run on string 1 (one merged slur) and a
+    // two-string chord hammering on strings 2 and 3 (one slur); m2 an explicit slur over a hammer-on beat (auto slur
+    // suppressed), a grace hammering on (no auto slur) and a hammer-on whose next note is on another string (links to
+    // the later string-3 note, past a string-4 note); m3 slide-ins true / 'down' / 'above' (on the downbeat after the barline, on a note with an
+    // accidental), slide-outs true (dotted note) / 'up' (last 8th, before the barline); m4 conflicts: slide-out + slide,
+    // slide-in on the slide's target, slide-in on a grace, slide-out + bend, slide-in 'sideways' (all skipped); m5-m7
+    // pre-bend, pre-bend-and-release, release notes (own amount, default from the string's last bend, 'Full' with no
+    // earlier bend, ghost), 'full release' unchanged. A tab-only guitar: H / P, slide in / out, a pre-bend under a whammy
+    // dip and its release. A notation-only staff: slide in / out drawn; a hammerPull without string adds no slur.
+    name: 'legato-slides', width: 900,
+    score: {
+      tracks: [
+        {
+          name: 'Gt.', showTablature: true,
+          measures: [
+            { beats: [
+              tabd('8th', 1, 5, { hammerPull: true }), tabd('8th', 1, 7, { hammerPull: 'p' }), tabd('8th', 1, 5, { hammerPull: true }), tabd('8th', 1, 7),
+              tabc([[2, 5, { hammerPull: true }], [3, 5, { hammerPull: true }]]), tabc([[2, 7], [3, 7]]),
+            ] },
+            { beats: [
+              tabd('8th', 2, 5, {}, { slurStart: true }), tabd('8th', 2, 7, { hammerPull: true }, { slurEnd: true }), tabq(2, 8),
+              { type: 'grace', duration: '16th', notes: [{ string: 3, fret: 4, hammerPull: true }] }, tabh(3, 5, { hammerPull: true }),
+              tabd('8th', 4, 5), tabd('8th', 3, 7),
+            ] },
+            { beats: [
+              tabh(2, 5, { slideIn: true }), tabd('8th', 2, 7, { slideIn: 'down' }), tabd('8th', 3, 9, { slideIn: 'above' }),
+              tabh(3, 7, { slideOut: true }, { dots: 1 }), tabd('8th', 1, 5, { slideOut: 'up' }),
+            ] },
+            { beats: [
+              tabh(3, 5, { slide: true, slideOut: true }), tabh(3, 7, { slideIn: true }),
+              { type: 'grace', duration: '16th', notes: [{ string: 2, fret: 5, slideIn: true }] }, tabh(2, 7, { bend: 'full', slideOut: true }),
+              tabh(1, 5, { slideIn: 'sideways' }),
+            ] },
+            { beats: [
+              tabh(2, 8, { bend: 'prebend full' }), tabh(2, 8, { bend: { type: 'release', amount: 'full' } }),
+              tabq(4, 5), tabh(3, 7, { bend: 'pb 1/2 release' }),
+            ] },
+            { beats: [tabh(1, 10, { bend: 'release' }), tabq(5, 3), tabh(3, 7, { bend: 'release' }), tabq(5, 3)] },
+            { beats: [tabh(2, 10, { bend: 'full release' }), tabq(5, 3), tabh(4, 7, { bend: 'release', ghost: true }), tabq(5, 3)] },
+          ],
+        },
+        {
+          name: 'TAB', showStandardNotation: false, showTablature: true,
+          measures: [
+            { beats: [
+              tabd('8th', 3, 5, { hammerPull: true }), tabd('8th', 3, 7, { hammerPull: true }), tabd('8th', 3, 5), tabd('8th', 3, 7),
+              tabh(2, 5, { slideIn: true }), tabh(2, 7, { slideOut: 'down' }),
+            ] },
+            { beats: [tabq(3, 5), tabq(3, 7), tabh(3, 5, { slideIn: 'above' }), tabh(3, 7, { slideOut: 'up' })] },
+            { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+            { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+            { beats: [tabh(2, 8, { bend: 'prebend full' }, { whammy: true }), tabh(2, 8, { bend: 'release' }), tabq(3, 5), tabq(3, 7)] },
+            { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+            { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+          ],
+        },
+        {
+          name: 'Notation',
+          measures: [
+            { beats: [pc([n('G4', { slideIn: true })]), pc([n('B4', { slideOut: 'up' })]), pc([n('C5', { hammerPull: true })]), q('D5')] },
+            { beats: [pc([n('E5', { slideIn: 'above' })]), pc([n('F#5', { slideIn: true })]), qr(), pc([n('A4', { slideOut: 'down' })])] },
+            bar4(), bar4(), bar4(), bar4(), bar4(),
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Legato and slides across system breaks at 600 (notation + TAB; systems of measures 1-2, 3-4, 5-7, 8-10, 11-12):
+    // an H / P chain from the last beat of system 1 into system 2 (slur and TAB arcs split); a slide-out on the last
+    // 16th of system 2 (clamped at the break end) and a slide-in on the first beat of system 3 (clamped at the break
+    // start); a pre-bend on the last beat of system 3 and a release note opening system 4 (its default amount, 1/2,
+    // carried across the break); an explicit slur across the break into system 5 over a hammer-on (auto slur suppressed).
+    name: 'legato-slides-break', width: 600,
+    score: {
+      tracks: [{
+        name: 'Gt.', showTablature: true,
+        measures: [
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabh(2, 5, { hammerPull: true })] },
+          { beats: [tabh(2, 7, { hammerPull: 'p' }), tabq(2, 5), tabq(3, 7), tabq(3, 5)] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabd('8th', 3, 7), tabd('16th', 3, 5), tabd('16th', 2, 5, { slideOut: true })] },
+          { beats: [tabh(2, 5, { slideIn: 'above' }), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabh(2, 8, { bend: 'pb 1/2' })] },
+          { beats: [tabh(2, 8, { bend: 'release' }), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabh(3, 7, {}, { slurStart: true })] },
+          { beats: [tabh(3, 5, { hammerPull: true }), tabh(3, 7, {}, { slurEnd: true }), tabq(3, 5), tabq(3, 7)] },
           { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
         ],
       }],
