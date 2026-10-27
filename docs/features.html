@@ -225,7 +225,7 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <li>A whammy dive slopes down (0.8 to 2.4 sp deep, by amount) and stays held, as a level line, until a beat with <code>{ type: 'return' }</code>, where it rises again. A dip, another dive or a pre-dive ends the hold early with no rise. A hold carries over a line break, stopping 0.5 sp before the barline and resuming after the next header without text. A pre-dive is a short level lead-in before its note, then the rise. The line is lifted above any frets, marks, letters, trills and bends under it.</li>
   <li>A slapped or popped bass note gets an "S" or "P" above it, in the same place as the "T". One letter per beat: tap, then slap, then pop.</li>
   <li>A rake is a dashed "rake" label over its beat and the grace notes right before it. Write those dead-note grace notes yourself. The label sits outside any P.M. or let-ring label it overlaps.</li>
-  <li>A trill is "tr" and a wavy line above the beat, on notation and TAB, above any vibrato or tremolo and below a "T", pick stroke or fermata. On TAB, a fret or pitch target adds <code>(7)</code>. The wave stops before the next beat and at a line break.</li>
+  <li>A trill is "tr" and a wavy line above the beat, on notation and TAB, above any vibrato or tremolo and below a "T", pick stroke or fermata. On TAB, a fret or pitch target adds <code>(7)</code>. Consecutive trills on a system share one height. The wave stops before the next beat (or the next "tr") and at a line break.</li>
   <li>Rests and grace notes ignore pick strokes, taps, slaps, pops, trills, whammy marks and rakes.</li>
 </ul>
 <div class="demo" data-demo="directions" data-width="680"></div>
