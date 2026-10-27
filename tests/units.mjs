@@ -1735,6 +1735,38 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(bendOf({ type: 'nope', amount: 1 }), b('bend', '1'));
     eq(bendOf({ amount: 1 }).amount, '1');
   });
+  test('bendOf suffix scan: release / hold in any case, any whitespace; only a whole trailing word counts', () => {
+    eq(bendOf('Full RELEASE'), b('bend', 'Full', true));
+    eq(bendOf('1/2 hold'), b('bend', '1/2', false, true));
+    eq(bendOf('full	release'), b('bend', 'full', true));
+    eq(bendOf('1 1/2   HOLD  '), b('bend', '1 1/2', false, true));
+    eq(bendOf('fullrelease'), b('bend', 'fullrelease'));
+    eq(bendOf('full releases'), b('bend', 'full releases'));
+    eq(bendOf('release hold'), b('release', 'hold', true));
+    eq(bendOf('pre-bend 1 hold'), b('prebend', '1'));
+    eq(bendOf('PB 1 RELEASE'), b('prebend', '1', true));
+    eq(bendOf('pb hold'), b('prebend', 'full'));
+    eq(bendOf('prebend release'), b('prebend', 'full', true));
+    eq(bendOf('   '), b('bend', 'full'));
+  });
+  test('bendOf suffix scan: very long whitespace runs parse fast and correctly (no quadratic backtracking)', () => {
+    const ok = (c, m) => { if (!c) throw new Error(m); };
+    const gap = ' '.repeat(100000);
+    const t0 = Date.now();
+    eq(bendOf(`full${gap}release`), b('bend', 'full', true));
+    eq(bendOf(`pb${gap}1/2${gap}hold`), b('prebend', '1/2'));
+    eq(bendOf(`full${gap}x`), b('bend', `full${gap}x`));
+    eq(bendOf(`${gap}hold${gap}`), b('bend', 'hold'));
+    eq(bendOf(gap + 'a'.repeat(1000) + gap + '!'), b('bend', 'a'.repeat(1000) + gap + '!'));
+    ok(Date.now() - t0 < 1000, `took ${Date.now() - t0} ms`);
+  });
+  test('bendOf: deterministic and leaves object / string input untouched', () => {
+    const o = { type: ' PB ', amount: 1, release: true, hold: true };
+    const copy = JSON.stringify(o);
+    eq(bendOf(o), bendOf(o));
+    eq(JSON.stringify(o), copy);
+    eq(bendOf(o) === bendOf(o), false);
+  });
   test('normalizeBend delegates to bendOf', () => {
     ['full', 'pb 1/2 release', 'release', { type: 'release', amount: 'full' }, true].forEach((v) => eq(normalizeBend(v), bendOf(v)));
   });
