@@ -1,21 +1,23 @@
 /**
- * draw/passes/playingDirections.js — pass 5 (draw/passes.js): pick strokes
- * and notation tap "T" above the beat, clear of the slurs drawn above it.
- * On tab-only tracks reads `run.tabInkBoxes`, `run.hpBoxes` (pass 3) and
+ * draw/passes/playingDirections.js — pass 5 (draw/passes.js): pick strokes,
+ * strum arrows and notation tap "T" above the beat, clear of the slurs
+ * drawn above it.
+ * Above a TAB staff reads `run.tabInkBoxes`, `run.hpBoxes` (pass 3) and
  * `run.labelBoxes` (pass 4); writes `info.directionTopY` for pass 7.
  */
 import { renderPickStroke, curveOuterPoints } from '../notation.js';
 import { renderTapMark, techniqueLabelSize } from '../tab.js';
 import { TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../../layout/ink.js';
 import { estimateTextWidth } from '../../textMetrics.js';
-import { beatTapMark, beatPickStroke, beatTrill, TAP_MARK_LETTERS } from '../../directions.js';
+import { beatTapMark, beatPickStroke, beatTrill, beatStrum, TAP_MARK_LETTERS } from '../../directions.js';
 import { glyphBox } from '../../glyphMetrics.js';
 import { pickStrokeGlyph, Glyph } from '../../glyphs.js';
 import { trillEndX, trillRunEndX, trillRuns, renderTrill } from '../trill.js';
+import { renderStrum, renderTabStrums, STRUM_HALF_SP } from '../strum.js';
 import { flattenRuns, tabTopY, inkTopInSpan, breakEndX, breakStartX } from './common.js';
 import { collectBeats, findSlurs, beatClearTop } from './notationBeats.js';
 
-// Playing directions above the notation staff: trill, tap "T" then pick stroke, this far apart.
+// Playing directions above the notation staff: trill, tap "T" then pick stroke / strum, this far apart.
 const DIRECTION_STACK_GAP_SP = 0.4;
 // A trill's bottom stays this far below the next rendered note's top.
 const TRILL_NEXT_CLEAR_SP = 1;
@@ -45,20 +47,30 @@ const PICK_TAB_CLEAR_SP = 0.4;
  *   trills on a system (graces between them allowed; trillRuns) share one
  *   line, the highest of their own, each wave ending before the next "tr". The top of the stack is recorded as
  *   `info.directionTopY` for renderFermatas. A track with a notation staff
- *   shows pick strokes there only.
+ *   shows pick strokes there only. A strum arrow (`strum`; draw/strum.js)
+ *   takes the pick stroke's place on a track without a TAB staff; runs of
+ *   strummed beats on a system (graces allowed; trillRuns) share the
+ *   highest bottom of their own.
  * - tab-only track: the pick stroke above the TAB staff, at least
  *   PICK_TAB_STAFF_CLEAR_SP above its top line and PICK_TAB_CLEAR_SP above
  *   the beat's frets / marks and any bend, "T", dip, technique label or
  *   hammer-on/pull-off ink under it.
+ * - TAB staff (notation + TAB and tab-only tracks): strum arrows
+ *   (renderTabStrums, draw/strum.js), in the pick stroke's slot; a strum
+ *   replaces a beat's pick stroke (beatPickStroke).
  */
 export function renderPlayingDirections(score, trackRuns, theme, systems) {
   const sp = theme.staffLineSpacing;
   score.tracks.forEach((track) => {
+    if (track.showTablature) renderTabStrums(trackRuns, track, theme);
     if (track.showStandardNotation) {
       const beats = collectBeats(trackRuns, track, theme);
-      beats.forEach((item) => { item.tapMark = beatTapMark(item.el); item.pick = beatPickStroke(item.el); item.trill = beatTrill(item.el); });
+      beats.forEach((item) => {
+        item.tapMark = beatTapMark(item.el); item.pick = beatPickStroke(item.el); item.trill = beatTrill(item.el);
+        item.strum = track.showTablature ? null : beatStrum(item.el);
+      });
       const marked = beats.filter((item) => item.info && !item.info.isRest && !item.info.isGrace
-        && (item.tapMark || item.pick || item.trill));
+        && (item.tapMark || item.pick || item.trill || item.strum));
       if (!marked.length) return;
       slurAboveCurves(beats, systems, theme);
       const tapSize = techniqueLabelSize(theme);
@@ -99,7 +111,16 @@ export function renderPlayingDirections(score, trackRuns, theme, systems) {
             item.trill ? item.trillTop - DIRECTION_STACK_GAP_SP * sp : Infinity,
           );
         }
+        if (item.strum) {
+          item.strumBottomY = Math.min(
+            beatClearTop(item, sp, slurClearTop(item, STRUM_HALF_SP * sp, sp)),
+            item.tapMark ? item.tapTop - DIRECTION_STACK_GAP_SP * sp : Infinity,
+            item.trill ? item.trillTop - DIRECTION_STACK_GAP_SP * sp : Infinity,
+          );
+        }
       });
+      // Strum arrows of one run share the highest of their bottoms.
+      const strumRuns = trillRuns(beats, (b) => !!b.strum && marked.includes(b), (b) => b.sysIdx, (b) => !!b.info?.isGrace);
       // Pick strokes of one beam group share the highest of their baselines (each stays clear of its own T).
       const groups = beamGroupsOf(trackRuns, track);
       const shared = new Map();
@@ -113,6 +134,10 @@ export function renderPlayingDirections(score, trackRuns, theme, systems) {
         if (item.pick) {
           const key = groups.get(item.layoutEl);
           top = renderPickStroke(item.g, item.x, key ? shared.get(key) : item.pickBottomY, item.pick, theme.noteColor, theme);
+        }
+        if (item.strum) {
+          const bottomY = Math.min(...strumRuns.get(item).map((m) => m.strumBottomY));
+          top = renderStrum(item.g, item.x, bottomY, item.strum, theme.noteColor, theme).top;
         }
         item.info.directionTopY = top;
       });
