@@ -5,7 +5,7 @@
  *
  * Progression: (pickup) | F | F | G | Bb | F C/E | Dm | Bb | Gm C | F | (F) | (end)
  *
- * It stays around the 8th-13th position. Each measure shows a few of the
+ * It stays around the 8th-15th position. Each measure shows a few of the
  * features: a 16th-note pickup run, 16th- and 8th-note triplets, a
  * hammer-on and pull-off, dotted rhythms, grace-note slides up and down,
  * ties across a beat and across a barline, 3rds and 6ths as dyads, "full"
