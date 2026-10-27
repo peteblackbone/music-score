@@ -4551,6 +4551,78 @@ test('techniques11', 'whammy breaks: a hold ends 0.5 sp before the last barline,
   });
 });
 
+// ---------- whammy pre-dive ----------
+const pdv = (amount = '1', extra = {}, string = 3, fret = 5) => bt(string, fret, { whammy: { type: 'predive', amount }, ...extra });
+const sixteenth = (string, fret, extra = {}) => ({ type: 'note', duration: '16th', notes: [{ string, fret }], ...extra });
+
+test('techniques11', 'pre-dive: lead-in at the deep level, then the note, then the release to the top; lead-in 1.0-1.5 sp, starting >= 0.9 sp after the previous beat and >= 0.5 sp after the header; text centred on the lead-in; class whammy whammy-predive; depth by amount', () => {
+  let seen = 0;
+  [900, 1400].forEach((width) => Object.entries({ '1/2': 0.8, '1': 1.2, '1 1/2': 1.8, '2': 2.4 }).forEach(([amount, depth]) => {
+    const score = tOnly([bt(3, 5), pdv(amount), bt(3, 7), pdv(amount), bt(3, 5), pdv(amount, {}, 2, 5), bt(3, 5), bt(3, 5)]);
+    const xs = elXs(score, width);
+    const layout = layoutOf(score, width);
+    const stg = tabStg(renderTree(score, width));
+    const lines = linesOf(stg);
+    ok(lines.length === 3, `${amount}@${width}: ${lines.length} pre-dives`);
+    lines.forEach((l, k) => {
+      const bi = [1, 3, 5][k];
+      ok(l.cls === 'whammy whammy-predive', `class "${l.cls}"`);
+      ok(l.pts.length === 3, `${l.pts.length} points`);
+      const [a, b, c] = l.pts;
+      near(b.x, xs[bi].x + 0.3 * SP, EPS, 'lead-in ends at the note + 0.3 sp');
+      near(a.y, b.y, EPS, 'lead-in horizontal');
+      near(a.y - c.y, depth * SP, EPS, `${amount}: release height = depth`);
+      const lead = b.x - a.x;
+      ok(lead >= 1.0 * SP - EPS && lead <= 1.5 * SP + EPS, `lead-in ${lead / SP} sp`);
+      ok(a.x >= xs[bi - 1].x + 0.9 * SP - EPS, `lead-in start ${a.x} within 0.9 sp of the previous beat ${xs[bi - 1].x}`);
+      ok(a.x >= layout.systems[0].contentStartX + 0.5 * SP - EPS, 'right of the header gap');
+      near(c.x - xs[bi].x - 0.3 * SP, widthRule(xs[bi].x, xs[bi + 1].x), EPS, 'release width as in a dip');
+      ok(c.x <= layout.systems[0].lastBarlineX - 0.5 * SP + EPS, 'release inside the barline');
+      ok(l.text === `-${amount}`, `text "${l.text}"`);
+      near(l.tx, (a.x + b.x) / 2, EPS, 'text centred on the lead-in');
+      seen++;
+    });
+  }));
+  ok(seen === 24, `${seen} pre-dives checked`);
+});
+
+test('techniques11', 'pre-dive on a system\'s first beat starts 0.5 sp after the header (no overlap); on a tight 16th-note run the lead-in keeps >= 0.9 sp from the previous beat; a pre-dive ends a held dive without a rise; ink under it is cleared', () => {
+  const width = 600;
+  const first = tOnly([pdv('1'), bt(3, 7), bt(3, 5), bt(3, 7)]);
+  const layout = layoutOf(first, width);
+  const [l] = linesOf(tabStg(renderTree(first, width)));
+  ok(l.pts[0].x >= layout.systems[0].contentStartX + 0.5 * SP - EPS, `lead-in ${l.pts[0].x} before the header gap`);
+  ok(l.pts[1].x - l.pts[0].x >= 0 && l.pts[1].x - l.pts[0].x <= 1.5 * SP + EPS, 'lead-in length');
+  // tight run
+  const run = tOnly(Array.from({ length: 8 }, (_, i) => sixteenth(3, 5 + (i % 3), i % 2 ? { whammy: { type: 'predive', amount: '1' } } : {})));
+  const xs = elXs(run, 600);
+  const ls = linesOf(tabStg(renderTree(run, 600)));
+  ok(ls.length >= 3, `${ls.length} pre-dives in the tight run`);
+  ls.forEach((q_) => {
+    const bi = xs.findIndex((e) => Math.abs(e.x + 0.3 * SP - q_.pts[1].x) < EPS);
+    ok(bi > 0 && q_.pts[0].x >= xs[bi - 1].x + 0.9 * SP - EPS, `tight run: lead-in start ${q_.pts[0].x} vs previous beat ${xs[bi - 1] && xs[bi - 1].x}`);
+  });
+  // ends a held dive without a rise
+  const ended = tOnly([{ ...bt(3, 5), whammy: { type: 'dive', amount: '1' } }, bt(3, 7), pdv('1/2'), bt(3, 7), bt(3, 5)]);
+  const exs = elXs(ended, 1200);
+  const el = linesOf(tabStg(renderTree(ended, 1200)));
+  ok(el.length === 2 && el[0].cls === 'whammy whammy-dive' && el[1].cls === 'whammy whammy-predive', `classes ${el.map((x) => x.cls)}`);
+  ok(el[0].pts.slice(1).every((p) => Math.abs(p.y - el[0].pts[1].y) < EPS), 'no rise on the stopped hold');
+  ok(el[0].pts.at(-1).x <= el[1].pts[0].x + EPS && el[0].pts.at(-1).x <= exs[2].x - 0.9 * SP + EPS, 'hold stops before the lead-in and 0.9 sp before the pre-dive');
+  // ink under the pre-dive is cleared (a tap / bend / vibrato on the same beat)
+  const busy = tOnly([bt(3, 5), pdv('1', { vibrato: true }, 3, 7), bt(3, 5, {}, { bend: 'full' }), bt(2, 5, { whammy: { type: 'predive' } }, { tap: true, trill: 7 })]);
+  const bstg = tabStg(renderTree(busy, 1200));
+  const info = staffInfo(bstg);
+  const blines = linesOf(bstg);
+  ok(blines.length === 2, `${blines.length} lines`);
+  blines.forEach((bl) => {
+    const span = { x1: Math.min(...bl.pts.map((p) => p.x)), x2: Math.max(...bl.pts.map((p) => p.x)) };
+    const deepY = bl.pts[0].y;
+    ok(deepY <= info.localTop - 0.5 * SP + EPS, 'above the top line');
+    tabInk(bstg).filter((b) => b.kind !== 'pick' && xover(span, b)).forEach((b) => ok(deepY <= b.top - 0.4 * SP + EPS, `${b.kind} ink top ${b.top} vs pre-dive level ${deepY}`));
+  });
+});
+
 // @@T11-END
 }
 

@@ -20,7 +20,9 @@ import { estimateTextWidth } from '../textMetrics.js';
 const DIVE_SP_PER_STEP = 1.2;     // depth of a whole-step dive
 const DIVE_MIN_DEPTH_SP = 0.8;
 const DIVE_MAX_DEPTH_SP = 2.4;
-
+const PREDIVE_LEAD_SP = 1.5;      // pre-dive lead-in length (shortened to fit, never below the minimum)
+const PREDIVE_MIN_LEAD_SP = 1.0;
+const PREDIVE_PREV_CLEAR_SP = 0.9; // lead-in start -> the previous beat's x
 const HOLD_STOP_GAP_SP = 0.9;     // a hold ended by another whammy mark stops this far before it
 const START_SP = 0.3;             // slope / release start -> right of the note's x (as for the dip)
 
@@ -50,6 +52,9 @@ export function whammyDepthSp(amount) {
  *   the last barline and resumes (class whammy-hold, no text) 0.5 sp after
  *   the next system's header, on every system up to the return or the end
  *   of the track;
+ * - pre-dive at x: self-contained lead-in at deep (PREDIVE_LEAD_SP, between
+ *   1.0 and 1.5 sp, at least PREDIVE_PREV_CLEAR_SP after the previous
+ *   element, never left of the system's header gap), the note, then the rise.
  */
 export function planWhammyLines(runs, systems, theme) {
   const sp = theme.staffLineSpacing;
@@ -87,20 +92,43 @@ export function planWhammyLines(runs, systems, theme) {
         held = null;
         return;
       }
-      if (held) endHold(x - HOLD_STOP_GAP_SP * sp);
+      if (held && w.type === 'predive') {
+        // The lead-in starts at xL (below); stop the hold no later than that.
+        const xl = preDiveStart(els, i, run, systems, theme);
+        endHold(Math.min(x - HOLD_STOP_GAP_SP * sp, xl));
+      } else if (held) {
+        endHold(x - HOLD_STOP_GAP_SP * sp);
+      }
       held = null;
-      if (w.type !== 'dive') return;
+      if (w.type === 'dip') return;
       const depth = whammyDepthSp(w.amount);
       const s = slope(i);
-      const seg = { run, cls: 'whammy whammy-dive', depth, label: whammyLabel(w), labelX: (s.x1 + s.x2) / 2, pts: [{ x: s.x1, deep: false }, { x: s.x2, deep: true }], noteX: x, notePieces: 1 };
-      segs.push(seg);
-      held = { seg, depth };
+      if (w.type === 'dive') {
+        const seg = { run, cls: 'whammy whammy-dive', depth, label: whammyLabel(w), labelX: (s.x1 + s.x2) / 2, pts: [{ x: s.x1, deep: false }, { x: s.x2, deep: true }], noteX: x, notePieces: 1 };
+        segs.push(seg);
+        held = { seg, depth };
+      } else {
+        const xl = preDiveStart(els, i, run, systems, theme);
+        const xn = x + START_SP * sp;
+        segs.push({
+          run, cls: 'whammy whammy-predive', depth, label: whammyLabel(w), labelX: (xl + xn) / 2,
+          pts: [{ x: xl, deep: true }, { x: xn, deep: true }, { x: Math.max(xn, s.x2), deep: false }], noteX: x, notePieces: 2,
+        });
+      }
     });
   });
   if (held) endHold(breakEndX(systems, runs[runs.length - 1].sysIdx, theme));
   return segs;
 }
 
+/** x where the lead-in of the pre-dive on element `i` of `els` starts. */
+function preDiveStart(els, i, run, systems, theme) {
+  const sp = theme.staffLineSpacing;
+  const xn = els[i].x + START_SP * sp;
+  const room = i > 0 ? xn - (els[i - 1].x + PREDIVE_PREV_CLEAR_SP * sp) : PREDIVE_LEAD_SP * sp;
+  const lead = Math.max(PREDIVE_MIN_LEAD_SP * sp, Math.min(PREDIVE_LEAD_SP * sp, room));
+  return Math.min(xn, Math.max(xn - lead, breakStartX(systems, run.sysIdx, theme)));
+}
 
 /**
  * Geometry of segment `seg` (planWhammyLines) with its deep level at
