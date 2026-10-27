@@ -857,6 +857,19 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(glyphBox(pickStrokeGlyph('down')), { left: 0, right: 1.248, top: 1.3, bottom: 0, width: 1.248 });
     eq(glyphBox(pickStrokeGlyph('up')), { left: 0, right: 1, top: 2, bottom: 0, width: 1 });
   });
+  test('arpeggio: out-of-range or infinite TAB string numbers are skipped, the wave stays short', () => {
+    const notes = [{ string: 1, fret: 0 }, { string: 2, fret: 1 }, { string: Infinity, fret: 0 }, { string: 1e9, fret: 0 }, { string: 99, fret: 0 }, { string: 1.5, fret: 0 }];
+    const score = { tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: [
+      { type: 'note', duration: 'whole', arpeggio: 'up', notes },
+    ] }] }] };
+    const started = Date.now();
+    const svg = render(score);
+    eq(Date.now() - started < 5000, true, 'renders promptly');
+    const arps = byClass(svg, 'arpeggio');
+    eq(arps.length, 1);
+    const d = arps[0].children[0].getAttribute('d');
+    eq(!/NaN|Infinity/.test(d) && d.length < 400, true, `short finite wave: ${d.length} chars`);
+  });
   test('directions: arpeggioOf canonical table, idempotent, garbage -> null', () => {
     const raws = [true, 'up', 'down', ' Up ', 'DOWN', 'upward', '', 'u', false, 1, 0, null, undefined, {}, ['up'], NaN];
     const out = raws.map(D.arpeggioOf);

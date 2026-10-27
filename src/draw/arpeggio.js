@@ -62,7 +62,7 @@ export function renderNotationArpeggio(g, layoutEl, kind, theme) {
  * nothing when no note has a string and fret.
  */
 export function renderTabArpeggio(g, layoutEl, stringCount, kind, theme) {
-  const ys = (layoutEl.el.notes || []).filter((n) => n.string != null && n.fret != null)
+  const ys = (layoutEl.el.notes || []).filter((n) => Number.isInteger(n.string) && n.string >= 1 && n.string <= stringCount && n.fret != null)
     .map((n) => layoutEl.tabBaselineY - (stringCount - n.string) * theme.tabStaffLineSpacing);
   if (!ys.length) return;
   const pad = ARPEGGIO_SPAN_PAD_SP * theme.staffLineSpacing;
