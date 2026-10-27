@@ -28,7 +28,9 @@
  *
  * A beat's `pickStroke` and `whammy` are canonicalized when present (see
  * directions.js: 'down' | 'up' | null, `{ type: 'dip', amount }` | null);
- * `letRing` and a note's `tap` pass through as given (read as truthy).
+ * `letRing` and a note's `tap` pass through as given (read as truthy). A
+ * note's `slideIn` / `slideOut` are canonicalized when present ('below' |
+ * 'above' | null, 'down' | 'up' | null; withNoteSlides).
  *
  * Rhythm on TAB staves: `track.tabRhythm` (true | false | 'auto', absent =
  * 'auto') is resolved to a boolean — true only for tracks with a TAB staff
@@ -48,7 +50,7 @@
  */
 import { pitchFromFret, transposeOctaves } from './pitch.js';
 import { harmonicKind } from './harmonics.js';
-import { withDirections, trillOf } from './directions.js';
+import { withDirections, trillOf, withNoteSlides } from './directions.js';
 import { mergeNavigation } from './navigation.js';
 
 const sameTime = (a, b) => a.beats === b.beats && a.beatType === b.beatType;
@@ -126,7 +128,7 @@ export function normalizeScore(score) {
             }
             // Canonical harmonic kind (`harmonicFret` passes through untouched).
             const x = n.harmonic ? { ...out, harmonic: harmonicKind(n.harmonic) } : out;
-            return n.trill !== undefined ? { ...x, trill: trillOf(n.trill) } : x;
+            return withNoteSlides(n.trill !== undefined ? { ...x, trill: trillOf(n.trill) } : x);
           }),
         })),
       });

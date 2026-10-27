@@ -6,7 +6,7 @@ import { line, group, text, glyphText, path, rect, wavyPathD, svgD } from './svg
 import { tabClefMetrics } from '../layout/systems.js';
 import { fretLabel, fretLabelWidth, estimateTextWidth } from '../textMetrics.js';
 import { TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../layout/ink.js';
-import { whammyLabel, TAP_MARK_LETTERS } from '../directions.js';
+import { whammyLabel, TAP_MARK_LETTERS, bendOf } from '../directions.js';
 import { tabFretKnockoutHalf } from '../layout/tabRhythm.js';
 
 /** Draw the tab staff lines for `stringCount` strings, baseline = bottom (highest-numbered) string. */
@@ -223,6 +223,17 @@ export function renderSlide(g, x1, x2, y, direction, theme, startInset, endInset
   }));
 }
 
+/**
+ * Draw a slide-in / slide-out mark: renderSlide's diagonal (direction
+ * 'up' | 'down') from `x1 + startInset` to `x2 - endInset` exactly, in a
+ * group of class `cls` (e.g. 'slide-in slide-in-below').
+ */
+export function renderSlideMark(g, x1, x2, y, direction, theme, startInset, endInset, cls) {
+  const gEl = group({ class: cls });
+  renderSlide(gEl, x1 + startInset, x2 - endInset, y, direction, theme, 0, 0);
+  g.appendChild(gEl);
+}
+
 /** Font size (px) of the technique labels ("P.M.", "A.H.", ...) above the TAB staff. */
 export function techniqueLabelSize(theme) {
   return Math.max(0.9 * theme.staffLineSpacing, theme.tabFontSize - 0.1 * theme.staffLineSpacing);
@@ -434,19 +445,26 @@ export function bendGeometry(x, y, bend, theme, nextX, targetFret) {
   const width = nextX != null ? Math.max(2.2 * spacing, Math.min(3.4 * spacing, nextX - x - 0.6 * spacing)) : 2.8 * spacing;
   const startX = x + 0.3 * spacing;
   const endX = startX + width;
+  // A pre-bend's straight shaft and a release note's peak sit over the note itself.
+  const onNote = bend.type === 'prebend' || bend.type === 'release';
   // The rise's curved "elbow" sits fairly close to the note; the fall is
   // the long, gentle sweep that carries most of the remaining horizontal
   // distance.
-  const peakX = startX + Math.min(1.6 * spacing, width * 0.5);
+  const peakX = onNote ? x : startX + Math.min(1.6 * spacing, width * 0.5);
   // Scaled by the bend amount (a "full" step is the 1.0 baseline — see
-  // renderTabArticulations in passes/tabTechniques.js) so a half bend's arc is visibly smaller than a
+  // renderTabLinks in tabLinks.js) so a half bend's arc is visibly smaller than a
   // full bend's, not the same size with a different label.
   const heightFrac = bend.heightFrac ?? 1;
   const bendHeight = theme.tabStaffLineSpacing * 1.8 * heightFrac;
   const peakY = baseY - bendHeight;
   const riseH = baseY - peakY;
   const halfStroke = BEND_STROKE_WIDTH / 2;
-  const boxes = [{ x1: startX - halfStroke, x2: peakX + arrow * ARROWHEAD_HALF_WIDTH, top: peakY, bottom: baseY + halfStroke, text: false }];
+  const boxes = [];
+  if (bend.type === 'prebend') {
+    boxes.push({ x1: x - arrow * ARROWHEAD_HALF_WIDTH - halfStroke, x2: x + arrow * ARROWHEAD_HALF_WIDTH + halfStroke, top: peakY, bottom: baseY, text: false });
+  } else if (bend.type !== 'release') {
+    boxes.push({ x1: startX - halfStroke, x2: peakX + arrow * ARROWHEAD_HALF_WIDTH, top: peakY, bottom: baseY + halfStroke, text: false });
+  }
 
   // Landing fret, only if there's clear room before the next fret number/bend.
   let target = null;
@@ -491,10 +509,13 @@ export function bendGeometry(x, y, bend, theme, nextX, targetFret) {
 /**
  * Draw a bend (and optional release/hold) on a single fret number, matching
  * the conventional tab-notation shape: a short, steep rise straight off the
- * fret number up to an arrowhead (the amount label sitting just above it).
+ * fret number up to an arrowhead (the amount label sitting just above it);
+ * a pre-bend (`type` 'prebend') rises as a straight vertical shaft from
+ * the note, a release note (`type` 'release') draws only the release
+ * fall from above the note.
  * A plain bend stops there — no return stroke, since only an explicit
  * `release` actually comes back down. `bend` is
- * `{ amount, release, hold }` (see normalizeBend below);
+ * `{ type, amount, release, hold }` (see normalizeBend below);
  * when `release` is set, a second arrowhead caps the landing to mark a
  * deliberate release. When `hold` is set, the pitch is sustained rather
  * than released or landed statically, so instead of a landing curve a
@@ -509,7 +530,7 @@ export function bendGeometry(x, y, bend, theme, nextX, targetFret) {
  * returns its ink `boxes`.
  */
 export function renderBend(g, x, y, bend, theme, nextX, targetFret) {
-  const gEl = group({ class: 'bend' });
+  const gEl = group({ class: bend.type === 'prebend' || bend.type === 'release' ? `bend bend-${bend.type}` : 'bend' });
   const color = theme.tabFretColor;
   const geo = bendGeometry(x, y, bend, theme, nextX, targetFret);
   const { arrow, baseY, startX, endX, peakX, peakY, riseH } = geo;
@@ -541,11 +562,19 @@ export function renderBend(g, x, y, bend, theme, nextX, targetFret) {
   // sits directly below the tip (vertical arrival) — so nearly all of the
   // curve's bend happens in a short elbow, and the last stretch below the
   // tip is essentially a straight vertical line.
-  const c1 = { x: startX + (peakX - startX) * 0.88, y: baseY };
-  const c2 = { x: peakX, y: peakY + riseH * 0.5 };
-  const d1 = svgD`M ${startX} ${baseY} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${peakX} ${peakY}`;
-  gEl.appendChild(path(d1, { fill: 'none', stroke: color, 'stroke-width': BEND_STROKE_WIDTH }));
-  gEl.appendChild(arrowheadDir(peakX, peakY, peakX - c2.x, peakY - c2.y, arrow, color));
+  // A pre-bend (bent before picking) is a straight vertical shaft up from
+  // the note instead; a release note has no rise at all, only the fall.
+  if (bend.type === 'prebend') {
+    const d1 = svgD`M ${peakX} ${baseY} L ${peakX} ${peakY}`;
+    gEl.appendChild(path(d1, { fill: 'none', stroke: color, 'stroke-width': BEND_STROKE_WIDTH }));
+    gEl.appendChild(arrowheadDir(peakX, peakY, 0, -1, arrow, color));
+  } else if (bend.type !== 'release') {
+    const c1 = { x: startX + (peakX - startX) * 0.88, y: baseY };
+    const c2 = { x: peakX, y: peakY + riseH * 0.5 };
+    const d1 = svgD`M ${startX} ${baseY} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${peakX} ${peakY}`;
+    gEl.appendChild(path(d1, { fill: 'none', stroke: color, 'stroke-width': BEND_STROKE_WIDTH }));
+    gEl.appendChild(arrowheadDir(peakX, peakY, peakX - c2.x, peakY - c2.y, arrow, color));
+  }
 
   if (bend.release) {
     // Release stroke: steeper and more direct than the plain landing
@@ -596,21 +625,13 @@ export function renderBend(g, x, y, bend, theme, nextX, targetFret) {
 }
 
 /**
- * Normalize a note's `bend` field into `{ amount, release, hold }`.
- * `release` and `hold` are mutually exclusive — `release` wins if a string
- * somehow specifies both (e.g. via `{ release: true, hold: true }`).
+ * Normalize a note's (truthy) `bend` field into `{ type, amount, release,
+ * hold }` (directions.js bendOf). `release` and `hold` are mutually
+ * exclusive — `release` wins if both are given (e.g. via `{ release: true,
+ * hold: true }`).
  */
 export function normalizeBend(raw) {
-  if (raw === true) return { amount: 'full', release: false, hold: false };
-  if (typeof raw === 'string') {
-    const trimmed = raw.trim();
-    const release = /\s+release$/i.test(trimmed);
-    const hold = !release && /\s+hold$/i.test(trimmed);
-    const amount = trimmed.replace(/\s+(release|hold)$/i, '') || 'full';
-    return { amount, release, hold };
-  }
-  const release = !!raw?.release;
-  return { amount: raw?.amount || 'full', release, hold: !release && !!raw?.hold };
+  return bendOf(raw);
 }
 
 /**
@@ -619,8 +640,19 @@ export function normalizeBend(raw) {
  * "full" bend on fret 7 lands on the pitch of fret 9). "full" = a whole
  * step (2 semitones); fractional/mixed-number labels are read in whole
  * steps too (e.g. "1/2" = a half step = 1 semitone, "1 1/2" = 3 semitones).
+ * Anything unreadable, infinite or negative (a zero denominator: "1/0",
+ * "0/0") counts as a full step (2).
  */
 export function bendSemitones(amount) {
+  const v = amountSemitones(amount);
+  return Number.isFinite(v) && v >= 0 ? v : 2;
+}
+
+/**
+ * bendSemitones as parsed, unchecked: a zero denominator gives Infinity or
+ * NaN (whammy.js clamps those itself).
+ */
+export function amountSemitones(amount) {
   const a = String(amount).trim().toLowerCase();
   if (a === 'full') return 2;
   const mixed = a.match(/^(\d+)\s+(\d+)\/(\d+)$/);

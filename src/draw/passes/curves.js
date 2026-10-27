@@ -1,16 +1,26 @@
 /**
- * draw/passes/curves.js — passes 1 and 2 (draw/passes.js): ties and slurs,
- * split across system breaks, and grace-note slurs, drawn into each run's
+ * draw/passes/curves.js — passes 1 and 2 (draw/passes.js): ties and slurs
+ * (hammer-on / pull-off runs included), split across system breaks,
+ * slide-in / slide-out lines, and grace-note slurs, drawn into each run's
  * notation group. Reads the rendered noteheads and stems; writes no run
  * fields.
  */
-import { renderCurve } from '../notation.js';
+import { renderCurve, renderNoteSlide } from '../notation.js';
 import { parsePitch, midiNumber } from '../../pitch.js';
+import { slideMarks } from '../../directions.js';
 import { flattenRuns, breakEndX, breakStartX } from './common.js';
 import { collectBeats, findSlurs } from './notationBeats.js';
 
 const TIE_END_GAP_SP = 0.25;     // tie end beyond the notehead edge, and off its centre line
 const GRACE_SLUR_CLEARANCE_SP = 0.6;
+// Slide in / out: a NOTE_SLIDE_DX_SP x NOTE_SLIDE_DY_SP line NOTE_SLIDE_GAP_SP off the chord's extent,
+// NOTE_SLIDE_CLEAR_SP clear of the neighbouring beats (rests / graces: NOTE_SLIDE_REST_EXT_SP each side) and the barlines.
+const NOTE_SLIDE_DX_SP = 1.2;
+const NOTE_SLIDE_DY_SP = 1;
+const NOTE_SLIDE_GAP_SP = 0.2;
+const NOTE_SLIDE_CLEAR_SP = 0.3;
+const NOTE_SLIDE_REST_EXT_SP = 0.6;
+const NOTE_SLIDE_MIN_SP = 0.4;   // skipped when clamping leaves a shorter line (horizontally)
 
 /**
  * Draw an arc from `a` to `b` (`{ g, sysIdx, x, y }`), split into two
@@ -80,19 +90,72 @@ export function renderTiesAndSlurs(score, trackRuns, theme, systems) {
       );
     });
 
-    // Slurs: element-level, slurStart to the next slurEnd, anchored to each
-    // end's own top (above) or bottom (below) plus a clearance.
+    // Slurs: element-level, slurStart to the next slurEnd (and hammer-on /
+    // pull-off runs, findSlurs), anchored to each end's own top (above) or
+    // bottom (below) plus a clearance.
     const beats = collectBeats(trackRuns, track, theme);
-    findSlurs(beats).forEach(({ i, j, above }) => {
+    findSlurs(beats, { auto: theme.hammerPullSlurs !== false }).forEach(({ i, j, above, y1, y2 }) => {
       const a = beats[i]; const b = beats[j];
-      const key = above ? 'anchorAbove' : 'anchorBelow';
       drawSplitArc(
-        { g: a.g, sysIdx: a.sysIdx, x: a.x, y: a[key] },
-        { g: b.g, sysIdx: b.sysIdx, x: b.x, y: b[key] },
+        { g: a.g, sysIdx: a.sysIdx, x: a.x, y: y1 },
+        { g: b.g, sysIdx: b.sysIdx, x: b.x, y: y2 },
         systems, theme,
         (g, x1, y1, x2, y2) => renderCurve(g, x1, y1, x2, y2, above, theme, 'slur'),
       );
     });
+    renderNoteSlides(track, trackRuns, theme, systems);
+  });
+}
+
+/**
+ * Slide-in / slide-out lines of a notation track (directions.js slideMarks
+ * over its notes in score order). A slide-in rises from below ('below') or
+ * falls from above ('above') to the notehead's height, ending
+ * NOTE_SLIDE_GAP_SP left of the chord (accidentals included); a slide-out
+ * leaves that far right of it (dots and flags included) downward / upward.
+ * Shortened along its own slope to stay clear of the neighbouring beats on
+ * the system, inside the measure and inside the break ends; skipped when
+ * less than NOTE_SLIDE_MIN_SP is left. They take no room and record no ink.
+ */
+function renderNoteSlides(track, trackRuns, theme, systems) {
+  const s = theme.staffLineSpacing;
+  const beats = [];
+  const notes = [];
+  trackRuns.filter((r) => r.track === track).forEach((run) => run.measures.forEach((measure) => measure.elements.forEach((le) => {
+    const bi = beats.length;
+    beats.push({ le, run, measure });
+    (le.el.notes || []).forEach((n, k) => notes.push({
+      bi, k, string: n.string, slide: n.slide, hammerPull: n.hammerPull, bend: n.bend,
+      slideIn: n.slideIn, slideOut: n.slideOut, grace: le.el.type === 'grace',
+    }));
+  })));
+  const ext = (b, side) => (b.le.chord && b.le.el.type !== 'rest' && b.le.el.type !== 'grace'
+    ? b.le.chord[side] : NOTE_SLIDE_REST_EXT_SP * s);
+  const full = NOTE_SLIDE_DX_SP * s;
+  slideMarks(notes).forEach(({ slideIn, slideOut }, ni) => {
+    if (!slideIn && !slideOut) return;
+    const { bi, k } = notes[ni];
+    const { le, run, measure } = beats[bi];
+    const h = le.rendered && !le.rendered.isRest ? le.rendered.noteheads?.[k] : null;
+    if (!h) return;
+    const prev = beats[bi - 1]?.run === run ? beats[bi - 1] : null;
+    const next = beats[bi + 1]?.run === run ? beats[bi + 1] : null;
+    if (slideIn) {
+      const x2 = le.x - ext(beats[bi], 'leftExt') - NOTE_SLIDE_GAP_SP * s;
+      const left = Math.max(prev ? prev.le.x + ext(prev, 'rightExt') + NOTE_SLIDE_CLEAR_SP * s : -Infinity,
+        measure.contentX + NOTE_SLIDE_CLEAR_SP * s, breakStartX(systems, run.sysIdx, theme));
+      const dx = Math.min(full, x2 - left);
+      const dy = (slideIn === 'below' ? 1 : -1) * NOTE_SLIDE_DY_SP * s * (dx / full);
+      if (dx >= NOTE_SLIDE_MIN_SP * s) renderNoteSlide(run.notationG, x2 - dx, h.y + dy, x2, h.y, `slide-in slide-in-${slideIn}`, theme);
+    }
+    if (slideOut) {
+      const x1 = le.x + ext(beats[bi], 'rightExt') + NOTE_SLIDE_GAP_SP * s;
+      const right = Math.min(next ? next.le.x - ext(next, 'leftExt') - NOTE_SLIDE_CLEAR_SP * s : Infinity,
+        measure.endX - NOTE_SLIDE_CLEAR_SP * s, breakEndX(systems, run.sysIdx, theme));
+      const dx = Math.min(full, right - x1);
+      const dy = (slideOut === 'down' ? 1 : -1) * NOTE_SLIDE_DY_SP * s * (dx / full);
+      if (dx >= NOTE_SLIDE_MIN_SP * s) renderNoteSlide(run.notationG, x1, h.y, x1 + dx, h.y + dy, `slide-out slide-out-${slideOut}`, theme);
+    }
   });
 }
 

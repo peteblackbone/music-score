@@ -10,8 +10,9 @@
  * - notationBeats.js — rendered notation beats with slur anchors, slurs, and
  *   the lowest y a mark may reach above a beat
  * - curves.js — ties and slurs, grace-note slurs
- * - tabTechniques.js — tab hammer-on/pull-off, slide, bend, tap "T" / slap /
- *   pop, trill, whammy dip and dive / return / pre-dive lines
+ * - tabTechniques.js — tab hammer-on/pull-off, slide and bend (per-note links,
+ *   drawn by ../tabLinks.js), tap "T" / slap / pop, trill, whammy dip and
+ *   dive / return / pre-dive lines
  * - techniqueLabels.js — palm mute / harmonic / let-ring / rake label runs
  * - playingDirections.js — pick strokes, strum arrows (draw/strum.js),
  *   notation tap "T" / slap / pop and trills

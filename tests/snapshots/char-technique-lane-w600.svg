@@ -290,6 +290,7 @@
         <line x1="421.22" y1="0" x2="421.22" y2="40" stroke="#1a1a1a" stroke-width="1"/>
       </g>
       <text x="30" y="-20" class="measure-number" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" font-style="italic" fill="#1a1a1a">6</text>
+      <path d="M 150.37 -21 C 164.23 -32.88, 186 -32.88, 199.86 -21 C 186 -31.39, 164.23 -31.39, 150.37 -21 Z" class="slur" fill="#1a1a1a" stroke="none"/>
     </g>
     <g class="staff staff-tab" data-track="0" transform="translate(0,672.42)">
       <g class="tab-lines">

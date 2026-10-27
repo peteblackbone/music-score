@@ -4,7 +4,8 @@
 //
 // Areas (assertion counts are printed per area at the end):
 //   align, justify, signatures, measure-numbers, barlines, repeats, vertical, numbers,
-//   scaling, octave, beaming, accidentals, ties, tab-clef, a11y, theme, robustness, header, collisions, harmonics, directions, tab-rhythm, navigation, chordDiagrams, techniques11, strumArpeggio
+//   scaling, octave, beaming, accidentals, ties, tab-clef, a11y, theme, robustness, header, collisions, harmonics, directions, tab-rhythm, navigation, chordDiagrams, techniques11, strumArpeggio,
+//   legatoSlides
 //
 // Most geometric checks read the rendered SVG tree (class names + transforms); a few read the
 // layout model (computeLayout) for facts that are not observable in the SVG (onset times,
@@ -1670,7 +1671,7 @@ const dirLabelStaff = (m, si, tr) => staffOf(m, si, tr, tr.tab);
 test('directions', 'AC1: every pre-existing fixture/example emits no let-ring / pick-stroke / tap / whammy group and no U+E610 / U+E612 glyph', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams') || name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio')) continue; // newer fixtures using directions on purpose
+    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams') || name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-legato-slides')) continue; // newer fixtures using directions on purpose
     for (const width of [600, 900]) {
       all(renderTree(score, width, options)).forEach(({ n }) => {
         const c = cls(n).split(' ');
@@ -5135,6 +5136,303 @@ test('strumArpeggio', 'E12 fixture content: strum-arpeggio draws 16 arpeggios (5
   const b = renderTree(SAB.score, 600);
   ok(systemsOf(b).length === 3, `${systemsOf(b).length} systems`);
   ok(tg(b, 'arpeggio').length === 6 && tg(b, 'strum').length === 10, `break: ${tg(b, 'arpeggio').length} arpeggios, ${tg(b, 'strum').length} strums`);
+});
+}
+
+// ---------- legato and slides (1.3.0) ----------
+{
+const { fretLabel, fretLabelWidth } = await imp('src/textMetrics.js');
+const LS = characterizationCases.find((c) => c.name === 'legato-slides');
+const LSB = characterizationCases.find((c) => c.name === 'legato-slides-break');
+const LSFIX = [[LS, 900], [LSB, 600]];
+const S = DEF.staffLineSpacing;
+const TOL = 0.02;
+const slurPathsIn = (root) => all(root).map(({ n }) => n).filter((n) => n.tag === 'path' && cls(n) === 'slur');
+const lineOf = (g) => { const l = g.children.find((c) => c.tag === 'line'); return { x1: num(l, 'x1'), y1: num(l, 'y1'), x2: num(l, 'x2'), y2: num(l, 'y2') }; };
+const tnote = (string, fret, note = {}, beat = {}, duration = 'quarter') => ({ type: 'note', duration, notes: [{ string, fret, ...note }], ...beat });
+// Tight 8ths, so a slide mark is clamped by its neighbour (the fixtures clamp at barlines and break ends).
+const CLAMP = { name: 'slide-clamp', score: { tracks: [{ name: 'G', showTablature: true, measures: [{ beats: [
+  tnote(3, 5, {}, {}, '8th'), tnote(3, 7, { slideIn: true }, {}, '8th'), tnote(3, 5, { slideOut: 'up' }, {}, '8th'), tnote(3, 7, {}, {}, '8th'),
+  tnote(3, 5), tnote(3, 7),
+] }] }] } };
+// The binding limit of a clamped mark end: the max (start) / min (end) of named candidates; 'own' when unclamped.
+const binding = (cands, pick) => Object.entries(cands).reduce((a, b) => (pick(b[1], a[1]) ? b : a))[0];
+
+// Oracle: the auto (hammer-on / pull-off) slur spans of a track's raw beats, as [i, j] beat indices.
+function autoSpans(raws) {
+  const items = [];
+  raws.forEach((b, bi) => (b.notes || []).forEach((n) => { if (n.string != null) items.push({ bi, n, grace: b.type === 'grace' }); }));
+  const links = [];
+  items.forEach((it, k) => {
+    if (!it.n.hammerPull || it.grace) return;
+    const t = items.slice(k + 1).find((c) => c.n.string === it.n.string);
+    if (t && !t.grace && t.bi !== it.bi) links.push([it.bi, t.bi]);
+  });
+  links.sort((a, b) => a[0] - b[0]);
+  const merged = [];
+  links.forEach(([i, j]) => { const c = merged[merged.length - 1]; if (c && i <= c[1]) c[1] = Math.max(c[1], j); else merged.push([i, j]); });
+  const explicit = [];
+  raws.forEach((b, i) => { if (!b.slurStart) return; const j = raws.findIndex((c, k) => k > i && c.slurEnd); if (j >= 0) explicit.push([i, j]); });
+  return merged.filter(([i, j]) => !explicit.some(([a, b]) => i <= b && a <= j));
+}
+
+// Oracle: every note of a track in score order with its layout element, measure and system, and the slide-in /
+// slide-out marks it should draw (grace, slide / H-P target, own slide target and bend conflicts).
+const canonIn = (v) => { if (v === true) return 'below'; if (typeof v !== 'string') return null; const k = v.trim().toLowerCase(); return k === 'up' || k === 'below' ? 'below' : (k === 'down' || k === 'above' ? 'above' : null); };
+const canonOut = (v) => { if (v === true) return 'down'; if (typeof v !== 'string') return null; const k = v.trim().toLowerCase(); return k === 'down' || k === 'up' ? k : null; };
+function slideOracle(layout, ti) {
+  const beats = []; const notes = [];
+  layout.systems.forEach((sys, si) => sys.tracks[ti].measures.forEach((m) => m.elements.forEach((le) => {
+    const b = { si, sys, m, le, pos: beats.length };
+    beats.push(b);
+    (le.el.notes || []).forEach((n, k) => notes.push({ b, n, k, grace: le.el.type === 'grace' }));
+  })));
+  const next = (i) => (notes[i].n.string == null ? -1 : notes.findIndex((c, k) => k > i && c.n.string === notes[i].n.string));
+  const targeted = new Set(notes.map((it, i) => (it.n.slide || it.n.hammerPull ? next(i) : -1)));
+  notes.forEach((it, i) => {
+    it.slideIn = it.grace || targeted.has(i) ? null : canonIn(it.n.slideIn);
+    it.slideOut = it.grace || (it.n.slide && next(i) >= 0) || it.n.bend ? null : canonOut(it.n.slideOut);
+  });
+  return { beats, notes };
+}
+const isRelease = (n) => (typeof n.bend === 'string' && /^release\b/i.test(n.bend.trim())) || (n.bend && typeof n.bend === 'object' && String(n.bend.type).trim().toLowerCase() === 'release');
+const decorated = (n) => !!n.harmonic;
+const tabInset = (n) => (n.fret != null && (decorated(n) || isRelease(n)) ? Math.max(0.7 * S, fretLabelWidth(fretLabel(n), DEF) / 2 + 0.2 * S) : 0.7 * S);
+
+test('legatoSlides', 'auto slurs: one slur per merged hammer-on / pull-off span (oracle), from beat x to beat x, split in two across a break; none with hammerPullSlurs: false; explicit-slur overlap and graces add none', () => {
+  let spans = 0; let split = 0;
+  LSFIX.forEach(([fx, width]) => {
+    const m = dirModel(fx, width);
+    const off = renderTree(fx.score, width, { theme: { hammerPullSlurs: false } });
+    let segs = 0;
+    m.tracks.filter((tr) => tr.notation).forEach((tr) => {
+      autoSpans(tr.beats.map((b) => b.raw)).forEach(([i, j]) => {
+        spans++;
+        const a = tr.beats[i]; const b = tr.beats[j];
+        const ends = (si) => slurPathsIn(staffOf(m, si, tr, false)).map((p) => pathNums(p.getAttribute('d'))).map((v) => [v[0], v[6]]);
+        if (a.si === b.si) {
+          segs++;
+          ok(ends(a.si).some(([x1, x2]) => Math.abs(x1 - a.x) < TOL && Math.abs(x2 - b.x) < TOL), `${fx.name} t${tr.ti}: no slur from beat ${i} to ${j}`);
+        } else {
+          segs += 2; split++;
+          const sys = m.layout.systems;
+          ok(ends(a.si).some(([x1, x2]) => Math.abs(x1 - a.x) < TOL && Math.abs(x2 - (sys[a.si].lastBarlineX - 0.5 * S)) < TOL), `${fx.name}: no first segment from beat ${i}`);
+          ok(ends(b.si).some(([x1, x2]) => Math.abs(x1 - (sys[b.si].contentStartX + 0.5 * S)) < TOL && Math.abs(x2 - b.x) < TOL), `${fx.name}: no second segment to beat ${j}`);
+        }
+      });
+    });
+    ok(slurPathsIn(m.svg).length - slurPathsIn(off).length === segs, `${fx.name}: ${slurPathsIn(m.svg).length - slurPathsIn(off).length} auto slur paths, oracle ${segs}`);
+  });
+  ok(spans === 4 && split === 1, `${spans} spans, ${split} split`);
+});
+
+test('legatoSlides', 'auto slur side: low stem-up notes -> below, high stem-down notes -> above; a hammer-on without string or to another string only adds no slur', () => {
+  const run = (s, f1, f2) => ({ tracks: [{ name: 'G', showTablature: true, measures: [{ beats: [tnote(s, f1, { hammerPull: true }), tnote(s, f2), tnote(s, f1), tnote(s, f1)] }] }] });
+  const side = (score) => { const v = pathNums(slurPathsIn(renderTree(score, 900))[0].getAttribute('d')); return v[3] < v[1] ? 'above' : 'below'; };
+  ok(side(run(6, 3, 5)) === 'below', 'low run not below');
+  ok(side(run(1, 12, 14)) === 'above', 'high run not above');
+  const none = { tracks: [{ name: 'N', measures: [{ beats: [{ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4', hammerPull: true }] }, q('G4'), q('B4'), q('D5')] }] },
+    { name: 'G', showTablature: true, measures: [{ beats: [tnote(1, 5, { hammerPull: true }), tnote(2, 5), tnote(3, 5), tnote(4, 5)] }] }] };
+  ok(slurPathsIn(renderTree(none, 900)).length === 0, 'unexpected slur');
+});
+
+test('legatoSlides', 'pick strokes and T clear an auto slur where it crosses them (>= 0.5 sp); a fermata on a slurred beat sits >= 1 sp above the slur', () => {
+  const score = { tracks: [{ name: 'G', showTablature: true, measures: [{ beats: [
+    tnote(1, 12, { hammerPull: true }, { pickStroke: 'down' }), tnote(1, 14, { hammerPull: 'p', tap: true }, { pickStroke: 'up' }),
+    tnote(1, 12, { hammerPull: true }, { fermata: true }), tnote(1, 14),
+  ] }] }] };
+  const fx = { name: 'auto-slur-marks', score };
+  const m = dirModel(fx, 900);
+  const stg = staffOf(m, 0, m.tracks[0], false);
+  const slurs = slursAbove(stg);
+  ok(slurs.length === 1, `${slurs.length} slurs above`);
+  const marks = [...picksIn(stg), ...tapsIn(stg)];
+  ok(marks.length === 3, `${marks.length} pick / T marks`);
+  marks.forEach((d) => ok(d.bottom <= slurBound(slurs, d) + EPS, `mark at x=${d.x} bottom ${d.bottom} within 0.5 sp of the slur`));
+  const fg = byClass(stg, 'fermata', 'g')[0].n;
+  const fb = nodeBox(fg.children[0]);
+  ok(fb.bottom <= curveTop(slurs[0], fb.x1, fb.x2) - S + EPS, `fermata bottom ${fb.bottom} not clear of the slur`);
+});
+
+test('legatoSlides', 'TAB slide marks: classes slide-in-below|above / slide-out-down|up, slant by direction, 1.5 sp beside the fret label unless clamped to the neighbour (+0.7 sp), the measure (0.3 sp) and the break ends (0.5 sp); skipped under 0.4 sp; exactly the oracle\'s marks', () => {
+  let drawn = 0; const binds = { nb: 0, bar: 0, brk: 0 };
+  [...LSFIX, [CLAMP, 900]].forEach(([fx, width]) => {
+    const layout = layoutOf(fx.score, width);
+    const svg = renderTree(fx.score, width);
+    fx.score.tracks.forEach((track, ti) => {
+      if (!track.showTablature) return;
+      const { notes } = slideOracle(layout, ti);
+      const fretted = notes.filter((it) => it.n.string != null);
+      layout.systems.forEach((sys, si) => {
+        const stg = staffOfTrack(svg, si, ti, true);
+        const want = { in: [], out: [] };
+        fretted.filter((it) => it.b.si === si).forEach((it) => {
+          const x = it.b.le.x; const inset = tabInset(it.n);
+          const xs = fretted.filter((c) => c.b.si === si).map((c) => c.b.le.x);
+          if (it.slideIn) {
+            const c = { own: x - inset - 1.5 * S, nb: Math.max(-Infinity, ...xs.filter((v) => v < x)) + 0.7 * S, bar: it.b.m.contentX + 0.3 * S, brk: sys.contentStartX + 0.5 * S };
+            const x1 = Math.max(...Object.values(c));
+            if (x - inset - x1 >= 0.4 * S) want.in.push({ x1, x2: x - inset, dir: it.slideIn, bind: binding(c, (v, w) => v > w) });
+          }
+          if (it.slideOut) {
+            const c = { own: x + inset + 1.5 * S, nb: Math.min(Infinity, ...xs.filter((v) => v > x)) - 0.7 * S, bar: it.b.m.endX - 0.3 * S, brk: sys.lastBarlineX - 0.5 * S };
+            const x2 = Math.min(...Object.values(c));
+            if (x2 - x - inset >= 0.4 * S) want.out.push({ x1: x + inset, x2, dir: it.slideOut, bind: binding(c, (v, w) => v < w) });
+          }
+        });
+        [['in', 'slide-in'], ['out', 'slide-out']].forEach(([k, c]) => {
+          const got = dgroups(stg, c).map((g) => ({ g, ...lineOf(g) })).sort((a, b) => a.x1 - b.x1);
+          const exp = want[k].sort((a, b) => a.x1 - b.x1);
+          ok(got.length === exp.length, `${fx.name} t${ti} sys${si}: ${got.length} ${c} marks, oracle ${exp.length}`);
+          got.forEach((l, i) => {
+            const e = exp[i];
+            if (fx !== CLAMP) drawn++;
+            if (e.bind !== 'own') binds[e.bind]++;
+            near(l.x1, e.x1, TOL, `${fx.name} t${ti} sys${si} ${c} ${i} start`);
+            near(l.x2, e.x2, TOL, `${fx.name} t${ti} sys${si} ${c} ${i} end`);
+            ok(cls(l.g) === `${c} ${c}-${e.dir}`, `class ${cls(l.g)}`);
+            const rising = l.y2 < l.y1;
+            ok(rising === (e.dir === 'below' || e.dir === 'up'), `${c}-${e.dir} slants the wrong way`);
+            if (e.bind === 'own') near(l.x2 - l.x1, 1.5 * S, TOL, `${c} length`);
+          });
+        });
+      });
+    });
+  });
+  ok(drawn === 11 && binds.nb >= 1 && binds.bar >= 1 && binds.brk >= 1, `${drawn} TAB slide marks, clamped ${JSON.stringify(binds)}`);
+});
+
+test('legatoSlides', 'notation slide lines: noteColor, 1.3 px, ending / starting 0.2 sp off the chord\'s extent, 1.2 x 1 sp unless clamped (slope kept) to the neighbouring beats (+0.3 sp), the measure (0.3 sp) and the break ends (0.5 sp); skipped under 0.4 sp; exactly the oracle\'s marks', () => {
+  let drawn = 0; const binds = { nb: 0, bar: 0, brk: 0 };
+  [...LSFIX, [CLAMP, 900]].forEach(([fx, width]) => {
+    const layout = layoutOf(fx.score, width);
+    const svg = renderTree(fx.score, width);
+    fx.score.tracks.forEach((track, ti) => {
+      if (track.showStandardNotation === false) return;
+      const { beats, notes } = slideOracle(layout, ti);
+      const ext = (b, side) => (b.le.chord && b.le.el.type !== 'rest' && b.le.el.type !== 'grace' ? b.le.chord[side] : 0.6 * S);
+      layout.systems.forEach((sys, si) => {
+        const stg = staffOfTrack(svg, si, ti, false);
+        const want = { in: [], out: [] };
+        notes.filter((it) => it.b.si === si).forEach((it) => {
+          const { b } = it; const prev = beats[b.pos - 1]?.si === si ? beats[b.pos - 1] : null; const nxt = beats[b.pos + 1]?.si === si ? beats[b.pos + 1] : null;
+          if (it.slideIn) {
+            const x2 = b.le.x - ext(b, 'leftExt') - 0.2 * S;
+            const c = { own: x2 - 1.2 * S, nb: prev ? prev.le.x + ext(prev, 'rightExt') + 0.3 * S : -Infinity, bar: b.m.contentX + 0.3 * S, brk: sys.contentStartX + 0.5 * S };
+            const dx = x2 - Math.max(...Object.values(c));
+            if (dx >= 0.4 * S) want.in.push({ x1: x2 - dx, x2, dir: it.slideIn, bind: binding(c, (v, w) => v > w) });
+          }
+          if (it.slideOut) {
+            const x1 = b.le.x + ext(b, 'rightExt') + 0.2 * S;
+            const c = { own: x1 + 1.2 * S, nb: nxt ? nxt.le.x - ext(nxt, 'leftExt') - 0.3 * S : Infinity, bar: b.m.endX - 0.3 * S, brk: sys.lastBarlineX - 0.5 * S };
+            const dx = Math.min(...Object.values(c)) - x1;
+            if (dx >= 0.4 * S) want.out.push({ x1, x2: x1 + dx, dir: it.slideOut, bind: binding(c, (v, w) => v < w) });
+          }
+        });
+        [['in', 'slide-in'], ['out', 'slide-out']].forEach(([k, c]) => {
+          const got = dgroups(stg, c).map((g) => ({ g, ...lineOf(g) })).sort((a, b) => a.x1 - b.x1);
+          const exp = want[k].sort((a, b) => a.x1 - b.x1);
+          ok(got.length === exp.length, `${fx.name} t${ti} sys${si}: ${got.length} notation ${c}, oracle ${exp.length}`);
+          got.forEach((l, i) => {
+            const e = exp[i]; const line = l.g.children[0];
+            if (fx !== CLAMP) drawn++;
+            if (e.bind !== 'own') binds[e.bind]++;
+            near(l.x1, e.x1, TOL, `${fx.name} ${c} ${i} x1`);
+            near(l.x2, e.x2, TOL, `${fx.name} ${c} ${i} x2`);
+            near(Math.abs(l.y2 - l.y1), (l.x2 - l.x1) / 1.2, TOL, `${fx.name} ${c} ${i} slope`);
+            ok((l.y2 < l.y1) === (e.dir === 'below' || e.dir === 'up'), `${c}-${e.dir} slants the wrong way`);
+            ok(cls(l.g) === `${c} ${c}-${e.dir}` && line.getAttribute('stroke') === DEF.noteColor && num(line, 'stroke-width') === 1.3, `${c} attributes`);
+            if (e.bind === 'own') near(l.x2 - l.x1, 1.2 * S, TOL, `${c} length`);
+          });
+        });
+      });
+    });
+  });
+  ok(drawn === 12 && binds.nb >= 1 && binds.bar >= 1 && binds.brk >= 1, `${drawn} notation slide lines, clamped ${JSON.stringify(binds)}`);
+});
+
+test('legatoSlides', 'a slide mark with less than 0.4 sp left is skipped (TAB and notation), never drawn backwards', () => {
+  const score = { tracks: [{ name: 'G', showTablature: true, measures: [{ beats: [
+    tnote(3, 5, { slideOut: true }, {}, '64th'), tnote(3, 7, { slideIn: true }, {}, '64th'),
+    { type: 'rest', duration: '32nd' }, { type: 'rest', duration: '16th' }, { type: 'rest', duration: '8th' }, { type: 'rest', duration: 'quarter' }, { type: 'rest', duration: 'half' },
+  ] }] }] };
+  const svg = renderTree(score, 1400);
+  const marks = [...dgroups(svg, 'slide-in'), ...dgroups(svg, 'slide-out')];
+  marks.forEach((g) => { const l = lineOf(g); ok(l.x2 - l.x1 >= 0.4 * S - EPS, `mark only ${l.x2 - l.x1} px`); });
+  const nst = staffOfTrack(svg, 0, 0, false);
+  ok(dgroups(nst, 'slide-in').length + dgroups(nst, 'slide-out').length === 0, 'notation slide between two beamed 64ths');
+});
+
+test('legatoSlides', 'pre-bend: class bend bend-prebend, a straight vertical shaft at the note x with an upward arrowhead, no landing fret; its ink is in tabInkBoxes (a P.M. label over it clears it)', () => {
+  const svg = renderTree(LS.score, 900);
+  const lay = layoutOf(LS.score, 900);
+  const xs = new Set(lay.systems.flatMap((sys) => sys.tracks.flatMap((t) => t.measures.flatMap((m) => m.elements.map((le) => le.x.toFixed(2))))));
+  const pre = dgroups(svg, 'bend-prebend');
+  ok(pre.length === 3, `${pre.length} pre-bends`);
+  pre.forEach((g) => {
+    ok(cls(g) === 'bend bend-prebend', cls(g));
+    const shaft = pathNums(g.children.find((c) => c.tag === 'path').getAttribute('d'));
+    ok(shaft.length === 4 && shaft[0] === shaft[2] && shaft[3] < shaft[1], `shaft ${shaft}`);
+    ok(xs.has(shaft[0].toFixed(2)), `shaft x ${shaft[0]} is no note x`);
+    ok(g.children.filter((c) => c.tag === 'text').length === 1, 'landing fret drawn');
+  });
+  const pm = { tracks: [{ name: 'G', showStandardNotation: false, showTablature: true, measures: [{ beats: [
+    tnote(2, 8, { bend: 'prebend 1 1/2' }, { palmMute: true }), tnote(2, 8, { bend: 'release' }, { palmMute: true }), tnote(3, 5), tnote(3, 5),
+  ] }] }] };
+  const s2 = renderTree(pm, 900);
+  const label = labelInk(pmGroups(s2)[0]);
+  const ink = dgroups(s2, 'bend').flatMap((g) => g.children.filter((c) => c.tag === 'path' || c.tag === 'rect').map((c) => (c.tag === 'rect' ? rectBox(c) : hullOf(c.getAttribute('d')))));
+  ink.forEach((b) => ok(!boxesHit(label.text, b) && (!label.dash || !boxesHit(label.dash, b)), `P.M. label overlaps bend ink at x ${b.x1}`));
+});
+
+test('legatoSlides', 'release notes: class bend bend-release, fret in parentheses once (ghost too), no rise; amount = own, else the string\'s last bend / pre-bend (across a break), else Full; \'full release\' unchanged', () => {
+  const amounts = (svg) => dgroups(svg, 'bend-release').map((g) => g.children.find((c) => c.tag === 'text')._text);
+  const svg = renderTree(LS.score, 900);
+  ok(JSON.stringify(amounts(svg)) === JSON.stringify(['Full', 'Full', '1/2', 'Full', 'Full']), `amounts ${amounts(svg)}`);
+  dgroups(svg, 'bend-release').forEach((g) => ok(g.children.filter((c) => c.tag === 'path').length === 2, 'release draws a fall and an arrowhead only'));
+  const frets = all(svg).filter(({ n, parents }) => n.tag === 'text' && /^\(\d+\)$/.test(n._text || '') && !parents.some((p) => dcls(p, 'bend'))).map(({ n }) => n._text);
+  ok(JSON.stringify(frets.sort()) === JSON.stringify(['(10)', '(7)', '(7)', '(8)', '(8)']), `parenthesized frets ${frets}`);
+  ok(dgroups(svg, 'bend').filter((g) => cls(g) === 'bend').length === 2, 'plain bends (incl. full release) keep class bend');
+  ok(JSON.stringify(amounts(renderTree(LSB.score, 600))) === JSON.stringify(['1/2']), 'default across the break');
+});
+
+test('legatoSlides', 'slide inset: a slide into a release note clears its "(n)" knock-out (+0.2 sp); into a plain or pre-bend note it stays 0.7 sp', () => {
+  const end = (target) => {
+    const score = { tracks: [{ name: 'G', showStandardNotation: false, showTablature: true, measures: [{ beats: [tnote(3, 5, { bend: 'full' }), tnote(3, 5, { slide: true }), target, tnote(4, 5)] }] }] };
+    const lay = layoutOf(score, 900); const x = lay.systems[0].tracks[0].measures[0].elements[2].x;
+    const sl = all(renderTree(score, 900)).map(({ n }) => n).filter((n) => n.tag === 'line' && n.getAttribute('stroke-linecap') === 'round' && num(n, 'x2') > num(n, 'x1'));
+    return x - Math.max(...sl.map((l) => num(l, 'x2')));
+  };
+  near(end(tnote(3, 7)), 0.7 * S, TOL, 'plain');
+  near(end(tnote(3, 7, { bend: 'pb full' })), 0.7 * S, TOL, 'pre-bend');
+  near(end(tnote(3, 7, { bend: 'release' })), fretLabelWidth('(7)', DEF) / 2 + 0.2 * S, TOL, 'release');
+});
+
+test('legatoSlides', 'robustness: bends \'0/0\', \'1/0\', \'0 0/0\', 5, { amount: 7 }, { type: [] } and garbage slide values render at 600 / 900 / 1400 with no NaN / undefined / Infinity, deterministically, input untouched; fixtures too', () => {
+  const garbage = [null, NaN, Infinity, -1, '', 'zz', [], {}, false, 0, ' UP ', () => 1];
+  const bends = ['0/0', '1/0', '0 0/0', 5, { amount: 7 }, { type: [] }, 'release 0/0', 'pb 1/0 release', { type: 'release', amount: 0 }];
+  const beats = [
+    ...bends.map((bend, i) => tnote(1 + (i % 6), 5, { bend })),
+    ...garbage.map((v, i) => tnote(1 + (i % 6), 7, { slideIn: v, slideOut: v, hammerPull: i % 2 ? v : undefined, slide: i % 3 ? undefined : v })),
+  ];
+  const measures = []; for (let i = 0; i < beats.length; i += 4) measures.push({ beats: beats.slice(i, i + 4) });
+  const score = { tracks: [{ name: 'G', showTablature: true, measures },
+    { name: 'N', measures: [{ beats: garbage.slice(0, 4).map((v) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4', slideIn: v, slideOut: v }] })) }] }] };
+  [600, 900, 1400].forEach((w) => {
+    const before = JSON.stringify(score);
+    const a = serialize(renderTree(score, w));
+    ok(a === serialize(renderTree(score, w)), `w${w}: two renders differ`);
+    ok(!/NaN|undefined|Infinity/.test(a), `w${w}: NaN / undefined / Infinity`);
+    ok(JSON.stringify(score) === before, `w${w}: input mutated`);
+  });
+  LSFIX.forEach(([fx, width]) => {
+    const before = JSON.stringify(fx.score);
+    const box = makeContainer(); new MusicScoreRenderer(box, fx.score, { width }).render();
+    const a = serialize(box.children[0]);
+    ok(JSON.stringify(fx.score) === before, `${fx.name}: input mutated`);
+    ok(a === serialize(renderTree(fx.score, width)), `${fx.name}: renders differ`);
+    ok(!/NaN|undefined|Infinity/.test(a), `${fx.name}: NaN / undefined / Infinity`);
+  });
 });
 }
 

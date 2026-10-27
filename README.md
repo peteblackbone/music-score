@@ -1,6 +1,6 @@
 # music-score
 
-Version 1.2.0 · MIT licence
+Version 1.3.0 · MIT licence
 
 A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL).
 
@@ -111,6 +111,7 @@ Other keys:
 
   The band is drawn in `tabFretColor`. Rest backings use `background`.
 - `hammerPullLabels`: `true` (default) shows "H" and "P" above hammer-on and pull-off slurs. `false` draws a plain slur.
+- `hammerPullSlurs`: `true` (default) also draws a slur on the notation staff for each hammer-on and pull-off run. `false` leaves the notation without them, as in 1.2.0.
 - `fontFamily`, `textFontFamily`: font families for the music font and text.
 - `glyphSize`: accepted but unused. It has no effect.
 
@@ -248,9 +249,11 @@ Each entry in a beat's `notes` array.
 | `tieStart`, `tieEnd` | boolean | Tie to the next note of the same pitch. Enharmonic spellings count as the same pitch (C#4 ties to Db4). A tie that crosses a line break is split into two parts. |
 | `string` | integer | Tab only. String 1 is the highest-pitched (top line). |
 | `fret` | integer | Tab only. 0 is an open string. If `pitch` is missing, it is worked out from `string`, `fret`, and the track's `tuning`. |
-| `hammerPull` | `true`, `'h'`, or `'p'` | Tab only. Slur to the next note on the same string. `true` picks hammer-on or pull-off from the fret direction. |
+| `hammerPull` | `true`, `'h'`, or `'p'` | Slur to the next note on the same string, with H or P on tab. The notation staff gets the same slur (see `hammerPullSlurs` in [Theme](#theme)). Both notes need `string`. `true` picks hammer-on or pull-off from the fret direction. |
 | `slide` | `true`, `'up'`, or `'down'` | Tab only. Slide to the next note on the same string. A slide that crosses a line break ends in a short stub at the end of the line. |
-| `bend` | `true`, a string, or `{ amount, release, hold }` | Tab only. Amount such as `'1/2'`, `'full'`, `'1 1/2'`, or `'2'`. Add `' release'` or `' hold'` to the string, e.g. `'full release'`, `'1/2 hold'`. `true` means `'full'`. |
+| `slideIn` | `true`, `'up'` / `'below'`, or `'down'` / `'above'` | Short slide into the note: from below for `true`, `'up'` or `'below'`, from above for `'down'` or `'above'`. Drawn on tab and notation. Not drawn on a grace note, or on a note that a slide or hammer-on already leads into. Other values are ignored. |
+| `slideOut` | `true`, `'down'`, or `'up'` | Short slide off the note: downward for `true` or `'down'`, upward for `'up'`. Drawn on tab and notation. Not drawn on a grace note, on a note whose own `slide` reaches another note, or on a note with a `bend`. Other values are ignored. |
+| `bend` | `true`, a string, or `{ type, amount, release, hold }` | Tab only. Amount such as `'1/2'`, `'full'`, `'1 1/2'`, or `'2'`. Add `' release'` or `' hold'` to the string, e.g. `'full release'`, `'1/2 hold'`. `true` means `'full'`. Pre-bend: `'prebend full'` (or `'pb'` / `'pre-bend'`, with an amount), bent before the note is picked. Release note: `'release'` alone, or `'release 1/2'`, a note of its own that falls back to the unbent pitch. Object `type`: `'bend'` (default), `'prebend'` or `'release'`. See [Hammer-ons, pull-offs, slides and bends](#hammer-ons-pull-offs-slides-and-bends). |
 | `mute` | boolean | Dead or muted note. Drawn as an x notehead (notation) or x (tab). |
 | `ghost` | boolean | Ghost note. Drawn in parentheses. |
 | `harmonic` | `true`, `'natural'`, `'artificial'`, `'pinch'`, `'tapped'`, or `'semi'` | Guitar harmonic (see [Harmonics](#harmonics)). Case-insensitive. `true` and unknown strings count as `'natural'`. `false` or omitted means no harmonic. A muted note is never a harmonic. |
@@ -334,6 +337,22 @@ Optional fields draw playing marks: `letRing`, `pickStroke`, `strum`, `arpeggio`
 ```
 
 SVG classes: `tap`, `slap`, `pop` (one group per letter), `rake` (one group per run), `trill` (glyph, optional fret text and wave) and `whammy` with one of `whammy-dip`, `whammy-dive`, `whammy-hold` (a continuation on a following system) or `whammy-predive`, plus `whammy-return` on a line that rises again. Also `arpeggio` (plus `arpeggio-up` or `arpeggio-down` when it has an arrowhead) and `strum` with `strum-down` or `strum-up`, one group per mark.
+
+### Hammer-ons, pull-offs, slides and bends
+
+These note fields add legato, slides and bends. They are read from each note in `notes`, not from the beat. None of them change the rhythm.
+
+- **Hammer-ons and pull-offs** (`hammerPull`): a slur to the next note on the same string, with H or P above it on tab. The notation staff gets the same slur. Consecutive hammer-ons and pull-offs on one string share one slur. Set `hammerPullSlurs: false` in the theme to leave the notation without them.
+- **Slide in and slide out** (`slideIn`, `slideOut`): a short slide into the note, or off it, drawn on tab and notation. They take no horizontal room. A slide-in is left out when a slide or hammer-on already leads into the note. A slide-out is left out when the note has its own `slide` to another note, or a `bend`.
+- **Pre-bends** (`bend: 'prebend full'`, `'pb 1/2'`, `'pre-bend full'`): the string is bent before the note is picked. Tab shows a rising shaft with the amount, and no landing fret. Add `release` (`'pb 1/2 release'`) to bend back down. A `hold` on a pre-bend is ignored.
+- **Releases** (`bend: 'release'`): a note of its own that returns to the unbent pitch. Tab shows a falling arrow, and the fret in parentheses. The amount defaults to the last bend on that string, or `'full'` when there is none. `'release 1/2'` sets it.
+- Pre-bends and releases are drawn on tab only. The notation shows the note as written.
+
+```json
+{ "type": "note", "duration": "quarter", "notes": [{ "string": 1, "fret": 7, "bend": "prebend full" }] }
+```
+
+SVG classes: `slur` (also on notation hammer-on and pull-off slurs), `slide-in` with `slide-in-below` or `slide-in-above`, and `slide-out` with `slide-out-down` or `slide-out-up`, one group per mark on tab and notation. A bend is drawn in a `bend` group, with `bend-prebend` or `bend-release` added for a pre-bend or release note. A plain bend has `bend` alone.
 
 ### Rhythm on TAB staves
 
@@ -511,6 +530,11 @@ These fields do not change the API or the theme.
 - **Pick strokes and TAB.** Pick strokes are not drawn on the TAB staff when the track also shows notation.
 - **Strum and arpeggio.** No arpeggio line across several staves or tracks, no partial strums (on some strings only) and no rasgueado finger letters. Ties, slurs, slides and H / P arcs that end at an arpeggiated chord can cross its line. On a track with notation and TAB the strum arrows sit between the two staves. Neighbouring pick strokes are not avoided.
 - **Playing directions take no extra room.** Pick strokes, strum arrows, "T" / "S" / "P" letters, trills, whammy lines and dips get no extra horizontal space, so a dense beat can crowd. Examples: a pick stroke next to a vibrato, or a dip close to the next note.
+- **Slides take no room.** Slide-ins and slide-outs are shortened to fit beside their note, but add no horizontal space, so a dense beat can crowd them.
+- **Pre-bends and releases on notation.** The notation staff shows the note as written. Pre-bends and releases appear on tab only.
+- **Hammer-on slurs need `string`.** A `hammerPull` note without `string` gets no slur on the notation staff.
+- **Auto slurs span rests.** A hammer-on or pull-off slur runs over any rest between its first and last notes.
+- **Release arrow.** A release arrow can touch the next fret number on the adjacent string.
 - **Let ring has no ties.** A let-ring run is a dashed label only. There are no per-note ring-out ties.
 - **Navigation is drawn, not played.** Repeats, endings and jumps are not unrolled or checked for sense. There are no repeat counts ("x3") or rehearsal marks.
 - **Coda layout.** A coda does not force a line break or leave a gap before it.
@@ -543,6 +567,16 @@ It prints `ALL PASSED` and exits with code 0 on success.
 - To run one group on its own: `node tests/units.mjs`, `node tests/engraving.mjs`, or `node tests/articulations.mjs`.
 
 ## Changelog
+
+### 1.3.0 — 2026-10-27
+
+Legato, slides and pre-bends. One change affects existing scores: hammer-ons and pull-offs now get a slur on the notation staff. Set `hammerPullSlurs: false` in the theme to keep the 1.2.0 notation.
+
+- `hammerPull` on the notation staff: each run of hammer-ons and pull-offs on one string gets a slur. Slurs above a tuplet bracket stay clear of it. Notes need `string`. Theme key `hammerPullSlurs` (default `true`).
+- `slideIn` and `slideOut` on a note: a short slide into the note from below or above, or off it downward or upward. Drawn on TAB and notation, with no change to the spacing.
+- `bend` takes pre-bends: `'prebend full'`, `'pb 1/2'` or `'pre-bend'`, with an optional `release`, or `{ type: 'prebend' }`. Drawn on TAB.
+- `bend: 'release'` is now a release note: its own note that falls back to the unbent pitch, with its fret in parentheses. Its amount defaults to the last bend on that string. Before 1.3.0 a bare `'release'` drew a bend labelled "release". `'full release'` still means a bend and release.
+- New SVG classes: `slide-in`, `slide-in-below`, `slide-in-above`, `slide-out`, `slide-out-down`, `slide-out-up`, `bend-prebend` and `bend-release`. Notation hammer-on and pull-off slurs use the existing `slur` class.
 
 ### 1.2.0 — 2026-10-27
 
@@ -613,7 +647,7 @@ Initial public release.
   - `MusicScoreRenderer.js`: the entry point (the `MusicScoreRenderer` class). It runs the pipeline and mounts the SVG.
   - `normalize.js`: fills in score defaults (sticky time and key signatures, barlines, measure count, pitch from string and fret, written and sounding pitch, `tabRhythm`, padded measures).
   - `harmonics.js`: guitar harmonic kinds and the helpers that layout, drawing and labels share.
-  - `directions.js`: the playing direction fields (let ring, pick strokes, strum, arpeggio, tap, slap, pop, whammy, rake, trill) and their canonical values.
+  - `directions.js`: the playing direction fields (let ring, pick strokes, strum, arpeggio, tap, slap, pop, whammy, rake, trill, slide in and out, the bend grammar) and their canonical values.
   - `chordShapes.js`: chord-diagram shapes. Validates an author's shape against the track and picks the shape a beat shows.
   - `navigation.js`: the navigation fields (`ending`, `segno`, `coda`, `jump`), their canonical values and the merge across tracks.
   - `layout/`: positioning, no drawing.
@@ -632,6 +666,7 @@ Initial public release.
     - `staff.js`: staff lines, clefs, key and time signatures, barlines.
     - `notation.js`: notes, stems, beams, articulations, fermatas, tuplets, chord symbols, ties and slurs.
     - `tab.js`: tab staff, fret numbers, tab clef, hammer-ons, slides, bends, palm mutes, tap letters and whammy dips.
+    - `tabLinks.js`: the per-note TAB links (hammer-ons, pull-offs, slides, slide-ins and slide-outs, bends, pre-bends and releases), drawn for each track by `passes/tabTechniques.js`.
     - `whammy.js`: whammy dive, hold, return and pre-dive lines (planning and drawing).
     - `trill.js`: the trill mark ("tr" and a wavy line).
     - `arpeggio.js`: the arpeggio line left of a chord, on notation and TAB, drawn with each chord.
@@ -641,8 +676,8 @@ Initial public release.
     - `passes.js`: the score-wide passes, drawn after all systems; re-exports them from `passes/` and documents their order.
       - `passes/common.js`: helpers shared by the passes.
       - `passes/notationBeats.js`: notation beats, slurs and the space above a beat, shared by several passes.
-      - `passes/curves.js`: ties, slurs and grace-note slurs.
-      - `passes/tabTechniques.js`: tab techniques (hammer-ons, slides, bends, tap / slap / pop letters, trills, whammy dips and lines).
+      - `passes/curves.js`: ties, slurs (including hammer-on and pull-off slurs), grace-note slurs and notation slide-ins and slide-outs.
+      - `passes/tabTechniques.js`: tab techniques (tap / slap / pop letters, trills, whammy dips and lines). Hands the per-note links to `tabLinks.js`.
       - `passes/techniqueLabels.js`: technique labels (P.M., harmonics, let ring, rake).
       - `passes/playingDirections.js`: pick strokes, strum arrows, notation tap / slap / pop letters and trills.
       - `passes/chordsFermatas.js`: chord symbols and dynamics, and fermatas.

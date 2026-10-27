@@ -55,6 +55,7 @@ export const defaultTheme = {
   glyphSize: 40,           // deprecated, unused (SMuFL glyphs are sized from staffLineSpacing)
 
   hammerPullLabels: true, // show "H"/"P" text above hammer-on/pull-off slurs; false draws a plain slur (some tab styles omit the letters)
+  hammerPullSlurs: true, // also slur each hammer-on/pull-off run in standard notation; false leaves notation as before 1.3.0
 };
 
 /**

@@ -166,14 +166,14 @@ function slurAboveLimits(beats, systems, theme) {
       if (beats[k].sysIdx === sysIdx) beats[k].slurLimit = Math.min(beats[k].slurLimit, limit);
     }
   };
-  findSlurs(beats).forEach(({ i, j, above }) => {
+  findSlurs(beats, { auto: theme.hammerPullSlurs !== false }).forEach(({ i, j, above, y1, y2 }) => {
     if (!above) return;
     const a = beats[i]; const b = beats[j];
     if (a.sysIdx === b.sysIdx) {
-      limitOver(i, j, a.sysIdx, a.anchorAbove, b.anchorAbove, a.x, b.x);
+      limitOver(i, j, a.sysIdx, y1, y2, a.x, b.x);
     } else {
-      limitOver(i, j, a.sysIdx, a.anchorAbove, a.anchorAbove, a.x, breakEndX(systems, a.sysIdx, theme));
-      limitOver(i, j, b.sysIdx, b.anchorAbove, b.anchorAbove, breakStartX(systems, b.sysIdx, theme), b.x);
+      limitOver(i, j, a.sysIdx, y1, y1, a.x, breakEndX(systems, a.sysIdx, theme));
+      limitOver(i, j, b.sysIdx, y2, y2, breakStartX(systems, b.sysIdx, theme), b.x);
     }
   });
 }

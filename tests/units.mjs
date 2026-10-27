@@ -1603,6 +1603,191 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- legato and slides (1.3.0) ----------
+{
+  const { linkTarget } = await imp('src/directions.js');
+  test('linkTarget: next item on the same string, -1 when none or no string', () => {
+    const items = [{ string: 1 }, { string: 2 }, { string: 1 }, { string: null }, { string: 2 }, {}];
+    eq([0, 1, 2, 3, 4, 5].map((i) => linkTarget(items, i)), [2, 4, -1, -1, -1, -1]);
+  });
+}
+
+{
+  const { findSlurs } = await imp('src/draw/passes/notationBeats.js');
+  // Fake collectBeats items: notes [string, hammerPull], stems up unless `down`.
+  const fb = (notes, { grace = false, rest = false, down = false, slurStart, slurEnd, sys = 0, tupletAbove = Infinity } = {}) => ({
+    sysIdx: sys, x: 0, anchorAbove: 10, anchorBelow: 90, tupletAbove,
+    el: { type: rest ? 'rest' : grace ? 'grace' : 'note', slurStart, slurEnd, notes: rest ? undefined : notes.map(([string, hammerPull]) => ({ string, hammerPull })) },
+    info: { isRest: rest, isGrace: grace, stemUp: !down, noteheads: rest ? [] : [{}] },
+  });
+  const spans = (beats, auto = true) => findSlurs(beats, { auto }).map(({ i, j, above }) => [i, j, above]);
+  test('findSlurs auto: hammerPull chain on one string merges into one span; off by default', () => {
+    const beats = [fb([[1, true]]), fb([[1, 'p']]), fb([[1, true]]), fb([[1]]), fb([[1]])];
+    eq(spans(beats), [[0, 3, false]]);
+    eq(spans(beats, false), []);
+    eq(findSlurs(beats), []);
+  });
+  test('findSlurs auto: chord links on two strings to the same beat merge; side from stems', () => {
+    eq(spans([fb([[2, true], [3, true]], { down: true }), fb([[2], [3]], { down: true })]), [[0, 1, true]]);
+    eq(spans([fb([[2, true]]), fb([[2]], { down: true })]), [[0, 1, true]]);
+  });
+  test('findSlurs auto: links to the next note on the same string, skipping other strings', () => {
+    eq(spans([fb([[1, true]]), fb([[2]]), fb([[1]])]), [[0, 2, false]]);
+    eq(spans([fb([[1, true]]), fb([[2]])]), []);
+    eq(spans([fb([[null, true]]), fb([[null]])]), []);
+  });
+  test('findSlurs auto: grace ends drop the link; rest beats are never targets', () => {
+    eq(spans([fb([[1, true]], { grace: true }), fb([[1]])]), []);
+    eq(spans([fb([[1, true]]), fb([[1]], { grace: true }), fb([[1]])]), []);
+    eq(spans([fb([[1, true]]), fb([], { rest: true }), fb([[1]])]), [[0, 2, false]]);
+  });
+  test('findSlurs auto: spans sharing a beat with an explicit slur are dropped', () => {
+    const beats = [fb([[1]], { slurStart: true }), fb([[1, true]], { slurEnd: true }), fb([[1]]), fb([[2, true]]), fb([[2]])];
+    eq(spans(beats), [[0, 1, false], [3, 4, false]]);
+  });
+  test('findSlurs: ends at anchors; an auto slur above clears tuplet brackets, explicit ones keep 1.2.0 ends', () => {
+    const beats = [fb([[1, true]], { down: true, slurStart: true, tupletAbove: 4 }), fb([[1]], { down: true, slurEnd: true, tupletAbove: 4 })];
+    eq(findSlurs(beats, { auto: true }).map(({ y1, y2 }) => [y1, y2]), [[10, 10]]);
+    beats.forEach((b) => { b.el.slurStart = b.el.slurEnd = undefined; });
+    eq(findSlurs(beats, { auto: true }).map(({ y1, y2 }) => [y1, y2]), [[4, 4]]);
+    eq(findSlurs([fb([[1, true]]), fb([[1]])], { auto: true }).map(({ y1, y2 }) => [y1, y2]), [[90, 90]]);
+  });
+}
+
+{
+  const { slideInOf, slideOutOf, withNoteSlides, slideMarks } = await imp('src/directions.js');
+  test('slideInOf / slideOutOf: canonical forms, trimmed and any case; garbage -> null; idempotent', () => {
+    const ins = [true, 'up', 'below', ' Below ', 'DOWN', 'above', 'sideways', '', false, 1, null, undefined, {}];
+    eq(ins.map(slideInOf), ['below', 'below', 'below', 'below', 'above', 'above', null, null, null, null, null, null, null]);
+    const outs = [true, 'down', ' UP ', 'up', 'below', 'above', '', false, 0, null, {}];
+    eq(outs.map(slideOutOf), ['down', 'down', 'up', 'up', null, null, null, null, null, null, null]);
+    ins.forEach((v) => eq(slideInOf(slideInOf(v)), slideInOf(v), `in ${String(v)}`));
+    outs.forEach((v) => eq(slideOutOf(slideOutOf(v)), slideOutOf(v), `out ${String(v)}`));
+  });
+  test('withNoteSlides: same object without the fields, else a canonical copy; input not mutated', () => {
+    const plain = { string: 1, fret: 5 };
+    eq(withNoteSlides(plain) === plain, true);
+    const raw = { string: 1, fret: 5, slideIn: 'Down', slideOut: 'nope' };
+    eq(withNoteSlides(raw), { string: 1, fret: 5, slideIn: 'above', slideOut: null });
+    eq(raw.slideIn, 'Down');
+    eq(withNoteSlides({ slideOut: true }), { slideOut: 'down' });
+    eq(withNoteSlides(withNoteSlides(raw)), withNoteSlides(raw));
+  });
+  test('normalizeScore canonicalizes note slideIn / slideOut', () => {
+    const s = normalizeScore({ tracks: [{ showTablature: true, measures: [{ beats: [
+      { type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 5, slideIn: 'UP', slideOut: 'x' }] }] }] }] });
+    const n = s.tracks[0].measures[0].beats[0].notes[0];
+    eq([n.slideIn, n.slideOut], ['below', null]);
+  });
+  test('slideMarks: conflicts with slides, H/P, bends and graces', () => {
+    const it = (o) => ({ string: 1, ...o });
+    eq(slideMarks([it({ slideIn: true, slideOut: true })]), [{ slideIn: 'below', slideOut: 'down' }]);
+    // own slide with a target drops the slide-out; its target drops the slide-in
+    eq(slideMarks([it({ slide: true, slideOut: 'up' }), it({ slideIn: 'down' })]), [{ slideIn: null, slideOut: null }, { slideIn: null, slideOut: null }]);
+    // a slide with no target keeps the slide-out
+    eq(slideMarks([it({ slide: true, slideOut: 'up' }), { string: 2, slideIn: true }]), [{ slideIn: null, slideOut: 'up' }, { slideIn: 'below', slideOut: null }]);
+    eq(slideMarks([it({ hammerPull: true }), it({ slideIn: true })]), [{ slideIn: null, slideOut: null }, { slideIn: null, slideOut: null }]);
+    eq(slideMarks([it({ bend: 'full', slideOut: true })]), [{ slideIn: null, slideOut: null }]);
+    eq(slideMarks([it({ grace: true, slideIn: true, slideOut: true })]), [{ slideIn: null, slideOut: null }]);
+    // notes without a string are never targets
+    eq(slideMarks([{ string: null, slide: true }, { string: null, slideIn: true }]), [{ slideIn: null, slideOut: null }, { slideIn: 'below', slideOut: null }]);
+  });
+}
+
+{
+  const { bendOf } = await imp('src/directions.js');
+  const { normalizeBend, bendSemitones, amountSemitones } = await imp('src/draw/tab.js');
+  const { fretLabel } = await imp('src/textMetrics.js');
+  const b = (type, amount, release = false, hold = false) => ({ type, amount, release, hold });
+  test('bendOf: plain bends parse as before (amount, " release", " hold"), with type "bend"', () => {
+    eq(bendOf(true), b('bend', 'full'));
+    eq(bendOf('1/2'), b('bend', '1/2'));
+    eq(bendOf(' full release '), b('bend', 'full', true));
+    eq(bendOf('1 1/2 hold'), b('bend', '1 1/2', false, true));
+    eq(bendOf('hold'), b('bend', 'hold'));
+    eq(bendOf(''), null);
+    eq(bendOf(undefined), null);
+    eq(bendOf(5), b('bend', 'full'));
+  });
+  test('bendOf: pre-bend strings', () => {
+    eq(bendOf('prebend full'), b('prebend', 'full'));
+    eq(bendOf('Pre-Bend 1/2'), b('prebend', '1/2'));
+    eq(bendOf('pb 1/2 release'), b('prebend', '1/2', true));
+    eq(bendOf('pb'), b('prebend', 'full'));
+    eq(bendOf('pb release'), b('prebend', 'full', true));
+    eq(bendOf('pb full hold'), b('prebend', 'full'));
+    eq(bendOf('pbx').type, 'bend');
+  });
+  test('bendOf: release strings (amount null when not given)', () => {
+    eq(bendOf('release'), b('release', null, true));
+    eq(bendOf('Release 1/2'), b('release', '1/2', true));
+    eq(bendOf('releases').type, 'bend');
+  });
+  test('bendOf: objects (type aliases, amount as a string, release / hold flags)', () => {
+    eq(bendOf({ amount: 'full', release: true }), b('bend', 'full', true));
+    eq(bendOf({ amount: '1/2', hold: true }), b('bend', '1/2', false, true));
+    eq(bendOf({ release: true, hold: true }), b('bend', 'full', true));
+    eq(bendOf({ type: ' PB ', amount: '1/2' }), b('prebend', '1/2'));
+    eq(bendOf({ type: 'pre-bend', release: true }), b('prebend', 'full', true));
+    eq(bendOf({ type: 'prebend', hold: true }), b('prebend', 'full'));
+    eq(bendOf({ type: 'release' }), b('release', null, true));
+    eq(bendOf({ type: 'release', amount: 'full' }), b('release', 'full', true));
+    eq(bendOf({ type: 'nope', amount: 1 }), b('bend', '1'));
+    eq(bendOf({ amount: 1 }).amount, '1');
+  });
+  test('bendOf suffix scan: release / hold in any case, any whitespace; only a whole trailing word counts', () => {
+    eq(bendOf('Full RELEASE'), b('bend', 'Full', true));
+    eq(bendOf('1/2 hold'), b('bend', '1/2', false, true));
+    eq(bendOf('full	release'), b('bend', 'full', true));
+    eq(bendOf('1 1/2   HOLD  '), b('bend', '1 1/2', false, true));
+    eq(bendOf('fullrelease'), b('bend', 'fullrelease'));
+    eq(bendOf('full releases'), b('bend', 'full releases'));
+    eq(bendOf('release hold'), b('release', 'hold', true));
+    eq(bendOf('pre-bend 1 hold'), b('prebend', '1'));
+    eq(bendOf('PB 1 RELEASE'), b('prebend', '1', true));
+    eq(bendOf('pb hold'), b('prebend', 'full'));
+    eq(bendOf('prebend release'), b('prebend', 'full', true));
+    eq(bendOf('   '), b('bend', 'full'));
+  });
+  test('bendOf suffix scan: very long whitespace runs parse fast and correctly (no quadratic backtracking)', () => {
+    const ok = (c, m) => { if (!c) throw new Error(m); };
+    const gap = ' '.repeat(100000);
+    const t0 = Date.now();
+    eq(bendOf(`full${gap}release`), b('bend', 'full', true));
+    eq(bendOf(`pb${gap}1/2${gap}hold`), b('prebend', '1/2'));
+    eq(bendOf(`full${gap}x`), b('bend', `full${gap}x`));
+    eq(bendOf(`${gap}hold${gap}`), b('bend', 'hold'));
+    eq(bendOf(gap + 'a'.repeat(1000) + gap + '!'), b('bend', 'a'.repeat(1000) + gap + '!'));
+    ok(Date.now() - t0 < 1000, `took ${Date.now() - t0} ms`);
+  });
+  test('bendOf: deterministic and leaves object / string input untouched', () => {
+    const o = { type: ' PB ', amount: 1, release: true, hold: true };
+    const copy = JSON.stringify(o);
+    eq(bendOf(o), bendOf(o));
+    eq(JSON.stringify(o), copy);
+    eq(bendOf(o) === bendOf(o), false);
+  });
+  test('normalizeBend delegates to bendOf', () => {
+    ['full', 'pb 1/2 release', 'release', { type: 'release', amount: 'full' }, true].forEach((v) => eq(normalizeBend(v), bendOf(v)));
+  });
+  test('bendSemitones: as before for readable amounts; infinite / NaN -> 2 (amountSemitones keeps the raw parse)', () => {
+    eq(['full', '1/2', '1 1/2', '2', '1/4', 'what'].map(bendSemitones), [2, 1, 3, 4, 0.5, 2]);
+    eq(bendSemitones('1/0'), 2);
+    eq(Number.isFinite(bendSemitones('0/0')), true);
+    eq(Number.isFinite(bendSemitones('0 0/0')), true);
+    eq(bendSemitones(null), 2);
+    eq(amountSemitones('1/0'), Infinity);
+  });
+  test('fretLabel: a release note is in parentheses (once with ghost); mute stays x', () => {
+    eq(fretLabel({ fret: 7, bend: 'release' }), '(7)');
+    eq(fretLabel({ fret: 7, bend: { type: 'release' } }), '(7)');
+    eq(fretLabel({ fret: 7, bend: 'release', ghost: true }), '(7)');
+    eq(fretLabel({ fret: 7, bend: 'full release' }), '7');
+    eq(fretLabel({ fret: 7, bend: 'pb full' }), '7');
+    eq(fretLabel({ fret: 7, mute: true, bend: 'release' }), 'x');
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

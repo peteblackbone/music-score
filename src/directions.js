@@ -20,7 +20,12 @@
  * - `beat.arpeggio` true | 'up' | 'down': a vertical wavy line left of a
  *   chord of two or more notes ('up' / 'down' add an arrowhead);
  * - `beat.strum` 'down' | 'up': a strum arrow above the beat; it replaces
- *   the beat's pick stroke.
+ *   the beat's pick stroke;
+ * - `note.slideIn` 'below' | 'above' (true / 'up' = 'below', 'down' =
+ *   'above') and `note.slideOut` 'down' | 'up' (true = 'down'): a short
+ *   slide into the note from below / above, or off it downward / upward
+ *   (slideMarks decides which are drawn; withNoteSlides canonicalizes);
+ * - `note.bend`: a bend, pre-bend or release note (bendOf).
  *
  * Rests and grace notes carry no pick stroke, tap, whammy, rake, arpeggio
  * or strum. Every
@@ -39,6 +44,120 @@ const WHAMMY_TYPES = ['dip', 'dive', 'return', 'predive'];
 /** Label text of a rake run. */
 export const RAKE_LABEL = 'rake';
 const DEFAULT_DIP_AMOUNT = '1/2';
+
+/**
+ * Index of the note `items[i]` links to with a hammer-on/pull-off or slide:
+ * the first later item on the same `string` (items in score order), or -1
+ * (none, or `items[i]` has no string).
+ */
+export function linkTarget(items, i) {
+  const string = items[i].string;
+  if (string == null) return -1;
+  for (let k = i + 1; k < items.length; k++) if (items[k].string === string) return k;
+  return -1;
+}
+
+/** Canonical slide-in ('below' | 'above') of a raw `note.slideIn`: true / 'up' / 'below' → 'below', 'down' / 'above' → 'above' (trimmed, any case), else null. Idempotent. */
+export function slideInOf(raw) {
+  if (raw === true) return 'below';
+  if (typeof raw !== 'string') return null;
+  const k = raw.trim().toLowerCase();
+  if (k === 'up' || k === 'below') return 'below';
+  return k === 'down' || k === 'above' ? 'above' : null;
+}
+
+/** Canonical slide-out ('down' | 'up') of a raw `note.slideOut`: true / 'down' → 'down', 'up' → 'up' (trimmed, any case), else null. Idempotent. */
+export function slideOutOf(raw) {
+  if (raw === true) return 'down';
+  if (typeof raw !== 'string') return null;
+  const k = raw.trim().toLowerCase();
+  return PICK_KINDS.includes(k) ? k : null;
+}
+
+/** `note` itself unless it has a `slideIn` or `slideOut` field; then a copy with those (present) fields canonicalized (null when not understood). */
+export function withNoteSlides(note) {
+  const hasIn = note.slideIn !== undefined;
+  const hasOut = note.slideOut !== undefined;
+  if (!hasIn && !hasOut) return note;
+  const out = { ...note };
+  if (hasIn) out.slideIn = slideInOf(note.slideIn);
+  if (hasOut) out.slideOut = slideOutOf(note.slideOut);
+  return out;
+}
+
+/**
+ * Slide-in / slide-out marks drawn for `items` (one per note of a track, in
+ * score order: `{ string, slide, hammerPull, bend, slideIn, slideOut, grace }`),
+ * `[{ slideIn, slideOut }]` (canonical or null). A grace note gets neither;
+ * a slide-out is dropped when the note's own `slide` reaches a target or it
+ * bends; a slide-in when the note is the target of an earlier slide or
+ * hammer-on / pull-off (linkTarget; notes without a string are never targets).
+ */
+export function slideMarks(items) {
+  const targeted = new Set();
+  items.forEach((it, i) => {
+    if (it.slide || it.hammerPull) targeted.add(linkTarget(items, i));
+  });
+  return items.map((it, i) => (it.grace ? { slideIn: null, slideOut: null } : {
+    slideIn: targeted.has(i) ? null : slideInOf(it.slideIn),
+    slideOut: (it.slide && linkTarget(items, i) >= 0) || it.bend ? null : slideOutOf(it.slideOut),
+  }));
+}
+
+/**
+ * A note's `bend` as `{ type, amount, release, hold }`, or null (falsy).
+ * `type`: 'bend' (bent after picking), 'prebend' (bent before picking:
+ * 'prebend' | 'pre-bend' | 'pb' + amount, optionally + ' release') or
+ * 'release' (its own note returning to the unbent pitch: 'release' +
+ * optional amount; `release` is always true, `amount` null when not given).
+ * Other strings: the amount (empty → 'full'), optionally + ' release' (a
+ * bend-and-release) or ' hold'. `true` and other non-objects → a full
+ * bend. An object takes `type` ('bend', 'prebend' / 'pb' / 'pre-bend',
+ * 'release'; trimmed, any case; else 'bend'), `amount` (as a string; else
+ * 'full', or null for a release) and `release` / `hold` flags (`hold`
+ * only on a plain bend that doesn't release).
+ */
+/**
+ * Split a trailing ' release' / ' hold' word (any case) off a bend string:
+ * [rest (trimmed), 'release' | 'hold' | null]. `whole` also accepts the word
+ * with nothing before it (a pre-bend's 'release'). A plain scan rather than
+ * /\s+release$/, whose backtracking is quadratic on long runs of spaces.
+ */
+function splitBendSuffix(str, whole) {
+  let i = str.length;
+  while (i > 0 && !/\s/.test(str[i - 1])) i--;
+  const word = str.slice(i).toLowerCase();
+  if ((word === 'release' || word === 'hold') && (i > 0 || whole)) return [str.slice(0, i).trim(), word];
+  return [str.trim(), null];
+}
+
+export function bendOf(raw) {
+  if (!raw) return null;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    const pre = /^(prebend|pre-bend|pb)\b\s*(.*)$/i.exec(trimmed);
+    if (pre) {
+      const [rest, word] = splitBendSuffix(pre[2], true);
+      return { type: 'prebend', amount: rest || 'full', release: word === 'release', hold: false };
+    }
+    const rel = /^release\b\s*(.*)$/i.exec(trimmed);
+    if (rel) return { type: 'release', amount: rel[1] || null, release: true, hold: false };
+    const [rest, word] = splitBendSuffix(trimmed, false);
+    return { type: 'bend', amount: rest || 'full', release: word === 'release', hold: word === 'hold' };
+  }
+  if (typeof raw === 'object') {
+    const t = typeof raw.type === 'string' ? raw.type.trim().toLowerCase() : '';
+    const type = ['prebend', 'pb', 'pre-bend'].includes(t) ? 'prebend' : (t === 'release' ? 'release' : 'bend');
+    const release = type === 'release' || !!raw.release;
+    return {
+      type,
+      amount: raw.amount ? String(raw.amount) : (type === 'release' ? null : 'full'),
+      release,
+      hold: type === 'bend' && !release && !!raw.hold,
+    };
+  }
+  return { type: 'bend', amount: 'full', release: false, hold: false };
+}
 
 /** Whether `el` is a main (non-grace) beat with at least one note. */
 export function isMainNoteBeat(el) {
