@@ -86,3 +86,23 @@ export function wavyPathD(x1, x2, y, amplitude, wavelength) {
   }
   return d;
 }
+
+/**
+ * wavyPathD turned upright: the `d` for a wavy vertical line at x from y1
+ * to y2 (either way up), its bumps alternating left/right. Used for
+ * arpeggio lines (draw/arpeggio.js).
+ */
+export function wavyPathDVertical(x, y1, y2, amplitude, wavelength) {
+  const dir = y2 >= y1 ? 1 : -1;
+  let d = svgD`M ${x} ${y1}`;
+  let y = y1;
+  let left = true;
+  while ((y2 - y) * dir > wavelength / 14) { // stop short of a sliver segment, as wavyPathD does
+    const ny = dir > 0 ? Math.min(y + wavelength / 2, y2) : Math.max(y - wavelength / 2, y2);
+    const my = (y + ny) / 2;
+    d += svgD` Q ${x + (left ? -amplitude : amplitude)} ${my} ${x} ${ny}`;
+    y = ny;
+    left = !left;
+  }
+  return d;
+}
