@@ -13,8 +13,8 @@
  * - tabTechniques.js — tab hammer-on/pull-off, slide, bend, tap "T" / slap /
  *   pop, trill, whammy dip and dive / return / pre-dive lines
  * - techniqueLabels.js — palm mute / harmonic / let-ring / rake label runs
- * - playingDirections.js — pick strokes, notation tap "T" / slap / pop and
- *   trills
+ * - playingDirections.js — pick strokes, strum arrows (draw/strum.js),
+ *   notation tap "T" / slap / pop and trills
  * - chordsFermatas.js — chord symbols, chord diagrams and dynamics, and fermatas
  *
  * `trackRuns` holds one entry per system per track:
@@ -45,7 +45,7 @@
  *   by 5
  * - `run.chordBoxes` (chord symbols and chord diagrams): written by 6, read by 7 through
  *   collectBeats (empty before 6)
- * - `info.directionTopY` (top of a beat's pick stroke / tap "T" / trill):
+ * - `info.directionTopY` (top of a beat's pick stroke / strum / tap "T" / trill):
  *   written by 5, read by 7
  * - pass 6 measures the notation staff's ink, so it must follow the passes
  *   that draw there (1, 2 and 5).

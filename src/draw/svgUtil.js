@@ -86,3 +86,27 @@ export function wavyPathD(x1, x2, y, amplitude, wavelength) {
   }
   return d;
 }
+
+const MAX_VERTICAL_WAVE_SEGMENTS = 1000; // ~400 sp of wave, far beyond any staff
+
+/**
+ * wavyPathD turned upright: the `d` for a wavy vertical line at x from y1
+ * to y2 (either way up), its bumps alternating left/right. Used for
+ * arpeggio lines (draw/arpeggio.js).
+ */
+export function wavyPathDVertical(x, y1, y2, amplitude, wavelength) {
+  const dir = y2 >= y1 ? 1 : -1;
+  let d = svgD`M ${x} ${y1}`;
+  if (!(wavelength > 0) || !Number.isFinite(y1) || !Number.isFinite(y2)) return d;
+  let y = y1;
+  let left = true;
+  let segs = MAX_VERTICAL_WAVE_SEGMENTS; // bounds the loop for absurd spans (huge octaves, bad string numbers)
+  while ((y2 - y) * dir > wavelength / 14 && segs-- > 0) { // stop short of a sliver segment, as wavyPathD does
+    const ny = dir > 0 ? Math.min(y + wavelength / 2, y2) : Math.max(y - wavelength / 2, y2);
+    const my = (y + ny) / 2;
+    d += svgD` Q ${x + (left ? -amplitude : amplitude)} ${my} ${x} ${ny}`;
+    y = ny;
+    left = !left;
+  }
+  return d;
+}

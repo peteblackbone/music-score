@@ -40,6 +40,9 @@ export const GHOST_PAREN_DX_SP = 0.95;    // ghost-note parenthesis centre, from
 export const GHOST_PAREN_SIZE_SP = 2.6;   // ghost-note parenthesis font size
 export const GHOST_PAREN_BASELINE = 0.32; // parenthesis baseline below the head centre, as a fraction of its font size
 const GHOST_PAREN_HALF_SP = 0.37;         // half the parenthesis width (GHOST_PAREN_SIZE_SP text)
+export const ARPEGGIO_CLEAR_SP = 0.4;     // chord ink -> nearest arpeggio ink
+export const ARPEGGIO_HALF_SP = 0.3;      // half the arpeggio mark's width (its arrowhead; the wave is ±0.25)
+export const ARPEGGIO_ROOM_SP = ARPEGGIO_CLEAR_SP + 2 * ARPEGGIO_HALF_SP; // left room an arpeggio adds (1.0)
 
 /** Stem x offset (sp) from the head centre for a head glyph, up or down. */
 export function stemDxSp(headGlyph, stemUp) {
@@ -55,6 +58,11 @@ export function stemDySp(headGlyph, stemUp) {
   const a = stemAnchors(headGlyph);
   if (!a) return 0;
   return stemUp ? -a.up[1] : -a.down[1];
+}
+
+/** Leftmost notation ink of a chord (accidentals, parentheses, heads, ledger lines), px left of the onset x; 0 for null. */
+export function arpeggioInnerLeft(chord) {
+  return chord ? Math.max(chord.leftExt, -chord.ledgerSpan.left) : 0;
 }
 
 /** Staff position where a dot for a note at `pos` sits (the space above a line note). */

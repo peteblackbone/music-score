@@ -15,6 +15,11 @@ const PH = { harmonic: 'pinch' };
 const PM = { palmMute: true };
 const tabe = (string, fret, extra = {}) => ({ type: 'note', duration: '8th', notes: [{ string, fret }], ...extra });
 const tabg = (string, fret, extra = {}) => ({ type: 'grace', duration: '16th', notes: [{ string, fret, mute: true }], ...extra });
+const tabc = (frets, extra = {}, duration = 'quarter') => ({ type: 'note', duration, notes: frets.map(([string, fret, note = {}]) => ({ string, fret, ...note })), ...extra });
+const pc = (pitches, extra = {}, duration = 'quarter') => ({ type: 'note', duration, notes: pitches.map((p) => (typeof p === 'string' ? n(p) : p)), ...extra });
+const C_CHORD = [[5, 3], [4, 2], [3, 0], [2, 1]];
+const E_TOP = [[3, 1], [2, 0], [1, 0]];
+const ras = (k) => tabc(E_TOP, { strum: k % 2 ? 'up' : 'down' }, '16th');
 
 export const characterizationCases = [
   {
@@ -856,6 +861,96 @@ export const characterizationCases = [
           { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
           { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
           { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+        ],
+      }],
+    },
+  },
+  {
+    // Strum / arpeggio marks (1.2.0). Guitar with notation + TAB: arpeggio true / up / down on chords with accidentals,
+    // a ledger-line chord, a ghost note and a grace before the chord, ignored on a single note and a rest; a 16th
+    // rasgueado run alternating down / up; strum + pickStroke (strum wins), strums with a tap, a trill (grace inside
+    // the run), a rest breaking the run and a rake. A tab-only guitar: strums over a bend, an H, a dip and P.M.,
+    // arpeggios on TAB. A notation-only staff: strums under a slur, over T / S / trill, under a fermata, with a
+    // pick stroke (strum wins), arpeggios and a whole-note chord with both marks.
+    name: 'strum-arpeggio', width: 900,
+    score: {
+      tracks: [
+        {
+          name: 'Gt.', showTablature: true,
+          measures: [
+            { beats: [
+              tabc(C_CHORD, { arpeggio: true }), tabc([[4, 4], [3, 3], [2, 2]], { arpeggio: 'up' }),
+              { type: 'grace', duration: '16th', notes: [{ string: 3, fret: 0 }] }, tabc([[4, 0], [3, 2], [2, 3], [1, 2, { ghost: true }]], { arpeggio: 'down' }),
+              tabq(2, 1, { arpeggio: true }),
+            ] },
+            { beats: [
+              { type: 'rest', duration: 'quarter', arpeggio: true }, tabc([[6, 0], [5, 2], [4, 2]], { arpeggio: 'up' }, 'half'),
+              tabc([[6, 3], [5, 2], [4, 0], [3, 0], [2, 0], [1, 3]], { arpeggio: 'down' }),
+            ] },
+            { beats: [
+              ras(0), ras(1), ras(2), ras(3), ras(4), ras(5), ras(6), ras(7),
+              tabc(E_TOP, { strum: 'down', pickStroke: 'up' }), qr(),
+            ] },
+            { beats: [
+              tabc([[3, 2], [2, 3, { tap: true }]], { strum: 'down' }), { type: 'grace', duration: '16th', notes: [{ string: 2, fret: 1 }] },
+              tabc([[3, 2], [2, 3, { trill: 5 }]], { strum: 'up' }), qr(),
+              tabc(E_TOP, { strum: 'down', rake: 'down' }, '8th'), tabc(E_TOP, { strum: 'up' }, '8th'),
+            ] },
+          ],
+        },
+        {
+          name: 'Gt. 2', showStandardNotation: false, showTablature: true,
+          measures: [
+            { beats: [
+              tabh(3, 7, { bend: 'full' }, { strum: 'down' }), tabh(3, 7, { hammerPull: 'h' }, { strum: 'up' }),
+              tabh(3, 9, {}, { strum: 'down' }), tabh(3, 7, {}, { strum: 'up', whammy: '1/2' }),
+            ] },
+            { beats: [
+              tabc([[4, 7], [3, 7], [2, 8]], { arpeggio: 'down', strum: 'down', ...PM }), tabc([[4, 7], [3, 7], [2, 8]], { strum: 'up', ...PM }),
+              tabc([[4, 9], [3, 9], [2, 10]], { arpeggio: 'up', strum: 'up' }), tabc([[4, 9], [3, 9], [2, 10]], { arpeggio: true }),
+            ] },
+            { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
+            { beats: [tabq(3, 5, { strum: 'down' }), tabq(3, 7, { strum: 'up' }), tabq(3, 5, { strum: 'down' }), tabq(3, 7, { strum: 'up' })] },
+          ],
+        },
+        {
+          name: 'Ens.',
+          measures: [
+            { beats: [
+              q('C6', { strum: 'down', slurStart: true }), pc([n('G4', { tap: true }), 'B4'], { strum: 'up' }),
+              pc([n('A4', { trill: true }), 'C5'], { strum: 'down' }), q('C6', { slurEnd: true }),
+            ] },
+            { beats: [
+              pc([n('E4', { slap: true }), 'G4'], { strum: 'up', fermata: true }), q('E4', { strum: 'down', pickStroke: 'up' }), qr(),
+              pc(['C4', 'E4', 'G4', 'C5'], { arpeggio: 'up' }),
+            ] },
+            { beats: [
+              e('E4', { strum: 'down' }), e('E4', { strum: 'up' }), e('E4', { strum: 'down' }), e('E4', { strum: 'up' }),
+              pc(['F4', 'A4', 'C5'], { arpeggio: true }, 'half'),
+            ] },
+            { beats: [pc(['Bb3', 'D4', 'F4', 'Bb4'], { arpeggio: 'down', strum: 'down' }, 'whole')] },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Strum / arpeggio across system breaks at 600: systems of measures 1-2, 3-5, 6. A strum run through system 1
+    // ending on an arpeggio chord (last beat before the break) whose tied F# is restated, with its arpeggio, on the
+    // first beat of system 2, where the strum run starts again; an arpeggio inside system 2.
+    name: 'strum-arpeggio-break', width: 600,
+    score: {
+      tracks: [{
+        name: 'Gt.', showTablature: true,
+        measures: [
+          { beats: [tabc(E_TOP, { strum: 'down' }), tabc(E_TOP, { strum: 'up' }), tabc(E_TOP, { strum: 'down' }), tabc(E_TOP, { strum: 'up' })] },
+          { beats: [tabc(E_TOP, { strum: 'down' }), tabc(E_TOP, { strum: 'up' }), tabc(E_TOP, { strum: 'down' }),
+            pc([n('F#4', { string: 1, fret: 2, tieStart: true }), n('A3', { string: 3, fret: 2 })], { arpeggio: 'up', strum: 'up' })] },
+          { beats: [pc([n('F#4', { string: 1, fret: 2, tieEnd: true }), n('C#4', { string: 2, fret: 2 }), n('A3', { string: 3, fret: 2 })], { arpeggio: true, strum: 'down' }),
+            tabc(E_TOP, { strum: 'up' }), tabc(E_TOP), tabc(E_TOP)] },
+          { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabc([[4, 2], [3, 2], [2, 3]], { arpeggio: 'down' })] },
           { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
           { beats: [tabq(3, 5), tabq(3, 7), tabq(3, 5), tabq(3, 7)] },
         ],

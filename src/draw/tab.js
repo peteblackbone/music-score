@@ -406,7 +406,7 @@ export function renderWhammyDip(g, x, bottomY, dip, theme, nextX) {
  * than a hardcoded "up"/"down") keeps the arrowhead visually aligned with
  * the curve it caps, instead of appearing to point off at an angle.
  */
-function arrowheadDir(x, y, dx, dy, size, color) {
+export function arrowheadDir(x, y, dx, dy, size, color) {
   const len = Math.hypot(dx, dy) || 1;
   const ux = dx / len, uy = dy / len;
   const bx = x - ux * size, by = y - uy * size; // base center, behind the tip

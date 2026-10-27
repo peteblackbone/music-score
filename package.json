@@ -1,6 +1,6 @@
 {
   "name": "music-score",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Render music notation and guitar tablature as SVG in the browser from plain JSON, using the Bravura (SMuFL) font. No build step, no dependencies.",
   "type": "module",
   "main": "index.js",

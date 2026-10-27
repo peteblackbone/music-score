@@ -4,7 +4,7 @@
 //
 // Areas (assertion counts are printed per area at the end):
 //   align, justify, signatures, measure-numbers, barlines, repeats, vertical, numbers,
-//   scaling, octave, beaming, accidentals, ties, tab-clef, a11y, theme, robustness, header, collisions, harmonics, directions, tab-rhythm, navigation, chordDiagrams, techniques11
+//   scaling, octave, beaming, accidentals, ties, tab-clef, a11y, theme, robustness, header, collisions, harmonics, directions, tab-rhythm, navigation, chordDiagrams, techniques11, strumArpeggio
 //
 // Most geometric checks read the rendered SVG tree (class names + transforms); a few read the
 // layout model (computeLayout) for facts that are not observable in the SVG (onset times,
@@ -1667,7 +1667,7 @@ const dirLabelStaff = (m, si, tr) => staffOf(m, si, tr, tr.tab);
 test('directions', 'AC1: every pre-existing fixture/example emits no let-ring / pick-stroke / tap / whammy group and no U+E610 / U+E612 glyph', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams') || name.startsWith('char-techniques-11')) continue; // newer fixtures using directions on purpose
+    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams') || name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio')) continue; // newer fixtures using directions on purpose
     for (const width of [600, 900]) {
       all(renderTree(score, width, options)).forEach(({ n }) => {
         const c = cls(n).split(' ');
@@ -4657,7 +4657,7 @@ const T11_CLASSES = ['slap', 'pop', 'rake', 'trill'];
 test('techniques11', 'AC1: no pre-existing fixture / example emits a slap / pop / rake / trill group, a dive / hold / return / pre-dive line or a U+E566 glyph', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-techniques-11')) continue;
+    if (name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio')) continue;
     for (const width of [600, 900]) {
       all(renderTree(score, width, options)).forEach(({ n }) => {
         const c = cls(n).split(' ');
@@ -4730,6 +4730,409 @@ test('techniques11', 'fixture content: techniques-11 draws every new mark (12 tr
 });
 
 // @@T11-END
+}
+
+// ======================= strum / arpeggio marks (1.2.0) =======================
+// Raw-score oracles, geometry recomputed from the rendered SVG (local staff coordinates). Unit tables live in units.mjs.
+{
+const SP = DEF.staffLineSpacing;
+const tg = (root, c) => all(root).filter(({ n }) => n.tag === 'g' && cls(n).split(' ').includes(c)).map(({ n }) => n);
+const tabStg = (svg, si = 0, ti = 0) => staffOfTrack(svg, si, ti, true);
+const notStg = (svg, si = 0, ti = 0) => staffOfTrack(svg, si, ti, false);
+const ch = (notes, extra = {}, duration = 'quarter') => ({ type: 'note', duration, notes: notes.map((n) => (typeof n === 'string' ? { pitch: n } : n)), ...extra });
+const grc = (notes) => ({ type: 'grace', duration: '16th', notes: notes.map((n) => (typeof n === 'string' ? { pitch: n } : n)) });
+const rawArp = (b) => {
+  if (!rawMain(b) || b.notes.length < 2) return null;
+  if (b.arpeggio === true) return true;
+  const k = typeof b.arpeggio === 'string' ? b.arpeggio.trim().toLowerCase() : null;
+  return ['up', 'down'].includes(k) ? k : null;
+};
+// Raw beats of track `ti` paired with their layout element and system.
+function arpSeq(score, width, ti = 0) {
+  const raws = score.tracks[ti].measures.flatMap((m) => m.beats);
+  const els = layoutOf(score, width).systems.flatMap((sys, si) => sys.tracks[ti].measures.flatMap((m) => m.elements.map((le) => ({ si, le }))));
+  ok(raws.length === els.length, `${raws.length} raw beats vs ${els.length} layout elements`);
+  return raws.map((raw, i) => ({ raw, ...els[i], x: els[i].le.x }));
+}
+// A drawn arpeggio: wave centre x, wave / head hulls, kind from its class.
+const arpInfo = (g) => {
+  const ps = g.children.filter((c) => c.tag === 'path');
+  const d = ps[0].getAttribute('d');
+  const head = ps[1] ? ps[1].getAttribute('d') : null;
+  const hulls = ps.map((p) => hullOf(p.getAttribute('d')));
+  return {
+    g, cx: pathNums(d)[0], d, wave: hullOf(d), head: head ? hullOf(head) : null, tip: head ? pathNums(head).slice(0, 2) : null, paths: ps.length,
+    top: Math.min(...hulls.map((h) => h.top)), bottom: Math.max(...hulls.map((h) => h.bottom)), cls: cls(g),
+  };
+};
+const arpsOf = (stg) => tg(stg, 'arpeggio').map(arpInfo).sort((a, b) => a.cx - b.cx);
+// Wave / head shape: Q segments, class by kind, head tip at the top ('up') / bottom ('down'), none for true.
+function checkArpShape(a, kind, top, bottom, what) {
+  ok(/^M -?[\d.]+ -?[\d.]+( Q -?[\d.]+ -?[\d.]+ -?[\d.]+ -?[\d.]+){2,}$/.test(a.d), `${what}: wave d "${a.d}"`);
+  ok(a.cls === (kind === true ? 'arpeggio' : `arpeggio arpeggio-${kind}`), `${what}: class "${a.cls}"`);
+  ok(a.paths === (kind === true ? 1 : 2), `${what}: ${a.paths} paths`);
+  ok(a.wave.x2 - a.wave.x1 <= 0.5 * SP + EPS, `${what}: wave width`);
+  near(a.top, top, (kind === 'down' ? 0 : 0.8 / 14 * SP) + EPS, `${what}: top`);
+  near(a.bottom, bottom, (kind === 'up' ? 0 : 0.8 / 14 * SP) + EPS, `${what}: bottom`);
+  if (kind === 'up') { near(a.tip[1], top, EPS, `${what}: up tip`); near(a.head.bottom, top + 0.5 * SP, EPS, `${what}: head base`); }
+  if (kind === 'down') { near(a.tip[1], bottom, EPS, `${what}: down tip`); near(a.head.top, bottom - 0.5 * SP, EPS, `${what}: head base`); }
+  if (a.head) { near(a.tip[0], a.cx, EPS, `${what}: tip x`); ok(a.head.x2 - a.head.x1 <= 0.6 * SP + EPS, `${what}: head width`); }
+}
+// Leaves of a staff group as ink boxes (staff lines, barlines, ties / slurs and the arpeggios themselves excluded).
+const inkLeaves = (stg) => {
+  const out = [];
+  const visit = (n) => {
+    if (['staff-lines', 'tab-lines', 'barline', 'arpeggio', 'tab-clef', 'measure-number', 'tie', 'slur', 'hammer-pull'].includes(cls(n).split(' ')[0])) return;
+    if (n.tag === 'g') { n.children.forEach(visit); return; }
+    const b = nodeBox(n);
+    if (b && Number.isFinite(b.top)) out.push(b);
+  };
+  stg.children.forEach(visit);
+  return out;
+};
+// Ink near the left of a wave (vertically overlapping it, ending within 0.3 sp of it or crossing it) must be a grace's and end at the wave.
+function checkLeftOfWave(stg, a, graceBefore, what) {
+  const left = a.cx - 0.3 * SP;
+  inkLeaves(stg).filter((l) => l.top < a.bottom && l.bottom > a.top && l.x1 < left - EPS && l.x2 > left - 0.3 * SP + EPS)
+    .forEach((l) => ok(graceBefore && l.x2 <= left + EPS, `${what}: ink ${JSON.stringify(l)} vs wave left ${left}`));
+}
+const arpNotation = () => ({ tracks: [{ name: 'N', measures: [
+  { beats: [
+    ch(['F#4', 'A4', 'C#5'], { arpeggio: true }), ch(['C4', 'E4', 'G4'], { arpeggio: 'up' }),
+    ch([{ pitch: 'E4', ghost: true }, 'G#4', 'B4'], { arpeggio: 'down' }), ch(['A3', 'B3', 'Eb4'], { arpeggio: ' UP ' }),
+  ] },
+  { beats: [
+    grc(['D4']), ch(['E4', 'G4', 'B4', 'E5'], { arpeggio: 'down' }), grc(['F4']), grc(['A4']), ch(['A3', 'C4', 'E4'], { arpeggio: true }),
+    ch(['D5', 'F#5', 'A5', 'D6'], { arpeggio: 'up' }, '8th'), ch(['G4', 'Bb4'], { arpeggio: true }, '8th'), ch(['E4', 'G4'], {}, 'half'),
+  ] },
+] }] });
+
+test('strumArpeggio', 'E3 notation arpeggio: centre = x - arpeggioInnerLeft - 0.7 sp, >= 0.4 sp clear of the chord\'s accidentals / parentheses / heads / ledgers, span = notehead y -/+ 0.5 sp, Q segments, head at top / bottom / none, classes', () => {
+  const score = arpNotation();
+  for (const width of [600, 1400]) {
+    const seq = arpSeq(score, width);
+    const svg = renderTree(score, width);
+    const marked = seq.filter((b) => rawArp(b.raw));
+    const drawn = systemsOf(svg).flatMap((_, si) => arpsOf(notStg(svg, si)).map((a) => ({ ...a, si })));
+    ok(marked.length === 8 && drawn.length === 8, `@${width}: ${drawn.length} drawn, ${marked.length} marked`);
+    marked.forEach((b, i) => {
+      const inner = Math.max(b.le.chord.leftExt, -b.le.chord.ledgerSpan.left);
+      const a = drawn.filter((x) => x.si === b.si).find((x) => Math.abs(x.cx - (b.x - inner - 0.7 * SP)) <= EPS);
+      ok(!!a, `@${width} arpeggio ${i}: no wave at x - inner - 0.7 sp`);
+      if (!a) return;
+      const ys = b.le.chord.heads.map((h) => 4 * SP - h.pos * SP / 2);
+      checkArpShape(a, rawArp(b.raw), Math.min(...ys) - 0.5 * SP, Math.max(...ys) + 0.5 * SP, `@${width} arpeggio ${i}`);
+      // Nothing (the chord's own ink included) in the 0.4 sp right of the mark.
+      const band = { x1: a.cx - 0.3 * SP + EPS, x2: a.cx + 0.7 * SP - EPS, top: a.top, bottom: a.bottom };
+      inkLeaves(notStg(svg, b.si)).filter((l) => overlaps(l, band)).forEach((l) => ok(false, `@${width} arpeggio ${i}: ink ${JSON.stringify(l)} in the clear band`));
+      ok(true, 'band checked');
+    });
+  }
+});
+
+test('strumArpeggio', 'E4 TAB arpeggio: right edge exactly 0.4 sp left of the widest fret knock-out, span = fretted strings -/+ 0.5 sp, TAB colour; tab-only and notation + TAB; nothing over a chord with no fretted note', () => {
+  const tabChord = (frets, extra = {}) => ({ type: 'note', duration: 'quarter', notes: frets.map(([string, fret, n = {}]) => ({ string, fret, ...n })), ...extra });
+  const beats = [
+    tabChord([[6, 3], [5, 2], [4, 0], [3, 0]], { arpeggio: 'down' }), tabChord([[3, 12], [2, 13], [1, 12]], { arpeggio: true }),
+    tabChord([[5, 7, { ghost: true }], [4, 9], [3, 9]], { arpeggio: 'up' }), tabChord([[2, 5, { mute: true }], [1, 5]], { arpeggio: true }),
+  ];
+  const pitchOnly = { type: 'note', duration: 'quarter', arpeggio: true, notes: [{ pitch: 'E4' }, { pitch: 'G4' }] };
+  [true, false].forEach((notation) => {
+    const name = notation ? 'N+TAB' : 'TAB';
+    const score = { tracks: [{ name: 'G', showTablature: true, showStandardNotation: notation, measures: [{ beats }, { beats: [pitchOnly, ...beats.slice(1)] }] }] };
+    const seq = arpSeq(score, 1400);
+    const svg = renderTree(score, 1400);
+    const stg = tabStg(svg);
+    const drawn = arpsOf(stg);
+    const marked = seq.filter((b) => rawArp(b.raw) && b.raw.notes.some((n) => n.string != null && n.fret != null));
+    ok(drawn.length === marked.length && drawn.length === 7, `${name}: ${drawn.length} drawn vs ${marked.length}`);
+    const rects = stg.children.filter((c) => c.tag === 'rect').map(rectBox);
+    marked.forEach((b, i) => {
+      const a = drawn[i];
+      const knock = Math.min(...rects.filter((r) => r.x1 < b.x && r.x2 > b.x).map((r) => r.x1));
+      near(a.cx + 0.3 * SP, knock - 0.4 * SP, EPS, `${name} arpeggio ${i}: right edge vs widest knock-out ${knock}`);
+      const ys = b.raw.notes.map((n) => (n.string - 1) * DEF.tabStaffLineSpacing);
+      checkArpShape(a, rawArp(b.raw), Math.min(...ys) - 0.5 * SP, Math.max(...ys) + 0.5 * SP, `${name} arpeggio ${i}`);
+      a.g.children.forEach((p) => ok((p.getAttribute('fill') === 'none' ? p.getAttribute('stroke') : p.getAttribute('fill')) === DEF.tabFretColor, 'TAB colour'));
+      checkLeftOfWave(stg, a, false, `${name} arpeggio ${i}`);
+    });
+    if (notation) ok(arpsOf(notStg(svg)).length === 8, 'the notation staff draws every marked chord, the pitch-only one too');
+  });
+});
+
+test('strumArpeggio', 'E5 graces before an arpeggio chord sit wholly left of the wave (notation and TAB); without graces nothing comes within 0.3 sp of its left', () => {
+  const t = (string, fret) => ({ string, fret });
+  const score = { tracks: [{ name: 'G', showTablature: true, measures: [
+    { beats: [ch([t(4, 2), t(3, 2)], {}, '8th'), grc([t(4, 0)]), ch([t(5, 3), t(4, 2), t(3, 0), t(2, 1)], { arpeggio: 'up' }, '8th'),
+      grc([t(2, 3)]), grc([t(2, 5)]), ch([t(3, 7), t(2, 8), t(1, 7)], { arpeggio: 'down' }), ch([t(1, 0), t(2, 0)], { arpeggio: true }),
+      ch([t(1, 3), t(2, 3)], {}, '8th'), ch([t(1, 0), t(2, 1)], { arpeggio: true }, '8th')] },
+    { beats: [grc([{ pitch: 'C#5', string: 2, fret: 2 }]), ch([t(3, 2), t(2, 3), t(1, 2)], { arpeggio: 'down' }, 'whole')] },
+  ] }] };
+  for (const width of [500, 900]) {
+    const seq = arpSeq(score, width);
+    const svg = renderTree(score, width);
+    const marked = seq.map((b, i) => ({ ...b, grace: i > 0 && seq[i - 1].raw.type === 'grace' })).filter((b) => rawArp(b.raw));
+    systemsOf(svg).forEach((_, si) => [notStg(svg, si), tabStg(svg, si)].forEach((stg, k) => {
+      const mine = marked.filter((b) => b.si === si);
+      const drawn = arpsOf(stg);
+      ok(drawn.length === mine.length, `@${width} sys ${si} ${k ? 'TAB' : 'notation'}: ${drawn.length} arpeggios vs ${mine.length}`);
+      drawn.forEach((a, i) => checkLeftOfWave(stg, a, mine[i].grace, `@${width} sys ${si} ${k ? 'TAB' : 'notation'} arpeggio ${i}`));
+    }));
+  }
+});
+
+// ---------- strum ----------
+const nOnly = (beats, extra = {}) => ({ tracks: [{ name: 'N', measures: [{ beats }], ...extra }] });
+const nt = (pitch, extra = {}, note = {}) => ({ type: 'note', duration: 'quarter', notes: [{ pitch, ...note }], ...extra });
+const rst = () => ({ type: 'rest', duration: 'quarter' });
+const letterBox = (g) => ({ ...tbox(g.children[0], { bold: true }), x: num(g.children[0], 'x') });
+const bt = (string, fret, extra = {}, note = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string, fret, ...note }], ...extra });
+const rawStrum = (b) => (rawMain(b) && typeof b.strum === 'string' && ['down', 'up'].includes(b.strum.trim().toLowerCase()) ? b.strum.trim().toLowerCase() : null);
+// A drawn strum: shaft (M/L) + arrowhead; x, kind, tip, box.
+const strumInfo = (g) => {
+  const [shaft, head] = g.children;
+  const s = pathNums(shaft.getAttribute('d'));
+  const h = hullOf(head.getAttribute('d'));
+  const tip = pathNums(head.getAttribute('d')).slice(0, 2);
+  return {
+    g, x: s[0], shaft: s, head: h, tip, cls: cls(g), kind: dcls(g, 'strum-down') ? 'down' : 'up',
+    x1: Math.min(h.x1, s[0]), x2: Math.max(h.x2, s[0]), top: Math.min(s[1], s[3], h.top), bottom: Math.max(s[1], s[3], h.bottom),
+    color: head.getAttribute('fill'), shaftD: shaft.getAttribute('d'),
+  };
+};
+const strumsOf = (stg) => tg(stg, 'strum').map(strumInfo).sort((a, b) => a.x - b.x);
+function checkStrumShape(st, kind, what) {
+  ok(st.cls === `strum strum-${kind}`, `${what}: class "${st.cls}"`);
+  ok(/^M -?[\d.]+ -?[\d.]+ L -?[\d.]+ -?[\d.]+$/.test(st.shaftD), `${what}: shaft "${st.shaftD}"`);
+  near(st.bottom - st.top, 1.5 * SP, EPS, `${what}: height`);
+  near(st.tip[0], st.x, EPS, `${what}: tip x`);
+  near(st.tip[1], kind === 'down' ? st.bottom : st.top, EPS, `${what}: tip ${kind}`);
+  near(st.x2 - st.x1, 0.6 * SP, EPS, `${what}: width`);
+}
+// TAB ink a strum must clear: tabInk boxes plus dive / hold / return / pre-dive lines and texts.
+const tabClearInk = (stg) => [
+  ...tabInk({ children: stg.children.filter((c) => !dcls(c, 'strum') && !dcls(c, 'arpeggio')) }),
+  ...tg(stg, 'whammy').filter((g) => !dcls(g, 'whammy-dip')).flatMap((g) => g.children.map((c) => (c.tag === 'path' ? hullOf(c.getAttribute('d')) : c.tag === 'text' ? tbox(c) : null)).filter(Boolean)),
+];
+const strumTabScore = () => ({ tracks: [
+  { name: 'G', showTablature: true, measures: [{ beats: [
+    bt(6, 3, { strum: 'down', pickStroke: 'up' }), bt(3, 5, { strum: ' UP ' }, { tap: true }), bt(3, 7, { strum: 'down', rake: 'down' }),
+    bt(2, 8, { strum: 'up' }, { trill: 10 }),
+  ] }] },
+  { name: 'T', showStandardNotation: false, showTablature: true, measures: [
+    { beats: [bt(3, 7, { strum: 'down' }, { bend: 'full' }), bt(3, 9, { strum: 'up', palmMute: true }), bt(3, 7, { strum: 'down', palmMute: true }, { hammerPull: true }), bt(3, 9, { strum: 'up', whammy: '1/2' })] },
+    { beats: [bt(2, 5, { strum: 'down', whammy: { type: 'dive', amount: '1' } }), bt(2, 5, { strum: 'up' }), bt(2, 5, { strum: 'down', whammy: { type: 'return' } }), bt(1, 12, { strum: 'up', letRing: true }, { slap: true })] },
+  ] },
+] });
+test('strumArpeggio', 'E6 TAB strum: class strum strum-down|up, arrow 1.5 sp tall pointing its way, TAB colour, bottom >= 1 sp above the top line and >= 0.4 sp above frets / bends / T-S-P / trills / dips / whammy lines / labels / H-P under it; never on the notation staff of a track with TAB', () => {
+  const score = strumTabScore();
+  const svg = renderTree(score, 1400);
+  let n = 0;
+  systemsOf(svg).forEach((_, si) => score.tracks.forEach((track, ti) => {
+    const stg = staffOfTrack(svg, si, ti, true);
+    const info = staffInfo(stg);
+    const ink = tabClearInk(stg);
+    const seq = arpSeq(score, 1400, ti).filter((b) => b.si === si && rawStrum(b.raw));
+    const sts = strumsOf(stg);
+    ok(sts.length === seq.length, `t${ti} sys${si}: ${sts.length} strums vs ${seq.length}`);
+    sts.forEach((st, i) => {
+      n++;
+      near(st.x, seq[i].x, EPS, `t${ti} strum ${i}: x`);
+      checkStrumShape(st, rawStrum(seq[i].raw), `t${ti} strum ${i}`);
+      ok(st.color === DEF.tabFretColor, `t${ti} strum ${i}: colour`);
+      ok(st.bottom <= info.localTop - 1 * SP + EPS, `t${ti} strum ${i}: bottom ${st.bottom} vs top line ${info.localTop}`);
+      ink.filter((b) => xover(st, b)).forEach((b) => ok(st.bottom <= b.top - 0.4 * SP + EPS, `t${ti} strum ${i}: bottom ${st.bottom} vs ${b.kind || 'line'} ink top ${b.top}`));
+    });
+    if (track.showStandardNotation !== false) ok(strumsOf(staffOfTrack(svg, si, ti, false)).length === 0, 'no strum on the notation staff');
+  }));
+  ok(n === 12, `${n} strums`);
+});
+
+test('strumArpeggio', 'E7 strum runs: consecutive strums on a system share one bottom (the highest of their own, here raised by a tap "T"), graces don\'t break a run, a rest / an unstrummed note / a system break do', () => {
+  const g5 = { type: 'grace', duration: '16th', notes: [{ string: 3, fret: 5 }] };
+  const score = { tracks: [{ name: 'G', showStandardNotation: false, showTablature: true, measures: [
+    { beats: [bt(4, 2, { strum: 'down' }), g5, bt(3, 7, { strum: 'up' }, { tap: true }), bt(4, 2, { strum: 'down' }), bt(4, 2)] },
+    { beats: [bt(4, 2, { strum: 'down' }), { type: 'rest', duration: 'quarter' }, bt(3, 7, { strum: 'up' }, { tap: true }), bt(4, 2, { strum: 'down' })] },
+    { beats: [bt(4, 2, { strum: 'down' }), bt(4, 2, { strum: 'up' }), bt(4, 2, { strum: 'down' }), bt(3, 7, { strum: 'up' }, { tap: true })] },
+    { beats: [bt(4, 2, { strum: 'down' }), bt(4, 2, { strum: 'up' }), bt(4, 2, { strum: 'down' }), bt(4, 2, { strum: 'up' })] },
+  ] }] };
+  for (const width of [1400, 500]) {
+    const svg = renderTree(score, width);
+    const seq = arpSeq(score, width).filter((b) => b.raw.type !== 'grace');
+    const bottoms = [];
+    systemsOf(svg).forEach((_, si) => strumsOf(tabStg(svg, si)).forEach((st) => bottoms.push({ si, bottom: st.bottom })));
+    const strummed = seq.filter((b) => rawStrum(b.raw));
+    ok(bottoms.length === strummed.length && strummed.length === 14, `@${width}: ${bottoms.length} strums vs ${strummed.length}`);
+    // Oracle runs: consecutive strummed main beats on one system.
+    let run = []; const runs = [];
+    seq.forEach((b, i) => {
+      const prev = seq[i - 1];
+      if (!rawStrum(b.raw) || (prev && prev.si !== b.si)) { if (run.length) runs.push(run); run = []; }
+      if (rawStrum(b.raw)) run.push(strummed.indexOf(b));
+    });
+    if (run.length) runs.push(run);
+    runs.forEach((r) => r.forEach((k) => near(bottoms[k].bottom, bottoms[r[0]].bottom, EPS, `@${width}: strum ${k} vs run start ${r[0]}`)));
+    const plain = Math.max(...bottoms.map((b) => b.bottom));
+    runs.forEach((r) => {
+      const bent = r.some((k) => strummed[k].raw.notes[0].tap);
+      ok(bent ? bottoms[r[0]].bottom < plain - 0.5 * SP : Math.abs(bottoms[r[0]].bottom - plain) <= EPS, `@${width}: run [${r}] bottom ${bottoms[r[0]].bottom} (plain ${plain}, bent ${bent})`);
+    });
+    if (width === 1400) ok(runs.length === 3, `@1400: ${runs.length} runs`);
+    else ok(runs.length > 3 && systemsOf(svg).length > 1, `@500: a break splits a run (${runs.length} runs)`);
+  }
+});
+
+test('strumArpeggio', 'E8 a strum replaces the beat\'s pick stroke on both staves; a rake and a strum on one beat are both drawn', () => {
+  const beats = [bt(3, 5, { strum: 'down', pickStroke: 'up' }), bt(3, 5, { pickStroke: 'up' }), bt(3, 5, { strum: 'up', rake: 'up' }), bt(3, 5, { strum: 'bogus', pickStroke: 'down' })];
+  [true, false].forEach((notation) => {
+    const svg = renderTree({ tracks: [{ name: 'G', showTablature: true, showStandardNotation: notation, measures: [{ beats }] }] }, 900);
+    const picks = tg(svg, 'pick-stroke');
+    ok(picks.length === 2, `${notation ? 'N+TAB' : 'TAB'}: ${picks.length} pick strokes (beats 2 and 4 only)`);
+    ok(strumsOf(tabStg(svg)).length === 2 && tg(svg, 'rake').length === 1, 'two strums and the rake');
+    const pickXs = picks.map((g) => num(g.children[0], 'x'));
+    strumsOf(tabStg(svg)).forEach((st) => ok(!pickXs.some((x) => Math.abs(x - st.x) < 1), `strum at ${st.x} has a pick stroke too`));
+  });
+});
+
+test('strumArpeggio', 'E9 notation-only strum: above the staff, >= 0.4 sp above T / S / P and trill, >= 0.5 sp above a slur where it crosses, fermata >= 0.5 sp above it, noteColor', () => {
+  const score = nOnly([
+    nt('C6', { strum: 'down', slurStart: true }), nt('G4', { strum: 'up' }, { tap: true }), nt('A4', { strum: 'down' }, { trill: true }),
+    nt('E4', { strum: 'up', fermata: true }, { slap: true, trill: true }), nt('C6', { slurEnd: true }),
+    nt('E4', { strum: 'down', pickStroke: 'down' }), { type: 'grace', duration: '16th', notes: [{ pitch: 'D4' }], strum: 'up' }, nt('F4', { strum: 'up' }), rst(), nt('E4', { strum: 'down' }),
+  ]);
+  const svg = renderTree(score, 1400);
+  const stg = notStg(svg);
+  const info = staffInfo(stg);
+  const sts = strumsOf(stg);
+  ok(sts.length === 7, `${sts.length} strums`);
+  ok(tg(stg, 'pick-stroke').length === 0, 'the strum replaces the pick stroke');
+  sts.forEach((st, i) => { ok(st.bottom <= info.localTop - 0.4 * SP + EPS, `strum ${i}: above the staff`); ok(st.color === DEF.noteColor, 'noteColor'); });
+  const letters = [...tg(stg, 'tap'), ...tg(stg, 'slap')].map(letterBox);
+  const trs = tg(stg, 'trill').map((g) => ({ x: num(g.children[0], 'x'), top: Math.min(...all(g).map(({ n }) => nodeBox(n)).filter(Boolean).map((b) => b.top)) }));
+  ok(letters.length === 2 && trs.length === 2, `${letters.length} letters, ${trs.length} trills`);
+  [...letters, ...trs].forEach((m) => {
+    const st = sts.find((s) => Math.abs(s.x - m.x) < 1);
+    ok(!!st && st.bottom <= m.top - 0.4 * SP + EPS, `strum over mark at ${m.x}: ${st && st.bottom} vs ${m.top}`);
+  });
+  const slurs = slursAbove(stg);
+  let slurred = 0;
+  sts.forEach((st, i) => {
+    const bound = slurBound(slurs, st);
+    if (!Number.isFinite(bound)) return;
+    slurred++;
+    ok(st.bottom <= bound + C2_TOL, `strum ${i}: bottom ${st.bottom} vs slur limit ${bound}`);
+  });
+  ok(slurred >= 3, `${slurred} strums under the slur`);
+  const fer = num(tg(stg, 'fermata')[0].children[0], 'y');
+  ok(fer <= sts[3].top - 0.5 * SP + EPS, `fermata origin ${fer} vs strum top ${sts[3].top}`);
+  // Runs: beats 0-3 (the slur ends on an unstrummed note), 5 + 7 across the grace, 9 alone after the rest.
+  [1, 2, 3].forEach((k) => near(sts[k].bottom, sts[0].bottom, EPS, `run 0-3: strum ${k}`));
+  near(sts[4].bottom, sts[5].bottom, EPS, 'grace inside a run');
+});
+
+test('strumArpeggio', 'E10 rests, graces, single-note beats and garbage values draw no arpeggio; rests / graces / garbage no strum; no empty groups', () => {
+  const score = { tracks: [{ name: 'G', showTablature: true, measures: [{ beats: [
+    { type: 'rest', duration: 'quarter', arpeggio: true, strum: 'down' },
+    { type: 'grace', duration: '16th', arpeggio: 'up', strum: 'up', notes: [{ string: 1, fret: 3 }, { string: 2, fret: 3 }] },
+    { type: 'note', duration: 'quarter', arpeggio: true, strum: true, notes: [{ string: 1, fret: 5 }] },
+    { type: 'note', duration: 'quarter', arpeggio: 'sideways', strum: 'sideways', notes: [{ string: 1, fret: 5 }, { string: 2, fret: 5 }] },
+    { type: 'note', duration: 'quarter', arpeggio: 0, strum: 42, notes: [{ string: 3, fret: 2 }, { string: 2, fret: 3 }] },
+  ] }] }] };
+  [900, 400].forEach((width) => {
+    const svg = renderTree(score, width);
+    ok(tg(svg, 'arpeggio').length === 0 && tg(svg, 'strum').length === 0, `@${width}: nothing drawn`);
+    ok(all(svg).filter(({ n }) => n.tag === 'g' && !n.children.length).length === 0, 'no empty <g>');
+  });
+});
+
+// ---------- fixtures: strum-arpeggio, strum-arpeggio-break ----------
+const SA = characterizationCases.find((c) => c.name === 'strum-arpeggio');
+const SAB = characterizationCases.find((c) => c.name === 'strum-arpeggio-break');
+const SAFIX = [[SA, 900], [SAB, 600]];
+const mapBeats = (score, f) => ({ ...score, tracks: score.tracks.map((t) => ({ ...t, measures: t.measures.map((m) => ({ ...m, beats: m.beats.map(f) })) })) });
+
+test('strumArpeggio', 'E1: no pre-existing fixture / example emits an arpeggio or strum group', () => {
+  let checked = 0;
+  for (const [name, score, options] of SCORES) {
+    if (name.startsWith('char-strum-arpeggio')) continue;
+    for (const width of [600, 900]) {
+      all(renderTree(score, width, options)).forEach(({ n }) => {
+        ok(!cls(n).split(' ').some((x) => /^(arpeggio|strum)(-up|-down)?$/.test(x)), `${name}@${width}: class "${cls(n)}"`);
+      });
+      checked++;
+    }
+  }
+  ok(checked >= 20, `${checked} renders checked`);
+});
+
+test('strumArpeggio', 'E2: x of every element and the system breaks are unchanged with every strum stripped and with the arpeggio stripped from beats that ignore it; an arpeggio adds room; ink left of each wave is a grace\'s or >= 0.3 sp away', () => {
+  const shape = (score, width) => JSON.stringify(layoutOf(score, width).systems.map((sys) => ({
+    m: sys.measureIndices, last: sys.lastBarlineX, start: sys.contentStartX,
+    xs: sys.tracks.map((tr) => tr.measures.map((m) => m.elements.map((le) => le.x))),
+  })));
+  SAFIX.forEach(([fx, width]) => {
+    const base = shape(fx.score, width);
+    const noStrum = mapBeats(fx.score, ({ strum, ...b }) => b);
+    ok(shape(noStrum, width) === base, `${fx.name}: layout differs without strums`);
+    ok(!JSON.stringify(noStrum).includes('strum'), 'strums stripped');
+    const ignored = mapBeats(fx.score, (b) => { if (rawArp(b) || b.arpeggio === undefined) return b; const { arpeggio, ...rest } = b; return rest; });
+    ok(shape(ignored, width) === base, `${fx.name}: layout differs without the ignored arpeggios`);
+    ok(shape(mapBeats(fx.score, ({ arpeggio, ...b }) => b), width) !== base, `${fx.name}: arpeggios add room`);
+    const svg = renderTree(fx.score, width);
+    fx.score.tracks.forEach((track, ti) => {
+      const seq = arpSeq(fx.score, width, ti).map((b, i, list) => ({ ...b, grace: i > 0 && list[i - 1].raw.type === 'grace' }));
+      systemsOf(svg).forEach((_, si) => [false, true].forEach((tab) => {
+        const stg = staffOfTrack(svg, si, ti, tab);
+        if (!stg) return;
+        const marked = seq.filter((b) => b.si === si && rawArp(b.raw) && (!tab || b.raw.notes.some((nn) => nn.string != null && nn.fret != null)));
+        const drawn = arpsOf(stg);
+        ok(drawn.length === marked.length, `${fx.name} t${ti} sys${si} ${tab ? 'TAB' : 'notation'}: ${drawn.length} vs ${marked.length}`);
+        drawn.forEach((a, i) => checkLeftOfWave(stg, a, marked[i].grace, `${fx.name} t${ti} sys${si} ${tab ? 'TAB' : 'notation'} arpeggio ${i}`));
+      }));
+    });
+  });
+});
+
+test('strumArpeggio', 'E11: fixtures render deterministically, the input is not mutated, a direct render equals the cloned one, no NaN / undefined / Infinity; garbage arpeggio / strum values never throw', () => {
+  SAFIX.forEach(([fx, width]) => {
+    const a = serialize(renderTree(fx.score, width, fx.options || {}));
+    ok(a === serialize(renderTree(fx.score, width, fx.options || {})), `${fx.name}: two renders differ`);
+    const before = JSON.stringify(fx.score);
+    const box = makeContainer(); new MusicScoreRenderer(box, fx.score, { width }).render();
+    ok(JSON.stringify(fx.score) === before, `${fx.name}: input mutated`);
+    ok(serialize(box.children[0]) === a, `${fx.name}: direct render differs`);
+    ok(!/NaN|undefined|Infinity/.test(a), `${fx.name}: NaN / undefined / Infinity in the SVG`);
+  });
+  const garbage = [null, undefined, NaN, Infinity, -1, 2.5, '', 'zz', [], ['up'], {}, { up: true }, () => 1, false, 0, 'UPWARD', ' down '];
+  garbage.forEach((v) => {
+    const chord = (extra) => ({ type: 'note', duration: 'quarter', notes: [{ string: 3, fret: 2 }, { string: 2, fret: 3 }], arpeggio: v, strum: v, ...extra });
+    [true, false].forEach((notation) => {
+      const beats = [chord(), { type: 'grace', duration: '16th', notes: [{ string: 3, fret: 2 }], arpeggio: v, strum: v }, chord({ pickStroke: 'down' }), { type: 'rest', duration: 'half', arpeggio: v, strum: v }];
+      const score = { tracks: [{ name: 'G', showTablature: true, showStandardNotation: notation, measures: [{ beats }] }] };
+      const before = JSON.stringify(score);
+      const out = serialize(renderTree(score, 900));
+      ok(out === serialize(renderTree(score, 900)), 'deterministic');
+      ok(!/NaN|undefined|Infinity/.test(out), `NaN for garbage ${String(v)}`);
+      ok(JSON.stringify(score) === before, 'input untouched');
+    });
+  });
+});
+
+test('strumArpeggio', 'E12 fixture content: strum-arpeggio draws 16 arpeggios (5 chords on notation + TAB, 3 tab-only, 3 notation-only) and 34 strums with no pick stroke; the break fixture 6 arpeggios and 10 strums over 3 systems', () => {
+  const svg = renderTree(SA.score, 900);
+  const staves = (t) => (t.showTablature ? 1 : 0) + (t.showStandardNotation === false ? 0 : 1);
+  const arps = SA.score.tracks.reduce((s, t) => s + t.measures.flatMap((m) => m.beats).filter((b) => rawArp(b)).length * staves(t), 0);
+  const strums = SA.score.tracks.reduce((s, t) => s + t.measures.flatMap((m) => m.beats).filter((b) => rawStrum(b)).length, 0);
+  ok(arps === 16 && tg(svg, 'arpeggio').length === 16, `${tg(svg, 'arpeggio').length} arpeggios, oracle ${arps}`);
+  ok(strums === 34 && tg(svg, 'strum').length === 34, `${tg(svg, 'strum').length} strums, oracle ${strums}`);
+  ok(tg(svg, 'arpeggio-up').length === 6 && tg(svg, 'arpeggio-down').length === 6, `up ${tg(svg, 'arpeggio-up').length}, down ${tg(svg, 'arpeggio-down').length}`);
+  ok(tg(svg, 'strum-down').length === 18 && tg(svg, 'strum-up').length === 16, `down ${tg(svg, 'strum-down').length}, up ${tg(svg, 'strum-up').length}`);
+  ok(tg(svg, 'pick-stroke').length === 0, 'every pick stroke is on a strummed beat');
+  ok(tg(svg, 'rake').length === 1 && tg(svg, 'trill').length === 3 && tg(svg, 'tap').length === 3 && tg(svg, 'slap').length === 1, `rake ${tg(svg, 'rake').length}, trill ${tg(svg, 'trill').length}, tap ${tg(svg, 'tap').length}, slap ${tg(svg, 'slap').length}`);
+  const b = renderTree(SAB.score, 600);
+  ok(systemsOf(b).length === 3, `${systemsOf(b).length} systems`);
+  ok(tg(b, 'arpeggio').length === 6 && tg(b, 'strum').length === 10, `break: ${tg(b, 'arpeggio').length} arpeggios, ${tg(b, 'strum').length} strums`);
+});
 }
 
 // ---------- report ----------

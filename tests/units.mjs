@@ -857,6 +857,114 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(glyphBox(pickStrokeGlyph('down')), { left: 0, right: 1.248, top: 1.3, bottom: 0, width: 1.248 });
     eq(glyphBox(pickStrokeGlyph('up')), { left: 0, right: 1, top: 2, bottom: 0, width: 1 });
   });
+  test('arpeggio: out-of-range or infinite TAB string numbers are skipped, the wave stays short', () => {
+    const notes = [{ string: 1, fret: 0 }, { string: 2, fret: 1 }, { string: Infinity, fret: 0 }, { string: 1e9, fret: 0 }, { string: 99, fret: 0 }, { string: 1.5, fret: 0 }];
+    const score = { tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: [
+      { type: 'note', duration: 'whole', arpeggio: 'up', notes },
+    ] }] }] };
+    const started = Date.now();
+    const svg = render(score);
+    eq(Date.now() - started < 5000, true, 'renders promptly');
+    const arps = byClass(svg, 'arpeggio');
+    eq(arps.length, 1);
+    const d = arps[0].children[0].getAttribute('d');
+    eq(!/NaN|Infinity/.test(d) && d.length < 400, true, `short finite wave: ${d.length} chars`);
+  });
+  test('directions: arpeggioOf canonical table, idempotent, garbage -> null', () => {
+    const raws = [true, 'up', 'down', ' Up ', 'DOWN', 'upward', '', 'u', false, 1, 0, null, undefined, {}, ['up'], NaN];
+    const out = raws.map(D.arpeggioOf);
+    eq(out, [true, 'up', 'down', 'up', 'down', null, null, null, null, null, null, null, null, null, null, null]);
+    eq(out.map(D.arpeggioOf), out);
+  });
+  test('directions: strumOf canonical table (true -> null), idempotent', () => {
+    const raws = ['down', 'up', ' Down ', 'UP', true, 'strum', '', false, 1, null, undefined, {}, ['up']];
+    const out = raws.map(D.strumOf);
+    eq(out, ['down', 'up', 'down', 'up', null, null, null, null, null, null, null, null, null]);
+    eq(out.map(D.strumOf), out);
+  });
+  test('directions: beatArpeggio needs a main beat of two or more notes; beatStrum a main note beat', () => {
+    const two = [{ pitch: 'E4' }, { pitch: 'G4' }];
+    const note = (extra, notes = two) => ({ type: 'note', duration: 'quarter', notes, ...extra });
+    eq([D.beatArpeggio(note({ arpeggio: true })), D.beatArpeggio(note({ arpeggio: ' UP ' })), D.beatArpeggio(note({ arpeggio: 'down' }))], [true, 'up', 'down']);
+    eq(D.beatArpeggio(note({ arpeggio: 'sideways' })), null);
+    eq(D.beatArpeggio(note({ arpeggio: true }, [{ pitch: 'E4' }])), null, 'single note');
+    eq(D.beatArpeggio(note({ arpeggio: true }, [])), null, 'no notes');
+    eq(D.beatArpeggio({ type: 'rest', duration: 'quarter', arpeggio: true }), null);
+    eq(D.beatArpeggio({ type: 'grace', duration: '16th', notes: two, arpeggio: true }), null);
+    eq(D.beatArpeggio(note({ arpeggio: true }, undefined)), true);
+    eq([D.beatStrum(note({ strum: 'Down' })), D.beatStrum(note({ strum: 'up' }, [{ pitch: 'E4' }])), D.beatStrum(note({ strum: true }))], ['down', 'up', null]);
+    eq(D.beatStrum({ type: 'rest', duration: 'quarter', strum: 'down' }), null);
+    eq(D.beatStrum({ type: 'grace', duration: '16th', notes: two, strum: 'down' }), null);
+    eq(D.beatStrum(note({ strum: 'down' }, [])), null);
+  });
+  test('directions: beatPickStroke is suppressed by a strum, unchanged otherwise', () => {
+    const note = (extra) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }], ...extra });
+    eq(D.beatPickStroke(note({ pickStroke: 'down', strum: 'up' })), null);
+    eq(D.beatPickStroke(note({ pickStroke: 'up', strum: ' DOWN ' })), null);
+    eq(D.beatPickStroke(note({ pickStroke: 'down', strum: true })), 'down', 'garbage strum keeps the pick stroke');
+    eq(D.beatPickStroke(note({ pickStroke: 'down', strum: null })), 'down');
+    eq(D.beatPickStroke(note({ pickStroke: 'up' })), 'up');
+  });
+  test('directions: withDirections handles arpeggio / strum; fast path needs all five absent; idempotent', () => {
+    const b = { type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }, { pitch: 'G4' }] };
+    eq(D.withDirections(b) === b, true);
+    const raw = { ...b, arpeggio: ' Down ', strum: 'UP' };
+    const out = D.withDirections(raw);
+    eq(out !== raw && raw.arpeggio === ' Down ' && raw.strum === 'UP', true, 'copy, input untouched');
+    eq([out.arpeggio, out.strum], ['down', 'up']);
+    eq(D.withDirections(out), out);
+    eq(D.withDirections({ ...b, arpeggio: true }), { ...b, arpeggio: true });
+    eq(D.withDirections({ ...b, strum: true }), { ...b, strum: null });
+    eq(D.withDirections({ ...b, arpeggio: 'x' }), { ...b, arpeggio: null });
+    eq('arpeggio' in D.withDirections({ ...b, strum: 'down' }), false);
+    eq('strum' in D.withDirections({ ...b, arpeggio: 'up' }), false);
+  });
+}
+
+// ---------- arpeggio room (layout/timeline.js buildColumn) ----------
+{
+  const { buildColumn, tabExtents } = await imp('src/layout/timeline.js');
+  const { arpeggioInnerLeft, ARPEGGIO_ROOM_SP } = await imp('src/layout/chord.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const theme = resolveTheme();
+  const sp = theme.staffLineSpacing;
+  const close = (a, b, m) => { if (Math.abs(a - b) > 1e-9) throw new Error(`${m}: expected ${b}, got ${a}`); };
+  const column = (beats, extra = {}) => {
+    const score = normalizeScore({ tracks: [{ showTablature: true, ...extra, measures: [{ beats }] }] });
+    return buildColumn(0, score, theme).tracks[0].events;
+  };
+  const chordNotes = [{ string: 4, fret: 4 }, { string: 3, fret: 3 }, { string: 2, fret: 2 }];
+  const q = (extra, notes = chordNotes) => ({ type: 'note', duration: 'quarter', notes, ...extra });
+  test('arpeggio room: ownLeft / ownLeftFirst = max(arpeggioInnerLeft, TAB left) + 1.0 sp on an arpeggio chord', () => {
+    const plain = column([q({}), q({}), q({}), q({})]);
+    const marked = column([q({ arpeggio: true }), q({ arpeggio: 'up' }), q({ arpeggio: 'down' }), q({})]);
+    const tabIn = tabExtents(q({}), theme).left;
+    eq(tabIn > 0, true);
+    for (let i = 0; i < 3; i++) {
+      const ev = marked[i];
+      const want = Math.max(arpeggioInnerLeft(ev.chord), tabIn) + ARPEGGIO_ROOM_SP * sp;
+      close(ev.ownLeft, Math.max(plain[i].ownLeft, want), `ownLeft ${i}`);
+      close(ev.ownLeftFirst, Math.max(plain[i].ownLeftFirst, Math.max(arpeggioInnerLeft(ev.chordFirst), tabIn) + ARPEGGIO_ROOM_SP * sp), `ownLeftFirst ${i}`);
+      eq(ev.ownLeft > plain[i].ownLeft, true, 'room added');
+    }
+    close(marked[3].ownLeft, plain[3].ownLeft, 'unmarked beat');
+  });
+  test('arpeggio room: restated tied accidental widens ownLeftFirst only; single notes, rests and graces reserve nothing', () => {
+    const tied = [{ type: 'note', duration: 'quarter', arpeggio: true, notes: [{ pitch: 'F#4', tieEnd: true }, { pitch: 'A4' }, { pitch: 'C5' }] }];
+    const [ev] = column(tied, { showTablature: false });
+    close(ev.ownLeft, arpeggioInnerLeft(ev.chord) + ARPEGGIO_ROOM_SP * sp, 'ownLeft');
+    close(ev.ownLeftFirst, arpeggioInnerLeft(ev.chordFirst) + ARPEGGIO_ROOM_SP * sp, 'ownLeftFirst');
+    eq(ev.ownLeftFirst > ev.ownLeft, true, 'restated sharp is further left');
+    const beats = [
+      { type: 'grace', duration: '16th', arpeggio: true, notes: chordNotes },
+      q({ arpeggio: true }, [{ string: 2, fret: 1 }]),
+      { type: 'rest', duration: 'quarter', arpeggio: true },
+      q({ arpeggio: 'bogus' }), q({ arpeggio: false }),
+    ];
+    const stripped = beats.map(({ arpeggio, ...b }) => b);
+    const a = column(beats); const b = column(stripped);
+    a.forEach((ev2, i) => { close(ev2.ownLeft, b[i].ownLeft, `ownLeft ${i}`); close(ev2.left, b[i].left, `left ${i}`); close(ev2.ownLeftFirst ?? 0, b[i].ownLeftFirst ?? 0, `first ${i}`); });
+  });
 }
 
 // ---------- rest glyphs ----------

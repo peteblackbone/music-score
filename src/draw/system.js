@@ -21,6 +21,8 @@ import {
 import { drawTabStaffLines, drawTabClef, renderTabElement } from './tab.js';
 import { drawTabRhythm } from './tabRhythm.js';
 import { drawMeasureNumber } from './decor.js';
+import { renderNotationArpeggio, renderTabArpeggio } from './arpeggio.js';
+import { beatArpeggio } from '../directions.js';
 import { glyphBox } from '../glyphMetrics.js';
 import { noteheadForDuration } from '../glyphs.js';
 
@@ -161,7 +163,7 @@ function barlineStaff(staff, theme) {
 /**
  * Notation-staff content of one measure: notes/rests (recording each
  * element's info on `layoutEl.rendered`), beams, articulations,
- * tremolo/vibrato and tuplet brackets. Chord symbols and dynamics are
+ * tremolo/vibrato, arpeggio lines and tuplet brackets. Chord symbols and dynamics are
  * drawn later by a score-wide pass (passes/chordsFermatas.js), once everything they must
  * clear is on the staff.
  */
@@ -193,6 +195,8 @@ function drawNotationMeasure(g, measure, track, notationBaselineY, theme) {
     if (marks.length) renderArticulations(g, layoutEl.rendered, marks, notationBaselineY, theme);
     if (layoutEl.el.tremolo) renderTremolo(g, layoutEl.rendered, theme);
     if (layoutEl.el.vibrato) renderVibrato(g, layoutEl.rendered, layoutEl.width, theme);
+    const arp = beatArpeggio(layoutEl.el);
+    if (arp) renderNotationArpeggio(g, { ...layoutEl, baselineY: notationBaselineY }, arp, theme);
   });
 
   drawTupletBrackets(g, measure, notationBaselineY, theme);
@@ -226,8 +230,8 @@ function drawTupletBrackets(g, measure, notationBaselineY, theme) {
 }
 
 /**
- * Tab-staff content of one measure: fret numbers and per-beat tab marks,
- * then, when the track shows rhythm on its TAB staff (`track.tabRhythm`),
+ * Tab-staff content of one measure: fret numbers, per-beat tab marks and
+ * arpeggio lines, then, when the track shows rhythm on its TAB staff (`track.tabRhythm`),
  * stems, beams, flags, dots, tuplets and rests (draw/tabRhythm.js) — drawn
  * before the score-wide passes, so slides, H/P arcs and bends sit on top
  * of rest knock-outs. Records each element's fret / marks tops on
@@ -236,6 +240,8 @@ function drawTupletBrackets(g, measure, notationBaselineY, theme) {
 function drawTabMeasure(g, measure, track, tabBaselineY, theme) {
   measure.elements.forEach((layoutEl) => {
     layoutEl.tabRendered = renderTabElement(g, { ...layoutEl, tabBaselineY }, track.tuning.length, theme);
+    const arp = beatArpeggio(layoutEl.el);
+    if (arp) renderTabArpeggio(g, { ...layoutEl, tabBaselineY }, track.tuning.length, arp, theme);
   });
   if (track.tabRhythm) drawTabRhythm(g, measure, track.tuning.length, tabBaselineY, theme);
 }

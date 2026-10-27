@@ -16,9 +16,14 @@
  * - `beat.rake` (truthy, 'down' | 'up'): a "rake" label run over the beat
  *   and the grace notes right before it;
  * - `note.trill` true | fret | pitch | `{ fret, pitch }`: "tr" and a wavy
- *   line above the beat.
+ *   line above the beat;
+ * - `beat.arpeggio` true | 'up' | 'down': a vertical wavy line left of a
+ *   chord of two or more notes ('up' / 'down' add an arrowhead);
+ * - `beat.strum` 'down' | 'up': a strum arrow above the beat; it replaces
+ *   the beat's pick stroke.
  *
- * Rests and grace notes carry no pick stroke, tap, whammy or rake. Every
+ * Rests and grace notes carry no pick stroke, tap, whammy, rake, arpeggio
+ * or strum. Every
  * canonicalizer is idempotent and returns null for values it doesn't
  * understand. Pure functions, no DOM.
  */
@@ -45,6 +50,19 @@ export function pickStrokeKind(raw) {
   if (typeof raw !== 'string') return null;
   const k = raw.trim().toLowerCase();
   return PICK_KINDS.includes(k) ? k : null;
+}
+
+/** Canonical arpeggio of a raw `arpeggio` value: true | 'up' | 'down' (trimmed, any case), or null. Idempotent. */
+export function arpeggioOf(raw) {
+  if (raw === true) return true;
+  if (typeof raw !== 'string') return null;
+  const k = raw.trim().toLowerCase();
+  return PICK_KINDS.includes(k) ? k : null;
+}
+
+/** Canonical strum direction ('down' | 'up') of a raw `strum` value, or null (`true` too). Idempotent. */
+export function strumOf(raw) {
+  return pickStrokeKind(raw);
 }
 
 /** Dip amount text without its sign: trimmed string / finite number, every leading '-' / '−' (and whitespace) removed; '' or invalid → null. */
@@ -129,9 +147,19 @@ export function whammyLabel(dip) {
   return `-${dip.amount}`;
 }
 
-/** Pick stroke of a beat ('down' | 'up'), or null (none, rest, grace). */
+/** Pick stroke of a beat ('down' | 'up'), or null (none, rest, grace, or a strummed beat). */
 export function beatPickStroke(el) {
-  return isMainNoteBeat(el) ? pickStrokeKind(el.pickStroke) : null;
+  return isMainNoteBeat(el) && !strumOf(el.strum) ? pickStrokeKind(el.pickStroke) : null;
+}
+
+/** Arpeggio of a beat (true | 'up' | 'down'), or null (none, rest, grace, fewer than two notes). */
+export function beatArpeggio(el) {
+  return isMainNoteBeat(el) && el.notes.length >= 2 ? arpeggioOf(el.arpeggio) : null;
+}
+
+/** Strum direction of a beat ('down' | 'up'), or null (none, rest, grace). */
+export function beatStrum(el) {
+  return isMainNoteBeat(el) ? strumOf(el.strum) : null;
 }
 
 /** Whammy dip of a beat, or null (none, rest, grace, or a whammy of another type). */
@@ -188,17 +216,22 @@ export function beatTapMark(el) {
 }
 
 /**
- * `beat` itself unless it has a `pickStroke`, `whammy` or `rake` field; then
- * a copy with those (present) fields canonicalized (null when not understood).
+ * `beat` itself unless it has a `pickStroke`, `whammy`, `rake`, `arpeggio`
+ * or `strum` field; then a copy with those (present) fields canonicalized
+ * (null when not understood).
  */
 export function withDirections(beat) {
   const hasPick = beat.pickStroke !== undefined;
   const hasWhammy = beat.whammy !== undefined;
   const hasRake = beat.rake !== undefined;
-  if (!hasPick && !hasWhammy && !hasRake) return beat;
+  const hasArp = beat.arpeggio !== undefined;
+  const hasStrum = beat.strum !== undefined;
+  if (!hasPick && !hasWhammy && !hasRake && !hasArp && !hasStrum) return beat;
   const out = { ...beat };
   if (hasPick) out.pickStroke = pickStrokeKind(beat.pickStroke);
   if (hasWhammy) out.whammy = whammyOf(beat.whammy);
   if (hasRake) out.rake = rakeOf(beat.rake);
+  if (hasArp) out.arpeggio = arpeggioOf(beat.arpeggio);
+  if (hasStrum) out.strum = strumOf(beat.strum);
   return out;
 }
