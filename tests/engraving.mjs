@@ -4016,6 +4016,7 @@ test('chordDiagrams', 'determinism: fixtures render identically twice; inputs un
 // Raw-score oracles, geometry recomputed from the rendered SVG (local staff coordinates). Fixtures `techniques-11`
 // (w900) and `techniques-11-break` (w600) are in tests/fixtures/characterization.js; unit tables live in units.mjs.
 {
+const { techniqueLabelSize } = await imp('src/draw/tab.js');
 const SP = DEF.staffLineSpacing;
 const tg = (root, c) => all(root).filter(({ n }) => n.tag === 'g' && cls(n).split(' ').includes(c)).map(({ n }) => n);
 const tAny = (...beats) => ({ tracks: [{ name: 'G', showTablature: true, measures: [{ beats }] }] });
@@ -4104,6 +4105,136 @@ test('techniques11', 'slap / pop on a 4-string bass track (E1 A1 D2 G2): letters
   ok(!/NaN|undefined|Infinity/.test(s), 'no NaN/undefined/Infinity');
   const info = staffInfo(tabStg(svg));
   tg(tabStg(svg), 'slap').forEach((g) => ok(num(g.children[0], 'y') < info.localTop, 'above the staff'));
+});
+
+// ---------- rake ----------
+const gr = (string = 3, fret = 5) => ({ type: 'grace', duration: '16th', notes: [{ string, fret, mute: true }] });
+// Raw beats of track `ti` paired with their layout x / system (like dirModel, but for any in-test score).
+function seqOf(score, width, ti = 0, options = {}) {
+  const raws = score.tracks[ti].measures.flatMap((m) => m.beats);
+  const els = layoutOf(score, width, options).systems.flatMap((sys, si) => sys.tracks[ti].measures.flatMap((m) => m.elements.map((le) => ({ si, x: le.x }))));
+  ok(raws.length === els.length, `${raws.length} raw beats vs ${els.length} layout elements`);
+  return raws.map((raw, i) => ({ raw, ...els[i] }));
+}
+const rawRake = (b) => rawMain(b) && !!b.rake;
+// Oracle: the run of rake beat i = the graces directly before it on the same system, then the beat.
+const rakeRunsOf = (seq) => seq.flatMap((b, i) => {
+  if (!rawRake(b.raw)) return [];
+  let k = i;
+  while (k > 0 && seq[k - 1].raw.type === 'grace' && seq[k - 1].si === b.si) k--;
+  return [{ si: b.si, startX: seq[k].x, beatX: b.x, nextX: seq[i + 1] && seq[i + 1].si === b.si ? seq[i + 1].x : null }];
+});
+
+test('techniques11', 'rake: one "rake" run per rake beat, label x = first directly preceding grace on the system else the beat, dash end <= next beat - 0.6 sp and last barline - 0.5 sp (tab, tab+notation, notation-only)', () => {
+  const beats = [
+    gr(), gr(), gr(), bt(3, 7, { rake: 'down' }), bt(3, 5), bt(3, 7, { rake: true }), gr(), bt(3, 9, { rake: 'UP' }),
+    rst(), { ...rst(), rake: true }, gr(), { ...gr(), rake: true }, bt(2, 3),
+  ];
+  const mk = (kind) => (kind === 'tab' ? tOnly(beats) : kind === 'both' ? tAny(...beats) : nOnly(beats.map((b) => (b.notes && b.notes[0].string ? { ...b, notes: [{ pitch: 'E4', mute: true }] } : b))));
+  let runs = 0;
+  ['tab', 'both', 'notation'].forEach((kind) => {
+    const score = mk(kind);
+    const seq = seqOf(score, 1200);
+    const want = rakeRunsOf(seq).sort((a, b) => a.startX - b.startX);
+    ok(want.length === 3, `oracle: ${want.length} rake runs`);
+    const layout = layoutOf(score, 1200);
+    const stg = kind === 'notation' ? notStg(renderTree(score, 1200)) : tabStg(renderTree(score, 1200));
+    const got = tg(stg, 'rake').sort((a, b) => num(a.children[0], 'x') - num(b.children[0], 'x'));
+    ok(got.length === want.length, `${kind}: ${got.length} rake groups, expected ${want.length}`);
+    got.forEach((g, i) => {
+      const t = g.children[0];
+      ok(t._text === 'rake' && t.getAttribute('font-style') === 'italic' && t.getAttribute('font-weight') === 'bold', 'italic bold "rake"');
+      near(num(t, 'x'), want[i].startX, EPS, `${kind} run ${i} label x`);
+      const dash = g.children.find((c) => c.tag === 'path');
+      if (dash) {
+        const end = dashEnd(g);
+        if (want[i].nextX != null) ok(end <= want[i].nextX - 0.6 * SP + EPS, `${kind} run ${i}: dash end ${end} past next beat ${want[i].nextX}`);
+        ok(end <= layout.systems[want[i].si].lastBarlineX - 0.5 * SP + EPS, `${kind} run ${i}: dash end ${end} past the barline`);
+        ok(end >= want[i].beatX - EPS, `${kind} run ${i}: dash end ${end} short of the beat ${want[i].beatX}`);
+      }
+      runs++;
+    });
+  });
+  ok(runs === 9, `${runs} runs checked`);
+});
+
+test('techniques11', 'rake: "down" / "up" / true draw identically; a falsy rake draws nothing; rests and graces carry no rake', () => {
+  const mk = (r) => tOnly([gr(), bt(3, 7, { rake: r }), bt(3, 5)]);
+  const a = serialize(renderTree(mk('down'), 900));
+  ok(a === serialize(renderTree(mk('up'), 900)) && a === serialize(renderTree(mk(true), 900)) && a === serialize(renderTree(mk(' Down '), 900)), 'forms differ');
+  ok(tg(renderTree(mk(true), 900), 'rake').length === 1, 'one rake group');
+  [false, 0, '', null, undefined].forEach((r) => ok(tg(renderTree(mk(r), 900), 'rake').length === 0, `rake ${String(r)} drew a run`));
+  const nothing = tOnly([{ ...rst(), rake: true }, { ...gr(), rake: true }, bt(3, 5)]);
+  ok(tg(renderTree(nothing, 900), 'rake').length === 0, 'rest / grace rake drew a run');
+});
+
+test('techniques11', 'rake: stacks outside every overlapping P.M. / harmonic / let-ring run (TAB higher, notation-only lower); adjacent rakes never merge and do not overlap', () => {
+  const pm = (b) => ({ ...b, palmMute: true });
+  const lr = (b) => ({ ...b, letRing: true });
+  const beats = [
+    pm(lr(gr())), pm(lr(gr())), pm(lr(bt(3, 7, { rake: 'down' }))), pm(lr(bt(3, 5))),
+    gr(), bt(3, 7, { rake: true }), bt(3, 7, { rake: true }),
+    bt(2, 5, {}, { harmonic: 'artificial', harmonicFret: 17 }), bt(2, 5, { rake: true }, { harmonic: 'artificial', harmonicFret: 17 }),
+  ];
+  const svg = renderTree(tOnly(beats), 1200);
+  const stg = tabStg(svg);
+  const label = (c) => tg(stg, c).map((g) => ({ g, y: num(g.children[0], 'y'), x1: num(g.children[0], 'x'), x2: dashEnd(g) ?? num(g.children[0], 'x') + 30 }));
+  const rakes = label('rake');
+  ok(rakes.length === 4, `${rakes.length} rake runs (adjacent rakes never merge)`);
+  const others = [...label('palm-mute'), ...label('let-ring'), ...tg(stg, 'harmonic').map((g) => ({ y: num(g.children[0], 'y'), x1: num(g.children[0], 'x'), x2: dashEnd(g) ?? num(g.children[0], 'x') + 30 }))];
+  const sizeL = techniqueLabelSize(DEF);
+  let stacked = 0;
+  rakes.forEach((r) => others.filter((o) => o.x1 < r.x2 && r.x1 < o.x2).forEach((o) => {
+    ok(r.y <= o.y - sizeL + EPS, `rake at y ${r.y} not a lane above run at y ${o.y}`); // TAB labels stack upward
+    stacked++;
+  }));
+  ok(stacked >= 3, `${stacked} overlaps exercised`);
+  rakes.forEach((a, i) => rakes.slice(i + 1).forEach((b) => {
+    const ta = { x1: a.x1, x2: a.x1 + estimateTextWidth('rake', sizeL, { bold: true }), top: a.y - 1, bottom: a.y + 1 };
+    const tb = { x1: b.x1, x2: b.x1 + estimateTextWidth('rake', sizeL, { bold: true }), top: b.y - 1, bottom: b.y + 1 };
+    ok(!boxesHit(ta, tb), 'two rake labels overlap');
+  }));
+  const nSvg = renderTree(nOnly([{ ...nt('E4', {}, { mute: true }), letRing: true }, { ...nt('E4', { rake: true }, { mute: true }), letRing: true }]), 900);
+  const nStg = notStg(nSvg);
+  const ring = tg(nStg, 'let-ring')[0]; const rk = tg(nStg, 'rake')[0];
+  ok(num(rk.children[0], 'y') >= num(ring.children[0], 'y') + sizeL - EPS, 'notation-only: rake a lane below let ring');
+});
+
+test('techniques11', 'rake: graces never join P.M. / harmonic / let-ring runs - those groups are byte-identical with and without the rake marks', () => {
+  const base = [
+    { ...gr(), palmMute: true }, { ...bt(3, 7), palmMute: true }, { ...gr(), palmMute: true }, bt(3, 5),
+    { ...gr(), letRing: true }, { ...bt(3, 7), letRing: true }, gr(), { ...bt(3, 7), letRing: true },
+    gr(), bt(2, 5, {}, { harmonic: 'artificial', harmonicFret: 17 }), gr(), bt(2, 5, {}, { harmonic: 'artificial', harmonicFret: 17 }), bt(3, 5),
+  ];
+  const withRake = base.map((b, i) => (i === 1 || i === 5 || i === 11 ? { ...b, rake: 'down' } : b));
+  [tOnly, (b) => tAny(...b)].forEach((mk) => {
+    const a = renderTree(mk(base), 1200); const b = renderTree(mk(withRake), 1200);
+    ['palm-mute', 'let-ring', 'harmonic'].forEach((c) => {
+      const ga = tg(tabStg(a), c).map(serialize); const gb = tg(tabStg(b), c).map(serialize);
+      ok(ga.length >= 1, `${c}: no runs exercised`);
+      ok(JSON.stringify(ga) === JSON.stringify(gb), `${c} groups changed by the rake marks`);
+    });
+    ok(tg(tabStg(a), 'rake').length === 0 && tg(tabStg(b), 'rake').length === 3, 'rake groups only with the marks');
+  });
+});
+
+test('techniques11', 'rake: a run never crosses a system break - a rake beat opening a system takes no graces from the system before', () => {
+  const measures = Array.from({ length: 6 }, (_, i) => ({ beats: [bt(3, 5, { rake: true }), bt(3, 7), bt(3, 5), bt(3, 7), ...(i < 5 ? [gr()] : [])] }));
+  const score = { tracks: [{ name: 'G', showStandardNotation: false, showTablature: true, measures }] };
+  const width = 420;
+  const seq = seqOf(score, width);
+  const want = rakeRunsOf(seq);
+  ok(new Set(seq.map((b) => b.si)).size >= 2, 'the score breaks into several systems');
+  const svg = renderTree(score, width);
+  let opens = 0; let withGrace = 0;
+  want.forEach((w) => {
+    const stg = tabStg(svg, w.si);
+    const g = tg(stg, 'rake').find((q_) => Math.abs(num(q_.children[0], 'x') - w.startX) < EPS);
+    ok(!!g, `rake label at x ${w.startX} on system ${w.si}`);
+    if (w.startX === w.beatX) opens++; else withGrace++;
+  });
+  ok(opens >= 2 && withGrace >= 1, `${opens} runs without graces, ${withGrace} with graces`);
+  ok(tg(svg, 'rake').length === want.length, `${tg(svg, 'rake').length} rake groups for ${want.length} rake beats`);
 });
 
 // @@T11-END
