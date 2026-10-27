@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>music-score — lead solo in F</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f4f3f1; margin: 0; padding: 32px; }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { color: #666; margin: 0 0 24px; font-size: 14px; }
+  #score { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 8px 4px; overflow-x: auto; }
+  .music-score text { user-select: none; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>lead-solo-f.js</h1>
+    <p class="sub">An original 12-measure lead-guitar solo in F major — a 16th-note pickup run, 16th- and 8th-note triplets, hammer-ons and pull-offs, dotted rhythms, grace-note slides, ties, 3rds and 6ths as dyads, "full" and "full release" bends, chord symbols including a slash chord, and vibrato. See README.md.</p>
+    <div id="score"></div>
+  </div>
+
+  <script type="module">
+    import { MusicScoreRenderer } from './index.js';
+    import { leadSoloF } from './examples/lead-solo-f.js';
+
+    const el = document.getElementById('score');
+    const renderer = new MusicScoreRenderer(el, leadSoloF, { width: 860 });
+
+    function draw() { renderer.render(); }
+
+    if (document.fonts && document.fonts.ready) {
+      draw();
+      document.fonts.load('40px Bravura').then(draw).catch(draw);
+      document.fonts.ready.then(draw);
+    } else {
+      draw();
+    }
+  </script>
+</body>
+</html>

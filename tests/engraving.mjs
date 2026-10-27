@@ -30,6 +30,7 @@ const { layoutChord } = await imp('src/layout/chord.js');
 const { repeatDotSpaces } = await imp('src/draw/staff.js');
 const { exampleScore } = await imp('examples/example-score.js');
 const { leadRiff } = await imp('examples/lead-riff.js');
+const { leadSoloF } = await imp('examples/lead-solo-f.js');
 const { articulationsScore } = await imp('examples/articulations-demo.js');
 const { characterizationCases } = await imp('tests/fixtures/characterization.js');
 
@@ -83,7 +84,7 @@ function staffInfo(g) {
 }
 
 const SCORES = [
-  ['example-score', exampleScore, {}], ['lead-riff', leadRiff, {}], ['articulations', articulationsScore, {}],
+  ['example-score', exampleScore, {}], ['lead-riff', leadRiff, {}], ['lead-solo-f', leadSoloF, {}], ['articulations', articulationsScore, {}],
   ...characterizationCases.map((c) => [`char-${c.name}`, c.score, c.options || {}]),
 ];
 const WIDTHS = [600, 860, 900, 1400];
@@ -2727,7 +2728,7 @@ test('tab-rhythm', 'AC1: no tab-rhythm / tab-rest / tab-tuplet node unless the t
     ok(c.score.tracks.some((t) => t.showTablature !== false), `${c.name}: has a TAB track`);
     ok(!/tab-(rhythm|rest|tuplet)/.test(serialize(renderTree(c.score, c.width, c.options || {}))), `${c.name}: has band nodes`);
   });
-  ['example-score', 'lead-riff', 'articulations'].forEach((nm) => {
+  ['example-score', 'lead-riff', 'lead-solo-f', 'articulations'].forEach((nm) => {
     const [, score, options] = SCORES.find(([n]) => n === nm);
     ok(!/tab-(rhythm|rest|tuplet)/.test(serialize(renderTree(score, 900, options))), `${nm}: has band nodes`);
   });
