@@ -90,7 +90,7 @@
   <div class="tile"><b>JSON in, SVG out</b><span>Score → tracks → measures → beats → notes. Rendered into any container.</span></div>
   <div class="tile"><b>Notation, tab or both</b><span>Per track. Tab pitch is worked out from string, fret and tuning.</span></div>
   <div class="tile"><b>Real engraving layout</b><span>Justified systems, aligned beats across staves, content-aware spacing.</span></div>
-  <div class="tile"><b>Guitar conventions</b><span>8vb clefs, SMuFL TAB clef, hammer-ons, slides, bends, palm mute, harmonics, let ring, pick strokes, tapping, slap and pop, whammy dips and dives, rakes, trills.</span></div>
+  <div class="tile"><b>Guitar conventions</b><span>8vb clefs, SMuFL TAB clef, hammer-ons, slides, bends, palm mute, harmonics, let ring, pick strokes, strum arrows, arpeggios, tapping, slap and pop, whammy dips and dives, rakes, trills.</span></div>
   <div class="tile"><b>Rhythm on tab</b><span>Tab-only tracks show stems, beams, flags, dots, tuplets and rests on the TAB staff.</span></div>
   <div class="tile"><b>Full notation basics</b><span>Keys, meters, tuplets, dots, ties, slurs, accidentals, chords.</span></div>
   <div class="tile"><b>Marks</b><span>Articulations, fermatas, dynamics, chord symbols, vibrato, tremolo.</span></div>
@@ -197,6 +197,8 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <tr><td><code>harmonic</code>, <code>harmonicFret</code></td><td>Natural: diamond and <code>&lt;12&gt;</code> on tab. Artificial, tapped, pinch, semi: <code>A.H.</code>, <code>T.H.</code>, <code>P.H.</code>, <code>S.H.</code> label; <code>harmonicFret</code> gives the touched fret, e.g. <code>5(17)</code></td></tr>
   <tr><td><code>letRing</code></td><td>Dashed "let ring" label over consecutive beats, like P.M.; a rest inside the run keeps it going</td></tr>
   <tr><td><code>pickStroke</code></td><td><code>'down'</code> or <code>'up'</code>: ⊓ or ∨ above the beat</td></tr>
+  <tr><td><code>strum</code></td><td><code>'down'</code> or <code>'up'</code>: a strum arrow ↓ or ↑ above the TAB (above the notation staff on a track without TAB); replaces the pick stroke</td></tr>
+  <tr><td><code>arpeggio</code></td><td><code>true</code>, <code>'up'</code> or <code>'down'</code>: a wavy line left of a chord on notation and TAB, with an arrowhead at the top or bottom</td></tr>
   <tr><td><code>tap</code> (on a note)</td><td>"T" above the note on notation, or above the fret on TAB</td></tr>
   <tr><td><code>slap</code>, <code>pop</code> (on a note)</td><td>"S" or "P" in the tap "T" place, on notation and TAB (tap wins over slap, slap over pop)</td></tr>
   <tr><td><code>whammy</code></td><td>Whammy-bar mark on TAB: <code>true</code>, a string or <code>{ type: 'dip' }</code> is a V with <code>-1/2</code> above it (<code>true</code> means <code>1/2</code>); <code>{ type: 'dive', amount }</code> slopes down and is held until a <code>{ type: 'return' }</code> beat rises again, across line breaks; <code>{ type: 'predive', amount }</code> is a level lead-in before the note, then the rise</td></tr>
@@ -216,7 +218,7 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 <div class="demo" data-demo="harmonics" data-width="680"></div>
 
 <h2 id="directions">Picking and playing directions</h2>
-<p>Beat fields for the marks players read: <code>letRing</code> for a let-ring run, <code>pickStroke</code> for down and up picks, <code>tap</code>, <code>slap</code>, <code>pop</code> and <code>trill</code> on a note, and <code>whammy</code> and <code>rake</code> on a beat. None of them change the rhythm or the note spacing.</p>
+<p>Beat fields for the marks players read: <code>letRing</code> for a let-ring run, <code>pickStroke</code> for down and up picks, <code>strum</code> and <code>arpeggio</code> for strummed and spread chords, <code>tap</code>, <code>slap</code>, <code>pop</code> and <code>trill</code> on a note, and <code>whammy</code> and <code>rake</code> on a beat. None of them change the rhythm; only <code>arpeggio</code> adds room left of its chord.</p>
 <ul class="points">
   <li>Consecutive <code>letRing</code> beats share one dashed "let ring" label, and an unmarked rest between them keeps the run going. The label sits outside any P.M. or harmonic label.</li>
   <li>Pick strokes sit above the notation staff, one per beat, and beats in one beam group share a height. On a tab-only track they sit above the TAB.</li>
@@ -226,10 +228,13 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <li>A slapped or popped bass note gets an "S" or "P" above it, in the same place as the "T". One letter per beat: tap, then slap, then pop.</li>
   <li>A rake is a dashed "rake" label over its beat and the grace notes right before it. Write those dead-note grace notes yourself. The label sits outside any P.M. or let-ring label it overlaps.</li>
   <li>A trill is "tr" and a wavy line above the beat, on notation and TAB, above any vibrato or tremolo and below a "T", pick stroke or fermata. On TAB, a fret or pitch target adds <code>(7)</code>. Consecutive trills on a system share one height. The wave stops before the next beat (or the next "tr") and at a line break.</li>
-  <li>Rests and grace notes ignore pick strokes, taps, slaps, pops, trills, whammy marks and rakes.</li>
+  <li>A strum arrow (<code>'down'</code> ↓, <code>'up'</code> ↑) sits above the TAB staff, clear of the frets and marks under it, or above the notation staff on a track without TAB. Consecutive strums on a system share one height, so a rasgueado run reads as one line. A strum replaces the beat's pick stroke.</li>
+  <li>An arpeggio is a wavy line just left of a chord, on notation and TAB, spanning its notes. <code>'up'</code> adds an arrowhead at the top, <code>'down'</code> at the bottom. The chord gets 1 sp more room on its left, and grace notes stay left of the line.</li>
+  <li>Rests and grace notes ignore pick strokes, strums, arpeggios, taps, slaps, pops, trills, whammy marks and rakes. A single note ignores an arpeggio.</li>
 </ul>
 <div class="demo" data-demo="directions" data-width="680"></div>
 <div class="demo" data-demo="techniques11" data-width="680"></div>
+<div class="demo" data-demo="strumArpeggio" data-width="680"></div>
 
 <h2 id="tab-rhythm">Rhythm on tab</h2>
 <p>A tab-only track (<code>showStandardNotation: false</code>, <code>showTablature: true</code>) shows its rhythm under the TAB staff by default, as in tab books: stems, beams, flags, augmentation dots, tuplets and rests. Set <code>tabRhythm: false</code> to keep plain fret numbers. A track that also shows notation gets this only with <code>tabRhythm: true</code>.</p>
@@ -459,6 +464,24 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
           ],
         },
       ],
+    },
+
+    strumArpeggio: {
+      tracks: [{
+        name: 'Gt.', showStandardNotation: true, showTablature: true,
+        measures: [
+          { beats: [
+            { type: 'note', duration: 'quarter', arpeggio: 'up', notes: [{ string: 5, fret: 3 }, { string: 4, fret: 2 }, { string: 3, fret: 0 }, { string: 2, fret: 1 }, { string: 1, fret: 0 }] },
+            { type: 'note', duration: 'quarter', arpeggio: 'down', notes: [{ string: 4, fret: 0 }, { string: 3, fret: 2 }, { string: 2, fret: 3 }, { string: 1, fret: 2 }] },
+            { type: 'note', duration: 'half', arpeggio: true, notes: [{ string: 6, fret: 0 }, { string: 5, fret: 2 }, { string: 4, fret: 2 }, { string: 3, fret: 1 }] },
+          ] },
+          { beats: [
+            ...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => ({ type: 'note', duration: '16th', strum: k % 2 ? 'up' : 'down', notes: [{ string: 3, fret: 1 }, { string: 2, fret: 0 }, { string: 1, fret: 0 }] })),
+            { type: 'note', duration: 'quarter', strum: 'down', notes: [{ string: 4, fret: 2 }, { string: 3, fret: 1 }, { string: 2, fret: 0 }] },
+            { type: 'note', duration: 'quarter', strum: 'up', arpeggio: 'up', notes: [{ string: 4, fret: 2 }, { string: 3, fret: 1 }, { string: 2, fret: 0 }] },
+          ] },
+        ],
+      }],
     },
 
     chordDiagrams: {
