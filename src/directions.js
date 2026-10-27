@@ -20,6 +20,8 @@ import { harmonicOf } from './harmonics.js';
 
 /** Label text of a let-ring run. */
 export const LET_RING_LABEL = 'let ring';
+/** Letter shown above a beat for each tap-style mark (class name = the key). */
+export const TAP_MARK_LETTERS = { tap: 'T', slap: 'S', pop: 'P' };
 const PICK_KINDS = ['down', 'up'];
 const DEFAULT_DIP_AMOUNT = '1/2';
 

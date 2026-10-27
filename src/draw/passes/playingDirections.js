@@ -171,8 +171,13 @@ function curveTopOver(pts, xa, xb) {
  * when no slur is drawn above the beat.
  */
 function slurClearTop(item, half, sp) {
+  return slurClearSpan(item, item.x - half, item.x + half, sp);
+}
+
+/** Like slurClearTop for a mark spanning the x range (xa, xb) instead of centred on the beat. */
+function slurClearSpan(item, xa, xb, sp) {
   return Math.min(Infinity, ...(item.slurCurves || [])
-    .map((pts) => curveTopOver(pts, item.x - half, item.x + half) - SLUR_DIRECTION_CLEAR_SP * sp));
+    .map((pts) => curveTopOver(pts, xa, xb) - SLUR_DIRECTION_CLEAR_SP * sp));
 }
 
 /**

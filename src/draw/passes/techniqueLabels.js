@@ -127,8 +127,8 @@ export function renderTechniqueLabelRuns(score, trackRuns, theme, systems) {
       .map((r) => draw(r, HARMONIC_LABELS[r.kind], `harmonic harmonic-${r.kind}`, pmBoxes));
     // Let ring last, outside every P.M. and harmonic run it overlaps.
     const placed = [...pmBoxes, ...harmonicBoxes];
-    labelRuns(flat, (it) => (it.ringing ? 'let-ring' : null), systems, theme)
-      .forEach((r) => draw(r, LET_RING_LABEL, 'let-ring', placed));
+    const ringBoxes = labelRuns(flat, (it) => (it.ringing ? 'let-ring' : null), systems, theme)
+      .map((r) => draw(r, LET_RING_LABEL, 'let-ring', placed));
   });
 }
 
