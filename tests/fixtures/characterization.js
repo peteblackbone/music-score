@@ -16,6 +16,7 @@ const PH = { harmonic: 'pinch' };
 const PM = { palmMute: true };
 const tabe = (string, fret, extra = {}) => ({ type: 'note', duration: '8th', notes: [{ string, fret }], ...extra });
 const tabg = (string, fret, extra = {}) => ({ type: 'grace', duration: '16th', notes: [{ string, fret, mute: true }], ...extra });
+const tabgr = (notes) => ({ type: 'grace', duration: '16th', notes: notes.map(([string, fret, note = {}]) => ({ string, fret, ...note })) });
 const tabc = (frets, extra = {}, duration = 'quarter') => ({ type: 'note', duration, notes: frets.map(([string, fret, note = {}]) => ({ string, fret, ...note })), ...extra });
 const pc = (pitches, extra = {}, duration = 'quarter') => ({ type: 'note', duration, notes: pitches.map((p) => (typeof p === 'string' ? n(p) : p)), ...extra });
 const C_CHORD = [[5, 3], [4, 2], [3, 0], [2, 1]];
@@ -1053,6 +1054,73 @@ export const characterizationCases = [
       }],
     },
   },
+  {
+    // Key-aware spelling of fret-derived pitches (notation + TAB): a black key is a flat only when that flat is in
+    // the measure's key signature. m1 F major: s3f3 Bb, s2f2 C#, s4f1 D#, a Bb4 + C#5 dyad, a second Bb (no
+    // accidental), an explicit pitch 'A#4' that stays A#; m2 Bb major: Bb, Eb, G#; m3 Eb major: Ab, C#;
+    // m4 D major: A#, F#; m5 C major: all sharps; m6 Cb major: all five flats, B and E stay naturals.
+    name: 'spelling-keys', width: 900,
+    score: {
+      tracks: [{
+        name: 'Gt.', showTablature: true, writtenOctaveUp: true, keySignature: -1,
+        measures: [
+          { beats: [tabe(3, 3), tabe(2, 2), tabe(4, 1), tabc([[2, 11], [1, 9]], {}, '8th'), tabe(3, 3),
+            tabd('8th', 2, 11, { pitch: 'A#4' }), tabe(2, 1), tabe(1, 1)] },
+          { keySignature: -2, beats: [tabq(3, 3), tabq(4, 1), tabq(1, 4), tabq(2, 1)] },
+          { keySignature: -3, beats: [tabq(1, 4), tabq(2, 2), tabq(3, 3), tabq(4, 1)] },
+          { keySignature: 2, beats: [tabq(3, 3), tabq(4, 4), tabq(1, 4), tabq(2, 2)] },
+          { keySignature: 0, beats: [tabq(3, 3), tabq(4, 1), tabq(1, 4), tabq(2, 2)] },
+          { keySignature: -7, beats: [tabe(2, 2), tabe(4, 1), tabe(4, 4), tabe(1, 4), tabe(3, 3), tabe(2, 0), tabe(1, 0), tabe(1, 1)] },
+        ],
+      }],
+    },
+  },
+  {
+    // Grace-note accidentals (notation + TAB, fret-derived and explicit pitches; sounding pitches below, written an
+    // octave up): m1 grace F#4 -> F#4 (none) -> F4 (natural); m2 F#4 -> grace F4 (natural) -> F4 (none); m3 two graces
+    // with accidentals (C#4, D#4) before a note, and a trailing grace Bb4 (explicit pitch); m4 a grace with an explicit
+    // 'natural'; m5 F major: grace Bb4 (none) and grace B4 (natural); m6 C major: a grace dyad E4 / G#4.
+    name: 'grace-accidentals', width: 900,
+    score: {
+      tracks: [{
+        name: 'Gt.', showTablature: true, writtenOctaveUp: true,
+        measures: [
+          { beats: [tabgr([[1, 2]]), tabq(1, 2), tabq(1, 1), tabq(1, 3), tabq(1, 5)] },
+          { beats: [tabh(1, 2, { pitch: 'F#4' }), tabgr([[1, 1, { pitch: 'F4' }]]), tabq(1, 1), tabq(1, 3), tabq(1, 5)] },
+          { beats: [tabgr([[2, 2]]), tabgr([[2, 4]]), tabq(2, 5), tabq(2, 3), tabq(2, 1), tabq(2, 0), tabgr([[2, 11, { pitch: 'Bb4' }]])] },
+          { beats: [tabgr([[1, 1, { accidental: 'natural' }]]), tabq(1, 1), tabq(1, 3), tabq(1, 1), tabq(1, 0)] },
+          { keySignature: -1, beats: [tabgr([[2, 11]]), tabq(2, 10), tabgr([[2, 12]]), tabq(2, 12), tabq(2, 10), tabq(2, 8)] },
+          { keySignature: 0, beats: [tabgr([[2, 5], [1, 4]]), tabq(1, 5), tabq(1, 4), tabq(1, 5), tabq(1, 0)] },
+        ],
+      }],
+    },
+  },
+  {
+    // Release arrows next to a fret number on the string above (TAB only, so the notation staff can't widen the
+    // beats): m1 s2 'full release' -> s1 (capped); m2 a release note on s3 -> an 8th on s2 (capped); m3 'full release'
+    // -> the same string, then -> the string below (unchanged); m4 s3 'full release' -> s1, two strings up (unchanged);
+    // m5 16ths: s2 'full release' -> s1 (capped at the 0.6 sp minimum fall); m6 -> a ghost "(12)" on the string above
+    // (wide label); m7-m9 each end on an s2 'full release' and open on s1, so at 600 one of them crosses a system
+    // break (the next system's note is not an obstacle).
+    name: 'release-adjacent', width: 900,
+    score: {
+      tracks: [{
+        name: 'Gt.', showStandardNotation: false, showTablature: true,
+        measures: [
+          { beats: [tabh(2, 7, { bend: 'full release' }), tabq(1, 8), tabq(1, 5), tabq(1, 7)] },
+          { beats: [tabh(3, 7, { bend: 'pb full' }), tabd('8th', 3, 7, { bend: 'release' }), tabd('8th', 2, 8), tabq(2, 5), tabq(2, 7)] },
+          { beats: [tabh(2, 7, { bend: 'full release' }), tabq(2, 8), tabh(2, 7, { bend: 'full release' }), tabq(3, 8)] },
+          { beats: [tabh(3, 7, { bend: 'full release' }), tabq(1, 8), tabq(1, 5), tabq(1, 7)] },
+          { beats: [tabd('16th', 2, 10, { bend: 'full release' }), tabd('16th', 1, 12), tabd('16th', 1, 10), tabd('16th', 2, 10), tabq(1, 12), tabq(1, 10), tabq(2, 10)] },
+          { beats: [tabh(2, 7, { bend: 'full release' }), tabh(1, 12, { ghost: true }), tabq(1, 10), tabq(1, 8)] },
+          { beats: [tabq(1, 8), tabq(1, 5), tabq(1, 7), tabh(2, 7, { bend: 'full release' })] },
+          { beats: [tabq(1, 8), tabq(1, 5), tabq(1, 7), tabh(2, 7, { bend: 'full release' })] },
+          { beats: [tabq(1, 8), tabq(1, 5), tabq(1, 7), tabh(2, 7, { bend: 'full release' })] },
+          { beats: [tabq(1, 8), tabq(1, 5), tabq(1, 7), tabq(1, 8)] },
+        ],
+      }],
+    },
+  },
 ];
 
 // Copy of a score with tabRhythm: false on every track (source untouched). Today the field is ignored, so
@@ -1064,4 +1132,8 @@ const rhythmOffCase = (name) => {
   const base = characterizationCases.find((c) => c.name === name);
   return { name: `${name}-rhythm-off`, width: base.width, score: rhythmOff(base.score), ...(base.options ? { options: base.options } : {}) };
 };
+{
+  const ra = characterizationCases.find((c) => c.name === 'release-adjacent');
+  characterizationCases.push({ name: 'release-adjacent', width: 600, score: ra.score });
+}
 characterizationCases.push(...['tab-only', 'harmonics', 'tab-marks', 'directions'].map(rhythmOffCase));

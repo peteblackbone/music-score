@@ -12,9 +12,9 @@
  * and "full release" bends, a chromatic neighbour note, vibrato, and a
  * final measure rest.
  *
- * Pitches worked out from string and fret are spelled with sharps, so the
- * B-flat notes also give their `pitch` (as sounding pitch, which is why the
- * track sets `writtenOctaveUp: true`).
+ * Pitches worked out from string and fret follow the key: the B-flats are
+ * spelled Bb, and the m10 G# neighbour stays sharp. The track sets
+ * `writtenOctaveUp: true`, so an explicit `pitch` would be read as sounding.
  */
 export const leadSoloF = {
   title: 'Lead Solo in F',
@@ -51,7 +51,7 @@ export const leadSoloF = {
             { type: 'note', duration: '8th', chord: 'F', notes: [{ string: 3, fret: 10 }] },
             { type: 'note', duration: '16th', notes: [{ string: 3, fret: 12 }] },
             { type: 'note', duration: '32nd', tuplet: 3, notes: [{ string: 2, fret: 10, hammerPull: true }] },
-            { type: 'note', duration: '32nd', tuplet: 3, notes: [{ string: 2, fret: 11, pitch: 'Bb4', hammerPull: true }] },
+            { type: 'note', duration: '32nd', tuplet: 3, notes: [{ string: 2, fret: 11, hammerPull: true }] },
             { type: 'note', duration: '32nd', tuplet: 3, notes: [{ string: 2, fret: 10 }] },
 
             { type: 'note', duration: '8th', dots: 1, notes: [{ string: 3, fret: 12 }] },
@@ -98,13 +98,13 @@ export const leadSoloF = {
             { type: 'note', duration: '16th', notes: [{ string: 1, fret: 10, hammerPull: true }] },
             { type: 'note', duration: '16th', notes: [{ string: 1, fret: 13, hammerPull: true }] },
             { type: 'note', duration: '16th', notes: [{ string: 1, fret: 10 }] },
-            { type: 'note', duration: '16th', notes: [{ string: 2, fret: 11, pitch: 'Bb4' }] },
+            { type: 'note', duration: '16th', notes: [{ string: 2, fret: 11 }] },
 
             { type: 'grace', notes: [{ string: 1, fret: 15, slide: true }] },
             { type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 13 }] },
 
             { type: 'note', duration: '8th', notes: [{ string: 1, fret: 10 }] },
-            { type: 'note', duration: '8th', notes: [{ string: 2, fret: 11, pitch: 'Bb4' }] },
+            { type: 'note', duration: '8th', notes: [{ string: 2, fret: 11 }] },
           ],
         },
         { // 6 — F, then C/E. Two 8th-note triplets, then a dotted quarter on the E.
@@ -126,7 +126,7 @@ export const leadSoloF = {
             { type: 'note', duration: 'quarter', chord: 'Dm', notes: [{ string: 4, fret: 15 }, { string: 2, fret: 15 }] },
 
             { type: 'note', duration: '8th', notes: [{ string: 4, fret: 14 }, { string: 2, fret: 13 }] },
-            { type: 'note', duration: '8th', notes: [{ string: 4, fret: 12 }, { string: 2, fret: 11, pitch: 'Bb4' }] },
+            { type: 'note', duration: '8th', notes: [{ string: 4, fret: 12 }, { string: 2, fret: 11 }] },
 
             { type: 'note', duration: 'quarter', notes: [{ string: 4, fret: 10 }, { string: 2, fret: 10 }] },
 
@@ -137,13 +137,13 @@ export const leadSoloF = {
         { // 8 — Bb. A 16th-note arpeggio of Bb, a hammer-on from Bb to C.
           beats: [
             { type: 'note', duration: '16th', chord: 'Bb', notes: [{ string: 3, fret: 10 }] },
-            { type: 'note', duration: '16th', notes: [{ string: 2, fret: 11, pitch: 'Bb4' }] },
+            { type: 'note', duration: '16th', notes: [{ string: 2, fret: 11 }] },
             { type: 'note', duration: '16th', notes: [{ string: 1, fret: 10 }] },
-            { type: 'note', duration: '16th', notes: [{ string: 2, fret: 11, pitch: 'Bb4' }] },
+            { type: 'note', duration: '16th', notes: [{ string: 2, fret: 11 }] },
 
             { type: 'note', duration: 'quarter', notes: [{ string: 3, fret: 10 }] },
 
-            { type: 'note', duration: '8th', notes: [{ string: 2, fret: 11, pitch: 'Bb4', hammerPull: true }] },
+            { type: 'note', duration: '8th', notes: [{ string: 2, fret: 11, hammerPull: true }] },
             { type: 'note', duration: '8th', notes: [{ string: 2, fret: 13 }] },
 
             { type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 10 }] },
@@ -154,15 +154,15 @@ export const leadSoloF = {
             { type: 'note', duration: 'quarter', chord: 'Gm', notes: [{ string: 1, fret: 13, bend: 'full' }] },
 
             { type: 'note', duration: '8th', notes: [{ string: 1, fret: 10 }] },
-            { type: 'note', duration: '8th', notes: [{ string: 2, fret: 11, pitch: 'Bb4' }] },
+            { type: 'note', duration: '8th', notes: [{ string: 2, fret: 11 }] },
 
             { type: 'note', duration: '16th', chord: 'C', notes: [{ string: 2, fret: 13 }] },
-            { type: 'note', duration: '16th', notes: [{ string: 2, fret: 11, pitch: 'Bb4' }] },
+            { type: 'note', duration: '16th', notes: [{ string: 2, fret: 11 }] },
             { type: 'note', duration: '16th', notes: [{ string: 3, fret: 12 }] },
             { type: 'note', duration: '16th', notes: [{ string: 3, fret: 9 }] },
 
             { type: 'note', duration: '8th', notes: [{ string: 3, fret: 12 }] },
-            { type: 'note', duration: '8th', notes: [{ string: 2, fret: 11, pitch: 'Bb4' }] },
+            { type: 'note', duration: '8th', notes: [{ string: 2, fret: 11 }] },
           ],
         },
         { // 10 — F. A chromatic neighbour (A, G#, A), then F tied over the barline.

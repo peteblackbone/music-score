@@ -61,13 +61,13 @@ export function staffPositionToY(position, lineSpacing) {
 const SHARP_ORDER = ['F', 'C', 'G', 'D', 'A', 'E', 'B'];
 const FLAT_ORDER = ['B', 'E', 'A', 'D', 'G', 'C', 'F'];
 
-/** For a key signature integer (-7..7 flats/sharps), return { letter: alter } map. */
+/** For a key signature integer (-7..7 flats/sharps; larger values count as 7), return { letter: alter } map. */
 export function keySignatureAlterations(keySig = 0) {
   const map = {};
   if (keySig > 0) {
-    for (let i = 0; i < keySig; i++) map[SHARP_ORDER[i]] = 1;
+    for (let i = 0; i < Math.min(keySig, 7); i++) map[SHARP_ORDER[i]] = 1;
   } else if (keySig < 0) {
-    for (let i = 0; i < -keySig; i++) map[FLAT_ORDER[i]] = -1;
+    for (let i = 0; i < Math.min(-keySig, 7); i++) map[FLAT_ORDER[i]] = -1;
   }
   return map;
 }
@@ -109,18 +109,23 @@ export function resolveAccidental(pitchStr, keySig, explicitAccidental) {
   return names[String(p.alter)] ?? null;
 }
 
-/** Transpose a tuning pitch up by `fret` semitones, returning a spelled pitch string. */
-export function pitchFromFret(openPitch, fret) {
-  const p = parsePitch(openPitch);
-  let midi = midiNumber(p) + fret;
-  // Re-spell using a simple sharps-preferring chromatic scale.
-  const CHROMA = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const CHROMA = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const FLAT_OF = { 'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab', 'A#': 'Bb' };
+
+/**
+ * Transpose a tuning pitch up by `fret` semitones, returning a spelled pitch string.
+ * Black keys are spelled as sharps, except that a black key is spelled as a
+ * flat when that flat is in `keySig`'s signature (F major, -1: Bb; Bb major,
+ * -2: Bb and Eb; ...). Only black keys are respelled, so there is never a
+ * Cb/Fb/E#/B# or a double accidental, and the octave never changes.
+ */
+export function pitchFromFret(openPitch, fret, keySig = 0) {
+  const midi = midiNumber(parsePitch(openPitch)) + fret;
   const octave = Math.floor(midi / 12) - 1;
-  const name = CHROMA[((midi % 12) + 12) % 12];
-  const step = name[0];
-  const alter = name.length > 1 ? 1 : 0;
-  const alterStr = alter === 1 ? '#' : '';
-  return `${step}${alterStr}${octave}`;
+  let name = CHROMA[((midi % 12) + 12) % 12];
+  const flat = FLAT_OF[name];
+  if (flat && keySignatureAlterations(keySig)[flat[0]] === -1) name = flat;
+  return `${name}${octave}`;
 }
 
 const ALTER_NAMES = { '-2': 'doubleFlat', '-1': 'flat', 0: 'natural', 1: 'sharp', 2: 'doubleSharp' };

@@ -436,8 +436,8 @@
       <g class="bend">
         <path d="M 389.46 6 C 403.54 6, 405.46 -7.5, 405.46 -21" fill="none" stroke="#1a1a1a" stroke-width="1.1"/>
         <path d="M 405.46 -21 L 407.86 -17 L 403.06 -17 Z" fill="#1a1a1a" stroke="none"/>
-        <path d="M 405.46 -21 Q 412.66 -18.3 423.46 6" fill="none" stroke="#1a1a1a" stroke-width="1.1"/>
-        <path d="M 423.46 6 L 419.65 3.32 L 424.03 1.37 Z" fill="#1a1a1a" stroke="none"/>
+        <path d="M 405.46 -21 Q 409.3 -18.3 415.06 6" fill="none" stroke="#1a1a1a" stroke-width="1.1"/>
+        <path d="M 415.06 6 L 411.81 2.66 L 416.48 1.55 Z" fill="#1a1a1a" stroke="none"/>
         <rect x="392.06" y="-35" width="27.8" height="13" fill="#ffffff"/>
         <text x="393.06" y="-25" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-style="italic" font-size="10" text-anchor="start" fill="#1a1a1a">Full</text>
       </g>

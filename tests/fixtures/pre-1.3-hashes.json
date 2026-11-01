@@ -7,7 +7,7 @@
   "char-chord-diagrams-break-w600": "14907dfbcb057e75b3aaf5aa0c32b0b822f052fbb8bef3d5ceadfa2d23d593d3",
   "char-chord-diagrams-tab-w900": "5ee92ea5c4c2f885f3238c9f84fd67cca926fca170bf71d58ac47e2ab990bf6f",
   "char-chord-diagrams-w900": "cdf67b933d1ab2e0f42f301ed37333dc511ee66174381820cf0b662094a82cbc",
-  "char-directions-break-w600": "50e1412df84075534c98a57bd32c73785ce82d16691d7121667a4446f374c240",
+  "char-directions-break-w600": "18a61dbb4cb737ebf5896f28ca225cd317e39b787deef9e257c3a142f990b141",
   "char-directions-rhythm-off-w900": "7c5d5b5bed8aeeabcfc8479e46cd4b5a461b6abfe4bc75f614cdb27d5a2d27b5",
   "char-directions-w900": "f9b4f14ae86205b5090c7da6fecd82abd3c734c158e2bdb92fb1210436849eee",
   "char-dynamic-rfz-w900": "55dbff3e0530cdbcae962ed6ba34d137e620d8eb295ea544ad185ed38ea746dc",
@@ -35,14 +35,14 @@
   "char-theme-spacing12-w900": "1f3f3785b59351ea116e0ce6cbcef60ab19887acee99016e40bfeead4714c7f6",
   "char-three-tracks-w900": "751ef2824c65a354d459283269f071d3294e9bdddaf3f6edb1f05da688900d79",
   "char-tie-slur-break-w600": "eb245760f1237689941acf9827ed34e59b32ac62d0cd6debf635b54c8a506af2",
-  "char-tuplet-spans-w900": "fa1e9bb61c46883f1439da1685cd51ad5a68ddfa11c1fa2ef43eed9259dc919e",
+  "char-tuplet-spans-w900": "1db26ad382962d6449acda59982372f58afe2cad75d977e34ef5335b698bda88",
   "example-score-w1400": "bc95e7a6ca4cd9880f9862ebf0d1cd1171f0b653a0f0121568b9f7c0d71b5956",
   "example-score-w600": "f2273e978a4981b99341ddd904d4ac673574c1d11f49aa06ee9ea3c7debd05c2",
   "example-score-w900": "56aea5e13f40342e3d6f005c2ddf16ab7842c8000a7c27c0a2632e5e6b5d29ef",
   "lead-riff-w1400": "cbc5b090a38b4492ce2d5c130b5389259c1b356fccf5b7f307c85408c34ae159",
   "lead-riff-w600": "2ee944613ee62b0ad7c9558d02809327a688be2a21c988c2c9d8f5e77eb5d9f7",
   "lead-riff-w900": "90b11c0a7e832fe8c1614ee07815b99925a25f57a1d6de1482fc623db5d30681",
-  "lead-solo-f-w1400": "3926d61655bb15d849604c81d6ef5a3a4adb8c9d43fdc31f4f723277b4681d98",
-  "lead-solo-f-w600": "3563ba2af7fb08ca0e03194fd4dca152010b0c0e6eb3e6e99079a4f851a74e54",
-  "lead-solo-f-w900": "df6efee1f85ae0b55096c951e10cf9410779e118bf4adf08ef6480ca69d81b79"
+  "lead-solo-f-w1400": "215660cf5dc27b05c57ad62da6bdc7413b021475b8b7e1cd7565670c0d9723be",
+  "lead-solo-f-w600": "7d84ca84b97795dbcd322ab8461a459a4a2bbbb4c71087abdc501c4e816a862f",
+  "lead-solo-f-w900": "130e0387d2ac531fbd2240bd4b36880ebf5a334c1cc57602f24c423d45f281c3"
 }

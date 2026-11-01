@@ -11,6 +11,7 @@ import {
 import { fretLabel, fretLabelWidth } from '../textMetrics.js';
 import { isNaturalHarmonic, decoratesFretLabel } from '../harmonics.js';
 import { linkTarget, slideMarks, bendOf } from '../directions.js';
+import { tabFretKnockoutHalf } from '../layout/tabRhythm.js';
 
 const SLIDE_STUB_SP = 2;         // outgoing slide stroke across a system break (horizontal length)
 const SLIDE_LABEL_CLEAR_SP = 0.2; // slide end -> edge of a wide (harmonic) fret-label knock-out
@@ -49,7 +50,11 @@ const SLIDE_MARK_MIN_SP = 0.4;   // ...and skipped when clamping leaves less tha
  *   `release: true` (or the shorthand string ending in " release", e.g.
  *   `'full release'`) adds a second arrow curving back down, for a
  *   bend-and-release. Its width is limited by the next note on the system
- *   and by the system's last barline. A pre-bend ('prebend …' / 'pb …' or
+ *   and by the system's last barline; a release fall (bend-and-release or
+ *   release note) also ends short of the fret knock-out of a later note
+ *   on the same system whose band its arrowhead would reach (in practice
+ *   the string just above; tab.js bendGeometry).
+ *   A pre-bend ('prebend …' / 'pb …' or
  *   `type: 'prebend'`) is a straight vertical arrow over the fret; a release
  *   note ('release [amount]' or `type: 'release'`) is only the falling
  *   arrow, its fret in parentheses, its amount defaulting to the last bend
@@ -71,6 +76,13 @@ export function renderTabLinks(track, trackRuns, systems, theme, { flattenRuns, 
   trackRuns.filter((r) => r.track === track).forEach((run) => run.measures
     .forEach((m) => m.elements.forEach((le) => measureOf.set(le, m))));
   const flat = [];
+  // A note's fret-label knock-out box (null without a fret), an obstacle for release falls.
+  const knockHalf = tabFretKnockoutHalf(theme);
+  const knockOf = (n, x, y) => {
+    if (n.fret == null) return null;
+    const w = fretLabelWidth(fretLabel(n), theme);
+    return { x1: x - w / 2, x2: x + w / 2, top: y - knockHalf, bottom: y + knockHalf };
+  };
   flattenRuns(trackRuns, track, (layoutEl, run) => {
     const elDef = layoutEl.el;
     (elDef.notes || []).forEach((n) => {
@@ -86,6 +98,7 @@ export function renderTabLinks(track, trackRuns, systems, theme, { flattenRuns, 
         string: n.string, fret: n.fret, hammerPull: n.hammerPull, slide: n.slide, bend: n.bend,
         naturalHarmonic: isNaturalHarmonic(n), slideInset,
         grace: elDef.type === 'grace', slideIn: n.slideIn, slideOut: n.slideOut, measure: measureOf.get(layoutEl),
+        knock: knockOf(n, layoutEl.x, y),
       });
     });
   });
@@ -173,8 +186,11 @@ export function renderTabLinks(track, trackRuns, systems, theme, { flattenRuns, 
       // does a pre-bend (already bent when picked) or a release note.
       const targetFret = item.fret != null && bendInfo.type === 'bend' && !bendInfo.release && !bendInfo.hold && !item.naturalHarmonic
         ? Math.round(item.fret + semitones) : null;
+      // A release fall ends short of later fret labels its arrowhead would reach.
+      const obstacles = bendInfo.release
+        ? flat.slice(i + 1).filter((c) => c.sysIdx === item.sysIdx && c.x > item.x && c.knock).map((c) => c.knock) : null;
       // Record its ink on the run (tagged with the note's x) for the technique-label pass.
-      renderBend(item.g, item.x, item.y, bendInfo, theme, nextX, targetFret)
+      renderBend(item.g, item.x, item.y, bendInfo, theme, nextX, targetFret, obstacles)
         .forEach((b) => item.run.tabInkBoxes.push({ ...b, noteX: item.x }));
     }
   });

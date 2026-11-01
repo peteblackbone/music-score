@@ -14,6 +14,11 @@
  *   each into the first column where it is ≥ 6 staff positions from every
  *   accidental already there (so top and bottom share column 1 when
  *   ≥ 6 apart). Column pitch ≥ 1.1 sp (wider for wide glyphs).
+ * - Grace notes: one accidental column ACC_HEAD_GAP_SP left of the head, all
+ *   at graceNoteScale; on a stem-down grace, left of the stem's slash
+ *   instead (graceAccidentalRight). Its room also keeps it ACC_HEAD_GAP_SP
+ *   clear of the flag of a stem-up grace one slot to its left
+ *   (graceAccidentalRoom). A grace chord's accidentals share the column.
  * - Ledger lines: across all head columns, 0.3 sp beyond each side.
  * - Dots: first centre 0.5 sp right of the rightmost head column, further
  *   dots 0.5 sp apart; a note on a line puts its dot in the space above.
@@ -26,12 +31,12 @@
  * All returned offsets are px relative to the onset x. Pure function, no DOM.
  */
 import { glyphBox, stemAnchors } from '../glyphMetrics.js';
-import { accidentalGlyph, flagForDuration } from '../glyphs.js';
+import { accidentalGlyph, flagForDuration, noteheadForDuration } from '../glyphs.js';
 
 export const DOT_GAP_SP = 0.5;            // head right edge -> first dot centre
 export const DOT_STEP_SP = 0.5;           // between successive dot centres
 export const DOT_RADIUS_SP = 0.17;
-const ACC_HEAD_GAP_SP = 0.25;             // accidental column 1 -> leftmost notehead
+export const ACC_HEAD_GAP_SP = 0.25;      // accidental column 1 -> leftmost notehead
 const ACC_COLUMN_SP = 1.1;                // minimum column pitch
 const ACC_COLUMN_GAP_SP = 0.1;            // min gap between a wide accidental and the next column
 const ACC_CLEAR_POSITIONS = 6;            // accidentals this far apart (staff positions) may share a column
@@ -43,6 +48,8 @@ const GHOST_PAREN_HALF_SP = 0.37;         // half the parenthesis width (GHOST_P
 export const ARPEGGIO_CLEAR_SP = 0.4;     // chord ink -> nearest arpeggio ink
 export const ARPEGGIO_HALF_SP = 0.3;      // half the arpeggio mark's width (its arrowhead; the wave is ±0.25)
 export const ARPEGGIO_ROOM_SP = ARPEGGIO_CLEAR_SP + 2 * ARPEGGIO_HALF_SP; // left room an arpeggio adds (1.0)
+export const GRACE_STEM_DX_SP = 0.4;      // grace stem from the head centre (not scaled)
+export const GRACE_SLASH_DX_SP = 0.5;     // grace slash half-width, either side of the stem (not scaled)
 
 /** Stem x offset (sp) from the head centre for a head glyph, up or down. */
 export function stemDxSp(headGlyph, stemUp) {
@@ -169,4 +176,33 @@ export function layoutChord(notes, positions, stemUp, accNames, opts, theme) {
     leftExt,
     rightExt,
   };
+}
+
+/**
+ * Right edge (sp from the grace head centre; negative = left) of a grace
+ * note's accidental column: ACC_HEAD_GAP_SP left of a head `headWidthSp`
+ * wide, at graceNoteScale; a stem-down grace's slash reaches further left,
+ * so its accidentals go that gap left of the slash.
+ */
+export function graceAccidentalRight(headWidthSp, stemUp, theme) {
+  const scale = theme.graceNoteScale;
+  const byHead = -(headWidthSp / 2 + ACC_HEAD_GAP_SP) * scale;
+  return stemUp ? byHead : Math.min(byHead, -(GRACE_STEM_DX_SP + GRACE_SLASH_DX_SP + ACC_HEAD_GAP_SP * scale));
+}
+
+/**
+ * Extra room (px) left of a grace note's head for its accidentals (one
+ * column at graceNoteScale), plus what keeps them clear of the flag of a
+ * stem-up grace one graceNoteWidthSp slot to the left; 0 when none.
+ */
+export function graceAccidentalRoom(names, theme, stemUp = true) {
+  const ws = (names || []).filter(Boolean).map((n) => glyphBox(accidentalGlyph(n)).width);
+  if (!ws.length) return 0;
+  const scale = theme.graceNoteScale;
+  const headW = glyphBox(noteheadForDuration('quarter')).width;
+  const room = stemUp ? (ACC_HEAD_GAP_SP + Math.max(...ws)) * scale
+    : -graceAccidentalRight(headW, false, theme) + (Math.max(...ws) - headW / 2) * scale;
+  const flagReach = GRACE_STEM_DX_SP + glyphBox(flagForDuration('8th', true)).right * scale;
+  const flagClear = flagReach + ACC_HEAD_GAP_SP * scale - (theme.graceNoteWidthSp - (headW / 2) * scale);
+  return (room + Math.max(0, flagClear)) * theme.staffLineSpacing;
 }

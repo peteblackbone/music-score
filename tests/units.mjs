@@ -199,7 +199,7 @@ test('pitchFromFret: standard guitar open strings and frets', () => {
   eq(pitchFromFret('E2', 12), 'E3');
   eq(pitchFromFret('B3', 1), 'C4');
 });
-test('pitchFromFret: always spells with sharps, never flats', () => {
+test('pitchFromFret: without a key signature always spells with sharps, never flats', () => {
   eq(pitchFromFret('A2', 1), 'A#2');
   eq(pitchFromFret('E4', 4), 'G#4');
   eq(pitchFromFret('D3', 1), 'D#3');
@@ -216,6 +216,28 @@ test('pitchFromFret: invalid open pitch throws', () => {
   let threw = false;
   try { pitchFromFret('nope', 3); } catch { threw = true; }
   eq(threw, true);
+});
+// Black keys on strings G3 (+3 A#), B3 (+2 C#, +11 A#4), D3 (+1 D#, +4 F#), E4 (+4 G#).
+const blackKeys = (k) => [pitchFromFret('G3', 3, k), pitchFromFret('B3', 2, k), pitchFromFret('D3', 1, k), pitchFromFret('D3', 4, k), pitchFromFret('E4', 4, k)];
+test('pitchFromFret: key -1 spells A# as Bb; C#, D#, F#, G# stay sharps', () => {
+  eq(blackKeys(-1), ['Bb3', 'C#4', 'D#3', 'F#3', 'G#4']);
+  eq(pitchFromFret('B3', 11, -1), 'Bb4');
+});
+test('pitchFromFret: key -2 -> Bb, Eb; key -3 -> Bb, Eb, Ab', () => {
+  eq(blackKeys(-2), ['Bb3', 'C#4', 'Eb3', 'F#3', 'G#4']);
+  eq(blackKeys(-3), ['Bb3', 'C#4', 'Eb3', 'F#3', 'Ab4']);
+});
+test('pitchFromFret: key -7 -> all five flats; B and E stay naturals (no Cb / Fb)', () => {
+  eq(blackKeys(-7), ['Bb3', 'Db4', 'Eb3', 'Gb3', 'Ab4']);
+  eq([pitchFromFret('B3', 0, -7), pitchFromFret('E4', 0, -7), pitchFromFret('A3', 2, -7), pitchFromFret('E4', 1, -7)], ['B3', 'E4', 'B3', 'F4']);
+});
+test('pitchFromFret: keys 0 and 2 unchanged (sharps); octave never changes', () => {
+  eq(blackKeys(0), ['A#3', 'C#4', 'D#3', 'F#3', 'G#4']);
+  eq(blackKeys(2), ['A#3', 'C#4', 'D#3', 'F#3', 'G#4']);
+  eq(blackKeys(0), blackKeys(undefined));
+  eq(pitchFromFret('A3', 2, -7), 'B3');
+  eq(pitchFromFret('A3', 3, -7), 'C4');
+  eq(pitchFromFret('B2', 0, -7), 'B2');
 });
 
 // ---------- normalizeScore (defaults and tab-derived pitch) ----------
@@ -283,6 +305,34 @@ test('normalizeScore: string beyond tuning leaves pitch undefined', () => {
   const s = normalizeScore({ tracks: [{ measures: [{ beats: [{ type: 'note', duration: 'quarter', notes: [{ string: 9, fret: 3 }] }] }] }] });
   eq(s.tracks[0].measures[0].beats[0].notes[0].pitch, undefined);
 });
+{
+  // s3 f3 = A#3/Bb3, s4 f1 = D#3/Eb3, s1 f4 = G#4/Ab4 (sounding); pitch is written an octave up.
+  const fb = (notes) => ({ type: 'note', duration: 'quarter', notes });
+  const sp = (t) => t.measures.map((m) => m.beats.map((b) => b.notes.map((x) => x.soundingPitch)));
+  test('normalizeScore: fret-derived spelling follows the effective key (track, score, mid-piece change)', () => {
+    const beats = [fb([{ string: 3, fret: 3 }]), fb([{ string: 4, fret: 1 }]), fb([{ string: 1, fret: 4 }])];
+    const s = normalizeScore({ keySignature: -2, tracks: [
+      { keySignature: -1, measures: [{ beats }, { keySignature: -3, beats }, { beats }, { keySignature: 2, beats }] },
+      { measures: [{ beats }, { keySignature: 0, beats }, { beats }, { keySignature: -7, beats }] },
+    ] });
+    eq(sp(s.tracks[0]), [
+      [['Bb3'], ['D#3'], ['G#4']], [['Bb3'], ['Eb3'], ['Ab4']], [['Bb3'], ['Eb3'], ['Ab4']], [['A#3'], ['D#3'], ['G#4']],
+    ]);
+    eq(sp(s.tracks[1]), [
+      [['Bb3'], ['Eb3'], ['G#4']], [['A#3'], ['D#3'], ['G#4']], [['A#3'], ['D#3'], ['G#4']], [['Bb3'], ['Eb3'], ['Ab4']],
+    ]);
+    eq(s.tracks[0].measures[0].beats[0].notes[0].pitch, 'Bb4');
+    eq(s.tracks[0].measures[0].beats[0].notes[0].fromFret, true);
+  });
+  test('normalizeScore: an explicit pitch is never respelled; chords are spelled per note', () => {
+    const s = normalizeScore({ tracks: [{ keySignature: -1, measures: [{ beats: [
+      fb([{ string: 2, fret: 11, pitch: 'A#4' }]),
+      fb([{ string: 3, fret: 3 }, { string: 2, fret: 2 }, { string: 1, fret: 6, pitch: 'A#4' }]),
+    ] }] }] });
+    eq(sp(s.tracks[0]), [[['A#4'], ['Bb3', 'C#4', 'A#4']]]);
+    eq(s.tracks[0].measures[0].beats[1].notes.map((x) => x.pitch), ['Bb4', 'C#5', 'A#4']);
+  });
+}
 
 test('normalizeScore: showChordDiagrams defaults to showTablature; author value read as a boolean; chordShapes / chordDiagram pass through', () => {
   const shapes = { C: { frets: ['x', 3, 2, 0, 1, 0] } };
@@ -1785,6 +1835,202 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(fretLabel({ fret: 7, bend: 'full release' }), '7');
     eq(fretLabel({ fret: 7, bend: 'pb full' }), '7');
     eq(fretLabel({ fret: 7, mute: true, bend: 'release' }), 'x');
+  });
+}
+
+// ---------- 1.3.1 characterization (C0): grace accidentals, release geometry, lead-solo-f spelling ----------
+{
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
+  const { graceAccidentalRoom } = await imp('src/layout/chord.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const { accidentalGlyph } = await imp('src/glyphs.js');
+  const { bendGeometry, normalizeBend } = await imp('src/draw/tab.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const thm = resolveTheme({});
+  const gr = (p) => ({ type: 'grace', duration: '16th', notes: [{ pitch: p }] });
+  const nt = (p) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: p }] });
+
+  // (a)(b) 1.3.1: grace notes take part in the measure's accidental memory, in score order (were ignored before).
+  const accOf = (beats, key = 0) => resolveMeasureAccidentals(normalizeScore({ tracks: [{ keySignature: key, measures: [{ beats }] }] }).tracks[0], 0);
+  test('grace accidentals: resolveMeasureAccidentals carries graces into the main notes after them', () => {
+    eq(accOf([gr('C#5'), nt('C#5'), gr('D#5'), nt('D5')]), [
+      { names: ['sharp'], restate: ['sharp'] },
+      { names: [null], restate: [null] },
+      { names: ['sharp'], restate: ['sharp'] },
+      { names: ['natural'], restate: ['natural'] },
+    ]);
+  });
+  test('grace accidentals: a rendered grace C#5 draws a sharp glyph', () => {
+    const svg = serialize(renderTree({ tracks: [{ measures: [{ beats: [gr('C#5'), nt('D5'), nt('D5'), nt('D5'), nt('D5')] }] }] }));
+    eq((svg.match(/\uE262/g) || []).length, 1);
+  });
+  test('grace accidentals: main -> grace carry and a cancelling natural on a grace', () => {
+    eq(accOf([nt('F#4'), gr('F#4'), gr('F4'), nt('F4')]).map((a) => a.names), [['sharp'], [null], ['natural'], [null]]);
+    eq(accOf([nt('F#4'), gr('F4'), nt('F#4'), nt('F#4')]).map((a) => a.names), [['sharp'], ['natural'], ['sharp'], [null]]);
+  });
+  test('grace accidentals: an explicit accidental is drawn; a key-signature flat on a grace draws nothing', () => {
+    eq(accOf([gr('F4'), { ...gr('F4'), notes: [{ pitch: 'F4', accidental: 'natural' }] }, nt('F4'), nt('F4')]).map((a) => a.names),
+      [[null], ['natural'], [null], [null]]);
+    eq(accOf([gr('Bb4'), nt('Bb4'), gr('B4'), nt('B4')], -1).map((a) => a.names), [[null], [null], ['natural'], [null]]);
+    eq(accOf([{ type: 'grace', duration: '16th', notes: [{ pitch: 'E4' }, { pitch: 'G#4' }] }, nt('G#4')]).map((a) => a.names), [[null, 'sharp'], [null]]);
+    const svg = serialize(renderTree({ tracks: [{ keySignature: -1, measures: [{ beats: [gr('Bb4'), nt('A4'), nt('A4'), nt('A4'), nt('A4')] }] }] }));
+    eq((svg.match(/\uE260/g) || []).length, 1, 'only the key signature flat');
+  });
+  test('graceAccidentalRoom: 0 without accidentals; else one column (0.25 sp + widest glyph, grace scale) + stem-up flag clearance; stem down clears the slash', () => {
+    eq([graceAccidentalRoom(null, thm), graceAccidentalRoom([], thm), graceAccidentalRoom([null, null], thm)], [0, 0, 0]);
+    const sc = thm.graceNoteScale; const sp = thm.staffLineSpacing;
+    const headW = glyphBox(Glyph.noteheadBlack).width;
+    // a stem-up grace one slot left: its flag reaches 0.4 sp (stem) + the flag's width; keep 0.25 sp (scaled) clear of it
+    const flagClear = Math.max(0, 0.4 + glyphBox(Glyph.flag8thUp).right * sc + 0.25 * sc - (thm.graceNoteWidthSp - (headW / 2) * sc));
+    const sharp = graceAccidentalRoom(['sharp'], thm);
+    eq(Math.abs(sharp - ((0.25 + glyphBox(accidentalGlyph('sharp')).width) * sc + flagClear) * sp) < 1e-9, true);
+    eq(graceAccidentalRoom(['flat', null, 'sharp'], thm), Math.max(graceAccidentalRoom(['flat'], thm), sharp));
+    // stem down: the accidental's right edge is 0.25 sp (scaled) left of the slash end, 0.4 + 0.5 sp left of the head centre
+    const down = graceAccidentalRoom(['sharp'], thm, false);
+    eq(Math.abs(down - ((0.9 + 0.25 * sc + glyphBox(accidentalGlyph('sharp')).width * sc - (headW / 2) * sc) + flagClear) * sp) < 1e-9, true);
+  });
+
+  // (c) neutrality: graces without accidentals keep their layout x (must stay true after 1.3.1).
+  const graceBeats = () => [gr('E4'), gr('F4'), nt('G4'), nt('A4'), gr('B4'), nt('C5'), nt('D5')];
+  const elementXs = (score) => {
+    const m = computeLayout(normalizeScore(score), thm, 900).systems[0].tracks[0].measures[0];
+    return m.elements.map((e) => [e.index, e.x, e.width, e.t]);
+  };
+  test('grace layout neutrality: notation track, two graces before a note and one trailing grace', () => {
+    eq(elementXs({ tracks: [{ measures: [{ beats: graceBeats() }] }] }), [
+      [0, 113.852, 12, null], [1, 125.852, 12, null], [2, 143.752, 35, { n: 0, d: 1 }], [3, 178.752, 35, { n: 1, d: 4 }],
+      [4, 195.852, 12, null], [5, 213.752, 35, { n: 1, d: 2 }], [6, 248.752, 30, { n: 3, d: 4 }],
+    ]);
+  });
+  test('grace layout neutrality: tab-only track, two graces before a note and one trailing grace', () => {
+    eq(elementXs({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: graceBeats() }] }] }), [
+      [0, 102.70430769230768, 12, null], [1, 114.70430769230768, 12, null], [2, 126.70430769230768, 35, { n: 0, d: 1 }],
+      [3, 161.70430769230768, 35, { n: 1, d: 4 }], [4, 184.70430769230768, 12, null], [5, 196.70430769230768, 35, { n: 1, d: 2 }],
+      [6, 231.70430769230768, 30, { n: 3, d: 4 }],
+    ]);
+  });
+  test('grace layout: a grace accidental moves only the graces farther from the note, and the onset', () => {
+    const plain = elementXs({ tracks: [{ measures: [{ beats: [gr('E4'), gr('F4'), nt('G4'), nt('A4'), nt('B4'), nt('C5')] }] }] });
+    const acc = elementXs({ tracks: [{ measures: [{ beats: [gr('E4'), gr('F#4'), nt('G4'), nt('A4'), nt('B4'), nt('C5')] }] }] });
+    const room = graceAccidentalRoom(['sharp'], thm);
+    const d = acc.map((e, i) => e[1] - plain[i][1]);
+    // the onset moves right by the room; grace k=0 (F#4) stays at the same distance from it; grace k=1 moves left by the room
+    eq(Math.abs(d[2] - room) < 1e-9, true, 'onset');
+    eq(Math.abs(d[1] - room) < 1e-9, true, 'nearest grace');
+    eq(Math.abs(d[0]) < 1e-9, true, 'farther grace');
+  });
+
+  // bendGeometry pins for release arrows (as tabLinks feeds it: a missing release amount becomes 'full').
+  const relGeom = (raw, nextX) => {
+    const b = normalizeBend(raw);
+    if (b.amount == null) b.amount = 'full';
+    b.heightFrac = 1;
+    const g = bendGeometry(100, 50, b, thm, nextX);
+    return { endX: g.endX, releaseCtrl: g.releaseCtrl, boxes: g.boxes };
+  };
+  const lbl = (x1, x2) => ({ x1, x2, top: 0, bottom: 13, text: true });
+  const fall = (x1, x2) => ({ x1, x2, top: 14, bottom: 41.55, text: false });
+  const ctrl = (x, y = 16.7) => ({ x, y });
+  test('bendGeometry pin: {type:"release"} at nextX = x+25, x+40, undefined', () => {
+    eq(relGeom({ type: 'release' }, 125), { endX: 125, releaseCtrl: ctrl(110), boxes: [fall(100, 129), lbl(86.6, 114.39999999999999)] });
+    eq(relGeom({ type: 'release' }, 140), { endX: 137, releaseCtrl: ctrl(114.8), boxes: [fall(100, 141), lbl(86.6, 114.39999999999999)] });
+    eq(relGeom({ type: 'release' }, undefined), { endX: 131, releaseCtrl: ctrl(112.4), boxes: [fall(100, 135), lbl(86.6, 114.39999999999999)] });
+  });
+  test('bendGeometry pin: "full release" at nextX = x+25, x+40, undefined', () => {
+    const rise = (x2) => ({ x1: 102.45, x2, top: 14, bottom: 41.55, text: false });
+    eq(relGeom('full release', 125), { endX: 125, releaseCtrl: ctrl(118.4), boxes: [rise(116.4), fall(114, 129), lbl(100.6, 128.4)] });
+    eq(relGeom('full release', 140), { endX: 137, releaseCtrl: ctrl(126.2), boxes: [rise(121.4), fall(119, 141), lbl(105.6, 133.4)] });
+    eq(relGeom('full release', undefined), { endX: 131, releaseCtrl: ctrl(122.6), boxes: [rise(119.4), fall(117, 135), lbl(103.6, 131.4)] });
+  });
+
+  // 1.3.1 release-arrow cap: obstacles = fret knock-outs of later notes (bendGeometry's 7th argument).
+  const { RELEASE_CLEAR_SP, RELEASE_MIN_FALL_SP } = await imp('src/draw/tab.js');
+  const { tabFretKnockoutHalf } = await imp('src/layout/tabRhythm.js');
+  const { fretLabelWidth: flw } = await imp('src/textMetrics.js');
+  const SP = thm.staffLineSpacing;
+  // knock-out of fret label `label` at x, `strings` strings above (negative = below) the bent note at y = 50
+  const knock = (x, strings = 1, label = '8') => {
+    const w = flw(label, thm); const y = 50 - strings * thm.tabStaffLineSpacing; const kh = tabFretKnockoutHalf(thm);
+    return { x1: x - w / 2, x2: x + w / 2, top: y - kh, bottom: y + kh };
+  };
+  const geomObs = (raw, nextX, obstacles) => {
+    const b = normalizeBend(raw);
+    if (b.amount == null) b.amount = 'full';
+    b.heightFrac = 1;
+    const g = bendGeometry(100, 50, b, thm, nextX, null, obstacles);
+    return { endX: g.endX, releaseCtrl: g.releaseCtrl, boxes: g.boxes, arrow: g.arrow, peakX: g.peakX, peakY: g.peakY, riseH: g.riseH };
+  };
+  test('release cap: a knock-out on the string above caps the arrow RELEASE_CLEAR_SP before it; releaseCtrl and the fall box follow', () => {
+    eq([RELEASE_CLEAR_SP, RELEASE_MIN_FALL_SP], [0.2, 0.6]);
+    ['full release', { type: 'release' }].forEach((raw) => {
+      const free = geomObs(raw, 140);
+      const o = knock(140);
+      const g = geomObs(raw, 140, [o]);
+      eq(g.endX < free.endX, true, 'capped');
+      eq(g.endX + g.arrow <= o.x1 - RELEASE_CLEAR_SP * SP + 1e-9, true, 'clear of the knock-out');
+      eq(Math.abs(g.endX + g.arrow - (o.x1 - RELEASE_CLEAR_SP * SP)) < 1e-9, true, 'exactly at the clearance');
+      eq(g.releaseCtrl, { x: g.peakX + (g.endX - g.peakX) * 0.4, y: g.peakY + g.riseH * 0.1 });
+      const fallBox = g.boxes.find((b) => !b.text && b.x1 === g.peakX);
+      eq(fallBox.x2, g.endX + g.arrow);
+      eq(g.boxes.filter((b) => b.text), free.boxes.filter((b) => b.text), 'labels unchanged');
+    });
+  });
+  test('release cap: never closer than RELEASE_MIN_FALL_SP to the peak; never right of the uncapped end', () => {
+    ['full release', { type: 'release' }].forEach((raw) => {
+      const g = geomObs(raw, 140, [knock(geomObs(raw, 140).peakX + 2)]);
+      eq(Math.abs(g.endX - (g.peakX + RELEASE_MIN_FALL_SP * SP)) < 1e-9, true, 'floor');
+      [125, 140, undefined].forEach((nx) => {
+        const free = geomObs(raw, nx);
+        [100, 120, 130, 140, 150, 200].forEach((ox) => eq(geomObs(raw, nx, [knock(ox)]).endX <= free.endX, true, `nextX ${nx}, obstacle ${ox}`));
+        eq(geomObs(raw, nx, [knock(400)]), free, 'far obstacle: unchanged');
+      });
+    });
+  });
+  test('release cap: same-string, lower-string and two-up obstacles leave the C0 pins unchanged', () => {
+    const pick = (g) => ({ endX: g.endX, releaseCtrl: g.releaseCtrl, boxes: g.boxes });
+    ['full release', { type: 'release' }].forEach((raw) => [125, 140, undefined].forEach((nx) => {
+      const pin = relGeom(raw, nx);
+      [0, -1, 2].forEach((strings) => [110, 125, 140].forEach((ox) => {
+        eq(pick(geomObs(raw, nx, [knock(ox, strings), knock(ox, strings, '(12)')])), pin, `strings ${strings} x ${ox}`);
+      }));
+    }));
+  });
+  test('release cap: plain bends, pre-bends and holds ignore obstacles', () => {
+    ['full', '1/2', 'full hold', 'pb full'].forEach((raw) => [125, 140, undefined].forEach((nx) => {
+      eq(geomObs(raw, nx, [knock(nx ?? 130), knock(115)]), geomObs(raw, nx), `${raw} nextX ${nx}`);
+    }));
+  });
+  test('release cap: a note on the string above in the same beat is not an obstacle (rendered)', () => {
+    // [s2 full release + s1 f8] vs [s2 full release + s3 f8]: same layout, same release path.
+    const sc = (other) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: [
+      { type: 'note', duration: 'quarter', notes: [{ string: 2, fret: 7, bend: 'full release' }, { string: other, fret: 8 }] },
+      { type: 'note', duration: 'quarter', notes: [{ string: 3, fret: 7 }] },
+      { type: 'rest', duration: 'quarter' }, { type: 'rest', duration: 'quarter' },
+    ] }] }] });
+    const fallOf = (svg) => /<g class="bend">[\s\S]*?<\/g>/.exec(svg)[0];
+    eq(fallOf(serialize(renderTree(sc(1)))), fallOf(serialize(renderTree(sc(3)))));
+  });
+
+  // lead-solo-f spelling neutrality: [pitch, soundingPitch] per note in score order.
+  const { leadSoloF } = await imp('examples/lead-solo-f.js');
+  const { createHash } = await import('node:crypto');
+  test('lead-solo-f neutrality: normalizeScore [pitch, soundingPitch] per note in score order (90 notes)', () => {
+    const pairs = [];
+    normalizeScore(leadSoloF).tracks.forEach((t) => t.measures.forEach((m) => m.beats.forEach((b) => (b.notes || []).forEach((x) => pairs.push([x.pitch ?? null, x.soundingPitch ?? null])))));
+    eq(pairs.length, 90);
+    eq(pairs.slice(0, 3), [['F4', 'F3'], ['G4', 'G3'], ['A4', 'A3']]);
+    eq(createHash('sha256').update(JSON.stringify(pairs)).digest('hex'), 'c5b61162084a82775017c502f66bf655794b14dc9ff67eb97989c9a91e3434ac');
+  });
+  test('lead-solo-f: its 10 s2 f11 notes render byte-identical with an explicit pitch "Bb4" (key-aware spelling)', () => {
+    const copy = JSON.parse(JSON.stringify(leadSoloF));
+    let n = 0;
+    copy.tracks[0].measures.forEach((m) => m.beats.forEach((b) => (b.notes || []).forEach((x) => {
+      eq(x.pitch, undefined);
+      if (x.string === 2 && x.fret === 11) { x.pitch = 'Bb4'; n++; }
+    })));
+    eq(n, 10);
+    eq(serialize(renderTree(copy)), serialize(renderTree(leadSoloF)));
   });
 }
 
