@@ -16,6 +16,7 @@ const PH = { harmonic: 'pinch' };
 const PM = { palmMute: true };
 const tabe = (string, fret, extra = {}) => ({ type: 'note', duration: '8th', notes: [{ string, fret }], ...extra });
 const tabg = (string, fret, extra = {}) => ({ type: 'grace', duration: '16th', notes: [{ string, fret, mute: true }], ...extra });
+const tabgr = (notes) => ({ type: 'grace', duration: '16th', notes: notes.map(([string, fret, note = {}]) => ({ string, fret, ...note })) });
 const tabc = (frets, extra = {}, duration = 'quarter') => ({ type: 'note', duration, notes: frets.map(([string, fret, note = {}]) => ({ string, fret, ...note })), ...extra });
 const pc = (pitches, extra = {}, duration = 'quarter') => ({ type: 'note', duration, notes: pitches.map((p) => (typeof p === 'string' ? n(p) : p)), ...extra });
 const C_CHORD = [[5, 3], [4, 2], [3, 0], [2, 1]];
@@ -1070,6 +1071,26 @@ export const characterizationCases = [
           { keySignature: 2, beats: [tabq(3, 3), tabq(4, 4), tabq(1, 4), tabq(2, 2)] },
           { keySignature: 0, beats: [tabq(3, 3), tabq(4, 1), tabq(1, 4), tabq(2, 2)] },
           { keySignature: -7, beats: [tabe(2, 2), tabe(4, 1), tabe(4, 4), tabe(1, 4), tabe(3, 3), tabe(2, 0), tabe(1, 0), tabe(1, 1)] },
+        ],
+      }],
+    },
+  },
+  {
+    // Grace-note accidentals (notation + TAB, fret-derived and explicit pitches; sounding pitches below, written an
+    // octave up): m1 grace F#4 -> F#4 (none) -> F4 (natural); m2 F#4 -> grace F4 (natural) -> F4 (none); m3 two graces
+    // with accidentals (C#4, D#4) before a note, and a trailing grace Bb4 (explicit pitch); m4 a grace with an explicit
+    // 'natural'; m5 F major: grace Bb4 (none) and grace B4 (natural); m6 C major: a grace dyad E4 / G#4.
+    name: 'grace-accidentals', width: 900,
+    score: {
+      tracks: [{
+        name: 'Gt.', showTablature: true, writtenOctaveUp: true,
+        measures: [
+          { beats: [tabgr([[1, 2]]), tabq(1, 2), tabq(1, 1), tabq(1, 3), tabq(1, 5)] },
+          { beats: [tabh(1, 2, { pitch: 'F#4' }), tabgr([[1, 1, { pitch: 'F4' }]]), tabq(1, 1), tabq(1, 3), tabq(1, 5)] },
+          { beats: [tabgr([[2, 2]]), tabgr([[2, 4]]), tabq(2, 5), tabq(2, 3), tabq(2, 1), tabq(2, 0), tabgr([[2, 11, { pitch: 'Bb4' }]])] },
+          { beats: [tabgr([[1, 1, { accidental: 'natural' }]]), tabq(1, 1), tabq(1, 3), tabq(1, 1), tabq(1, 0)] },
+          { keySignature: -1, beats: [tabgr([[2, 11]]), tabq(2, 10), tabgr([[2, 12]]), tabq(2, 12), tabq(2, 10), tabq(2, 8)] },
+          { keySignature: 0, beats: [tabgr([[2, 5], [1, 4]]), tabq(1, 5), tabq(1, 4), tabq(1, 5), tabq(1, 0)] },
         ],
       }],
     },

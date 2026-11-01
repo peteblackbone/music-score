@@ -1842,25 +1842,53 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
 {
   const { computeLayout } = await imp('src/layout/index.js');
   const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
+  const { graceAccidentalRoom } = await imp('src/layout/chord.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const { accidentalGlyph } = await imp('src/glyphs.js');
   const { bendGeometry, normalizeBend } = await imp('src/draw/tab.js');
   const { resolveTheme } = await imp('src/theme.js');
   const thm = resolveTheme({});
   const gr = (p) => ({ type: 'grace', duration: '16th', notes: [{ pitch: p }] });
   const nt = (p) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: p }] });
 
-  // (a)(b) pre-1.3.1: grace notes take no part in accidental tracking. Expected to flip in 1.3.1.
-  test('grace accidentals (pre-1.3.1): resolveMeasureAccidentals ignores graces and does not carry them', () => {
-    const s = normalizeScore({ tracks: [{ measures: [{ beats: [gr('C#5'), nt('C#5'), gr('D#5'), nt('D5')] }] }] });
-    eq(resolveMeasureAccidentals(s.tracks[0], 0), [
-      { names: [null], restate: [null] },
+  // (a)(b) 1.3.1: grace notes take part in the measure's accidental memory, in score order (were ignored before).
+  const accOf = (beats, key = 0) => resolveMeasureAccidentals(normalizeScore({ tracks: [{ keySignature: key, measures: [{ beats }] }] }).tracks[0], 0);
+  test('grace accidentals: resolveMeasureAccidentals carries graces into the main notes after them', () => {
+    eq(accOf([gr('C#5'), nt('C#5'), gr('D#5'), nt('D5')]), [
       { names: ['sharp'], restate: ['sharp'] },
       { names: [null], restate: [null] },
-      { names: [null], restate: [null] },
+      { names: ['sharp'], restate: ['sharp'] },
+      { names: ['natural'], restate: ['natural'] },
     ]);
   });
-  test('grace accidentals (pre-1.3.1): a rendered grace C#5 draws no sharp glyph', () => {
+  test('grace accidentals: a rendered grace C#5 draws a sharp glyph', () => {
     const svg = serialize(renderTree({ tracks: [{ measures: [{ beats: [gr('C#5'), nt('D5'), nt('D5'), nt('D5'), nt('D5')] }] }] }));
-    eq(svg.includes('\uE262'), false);
+    eq((svg.match(/\uE262/g) || []).length, 1);
+  });
+  test('grace accidentals: main -> grace carry and a cancelling natural on a grace', () => {
+    eq(accOf([nt('F#4'), gr('F#4'), gr('F4'), nt('F4')]).map((a) => a.names), [['sharp'], [null], ['natural'], [null]]);
+    eq(accOf([nt('F#4'), gr('F4'), nt('F#4'), nt('F#4')]).map((a) => a.names), [['sharp'], ['natural'], ['sharp'], [null]]);
+  });
+  test('grace accidentals: an explicit accidental is drawn; a key-signature flat on a grace draws nothing', () => {
+    eq(accOf([gr('F4'), { ...gr('F4'), notes: [{ pitch: 'F4', accidental: 'natural' }] }, nt('F4'), nt('F4')]).map((a) => a.names),
+      [[null], ['natural'], [null], [null]]);
+    eq(accOf([gr('Bb4'), nt('Bb4'), gr('B4'), nt('B4')], -1).map((a) => a.names), [[null], [null], ['natural'], [null]]);
+    eq(accOf([{ type: 'grace', duration: '16th', notes: [{ pitch: 'E4' }, { pitch: 'G#4' }] }, nt('G#4')]).map((a) => a.names), [[null, 'sharp'], [null]]);
+    const svg = serialize(renderTree({ tracks: [{ keySignature: -1, measures: [{ beats: [gr('Bb4'), nt('A4'), nt('A4'), nt('A4'), nt('A4')] }] }] }));
+    eq((svg.match(/\uE260/g) || []).length, 1, 'only the key signature flat');
+  });
+  test('graceAccidentalRoom: 0 without accidentals; else one column (0.25 sp + widest glyph, grace scale) + stem-up flag clearance; stem down clears the slash', () => {
+    eq([graceAccidentalRoom(null, thm), graceAccidentalRoom([], thm), graceAccidentalRoom([null, null], thm)], [0, 0, 0]);
+    const sc = thm.graceNoteScale; const sp = thm.staffLineSpacing;
+    const headW = glyphBox(Glyph.noteheadBlack).width;
+    // a stem-up grace one slot left: its flag reaches 0.4 sp (stem) + the flag's width; keep 0.25 sp (scaled) clear of it
+    const flagClear = Math.max(0, 0.4 + glyphBox(Glyph.flag8thUp).right * sc + 0.25 * sc - (thm.graceNoteWidthSp - (headW / 2) * sc));
+    const sharp = graceAccidentalRoom(['sharp'], thm);
+    eq(Math.abs(sharp - ((0.25 + glyphBox(accidentalGlyph('sharp')).width) * sc + flagClear) * sp) < 1e-9, true);
+    eq(graceAccidentalRoom(['flat', null, 'sharp'], thm), Math.max(graceAccidentalRoom(['flat'], thm), sharp));
+    // stem down: the accidental's right edge is 0.25 sp (scaled) left of the slash end, 0.4 + 0.5 sp left of the head centre
+    const down = graceAccidentalRoom(['sharp'], thm, false);
+    eq(Math.abs(down - ((0.9 + 0.25 * sc + glyphBox(accidentalGlyph('sharp')).width * sc - (headW / 2) * sc) + flagClear) * sp) < 1e-9, true);
   });
 
   // (c) neutrality: graces without accidentals keep their layout x (must stay true after 1.3.1).
@@ -1881,6 +1909,16 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
       [3, 161.70430769230768, 35, { n: 1, d: 4 }], [4, 184.70430769230768, 12, null], [5, 196.70430769230768, 35, { n: 1, d: 2 }],
       [6, 231.70430769230768, 30, { n: 3, d: 4 }],
     ]);
+  });
+  test('grace layout: a grace accidental moves only the graces farther from the note, and the onset', () => {
+    const plain = elementXs({ tracks: [{ measures: [{ beats: [gr('E4'), gr('F4'), nt('G4'), nt('A4'), nt('B4'), nt('C5')] }] }] });
+    const acc = elementXs({ tracks: [{ measures: [{ beats: [gr('E4'), gr('F#4'), nt('G4'), nt('A4'), nt('B4'), nt('C5')] }] }] });
+    const room = graceAccidentalRoom(['sharp'], thm);
+    const d = acc.map((e, i) => e[1] - plain[i][1]);
+    // the onset moves right by the room; grace k=0 (F#4) stays at the same distance from it; grace k=1 moves left by the room
+    eq(Math.abs(d[2] - room) < 1e-9, true, 'onset');
+    eq(Math.abs(d[1] - room) < 1e-9, true, 'nearest grace');
+    eq(Math.abs(d[0]) < 1e-9, true, 'farther grace');
   });
 
   // bendGeometry pins for release arrows (as tabLinks feeds it: a missing release amount becomes 'full').

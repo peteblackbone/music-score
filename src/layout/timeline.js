@@ -14,7 +14,11 @@
  *   rightExt(i) + leftExt(i+1) + 0.3 sp; the last onset → barline gap
  *   ("tail") is max(ideal(Δt_last) − 0.5 sp, rightExt + 1 sp);
  * - grace notes are not onsets: grace k (0 = nearest) sits at
- *   x − ownLeftExtent − (k + 1) · graceNoteWidthSp, left of the note it leads into;
+ *   x − ownLeftExtent − (k + 1) · graceNoteWidthSp, left of the note it leads into,
+ *   moved further left by the accidental room (graceAccidentalRoom) of the
+ *   graces nearer that note; the note's left extent includes all of it
+ *   (trailing graces: the tail, which with accidentals also keeps them clear
+ *   of the last onset);
  * - a whole-measure rest (the only event is one rest ≥ the bar) or an empty
  *   measure creates no onset; it is centred in the measure later.
  *
@@ -26,7 +30,7 @@ import { staffPosition } from '../pitch.js';
 import { noteheadForDuration, restForDuration, flagForDuration } from '../glyphs.js';
 import { glyphBox } from '../glyphMetrics.js';
 import { groupBeams } from './beams.js';
-import { layoutChord, arpeggioInnerLeft, DOT_GAP_SP, DOT_STEP_SP, DOT_RADIUS_SP, ARPEGGIO_ROOM_SP } from './chord.js';
+import { layoutChord, arpeggioInnerLeft, graceAccidentalRoom, DOT_GAP_SP, DOT_STEP_SP, DOT_RADIUS_SP, ARPEGGIO_ROOM_SP } from './chord.js';
 import { resolveMeasureAccidentals } from './accidentals.js';
 import { fretLabel, fretLabelWidth } from '../textMetrics.js';
 import { layoutHeadGlyph } from '../harmonics.js';
@@ -88,12 +92,28 @@ export function tabExtents(el, theme) {
 }
 
 /**
+ * Anchor the pending graces `pending` (score order) to `anchor`: k counts
+ * from the nearest (0), accDx sums the accidental room of the graces
+ * nearer the anchor. Returns the total accidental room.
+ */
+function anchorGraces(pending, anchor) {
+  let accTotal = 0;
+  for (let k = 0; k < pending.length; k++) {
+    const g = pending[pending.length - 1 - k];
+    g.grace.anchor = anchor; g.grace.k = k; g.grace.accDx = accTotal;
+    accTotal += g.accRoom;
+  }
+  return accTotal;
+}
+
+/**
  * Per-beat timing and extents of one track's measure `mi`.
  * Returns `{ events, end, wholeMeasureRest, empty }` where each event is
- * `{ t, grace: { anchor, k } | null, left, right, ownLeft, chord, accidentals,
- * leftFirst, ownLeftFirst, chordFirst, accidentalsFirst, wholeMeasureRest }`
+ * `{ t, grace: { anchor, k, accDx } | null, left, right, ownLeft, chord, accidentals,
+ * accRoom, leftFirst, ownLeftFirst, chordFirst, accidentalsFirst, wholeMeasureRest }`
  * (grace `anchor` = beat index of the note it leads into, or 'end' for
- * trailing graces; `k` = 0 for the grace nearest it). The `…First`
+ * trailing graces; `k` = 0 for the grace nearest it; `accDx` = the
+ * accidental room of the graces nearer it, `accRoom` its own). The `…First`
  * variants apply when the measure opens a system: tied continuations at
  * the first onset restate their accidental (ui.md §7).
  */
@@ -125,7 +145,11 @@ function trackEvents(track, mi, theme) {
   let pending = [];
   const events = measure.beats.map((el, bi) => {
     if (el.type === 'grace') {
-      const ev = { t: null, grace: { anchor: null, k: 0 }, left: 0, right: 0, ownLeft: 0, chord: null, accidentals: null };
+      const accidentals = accs ? accs[bi].names : null;
+      const ev = {
+        t: null, grace: { anchor: null, k: 0, accDx: 0 }, left: 0, right: 0, ownLeft: 0, chord: null, accidentals,
+        accRoom: graceAccidentalRoom(accidentals, theme, accidentals ? stemUpFor(positionsOf(el)) : true),
+      };
       pending.push(ev);
       return ev;
     }
@@ -163,19 +187,23 @@ function trackEvents(track, mi, theme) {
       left = Math.max(left, arpeggioInnerLeft(chord) + room, tabIn + room);
       leftFirst = Math.max(leftFirst, arpeggioInnerLeft(chordFirst) + room, tabIn + room);
     }
-    const graceLead = pending.length ? pending.length * graceW + graceHalf : 0;
+    const accTotal = anchorGraces(pending, bi);
+    const graceLead = pending.length ? pending.length * graceW + graceHalf + accTotal : 0;
     const ev = {
       t, grace: null, left: left + graceLead, right, ownLeft: left, chord, accidentals,
       leftFirst: leftFirst + graceLead, ownLeftFirst: leftFirst, chordFirst, accidentalsFirst,
       wholeMeasureRest: wholeMeasureRest && el.type === 'rest',
     };
-    pending.forEach((g, j) => { g.grace.anchor = bi; g.grace.k = pending.length - 1 - j; });
     pending = [];
     t = add(t, durationR(el));
     return ev;
   });
-  pending.forEach((g, j) => { g.grace.anchor = 'end'; g.grace.k = pending.length - 1 - j; });
-  return { events, end: t, wholeMeasureRest, empty: mains.length === 0, trailingGraces: pending.length };
+  // Trailing graces with accidentals also keep the leftmost accidental clear of the last onset (they hang
+  // from the barline side, measurePaddingSp in); plain trailing graces keep their old room.
+  const trailingAcc = anchorGraces(pending, 'end');
+  const trailingAccRoom = trailingAcc
+    ? trailingAcc + graceHalf + Math.max(0, theme.measurePaddingSp + COLLISION_PAD_SP - TAIL_MIN_SP) * theme.staffLineSpacing : 0;
+  return { events, end: t, wholeMeasureRest, empty: mains.length === 0, trailingGraces: pending.length, trailingAccRoom };
 }
 
 /**
@@ -210,7 +238,7 @@ export function buildColumn(mi, score, theme) {
   tracks.forEach((tr) => tr.events.forEach((ev) => {
     ev.onset = ev.grace || ev.wholeMeasureRest ? null : index.get(key(ev.t));
   }));
-  const trailing = Math.max(0, ...tracks.map((tr) => tr.trailingGraces)) * graceW;
+  const trailing = Math.max(0, ...tracks.map((tr) => tr.trailingGraces * graceW + tr.trailingAccRoom));
   const duration = rmax(end, barDuration(score.tracks[0]?.measures[mi].timeSignature || { beats: 4, beatType: 4 }));
 
   let leadPad = 0;

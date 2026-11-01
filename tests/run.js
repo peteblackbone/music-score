@@ -56,7 +56,7 @@ for (const c of cases) {
   console.log(`FAIL ${c.id}: first diff at line ${i + 1}\n  expected: ${a[i]}\n  actual:   ${b[i]}`);
   fs.writeFileSync(path.join(snapDir, `${c.id}.actual.svg.tmp`), out);
 }
-// Opt-out guard: with hammerPullSlurs:false every pre-1.3 render must stay byte-identical to the 1.2.0 baseline.
+// Opt-out guard: with hammerPullSlurs:false every pre-1.3 render must match its recorded hash: the 1.2.0 baseline, plus the intended 1.3.1 changes (grace accidentals, release-arrow cap) re-recorded for the cases they touch.
 {
   const hashes = JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'pre-1.3-hashes.json'), 'utf8'));
   for (const c of cases) {
@@ -68,8 +68,8 @@ for (const c of cases) {
     const out = serialize(box.children[0]);
     if (crypto.createHash('sha256').update(out).digest('hex') === want) { console.log(`PASS optout-1.2.0 ${c.id}`); continue; }
     fail++;
-    console.log(`FAIL optout-1.2.0 ${c.id}
-  baseline: git show a825edc:tests/snapshots/${c.id}.svg`);
+    console.log(`FAIL optout-1.2.0 ${c.id}: differs from the 1.2.0 baseline plus intended 1.3.1 changes
+  1.2.0 baseline: git show a825edc:tests/snapshots/${c.id}.svg`);
     fs.writeFileSync(path.join(snapDir, `${c.id}.optout.actual.svg.tmp`), out);
   }
 }

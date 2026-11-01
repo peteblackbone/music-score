@@ -5,7 +5,7 @@
 // Areas (assertion counts are printed per area at the end):
 //   align, justify, signatures, measure-numbers, barlines, repeats, vertical, numbers,
 //   scaling, octave, beaming, accidentals, ties, tab-clef, a11y, theme, robustness, header, collisions, harmonics, directions, tab-rhythm, navigation, chordDiagrams, techniques11, strumArpeggio,
-//   legatoSlides
+//   legatoSlides, graceAccidentals
 //
 // Most geometric checks read the rendered SVG tree (class names + transforms); a few read the
 // layout model (computeLayout) for facts that are not observable in the SVG (onset times,
@@ -5433,6 +5433,82 @@ test('legatoSlides', 'robustness: bends \'0/0\', \'1/0\', \'0 0/0\', 5, { amount
     ok(a === serialize(renderTree(fx.score, width)), `${fx.name}: renders differ`);
     ok(!/NaN|undefined|Infinity/.test(a), `${fx.name}: NaN / undefined / Infinity`);
   });
+});
+}
+
+// ---------- grace-note accidentals (1.3.1) ----------
+{
+const { glyphBox, hasGlyphBox } = await imp('src/glyphMetrics.js');
+const S = DEF.staffLineSpacing;
+const FULL = 4 * S;                       // SMuFL font size: 1 em = 4 staff spaces
+const GRACE = FULL * DEF.graceNoteScale;
+const isAcc = (cp) => cp >= 0xE260 && cp <= 0xE264;
+const isHead = (cp) => cp === 0xE0A4 || cp === 0xE0DB || cp === 0xE0D9 || cp === 0xE0D8;
+// Ink box of a Bravura glyph text in staff-local px (SVG y down); middle-anchored glyphs are centred on x.
+function glyphInk(n) {
+  const fs = num(n, 'font-size'); const u = fs / 4; const b = glyphBox(String.fromCodePoint(cpOf(n)));
+  const x = num(n, 'x'); const y = num(n, 'y');
+  const mid = n.getAttribute('text-anchor') === 'middle';
+  const x1 = mid ? x - (b.width / 2) * u : x + b.left * u;
+  return { n, cp: cpOf(n), fs, x, y, x1, x2: x1 + b.width * u, y1: y - b.top * u, y2: y - b.bottom * u };
+}
+const overlap = (a, b, pad = 0) => a.x1 < b.x2 + pad && b.x1 < a.x2 + pad && a.y1 < b.y2 && b.y1 < a.y2;
+// Does segment (x1,y1)-(x2,y2) cross box b (sampled; segments here are short stems and slashes)?
+const segHits = (l, b) => { for (let i = 0; i <= 40; i++) { const x = l.x1 + (l.x2 - l.x1) * i / 40; const y = l.y1 + (l.y2 - l.y1) * i / 40; if (x > b.x1 && x < b.x2 && y > b.y1 && y < b.y2) return true; } return false; };
+// Staff-local Bravura glyph inks and non-horizontal lines (stems, grace slashes) of every notation staff.
+function notationInk(svg) {
+  const out = [];
+  systemsOf(svg).forEach((sysG) => staffGroups(sysG).filter((g) => !cls(g).includes('tab')).forEach((g) => {
+    const items = all(g).map(({ n }) => n);
+    const texts = items.filter((n) => n.tag === 'text' && /Bravura/.test(n.getAttribute('font-family') || '') && hasGlyphBox(String.fromCodePoint(cpOf(n)))).map(glyphInk);
+    const lines = items.filter((n) => n.tag === 'line').map((n) => ({ x1: num(n, 'x1'), y1: num(n, 'y1'), x2: num(n, 'x2'), y2: num(n, 'y2') }))
+      .filter((l) => Math.abs(l.x2 - l.x1) < Math.abs(l.y2 - l.y1) + 1 && !(l.y1 === l.y2));
+    out.push({ texts, lines });
+  }));
+  return out;
+}
+const tnoteG = (notes) => ({ type: 'grace', duration: '16th', notes });
+// Stem-up and stem-down graces, several in a row, a chord, ledger lines, tight width.
+const STRESS = { tracks: [{ name: 'N', measures: [
+  { beats: [tnoteG([{ pitch: 'C#4' }]), tnoteG([{ pitch: 'Eb4' }]), tnoteG([{ pitch: 'G#5' }]), q('A5'), tnoteG([{ pitch: 'A#5' }]), q('B5'), q('C6'), q('B5')] },
+  { beats: [q('Bb3'), tnoteG([{ pitch: 'C4' }, { pitch: 'E#4' }]), q('F#4'), tnoteG([{ pitch: 'Db6' }]), q('B4'), tnoteG([{ pitch: 'Fb5' }]), q('A4'), tnoteG([{ pitch: 'C##5' }])] },
+] }] };
+const GA = characterizationCases.find((c) => c.name === 'grace-accidentals');
+const DB = characterizationCases.find((c) => c.name === 'directions-break');
+const TS = characterizationCases.find((c) => c.name === 'tuplet-spans');
+const CASES = [[GA.score, 900, 8], [GA.score, 600, 8], [DB.score, 600, 1], [TS.score, 900, 1], [STRESS, 900, 8], [STRESS, 400, 8]];
+
+test('graceAccidentals', 'every grace accidental is drawn at grace size (font size x graceNoteScale); counts match the score', () => {
+  for (const [score, width, count] of CASES) {
+    const ink = notationInk(renderTree(score, width));
+    const accs = ink.flatMap((s) => s.texts.filter((t) => isAcc(t.cp)));
+    ok(accs.every((a) => Math.abs(a.fs - FULL) < 1e-6 || Math.abs(a.fs - GRACE) < 1e-6), `w${width}: accidental at an unexpected size`);
+    ok(accs.filter((a) => Math.abs(a.fs - GRACE) < 1e-6).length === count, `w${width}: ${accs.filter((a) => Math.abs(a.fs - GRACE) < 1e-6).length} grace accidentals, want ${count}`);
+  }
+});
+test('graceAccidentals', 'a grace accidental ends left of its own head, and touches no other glyph, stem or grace slash', () => {
+  for (const [score, width] of CASES) {
+    notationInk(renderTree(score, width)).forEach(({ texts, lines }) => {
+      texts.filter((t) => isAcc(t.cp) && Math.abs(t.fs - GRACE) < 1e-6).forEach((a) => {
+        const own = texts.filter((h) => isHead(h.cp) && Math.abs(h.fs - GRACE) < 1e-6 && Math.abs(h.y - a.y) < 0.01 && h.x > a.x).sort((p, r) => p.x - r.x)[0];
+        ok(!!own, `w${width}: grace accidental at x=${a.x} has no grace head to its right`);
+        ok(a.x2 <= own.x1 + EPS, `w${width}: grace accidental right ${a.x2} > its head left ${own.x1}`);
+        texts.forEach((o) => { if (o !== a) ok(!overlap(a, o), `w${width}: grace accidental at x=${a.x},y=${a.y} overlaps glyph U+${o.cp.toString(16)} at x=${o.x},y=${o.y}`); });
+        lines.forEach((l) => ok(!segHits(l, a), `w${width}: grace accidental at x=${a.x},y=${a.y} crossed by a line ${JSON.stringify(l)}`));
+      });
+    });
+  }
+});
+test('graceAccidentals', 'graces without accidentals keep their x (only graces farther from the note and the onsets move)', () => {
+  // Same layout with the accidental-bearing graces replaced by plain ones: plain graces nearer the note keep their offset to it.
+  const plain = { tracks: [{ name: 'N', measures: [{ beats: [tnoteG([{ pitch: 'E4' }]), tnoteG([{ pitch: 'F4' }]), q('G4'), q('A4'), q('B4'), q('C5')] }] }] };
+  const acc = { tracks: [{ name: 'N', measures: [{ beats: [tnoteG([{ pitch: 'E4' }]), tnoteG([{ pitch: 'F#4' }]), q('G4'), q('A4'), q('B4'), q('C5')] }] }] };
+  const xs = (s) => layoutOf(s, 900).systems[0].tracks[0].measures[0].elements.map((e) => e.x);
+  const a = xs(acc); const p = xs(plain);
+  near(a[2] - a[1], p[2] - p[1], 1e-9, 'nearest grace (with the accidental) keeps its distance to the note');
+  ok(a[1] - a[0] > p[1] - p[0] + 0.5 * S, 'the farther grace moves left by the accidental room');
+  const same = { tracks: [{ name: 'N', measures: [{ beats: [tnoteG([{ pitch: 'E4' }]), tnoteG([{ pitch: 'F4' }]), q('G4'), q('A4'), q('B4'), q('C5')] }] }] };
+  ok(JSON.stringify(xs(same)) === JSON.stringify(p), 'no accidental -> identical x');
 });
 }
 

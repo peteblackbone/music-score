@@ -10,7 +10,8 @@
  *   be shown when the note opens a new system;
  * - an explicit `note.accidental` is always drawn (compatibility) and
  *   becomes the active alteration;
- * - grace notes draw no accidentals and don't affect the measure's state.
+ * - grace notes take part like any other note, in score order: an altered
+ *   grace carries into the main notes after it and vice versa.
  *
  * Pure function, no DOM.
  */
@@ -28,7 +29,7 @@ export function resolveMeasureAccidentals(track, mi) {
   const keyAlters = keySignatureAlterations(measure.keySignature);
   return measure.beats.map((el) => {
     const notes = el.notes || [];
-    if (el.type === 'grace' || el.type === 'rest') {
+    if (el.type === 'rest') {
       return { names: notes.map(() => null), restate: notes.map(() => null) };
     }
     const names = [];

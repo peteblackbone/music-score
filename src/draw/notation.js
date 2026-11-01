@@ -12,6 +12,7 @@ import { smuflFontSizePx } from '../theme.js';
 import { beamCount } from '../duration.js';
 import {
   stemDxSp, stemDySp, dotPosition, DOT_GAP_SP, DOT_STEP_SP, DOT_RADIUS_SP,
+  graceAccidentalRight, GRACE_STEM_DX_SP, GRACE_SLASH_DX_SP,
   GHOST_PAREN_DX_SP, GHOST_PAREN_SIZE_SP, GHOST_PAREN_BASELINE,
 } from '../layout/chord.js';
 import { stemUpFor } from '../layout/timeline.js';
@@ -202,6 +203,10 @@ export function renderWholeMeasureRest(g, x, baselineY, theme) {
  * notation when there's no spare rhythmic value to give it a full note —
  * the tab staff shows the same technique via the target note's ordinary
  * `hammerPull` slur, so this only needs to handle the notation side.
+ * Accidentals (`layoutEl.accidentals`, decided by the layout like any
+ * other note's) sit left of the head (or of a stem-down slash) at grace
+ * size, graceAccidentalRight; the layout leaves room for them
+ * (graceAccidentalRoom).
  * `renderGraceSlurs` (draw/passes/curves.js) auto-slurs each grace note to the very next note
  * after rendering, so this just needs to return
  * enough info (`x`, `noteheads`, `stemTopY`/`stemBottomY`) for that pass
@@ -231,12 +236,20 @@ function renderGraceNote(g, layoutEl, track, theme) {
     }));
     const ledgerHalf = (glyphBox(headGlyph).width / 2 + 0.3) * spacing * scale;
     drawLedgerLines(g, x - ledgerHalf, x + ledgerHalf, pos, pos, layoutEl.baselineY, theme);
+    const acc = layoutEl.accidentals?.[i];
+    if (acc) {
+      const glyph = accidentalGlyph(acc);
+      const right = x + graceAccidentalRight(glyphBox(headGlyph).width, stemUp, theme) * spacing;
+      g.appendChild(glyphText(right - glyphBox(glyph).width * spacing * scale, y, glyph, theme.fontFamily, fontSize, {
+        fill: theme.noteColor,
+      }));
+    }
     noteheads.push({ pitch: note.pitch, x, y, position: pos, halfWidth: (glyphBox(headGlyph).width / 2) * spacing * scale });
   });
 
   const extremePos = stemUp ? maxPos : minPos;
   const noteY = layoutEl.baselineY + staffPositionToY(extremePos, spacing);
-  const stemAttachX = x + (stemUp ? 0.4 : -0.4) * spacing;
+  const stemAttachX = x + (stemUp ? GRACE_STEM_DX_SP : -GRACE_STEM_DX_SP) * spacing;
   const stemLen = STEM_LENGTH_SPACES * spacing * scale;
   const stemEndY = noteY + (stemUp ? -1 : 1) * stemLen;
   g.appendChild(line(stemAttachX, noteY, stemAttachX, stemEndY, {
@@ -248,7 +261,7 @@ function renderGraceNote(g, layoutEl, track, theme) {
   // The slash: a short diagonal stroke crossing the stem partway up,
   // marking this as a crushed grace note rather than a plain short note.
   const slashMidY = noteY + (stemEndY - noteY) * 0.5;
-  const slashDx = 0.5 * spacing;
+  const slashDx = GRACE_SLASH_DX_SP * spacing;
   const slashDy = 0.45 * spacing * (stemUp ? 1 : -1);
   g.appendChild(line(
     stemAttachX - slashDx, slashMidY + slashDy,

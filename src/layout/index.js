@@ -108,8 +108,8 @@ export function computeLayout(score, theme, containerWidth) {
             ? p.endX - pad
             : elements[ev.grace.anchor].x - tev.events[ev.grace.anchor][li === 0 ? 'ownLeftFirst' : 'ownLeft'];
           elements[bi] = {
-            index: bi, el, x: anchorX - (ev.grace.k + 1) * graceW, width: graceW, t: null,
-            chord: null, accidentals: null, wholeMeasureRest: false,
+            index: bi, el, x: anchorX - (ev.grace.k + 1) * graceW - ev.grace.accDx, width: graceW, t: null,
+            chord: null, accidentals: ev.accidentals, wholeMeasureRest: false,
           };
         });
         const next = placed[li + 1];
