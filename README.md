@@ -1,6 +1,6 @@
 # music-score
 
-Version 1.3.0 · MIT licence
+Version 1.3.1 · MIT licence
 
 A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL).
 
@@ -245,7 +245,7 @@ Each entry in a beat's `notes` array.
 | Field | Type | Notes |
 |---|---|---|
 | `pitch` | string | Pitch: a letter A to G, an optional accidental (`#`, `b`, `x`, `##`, `bb`), then the octave. Examples: `'E4'`, `'F#3'`, `'Bb2'`. Middle C is `C4`. Required for notation unless `string` and `fret` are given. See [Pitch and octaves](#pitch-and-octaves). |
-| `accidental` | `'sharp'`, `'flat'`, `'natural'`, `'doubleSharp'`, `'doubleFlat'` | Explicit accidental. Always drawn, and overrides the key signature for this note. |
+| `accidental` | `'sharp'`, `'flat'`, `'natural'`, `'doubleSharp'`, `'doubleFlat'` | Explicit accidental. Always drawn, on a grace note too, and overrides the key signature for this note. |
 | `tieStart`, `tieEnd` | boolean | Tie to the next note of the same pitch. Enharmonic spellings count as the same pitch (C#4 ties to Db4). A tie that crosses a line break is split into two parts. |
 | `string` | integer | Tab only. String 1 is the highest-pitched (top line). |
 | `fret` | integer | Tab only. 0 is an open string. If `pitch` is missing, it is worked out from `string`, `fret`, and the track's `tuning`. |
@@ -277,7 +277,13 @@ Guitar and bass music is written an octave higher than it sounds. The library fo
 
 Tie matching uses the pitch, not the spelling, so enharmonic spellings tie together.
 
-Pitches worked out from string and fret always use sharps (e.g. A#, never Bb).
+Pitches worked out from string and fret (notes given without a `pitch`) follow the key. A black key is spelled as a flat when the key signature has that flat, and as a sharp otherwise. Only black keys change, so you never get Cb, Fb, E# or B#, and the octave never changes.
+
+- F major (one flat, Bb): with the default guitar tuning, fret 6 on the high E string is written Bb, and fret 4 stays G#.
+- Bb major (Bb and Eb): A# is written Bb and D# is written Eb. C#, F# and G# stay sharp.
+- Sharp keys and C major: no change. Their black keys are sharps, as before.
+
+The key is the one in effect for the note's measure, so a key change mid-score applies from that measure on. An explicit `pitch` is written exactly as given and keeps its own spelling. To keep the old A# spelling in a flat key, give that note a `pitch` such as `'A#5'`.
 
 ### Harmonics
 
@@ -443,7 +449,7 @@ The renderer spaces and breaks the score for you. A short list of what to expect
 - **Measure numbers** are shown at the start of systems 2 onward, in italics above the top staff. Measure 1 is not numbered.
 - **Joining line and bracket.** Staves in a system are joined by a line at the left. A notation staff and its tab staff are bracketed when the system holds two or more instruments.
 - **Instrument names** are drawn horizontally to the left of the system. See [Instrument names](#instrument-names).
-- **Accidentals** last until the end of their measure. The next measure starts again from the key signature. A tied note that starts a new system repeats its accidental.
+- **Accidentals** last until the end of their measure. Grace notes take part too: an altered grace note carries into the notes after it in the measure, and an altered note carries into the grace notes after it. A grace note's accidental is drawn at grace size, left of its head, or left of the slash on a stem-down grace. The next measure starts again from the key signature. A tied note that starts a new system repeats its accidental.
 - **Ties and slurs** sit on the side opposite the stems. Ties, slurs, hammer-ons and pull-offs that cross a line break are split into two parts.
 - **Beaming.** Eighth notes and shorter beam within each beat. Compound meters group by dotted beat, so 6/8 beams as two groups of three and 12/8 as four.
 - **Chord symbols and dynamics** each sit on one line per system: chord symbols above the staff, dynamics below it. Both are kept clear of the notes. Chord diagrams sit in one row per system staff, between the music and the chord-symbol line (see [Chord diagrams](#chord-diagrams)).
@@ -504,7 +510,7 @@ These fields do not change the API or the theme.
 ## Known limitations
 
 - **Dots on chords with seconds.** Augmentation dots on a chord whose notes sit a second apart may not be placed cleanly.
-- **Grace notes.** Accidentals on grace notes are not handled yet. A slur from a grace note that crosses a line break is not split.
+- **Grace notes.** Accidentals on a grace chord share one column, so two that sit a second apart can touch. A grace-note slur clears only the noteheads, so it can cross an accidental on the note or grace it ends at. A slur from a grace note that crosses a line break is not split.
 - **Chord symbols.** Adjacent wide chord symbols can overlap each other horizontally. On tab-only tracks, chord symbols are drawn only above a chord diagram.
 - **Chord diagrams: overlap.** Diagrams get no horizontal space, so chord changes on close beats can overlap each other or a neighbouring chord symbol.
 - **Chord diagrams: names.** Only the diagram is moved inwards at the start or end of a system. A long name centred above it can still reach past the staff. A segno or coda at the start of a measure may sit beside a diagram name rather than above it.
@@ -534,7 +540,7 @@ These fields do not change the API or the theme.
 - **Pre-bends and releases on notation.** The notation staff shows the note as written. Pre-bends and releases appear on tab only.
 - **Hammer-on slurs need `string`.** A `hammerPull` note without `string` gets no slur on the notation staff.
 - **Auto slurs span rests.** A hammer-on or pull-off slur runs over any rest between its first and last notes.
-- **Release arrow.** A release arrow can touch the next fret number on the adjacent string.
+- **Release arrow.** A release arrow stops 0.2 sp before the next fret number on the string above, but its fall is never shorter than 0.6 sp, so it can still meet that number in very tight spacing.
 - **Let ring has no ties.** A let-ring run is a dashed label only. There are no per-note ring-out ties.
 - **Navigation is drawn, not played.** Repeats, endings and jumps are not unrolled or checked for sense. There are no repeat counts ("x3") or rehearsal marks.
 - **Coda layout.** A coda does not force a line break or leave a gap before it.
@@ -567,6 +573,15 @@ It prints `ALL PASSED` and exits with code 0 on success.
 - To run one group on its own: `node tests/units.mjs`, `node tests/engraving.mjs`, or `node tests/articulations.mjs`.
 
 ## Changelog
+
+### 1.3.1 — 2026-11-01
+
+Three notation fixes. One change affects existing scores: pitches worked out from string and fret in a flat key now use that key's flats. Use an explicit `pitch` to keep the old spelling.
+
+- Pitches from string and fret follow the key's flats. In F major, a fret-derived A# is now written Bb. In Bb major, A# and D# are written Bb and Eb. Other black keys, sharp keys and C major are unchanged, and before 1.3.1 these were always sharps.
+- Accidentals on grace notes are drawn, at grace size, and carry through the measure like other accidentals. An explicit `accidental` on a grace note is always drawn. Grace notes with accidentals get a little more room.
+- A release arrow stops 0.2 sp before the next fret number on the string above, instead of running into it. Very tight spacing can still bring it close (see [Known limitations](#known-limitations)).
+- Renders change for scores with grace notes that have altered pitches, scores with fret-derived black keys in a flat key, and scores with a release arrow next to a note on the string above. There are no API or theme changes.
 
 ### 1.3.0 — 2026-10-27
 
