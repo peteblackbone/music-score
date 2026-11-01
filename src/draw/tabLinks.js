@@ -53,7 +53,8 @@ const SLIDE_MARK_MIN_SP = 0.4;   // ...and skipped when clamping leaves less tha
  *   and by the system's last barline; a release fall (bend-and-release or
  *   release note) also ends short of the fret knock-out of a later note
  *   on the same system whose band its arrowhead would reach (in practice
- *   the string just above; tab.js bendGeometry). A pre-bend ('prebend …' / 'pb …' or
+ *   the string just above; tab.js bendGeometry).
+ *   A pre-bend ('prebend …' / 'pb …' or
  *   `type: 'prebend'`) is a straight vertical arrow over the fret; a release
  *   note ('release [amount]' or `type: 'release'`) is only the falling
  *   arrow, its fret in parentheses, its amount defaulting to the last bend

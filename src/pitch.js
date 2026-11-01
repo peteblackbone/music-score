@@ -61,13 +61,13 @@ export function staffPositionToY(position, lineSpacing) {
 const SHARP_ORDER = ['F', 'C', 'G', 'D', 'A', 'E', 'B'];
 const FLAT_ORDER = ['B', 'E', 'A', 'D', 'G', 'C', 'F'];
 
-/** For a key signature integer (-7..7 flats/sharps), return { letter: alter } map. */
+/** For a key signature integer (-7..7 flats/sharps; larger values count as 7), return { letter: alter } map. */
 export function keySignatureAlterations(keySig = 0) {
   const map = {};
   if (keySig > 0) {
-    for (let i = 0; i < keySig; i++) map[SHARP_ORDER[i]] = 1;
+    for (let i = 0; i < Math.min(keySig, 7); i++) map[SHARP_ORDER[i]] = 1;
   } else if (keySig < 0) {
-    for (let i = 0; i < -keySig; i++) map[FLAT_ORDER[i]] = -1;
+    for (let i = 0; i < Math.min(-keySig, 7); i++) map[FLAT_ORDER[i]] = -1;
   }
   return map;
 }

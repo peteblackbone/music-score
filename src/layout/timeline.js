@@ -113,7 +113,7 @@ function anchorGraces(pending, anchor) {
  * accRoom, leftFirst, ownLeftFirst, chordFirst, accidentalsFirst, wholeMeasureRest }`
  * (grace `anchor` = beat index of the note it leads into, or 'end' for
  * trailing graces; `k` = 0 for the grace nearest it; `accDx` = the
- * accidental room of the graces nearer it, `accRoom` its own). The `…First`
+ * accidental room of the graces nearer it, `accRoom` its own room; grace events only). The `…First`
  * variants apply when the measure opens a system: tied continuations at
  * the first onset restate their accidental (ui.md §7).
  */
