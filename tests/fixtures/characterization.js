@@ -1095,6 +1095,32 @@ export const characterizationCases = [
       }],
     },
   },
+  {
+    // Release arrows next to a fret number on the string above (TAB only, so the notation staff can't widen the
+    // beats): m1 s2 'full release' -> s1 (capped); m2 a release note on s3 -> an 8th on s2 (capped); m3 'full release'
+    // -> the same string, then -> the string below (unchanged); m4 s3 'full release' -> s1, two strings up (unchanged);
+    // m5 16ths: s2 'full release' -> s1 (capped at the 0.6 sp minimum fall); m6 -> a ghost "(12)" on the string above
+    // (wide label); m7-m9 each end on an s2 'full release' and open on s1, so at 600 one of them crosses a system
+    // break (the next system's note is not an obstacle).
+    name: 'release-adjacent', width: 900,
+    score: {
+      tracks: [{
+        name: 'Gt.', showStandardNotation: false, showTablature: true,
+        measures: [
+          { beats: [tabh(2, 7, { bend: 'full release' }), tabq(1, 8), tabq(1, 5), tabq(1, 7)] },
+          { beats: [tabh(3, 7, { bend: 'pb full' }), tabd('8th', 3, 7, { bend: 'release' }), tabd('8th', 2, 8), tabq(2, 5), tabq(2, 7)] },
+          { beats: [tabh(2, 7, { bend: 'full release' }), tabq(2, 8), tabh(2, 7, { bend: 'full release' }), tabq(3, 8)] },
+          { beats: [tabh(3, 7, { bend: 'full release' }), tabq(1, 8), tabq(1, 5), tabq(1, 7)] },
+          { beats: [tabd('16th', 2, 10, { bend: 'full release' }), tabd('16th', 1, 12), tabd('16th', 1, 10), tabd('16th', 2, 10), tabq(1, 12), tabq(1, 10), tabq(2, 10)] },
+          { beats: [tabh(2, 7, { bend: 'full release' }), tabh(1, 12, { ghost: true }), tabq(1, 10), tabq(1, 8)] },
+          { beats: [tabq(1, 8), tabq(1, 5), tabq(1, 7), tabh(2, 7, { bend: 'full release' })] },
+          { beats: [tabq(1, 8), tabq(1, 5), tabq(1, 7), tabh(2, 7, { bend: 'full release' })] },
+          { beats: [tabq(1, 8), tabq(1, 5), tabq(1, 7), tabh(2, 7, { bend: 'full release' })] },
+          { beats: [tabq(1, 8), tabq(1, 5), tabq(1, 7), tabq(1, 8)] },
+        ],
+      }],
+    },
+  },
 ];
 
 // Copy of a score with tabRhythm: false on every track (source untouched). Today the field is ignored, so
@@ -1106,4 +1132,8 @@ const rhythmOffCase = (name) => {
   const base = characterizationCases.find((c) => c.name === name);
   return { name: `${name}-rhythm-off`, width: base.width, score: rhythmOff(base.score), ...(base.options ? { options: base.options } : {}) };
 };
+{
+  const ra = characterizationCases.find((c) => c.name === 'release-adjacent');
+  characterizationCases.push({ name: 'release-adjacent', width: 600, score: ra.score });
+}
 characterizationCases.push(...['tab-only', 'harmonics', 'tab-marks', 'directions'].map(rhythmOffCase));

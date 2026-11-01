@@ -1944,6 +1944,74 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(relGeom('full release', undefined), { endX: 131, releaseCtrl: ctrl(122.6), boxes: [rise(119.4), fall(117, 135), lbl(103.6, 131.4)] });
   });
 
+  // 1.3.1 release-arrow cap: obstacles = fret knock-outs of later notes (bendGeometry's 7th argument).
+  const { RELEASE_CLEAR_SP, RELEASE_MIN_FALL_SP } = await imp('src/draw/tab.js');
+  const { tabFretKnockoutHalf } = await imp('src/layout/tabRhythm.js');
+  const { fretLabelWidth: flw } = await imp('src/textMetrics.js');
+  const SP = thm.staffLineSpacing;
+  // knock-out of fret label `label` at x, `strings` strings above (negative = below) the bent note at y = 50
+  const knock = (x, strings = 1, label = '8') => {
+    const w = flw(label, thm); const y = 50 - strings * thm.tabStaffLineSpacing; const kh = tabFretKnockoutHalf(thm);
+    return { x1: x - w / 2, x2: x + w / 2, top: y - kh, bottom: y + kh };
+  };
+  const geomObs = (raw, nextX, obstacles) => {
+    const b = normalizeBend(raw);
+    if (b.amount == null) b.amount = 'full';
+    b.heightFrac = 1;
+    const g = bendGeometry(100, 50, b, thm, nextX, null, obstacles);
+    return { endX: g.endX, releaseCtrl: g.releaseCtrl, boxes: g.boxes, arrow: g.arrow, peakX: g.peakX, peakY: g.peakY, riseH: g.riseH };
+  };
+  test('release cap: a knock-out on the string above caps the arrow RELEASE_CLEAR_SP before it; releaseCtrl and the fall box follow', () => {
+    eq([RELEASE_CLEAR_SP, RELEASE_MIN_FALL_SP], [0.2, 0.6]);
+    ['full release', { type: 'release' }].forEach((raw) => {
+      const free = geomObs(raw, 140);
+      const o = knock(140);
+      const g = geomObs(raw, 140, [o]);
+      eq(g.endX < free.endX, true, 'capped');
+      eq(g.endX + g.arrow <= o.x1 - RELEASE_CLEAR_SP * SP + 1e-9, true, 'clear of the knock-out');
+      eq(Math.abs(g.endX + g.arrow - (o.x1 - RELEASE_CLEAR_SP * SP)) < 1e-9, true, 'exactly at the clearance');
+      eq(g.releaseCtrl, { x: g.peakX + (g.endX - g.peakX) * 0.4, y: g.peakY + g.riseH * 0.1 });
+      const fallBox = g.boxes.find((b) => !b.text && b.x1 === g.peakX);
+      eq(fallBox.x2, g.endX + g.arrow);
+      eq(g.boxes.filter((b) => b.text), free.boxes.filter((b) => b.text), 'labels unchanged');
+    });
+  });
+  test('release cap: never closer than RELEASE_MIN_FALL_SP to the peak; never right of the uncapped end', () => {
+    ['full release', { type: 'release' }].forEach((raw) => {
+      const g = geomObs(raw, 140, [knock(geomObs(raw, 140).peakX + 2)]);
+      eq(Math.abs(g.endX - (g.peakX + RELEASE_MIN_FALL_SP * SP)) < 1e-9, true, 'floor');
+      [125, 140, undefined].forEach((nx) => {
+        const free = geomObs(raw, nx);
+        [100, 120, 130, 140, 150, 200].forEach((ox) => eq(geomObs(raw, nx, [knock(ox)]).endX <= free.endX, true, `nextX ${nx}, obstacle ${ox}`));
+        eq(geomObs(raw, nx, [knock(400)]), free, 'far obstacle: unchanged');
+      });
+    });
+  });
+  test('release cap: same-string, lower-string and two-up obstacles leave the C0 pins unchanged', () => {
+    const pick = (g) => ({ endX: g.endX, releaseCtrl: g.releaseCtrl, boxes: g.boxes });
+    ['full release', { type: 'release' }].forEach((raw) => [125, 140, undefined].forEach((nx) => {
+      const pin = relGeom(raw, nx);
+      [0, -1, 2].forEach((strings) => [110, 125, 140].forEach((ox) => {
+        eq(pick(geomObs(raw, nx, [knock(ox, strings), knock(ox, strings, '(12)')])), pin, `strings ${strings} x ${ox}`);
+      }));
+    }));
+  });
+  test('release cap: plain bends, pre-bends and holds ignore obstacles', () => {
+    ['full', '1/2', 'full hold', 'pb full'].forEach((raw) => [125, 140, undefined].forEach((nx) => {
+      eq(geomObs(raw, nx, [knock(nx ?? 130), knock(115)]), geomObs(raw, nx), `${raw} nextX ${nx}`);
+    }));
+  });
+  test('release cap: a note on the string above in the same beat is not an obstacle (rendered)', () => {
+    // [s2 full release + s1 f8] vs [s2 full release + s3 f8]: same layout, same release path.
+    const sc = (other) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: [
+      { type: 'note', duration: 'quarter', notes: [{ string: 2, fret: 7, bend: 'full release' }, { string: other, fret: 8 }] },
+      { type: 'note', duration: 'quarter', notes: [{ string: 3, fret: 7 }] },
+      { type: 'rest', duration: 'quarter' }, { type: 'rest', duration: 'quarter' },
+    ] }] }] });
+    const fallOf = (svg) => /<g class="bend">[\s\S]*?<\/g>/.exec(svg)[0];
+    eq(fallOf(serialize(renderTree(sc(1)))), fallOf(serialize(renderTree(sc(3)))));
+  });
+
   // lead-solo-f spelling neutrality: [pitch, soundingPitch] per note in score order.
   const { leadSoloF } = await imp('examples/lead-solo-f.js');
   const { createHash } = await import('node:crypto');

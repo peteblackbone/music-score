@@ -349,8 +349,8 @@
       <g class="bend">
         <path d="M 1150.37 6 C 1164.45 6, 1166.37 -7.5, 1166.37 -21" fill="none" stroke="#1a1a1a" stroke-width="1.1"/>
         <path d="M 1166.37 -21 L 1168.77 -17 L 1163.97 -17 Z" fill="#1a1a1a" stroke="none"/>
-        <path d="M 1166.37 -21 Q 1173.04 -18.3 1183.04 6" fill="none" stroke="#1a1a1a" stroke-width="1.1"/>
-        <path d="M 1183.04 6 L 1179.3 3.22 L 1183.74 1.39 Z" fill="#1a1a1a" stroke="none"/>
+        <path d="M 1166.37 -21 Q 1168.84 -18.3 1172.54 6" fill="none" stroke="#1a1a1a" stroke-width="1.1"/>
+        <path d="M 1172.54 6 L 1169.57 2.41 L 1174.31 1.68 Z" fill="#1a1a1a" stroke="none"/>
         <rect x="1152.97" y="-35" width="27.8" height="13" fill="#ffffff"/>
         <text x="1153.97" y="-25" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-style="italic" font-size="10" text-anchor="start" fill="#1a1a1a">Full</text>
       </g>

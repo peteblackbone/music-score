@@ -5,7 +5,7 @@
 // Areas (assertion counts are printed per area at the end):
 //   align, justify, signatures, measure-numbers, barlines, repeats, vertical, numbers,
 //   scaling, octave, beaming, accidentals, ties, tab-clef, a11y, theme, robustness, header, collisions, harmonics, directions, tab-rhythm, navigation, chordDiagrams, techniques11, strumArpeggio,
-//   legatoSlides, graceAccidentals
+//   legatoSlides, graceAccidentals, releaseCap
 //
 // Most geometric checks read the rendered SVG tree (class names + transforms); a few read the
 // layout model (computeLayout) for facts that are not observable in the SVG (onset times,
@@ -5509,6 +5509,68 @@ test('graceAccidentals', 'graces without accidentals keep their x (only graces f
   ok(a[1] - a[0] > p[1] - p[0] + 0.5 * S, 'the farther grace moves left by the accidental room');
   const same = { tracks: [{ name: 'N', measures: [{ beats: [tnoteG([{ pitch: 'E4' }]), tnoteG([{ pitch: 'F4' }]), q('G4'), q('A4'), q('B4'), q('C5')] }] }] };
   ok(JSON.stringify(xs(same)) === JSON.stringify(p), 'no accidental -> identical x');
+});
+}
+
+// ---------- release-arrow cap (1.3.1) ----------
+{
+const { tabFretKnockoutHalf } = await imp('src/layout/tabRhythm.js');
+const S = DEF.staffLineSpacing;
+const KH = tabFretKnockoutHalf(DEF);
+const pts = (d) => (d.match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+// Every release fall in the TAB staves: { peakX, tipX, tipY, inkRight, inkTop, inkBottom, stringY, knocks (later, same staff) }.
+function releaseFalls(svg) {
+  const out = [];
+  systemsOf(svg).forEach((sysG) => staffGroups(sysG).filter((g) => cls(g).includes('tab')).forEach((g) => {
+    const knocks = g.children.filter((c) => c.tag === 'rect' && Math.abs(num(c, 'height') - 2 * KH) < 0.02)
+      .map((r) => ({ x1: num(r, 'x'), x2: num(r, 'x') + num(r, 'width'), top: num(r, 'y'), bottom: num(r, 'y') + num(r, 'height') }));
+    all(g).map(({ n }) => n).filter((n) => n.tag === 'g' && /^bend\b/.test(cls(n))).forEach((bg) => {
+      const paths = bg.children.filter((c) => c.tag === 'path');
+      const k = paths.findIndex((p) => / Q /.test(p.getAttribute('d')));
+      if (k < 0) return;
+      const [px, , , , ex, ey] = pts(paths[k].getAttribute('d'));
+      const head = pts(paths[k + 1].getAttribute('d'));
+      const hx = head.filter((_, i) => i % 2 === 0); const hy = head.filter((_, i) => i % 2 === 1);
+      out.push({ peakX: px, tipX: ex, tipY: ey, inkRight: Math.max(...hx, ex + 0.55), inkTop: Math.min(...hy), inkBottom: Math.max(...hy, ey + 0.55),
+        stringY: ey + DEF.tabFontSize / 2 + 0.3 * S, knocks: knocks.filter((o) => (o.x1 + o.x2) / 2 > px) });
+    });
+  }));
+  return out;
+}
+const RA = characterizationCases.filter((c) => c.name === 'release-adjacent');
+test('releaseCap', 'every release fall ends >= 0.2 sp clear of the fret knock-outs of later notes on the string above (same system), unless held at the 0.6 sp minimum fall', () => {
+  let floors = 0; let checked = 0;
+  for (const [name, score, options] of SCORES) for (const width of WIDTHS) {
+    releaseFalls(renderTree(score, width, options)).forEach((f) => {
+      const above = f.knocks.filter((o) => Math.abs((o.top + o.bottom) / 2 - (f.stringY - DEF.tabStaffLineSpacing)) < 0.02
+        && o.bottom > f.inkTop && o.top < f.inkBottom);
+      above.forEach((o) => {
+        checked++;
+        if (f.inkRight <= o.x1 - 0.2 * S + EPS) { ok(true, ''); return; }
+        floors++;
+        near(f.tipX, f.peakX + 0.6 * S, EPS, `${name} w${width}: release at ${f.peakX} reaches the knock-out at ${o.x1} without being at the minimum fall`);
+      });
+    });
+  }
+  ok(checked >= 10, `only ${checked} release falls next to a string-above fret checked`);
+  ok(floors >= 1, 'the 16th-note fixture measure should be held at the minimum fall');
+});
+test('releaseCap', 'release-adjacent fixture: m1, m2 (release note), m5 (16ths) and m6 (ghost) end no further right than max(0.2 sp + arrow before the string-above knock-out, 0.6 sp past the peak); at 900 m1 / m2 end exactly there (capped); m5 at the minimum', () => {
+  for (const c of RA) {
+    const falls = releaseFalls(renderTree(c.score, c.width));
+    ok(falls.length === 10, `w${c.width}: ${falls.length} release falls`);
+    [0, 1, 5, 6].forEach((i) => {
+      const f = falls[i];
+      const o = f.knocks.filter((k) => Math.abs((k.top + k.bottom) / 2 - (f.stringY - DEF.tabStaffLineSpacing)) < 0.02).sort((x, y) => x.x1 - y.x1)[0];
+      const limit = Math.max(o.x1 - 0.2 * S - 0.4 * S, f.peakX + 0.6 * S);
+      ok(f.tipX <= limit + EPS, `w${c.width} fall ${i}: tip ${f.tipX} > ${limit}`);
+      if (c.width === 900 && i < 2) {
+        near(f.tipX, limit, EPS, `w900 fall ${i}`);
+        ok(f.tipX > f.peakX + 0.6 * S + EPS, `w900 fall ${i} capped, not at the minimum`);
+      }
+    });
+    near(falls[5].tipX, falls[5].peakX + 0.6 * S, EPS, `w${c.width} m5 minimum fall`);
+  }
 });
 }
 

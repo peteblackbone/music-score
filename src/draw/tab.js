@@ -429,6 +429,8 @@ export function arrowheadDir(x, y, dx, dy, size, color) {
 
 const BEND_STROKE_WIDTH = 1.1;    // bend rise / release / hold stroke width (px)
 const ARROWHEAD_HALF_WIDTH = 0.6; // arrowheadDir's half base width, as a fraction of its size
+export const RELEASE_CLEAR_SP = 0.2;     // capped release arrow tip -> obstacle (fret knock-out) left edge
+export const RELEASE_MIN_FALL_SP = 0.6;  // a capped release fall still ends at least this far right of its peak
 
 /**
  * Geometry of a bend as renderBend draws it (same arguments): every
@@ -437,20 +439,31 @@ const ARROWHEAD_HALF_WIDTH = 0.6; // arrowheadDir's half base width, as a fracti
  * release stroke + arrowhead or hold dash; and, with `text: true`, the
  * amount-label and landing-fret knock-outs). renderTechniqueLabelRuns
  * (passes/techniqueLabels.js) uses the boxes to keep P.M./harmonic labels clear of bends.
+ * `obstacles` (optional, release falls only): `{ x1, x2, top, bottom }`
+ * boxes (fret knock-outs of later notes); one whose band overlaps the
+ * release arrowhead's caps the fall so the arrow ends RELEASE_CLEAR_SP
+ * before it, but never closer than RELEASE_MIN_FALL_SP to the peak.
  */
-export function bendGeometry(x, y, bend, theme, nextX, targetFret) {
+export function bendGeometry(x, y, bend, theme, nextX, targetFret, obstacles) {
   const spacing = theme.staffLineSpacing;
   const arrow = 0.4 * spacing;
   const baseY = y - theme.tabFontSize / 2 - 0.3 * spacing;
   const width = nextX != null ? Math.max(2.2 * spacing, Math.min(3.4 * spacing, nextX - x - 0.6 * spacing)) : 2.8 * spacing;
   const startX = x + 0.3 * spacing;
-  const endX = startX + width;
+  let endX = startX + width;
   // A pre-bend's straight shaft and a release note's peak sit over the note itself.
   const onNote = bend.type === 'prebend' || bend.type === 'release';
   // The rise's curved "elbow" sits fairly close to the note; the fall is
   // the long, gentle sweep that carries most of the remaining horizontal
   // distance.
   const peakX = onNote ? x : startX + Math.min(1.6 * spacing, width * 0.5);
+  const halfStroke = BEND_STROKE_WIDTH / 2;
+  if (bend.release && obstacles?.length) {
+    const top = baseY - arrow; const bottom = baseY + halfStroke; // the arrowhead's band
+    let cap = endX;
+    obstacles.forEach((o) => { if (o.bottom > top && o.top < bottom) cap = Math.min(cap, o.x1 - RELEASE_CLEAR_SP * spacing - arrow); });
+    if (cap < endX) endX = Math.min(endX, Math.max(cap, peakX + RELEASE_MIN_FALL_SP * spacing));
+  }
   // Scaled by the bend amount (a "full" step is the 1.0 baseline — see
   // renderTabLinks in tabLinks.js) so a half bend's arc is visibly smaller than a
   // full bend's, not the same size with a different label.
@@ -458,7 +471,6 @@ export function bendGeometry(x, y, bend, theme, nextX, targetFret) {
   const bendHeight = theme.tabStaffLineSpacing * 1.8 * heightFrac;
   const peakY = baseY - bendHeight;
   const riseH = baseY - peakY;
-  const halfStroke = BEND_STROKE_WIDTH / 2;
   const boxes = [];
   if (bend.type === 'prebend') {
     boxes.push({ x1: x - arrow * ARROWHEAD_HALF_WIDTH - halfStroke, x2: x + arrow * ARROWHEAD_HALF_WIDTH + halfStroke, top: peakY, bottom: baseY, text: false });
@@ -526,13 +538,15 @@ export function bendGeometry(x, y, bend, theme, nextX, targetFret) {
  * standard way tab shows where a whole/half-step bend ends up (skipped for
  * `release`/`hold`, since neither lands on a new static pitch). `nextX`, if
  * given, caps how wide the arc may reach so it doesn't run into the next
- * fret number in a tight beat. All coordinates come from bendGeometry;
+ * fret number in a tight beat. `obstacles` (fret knock-outs of later
+ * notes) may cap a release fall short of the next note's fret number on
+ * the string above (bendGeometry). All coordinates come from bendGeometry;
  * returns its ink `boxes`.
  */
-export function renderBend(g, x, y, bend, theme, nextX, targetFret) {
+export function renderBend(g, x, y, bend, theme, nextX, targetFret, obstacles) {
   const gEl = group({ class: bend.type === 'prebend' || bend.type === 'release' ? `bend bend-${bend.type}` : 'bend' });
   const color = theme.tabFretColor;
-  const geo = bendGeometry(x, y, bend, theme, nextX, targetFret);
+  const geo = bendGeometry(x, y, bend, theme, nextX, targetFret, obstacles);
   const { arrow, baseY, startX, endX, peakX, peakY, riseH } = geo;
 
   // Landing fret, in parentheses, printed just to the right of the
