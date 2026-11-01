@@ -199,7 +199,7 @@ test('pitchFromFret: standard guitar open strings and frets', () => {
   eq(pitchFromFret('E2', 12), 'E3');
   eq(pitchFromFret('B3', 1), 'C4');
 });
-test('pitchFromFret: always spells with sharps, never flats', () => {
+test('pitchFromFret: without a key signature always spells with sharps, never flats', () => {
   eq(pitchFromFret('A2', 1), 'A#2');
   eq(pitchFromFret('E4', 4), 'G#4');
   eq(pitchFromFret('D3', 1), 'D#3');
@@ -216,6 +216,28 @@ test('pitchFromFret: invalid open pitch throws', () => {
   let threw = false;
   try { pitchFromFret('nope', 3); } catch { threw = true; }
   eq(threw, true);
+});
+// Black keys on strings G3 (+3 A#), B3 (+2 C#, +11 A#4), D3 (+1 D#, +4 F#), E4 (+4 G#).
+const blackKeys = (k) => [pitchFromFret('G3', 3, k), pitchFromFret('B3', 2, k), pitchFromFret('D3', 1, k), pitchFromFret('D3', 4, k), pitchFromFret('E4', 4, k)];
+test('pitchFromFret: key -1 spells A# as Bb; C#, D#, F#, G# stay sharps', () => {
+  eq(blackKeys(-1), ['Bb3', 'C#4', 'D#3', 'F#3', 'G#4']);
+  eq(pitchFromFret('B3', 11, -1), 'Bb4');
+});
+test('pitchFromFret: key -2 -> Bb, Eb; key -3 -> Bb, Eb, Ab', () => {
+  eq(blackKeys(-2), ['Bb3', 'C#4', 'Eb3', 'F#3', 'G#4']);
+  eq(blackKeys(-3), ['Bb3', 'C#4', 'Eb3', 'F#3', 'Ab4']);
+});
+test('pitchFromFret: key -7 -> all five flats; B and E stay naturals (no Cb / Fb)', () => {
+  eq(blackKeys(-7), ['Bb3', 'Db4', 'Eb3', 'Gb3', 'Ab4']);
+  eq([pitchFromFret('B3', 0, -7), pitchFromFret('E4', 0, -7), pitchFromFret('A3', 2, -7), pitchFromFret('E4', 1, -7)], ['B3', 'E4', 'B3', 'F4']);
+});
+test('pitchFromFret: keys 0 and 2 unchanged (sharps); octave never changes', () => {
+  eq(blackKeys(0), ['A#3', 'C#4', 'D#3', 'F#3', 'G#4']);
+  eq(blackKeys(2), ['A#3', 'C#4', 'D#3', 'F#3', 'G#4']);
+  eq(blackKeys(0), blackKeys(undefined));
+  eq(pitchFromFret('A3', 2, -7), 'B3');
+  eq(pitchFromFret('A3', 3, -7), 'C4');
+  eq(pitchFromFret('B2', 0, -7), 'B2');
 });
 
 // ---------- normalizeScore (defaults and tab-derived pitch) ----------
@@ -283,6 +305,34 @@ test('normalizeScore: string beyond tuning leaves pitch undefined', () => {
   const s = normalizeScore({ tracks: [{ measures: [{ beats: [{ type: 'note', duration: 'quarter', notes: [{ string: 9, fret: 3 }] }] }] }] });
   eq(s.tracks[0].measures[0].beats[0].notes[0].pitch, undefined);
 });
+{
+  // s3 f3 = A#3/Bb3, s4 f1 = D#3/Eb3, s1 f4 = G#4/Ab4 (sounding); pitch is written an octave up.
+  const fb = (notes) => ({ type: 'note', duration: 'quarter', notes });
+  const sp = (t) => t.measures.map((m) => m.beats.map((b) => b.notes.map((x) => x.soundingPitch)));
+  test('normalizeScore: fret-derived spelling follows the effective key (track, score, mid-piece change)', () => {
+    const beats = [fb([{ string: 3, fret: 3 }]), fb([{ string: 4, fret: 1 }]), fb([{ string: 1, fret: 4 }])];
+    const s = normalizeScore({ keySignature: -2, tracks: [
+      { keySignature: -1, measures: [{ beats }, { keySignature: -3, beats }, { beats }, { keySignature: 2, beats }] },
+      { measures: [{ beats }, { keySignature: 0, beats }, { beats }, { keySignature: -7, beats }] },
+    ] });
+    eq(sp(s.tracks[0]), [
+      [['Bb3'], ['D#3'], ['G#4']], [['Bb3'], ['Eb3'], ['Ab4']], [['Bb3'], ['Eb3'], ['Ab4']], [['A#3'], ['D#3'], ['G#4']],
+    ]);
+    eq(sp(s.tracks[1]), [
+      [['Bb3'], ['Eb3'], ['G#4']], [['A#3'], ['D#3'], ['G#4']], [['A#3'], ['D#3'], ['G#4']], [['Bb3'], ['Eb3'], ['Ab4']],
+    ]);
+    eq(s.tracks[0].measures[0].beats[0].notes[0].pitch, 'Bb4');
+    eq(s.tracks[0].measures[0].beats[0].notes[0].fromFret, true);
+  });
+  test('normalizeScore: an explicit pitch is never respelled; chords are spelled per note', () => {
+    const s = normalizeScore({ tracks: [{ keySignature: -1, measures: [{ beats: [
+      fb([{ string: 2, fret: 11, pitch: 'A#4' }]),
+      fb([{ string: 3, fret: 3 }, { string: 2, fret: 2 }, { string: 1, fret: 6, pitch: 'A#4' }]),
+    ] }] }] });
+    eq(sp(s.tracks[0]), [[['A#4'], ['Bb3', 'C#4', 'A#4']]]);
+    eq(s.tracks[0].measures[0].beats[1].notes.map((x) => x.pitch), ['Bb4', 'C#5', 'A#4']);
+  });
+}
 
 test('normalizeScore: showChordDiagrams defaults to showTablature; author value read as a boolean; chordShapes / chordDiagram pass through', () => {
   const shapes = { C: { frets: ['x', 3, 2, 0, 1, 0] } };
@@ -1865,6 +1915,13 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(pairs.length, 90);
     eq(pairs.slice(0, 3), [['F4', 'F3'], ['G4', 'G3'], ['A4', 'A3']]);
     eq(createHash('sha256').update(JSON.stringify(pairs)).digest('hex'), 'c5b61162084a82775017c502f66bf655794b14dc9ff67eb97989c9a91e3434ac');
+  });
+  test('lead-solo-f: without its 10 explicit pitch "Bb4" it renders byte-identical (key-aware spelling)', () => {
+    const copy = JSON.parse(JSON.stringify(leadSoloF));
+    let n = 0;
+    copy.tracks[0].measures.forEach((m) => m.beats.forEach((b) => (b.notes || []).forEach((x) => { if (x.pitch === 'Bb4') { delete x.pitch; n++; } })));
+    eq(n, 10);
+    eq(serialize(renderTree(copy)), serialize(renderTree(leadSoloF)));
   });
 }
 

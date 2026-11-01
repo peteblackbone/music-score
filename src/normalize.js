@@ -20,7 +20,9 @@
  * - explicit `pitch`es are sounding and written an octave up only when the
  *   track sets `writtenOctaveUp: true`; otherwise they are taken as written.
  * The track gets `octaveClef: true` (8vb treble/bass clef) when it opts in
- * or any of its pitches is fret-derived.
+ * or any of its pitches is fret-derived. Fret-derived pitches follow the
+ * measure's key: a black key is a flat when that flat is in the key
+ * signature, else a sharp (pitchFromFret).
  *
  * A note's `harmonic` is canonicalized to its kind ('natural' | 'artificial'
  * | 'pinch' | 'tapped' | 'semi'; see harmonics.js); falsy values are left as
@@ -117,7 +119,7 @@ export function normalizeScore(score) {
               if (!openPitch) {
                 out = n;
               } else {
-                const sounding = pitchFromFret(openPitch, n.fret);
+                const sounding = pitchFromFret(openPitch, n.fret, curKey);
                 fromFret = true;
                 out = { ...n, pitch: transposeOctaves(sounding, 1), soundingPitch: sounding, fromFret: true };
               }

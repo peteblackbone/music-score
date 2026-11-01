@@ -1053,6 +1053,27 @@ export const characterizationCases = [
       }],
     },
   },
+  {
+    // Key-aware spelling of fret-derived pitches (notation + TAB): a black key is a flat only when that flat is in
+    // the measure's key signature. m1 F major: s3f3 Bb, s2f2 C#, s4f1 D#, a Bb4 + C#5 dyad, a second Bb (no
+    // accidental), an explicit pitch 'A#4' that stays A#; m2 Bb major: Bb, Eb, G#; m3 Eb major: Ab, C#;
+    // m4 D major: A#, F#; m5 C major: all sharps; m6 Cb major: all five flats, B and E stay naturals.
+    name: 'spelling-keys', width: 900,
+    score: {
+      tracks: [{
+        name: 'Gt.', showTablature: true, writtenOctaveUp: true, keySignature: -1,
+        measures: [
+          { beats: [tabe(3, 3), tabe(2, 2), tabe(4, 1), tabc([[2, 11], [1, 9]], {}, '8th'), tabe(3, 3),
+            tabd('8th', 2, 11, { pitch: 'A#4' }), tabe(2, 1), tabe(1, 1)] },
+          { keySignature: -2, beats: [tabq(3, 3), tabq(4, 1), tabq(1, 4), tabq(2, 1)] },
+          { keySignature: -3, beats: [tabq(1, 4), tabq(2, 2), tabq(3, 3), tabq(4, 1)] },
+          { keySignature: 2, beats: [tabq(3, 3), tabq(4, 4), tabq(1, 4), tabq(2, 2)] },
+          { keySignature: 0, beats: [tabq(3, 3), tabq(4, 1), tabq(1, 4), tabq(2, 2)] },
+          { keySignature: -7, beats: [tabe(2, 2), tabe(4, 1), tabe(4, 4), tabe(1, 4), tabe(3, 3), tabe(2, 0), tabe(1, 0), tabe(1, 1)] },
+        ],
+      }],
+    },
+  },
 ];
 
 // Copy of a score with tabRhythm: false on every track (source untouched). Today the field is ignored, so
