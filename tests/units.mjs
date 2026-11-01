@@ -1916,10 +1916,13 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(pairs.slice(0, 3), [['F4', 'F3'], ['G4', 'G3'], ['A4', 'A3']]);
     eq(createHash('sha256').update(JSON.stringify(pairs)).digest('hex'), 'c5b61162084a82775017c502f66bf655794b14dc9ff67eb97989c9a91e3434ac');
   });
-  test('lead-solo-f: without its 10 explicit pitch "Bb4" it renders byte-identical (key-aware spelling)', () => {
+  test('lead-solo-f: its 10 s2 f11 notes render byte-identical with an explicit pitch "Bb4" (key-aware spelling)', () => {
     const copy = JSON.parse(JSON.stringify(leadSoloF));
     let n = 0;
-    copy.tracks[0].measures.forEach((m) => m.beats.forEach((b) => (b.notes || []).forEach((x) => { if (x.pitch === 'Bb4') { delete x.pitch; n++; } })));
+    copy.tracks[0].measures.forEach((m) => m.beats.forEach((b) => (b.notes || []).forEach((x) => {
+      eq(x.pitch, undefined);
+      if (x.string === 2 && x.fret === 11) { x.pitch = 'Bb4'; n++; }
+    })));
     eq(n, 10);
     eq(serialize(renderTree(copy)), serialize(renderTree(leadSoloF)));
   });
