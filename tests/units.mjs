@@ -1788,6 +1788,86 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.3.1 characterization (C0): grace accidentals, release geometry, lead-solo-f spelling ----------
+{
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
+  const { bendGeometry, normalizeBend } = await imp('src/draw/tab.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const thm = resolveTheme({});
+  const gr = (p) => ({ type: 'grace', duration: '16th', notes: [{ pitch: p }] });
+  const nt = (p) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: p }] });
+
+  // (a)(b) pre-1.3.1: grace notes take no part in accidental tracking. Expected to flip in 1.3.1.
+  test('grace accidentals (pre-1.3.1): resolveMeasureAccidentals ignores graces and does not carry them', () => {
+    const s = normalizeScore({ tracks: [{ measures: [{ beats: [gr('C#5'), nt('C#5'), gr('D#5'), nt('D5')] }] }] });
+    eq(resolveMeasureAccidentals(s.tracks[0], 0), [
+      { names: [null], restate: [null] },
+      { names: ['sharp'], restate: ['sharp'] },
+      { names: [null], restate: [null] },
+      { names: [null], restate: [null] },
+    ]);
+  });
+  test('grace accidentals (pre-1.3.1): a rendered grace C#5 draws no sharp glyph', () => {
+    const svg = serialize(renderTree({ tracks: [{ measures: [{ beats: [gr('C#5'), nt('D5'), nt('D5'), nt('D5'), nt('D5')] }] }] }));
+    eq(svg.includes('\uE262'), false);
+  });
+
+  // (c) neutrality: graces without accidentals keep their layout x (must stay true after 1.3.1).
+  const graceBeats = () => [gr('E4'), gr('F4'), nt('G4'), nt('A4'), gr('B4'), nt('C5'), nt('D5')];
+  const elementXs = (score) => {
+    const m = computeLayout(normalizeScore(score), thm, 900).systems[0].tracks[0].measures[0];
+    return m.elements.map((e) => [e.index, e.x, e.width, e.t]);
+  };
+  test('grace layout neutrality: notation track, two graces before a note and one trailing grace', () => {
+    eq(elementXs({ tracks: [{ measures: [{ beats: graceBeats() }] }] }), [
+      [0, 113.852, 12, null], [1, 125.852, 12, null], [2, 143.752, 35, { n: 0, d: 1 }], [3, 178.752, 35, { n: 1, d: 4 }],
+      [4, 195.852, 12, null], [5, 213.752, 35, { n: 1, d: 2 }], [6, 248.752, 30, { n: 3, d: 4 }],
+    ]);
+  });
+  test('grace layout neutrality: tab-only track, two graces before a note and one trailing grace', () => {
+    eq(elementXs({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: graceBeats() }] }] }), [
+      [0, 102.70430769230768, 12, null], [1, 114.70430769230768, 12, null], [2, 126.70430769230768, 35, { n: 0, d: 1 }],
+      [3, 161.70430769230768, 35, { n: 1, d: 4 }], [4, 184.70430769230768, 12, null], [5, 196.70430769230768, 35, { n: 1, d: 2 }],
+      [6, 231.70430769230768, 30, { n: 3, d: 4 }],
+    ]);
+  });
+
+  // bendGeometry pins for release arrows (as tabLinks feeds it: a missing release amount becomes 'full').
+  const relGeom = (raw, nextX) => {
+    const b = normalizeBend(raw);
+    if (b.amount == null) b.amount = 'full';
+    b.heightFrac = 1;
+    const g = bendGeometry(100, 50, b, thm, nextX);
+    return { endX: g.endX, releaseCtrl: g.releaseCtrl, boxes: g.boxes };
+  };
+  const lbl = (x1, x2) => ({ x1, x2, top: 0, bottom: 13, text: true });
+  const fall = (x1, x2) => ({ x1, x2, top: 14, bottom: 41.55, text: false });
+  const ctrl = (x, y = 16.7) => ({ x, y });
+  test('bendGeometry pin: {type:"release"} at nextX = x+25, x+40, undefined', () => {
+    eq(relGeom({ type: 'release' }, 125), { endX: 125, releaseCtrl: ctrl(110), boxes: [fall(100, 129), lbl(86.6, 114.39999999999999)] });
+    eq(relGeom({ type: 'release' }, 140), { endX: 137, releaseCtrl: ctrl(114.8), boxes: [fall(100, 141), lbl(86.6, 114.39999999999999)] });
+    eq(relGeom({ type: 'release' }, undefined), { endX: 131, releaseCtrl: ctrl(112.4), boxes: [fall(100, 135), lbl(86.6, 114.39999999999999)] });
+  });
+  test('bendGeometry pin: "full release" at nextX = x+25, x+40, undefined', () => {
+    const rise = (x2) => ({ x1: 102.45, x2, top: 14, bottom: 41.55, text: false });
+    eq(relGeom('full release', 125), { endX: 125, releaseCtrl: ctrl(118.4), boxes: [rise(116.4), fall(114, 129), lbl(100.6, 128.4)] });
+    eq(relGeom('full release', 140), { endX: 137, releaseCtrl: ctrl(126.2), boxes: [rise(121.4), fall(119, 141), lbl(105.6, 133.4)] });
+    eq(relGeom('full release', undefined), { endX: 131, releaseCtrl: ctrl(122.6), boxes: [rise(119.4), fall(117, 135), lbl(103.6, 131.4)] });
+  });
+
+  // lead-solo-f spelling neutrality: [pitch, soundingPitch] per note in score order.
+  const { leadSoloF } = await imp('examples/lead-solo-f.js');
+  const { createHash } = await import('node:crypto');
+  test('lead-solo-f neutrality: normalizeScore [pitch, soundingPitch] per note in score order (90 notes)', () => {
+    const pairs = [];
+    normalizeScore(leadSoloF).tracks.forEach((t) => t.measures.forEach((m) => m.beats.forEach((b) => (b.notes || []).forEach((x) => pairs.push([x.pitch ?? null, x.soundingPitch ?? null])))));
+    eq(pairs.length, 90);
+    eq(pairs.slice(0, 3), [['F4', 'F3'], ['G4', 'G3'], ['A4', 'A3']]);
+    eq(createHash('sha256').update(JSON.stringify(pairs)).digest('hex'), 'c5b61162084a82775017c502f66bf655794b14dc9ff67eb97989c9a91e3434ac');
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
