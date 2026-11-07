@@ -25,6 +25,10 @@ const ARTIC_GLYPHS = {
 // it on its target staff position (staccatissimo and marcato: half the
 // measured glyphMetrics.js heights).
 const ARTIC_HALF_HEIGHT_SP = { staccato: 0.17, staccatissimo: 0.59, tenuto: 0.08, accent: 0.37, marcato: 0.5 };
+// Least gap (sp) between a mark and the notehead or mark inside it. Only the
+// marks taller than a staff space's room (marcato, staccatissimo) can come
+// closer, and they then move out one more space.
+const ARTIC_MIN_GAP_SP = 0.1;
 
 // Vibrato wave per kind (noteEffects.js vibratoOf): amplitude and wavelength
 // in sp, stroke width in px. A wide wave also sits VIB_WIDE_LIFT_SP higher.
@@ -177,6 +181,10 @@ export function normalizeArticulations(raw) {
  * instead (above voice 1, below voice 2): the first centred 1 sp beyond
  * the stem tip or outer beam (a whole note: beyond its outer notehead),
  * rounded outward to a space inside the staff.
+ *
+ * A mark that would come within ARTIC_MIN_GAP_SP of the notehead or mark
+ * inside it (a marcato or staccatissimo next to a notehead in the adjacent
+ * space, or right outside a staccatissimo) moves out one more space.
  */
 export function renderArticulations(g, info, marks, baselineY, theme, voice) {
   if (!marks.length || !(info.noteheads || []).length) return;
@@ -184,6 +192,8 @@ export function renderArticulations(g, info, marks, baselineY, theme, voice) {
   const fontSize = smuflFontSizePx(theme);
   let above;
   let pos;
+  let innerY; // edge of what the first mark stacks on: the stem tip / outer beam, else the notehead's outer edge
+  const headEdgeY = (n, d) => baselineY + staffPositionToY(n, spacing) - d * 0.5 * spacing;
   if (voice) {
     above = voice === 1;
     const d = above ? 1 : -1;
@@ -191,15 +201,18 @@ export function renderArticulations(g, info, marks, baselineY, theme, voice) {
     if (tipY == null) {
       const n = above ? info.maxPos : info.minPos;
       pos = n + d * (Math.abs(n) % 2 === 1 ? 2 : 3);
+      innerY = headEdgeY(n, d);
     } else {
       pos = (baselineY - tipY) / (spacing / 2) + d * 2;
       if (pos >= 0 && pos <= 8) pos = above ? 2 * Math.ceil((pos - 1) / 2) + 1 : 2 * Math.floor((pos - 1) / 2) + 1;
+      innerY = tipY;
     }
   } else {
     const stemUp = info.duration === 'whole' ? stemUpFor([info.minPos, info.maxPos]) : info.stemUp;
     above = !stemUp;
     const n = stemUp ? info.minPos : info.maxPos;
     pos = n + (stemUp ? -1 : 1) * (Math.abs(n) % 2 === 1 ? 2 : 3);
+    innerY = headEdgeY(n, stemUp ? -1 : 1);
   }
   const side = above ? 'above' : 'below';
   const dir = above ? 1 : -1; // staff-position direction away from the notehead
@@ -208,11 +221,16 @@ export function renderArticulations(g, info, marks, baselineY, theme, voice) {
   let edgeY;
   marks.forEach((name) => {
     const half = ARTIC_HALF_HEIGHT_SP[name] * spacing;
-    const centerY = baselineY + staffPositionToY(pos, spacing);
+    let centerY = baselineY + staffPositionToY(pos, spacing);
+    while (dir * (innerY - (centerY + dir * half)) < ARTIC_MIN_GAP_SP * spacing) {
+      pos += dir * 2;
+      centerY = baselineY + staffPositionToY(pos, spacing);
+    }
     gEl.appendChild(glyphText(info.x, centerY + dir * half, ARTIC_GLYPHS[name][side], theme.fontFamily, fontSize, {
       fill: theme.noteColor, 'text-anchor': 'middle',
     }));
     edgeY = centerY - dir * half;
+    innerY = edgeY;
     pos += dir * 2;
   });
   g.appendChild(gEl);

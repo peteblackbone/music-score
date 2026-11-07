@@ -510,14 +510,16 @@ test('[A1] two voices: voice 1 marks above, voice 2 marks below', () => {
   const rests = [{ type: 'rest', duration: 'quarter' }, { type: 'rest', duration: 'half' }];
   const sc = oneTrack([]);
   sc.tracks[0].measures = [{ voices: [
-    { beats: [q('E5', { articulations: ['marcato', 'staccatissimo'] }), ...rests] },
-    { beats: [q('E4', { articulations: ['marcato', 'staccatissimo'] }), ...rests] },
+    { beats: [q('E5', { articulations: ['marcato', 'tenuto', 'staccatissimo'] }), ...rests] },
+    { beats: [q('E4', { articulations: ['marcato', 'tenuto', 'staccatissimo'] }), ...rests] },
   ] }];
   const [g1, g2] = groups(renderTree(sc), 'articulations').map(marksOf);
-  deepEq(g1.map((m) => m.code), ['E4A6', 'E4AC']);
-  deepEq(g2.map((m) => m.code), ['E4A7', 'E4AD']);
-  eq(g1[0].center - g1[1].center, SP, 'voice 1 stacks upward');
-  eq(g2[1].center - g2[0].center, SP, 'voice 2 stacks downward');
+  deepEq(g1.map((m) => m.code), ['E4A6', 'E4A4', 'E4AC']);
+  deepEq(g2.map((m) => m.code), ['E4A7', 'E4A5', 'E4AD']);
+  [0, 1].forEach((i) => {
+    eq(g1[i].center - g1[i + 1].center, SP, `voice 1 stacks upward ${i}`);
+    eq(g2[i + 1].center - g2[i].center, SP, `voice 2 stacks downward ${i}`);
+  });
 });
 test('[A2] normalizeArticulations: precedence, order, alias, exact names', () => {
   deepEq(normalizeArticulations(['accent', 'marcato', 'staccato', 'staccatissimo', 'tenuto']), ['staccatissimo', 'tenuto', 'marcato']);
@@ -535,9 +537,46 @@ test('[A2] stacked centres step 1 sp from the first staff space out, both sides'
   const ms = marksOf(groups(up, 'articulations')[0]);
   deepEq(ms.map((m) => m.name), ['staccatissimo', 'tenuto', 'marcato']);
   [-3, -5, -7].forEach((p, i) => eq(ms[i].center, posY(up, p), `up ${i}`));
-  const dn = renderTree(oneTrack([q('E5', { articulations: ['heavyAccent', 'staccatissimo'] })]));
+  const dn = renderTree(oneTrack([q('D5', { articulations: ['heavyAccent', 'tenuto', 'staccatissimo'] })]));
   const md = marksOf(groups(dn, 'articulations')[0]);
-  [9, 11].forEach((p, i) => eq(md[i].center, posY(dn, p), `down ${i}`));
+  [9, 11, 13].forEach((p, i) => eq(md[i].center, posY(dn, p), `down ${i}`));
+});
+// Marcato (1.0 sp) and staccatissimo (1.18 sp) are too tall to sit in the space next to a notehead or right
+// outside a staccatissimo: they move out one more space; the older marks keep their places.
+test('[A2] tall marks move out a space instead of touching the notehead or the mark inside them', () => {
+  const at = (pitch, arts) => {
+    const tree = renderTree(oneTrack([q(pitch, { articulations: arts })]));
+    return marksOf(groups(tree, 'articulations')[0]).map((m) => Math.round((baselineOf(tree) - m.center) / (SP / 2)));
+  };
+  deepEq(at('E5', ['staccatissimo']), [11]); // E5 pos 7: the space next to it (9) is too small
+  deepEq(at('E5', ['marcato']), [11]);
+  deepEq(at('E5', ['accent']), [9]);
+  deepEq(at('E5', ['staccato', 'marcato']), [9, 11]);
+  deepEq(at('F4', ['staccatissimo', 'tenuto']), [-3, -5]); // F4 pos 1 stem up
+  deepEq(at('E4', ['staccatissimo']), [-3]);
+  deepEq(at('E4', ['marcato']), [-3]);
+  deepEq(at('E4', ['staccatissimo', 'marcato']), [-3, -7]);
+  deepEq(at('E4', ['staccatissimo', 'accent']), [-3, -7]);
+  deepEq(at('E4', ['staccato', 'tenuto', 'accent']), [-3, -5, -7]);
+});
+test('[A2] every mark keeps >= 0.1 sp from the notehead and the mark inside it, centred in a space', () => {
+  const combos = [['staccatissimo'], ['marcato'], ['staccatissimo', 'marcato'], ['staccatissimo', 'accent'],
+    ['staccato', 'marcato'], ['staccatissimo', 'tenuto', 'marcato'], ['staccato', 'tenuto', 'accent']];
+  ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5', 'D5', 'E5', 'F5', 'G5', 'A5', 'C6'].forEach((p) => combos.forEach((arts) => {
+    const tree = renderTree(oneTrack([q(p, { articulations: arts })]));
+    const ms = marksOf(groups(tree, 'articulations')[0]);
+    const head = all(tree).find((x) => x.n.tag === 'text' && x.n.getAttribute('text-anchor') === 'middle' && !x.cls.includes('articulations')).n;
+    const below = ms[0].below;
+    const d = below ? 1 : -1; // y direction away from the notehead
+    let edge = num(head, 'y') + d * 0.5 * SP;
+    ms.forEach((m) => {
+      const h = HALF[m.code] * SP;
+      ok(d * (m.center - d * h - edge) >= 0.1 * SP - EPS, `${p} ${arts} ${m.name}: gap ${d * (m.center - d * h - edge)}`);
+      const pos = (baselineOf(tree) - m.center) / (SP / 2);
+      ok(near(pos, Math.round(pos)) && Math.abs(Math.round(pos)) % 2 === 1, `${p} ${arts} ${m.name} at ${pos}`);
+      edge = m.center + d * h;
+    });
+  }));
 });
 test('[A2] articTopY / articBottomY use the new half heights', () => {
   const theme = { staffLineSpacing: SP, fontFamily: 'Bravura', noteColor: '#000', fontSize: 40 };
@@ -545,7 +584,7 @@ test('[A2] articTopY / articBottomY use the new half heights', () => {
   // baseline y 0: staff position p sits at y = -p * SP / 2
   const below = { x: 0, noteheads: [{ y: 0 }], stemUp: true, minPos: 0, maxPos: 0, duration: 'quarter' };
   renderArticulations(g, below, ['staccatissimo', 'marcato'], 0, theme);
-  eq(below.articBottomY, 5 * (SP / 2) + 0.5 * SP, 'marcato outer edge below (pos -5)');
+  eq(below.articBottomY, 7 * (SP / 2) + 0.5 * SP, 'marcato outer edge below (pos -7: moved out past the staccatissimo)');
   const above = { x: 0, noteheads: [{ y: 0 }], stemUp: false, minPos: 8, maxPos: 8, duration: 'quarter' };
   renderArticulations(g, above, ['staccatissimo'], 0, theme);
   eq(above.articTopY, -11 * (SP / 2) - 0.59 * SP, 'staccatissimo outer edge above (pos 11)');
