@@ -13,8 +13,12 @@ import { flattenRuns } from './common.js';
 const SLUR_CLEARANCE_SP = 1.1;   // slur end -> note's top (above) / bottom (below)
 const TUPLET_SLUR_CLEAR_SP = 0.9; // slur end above a tuplet bracket under it -> the bracket line
 
-/** Every rendered beat of a notation track, in score order, with its slur anchors. */
-export function collectBeats(trackRuns, track, theme) {
+/**
+ * Every rendered beat of a notation track, in score order, with its slur
+ * anchors; `voice` picks the stream (flattenRuns). `item.voice` is the
+ * element's voice in a two-voice measure, else 0.
+ */
+export function collectBeats(trackRuns, track, theme, voice = 1) {
   const s = theme.staffLineSpacing;
   const beats = [];
   flattenRuns(trackRuns, track, (layoutEl, run) => {
@@ -28,8 +32,9 @@ export function collectBeats(trackRuns, track, theme) {
       anchorAbove: (Number.isFinite(top) ? top : run.notationBaselineY - 4 * s) - SLUR_CLEARANCE_SP * s,
       anchorBelow: (Number.isFinite(bottom) ? bottom : run.notationBaselineY) + SLUR_CLEARANCE_SP * s,
       tupletAbove: info?.tupletY != null ? info.tupletY - TUPLET_SLUR_CLEAR_SP * s : Infinity,
+      voice: layoutEl.voice || 0,
     });
-  });
+  }, voice);
   return beats;
 }
 
@@ -38,18 +43,20 @@ export function collectBeats(trackRuns, track, theme) {
  * with `auto` (theme `hammerPullSlurs`, default on), one slur per run of
  * hammer-ons / pull-offs (hammerPullSpans). Returns `[{ i, j, above, y1,
  * y2 }]` (indices into `beats`; end heights, slurEnds), explicit slurs
- * first.
+ * first. With `voice` 2 (`beats` from collectBeats' voice-2 stream) only
+ * slurs starting on a voice-2 beat count.
  */
-export function findSlurs(beats, { auto = false } = {}) {
+export function findSlurs(beats, { auto = false, voice = 1 } = {}) {
   const out = [];
+  const starts = (i) => voice !== 2 || beats[i].voice === 2;
   beats.forEach((item, i) => {
-    if (!item.el.slurStart) return;
+    if (!item.el.slurStart || !starts(i)) return;
     const j = beats.findIndex((c, k) => k > i && c.el.slurEnd);
     if (j === -1) return;
     out.push({ i, j, above: slurSide(beats, i, j) });
   });
   const explicit = out.map((sl) => ({ ...sl, ...slurEnds(beats, sl, false) }));
-  return auto ? explicit.concat(hammerPullSpans(beats, out).map((sl) => ({ ...sl, ...slurEnds(beats, sl, true) }))) : explicit;
+  return auto ? explicit.concat(hammerPullSpans(beats, out).filter((sl) => starts(sl.i)).map((sl) => ({ ...sl, ...slurEnds(beats, sl, true) }))) : explicit;
 }
 
 /**
@@ -72,9 +79,12 @@ function slurEnds(beats, { i, j, above }, clearTuplets) {
 /**
  * Side of a slur over beats i..j (ui.md §7): all stems up → below; all
  * down → above; mixed → above (stemless notes count with their notional
- * direction; rests and grace notes don't count). True = above.
+ * direction; rests and grace notes don't count). True = above. A slur
+ * touching a two-voice measure takes its start beat's voice side: voice 2
+ * below, otherwise above.
  */
 function slurSide(beats, i, j) {
+  if (beats.slice(i, j + 1).some((b) => b.voice)) return beats[i].voice !== 2;
   const dirs = beats.slice(i, j + 1)
     .filter((b) => b.info && !b.info.isRest && !b.info.isGrace && b.info.noteheads?.length)
     .map((b) => b.info.stemUp);

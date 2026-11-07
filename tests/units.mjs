@@ -2439,6 +2439,72 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const band = nodes(tab.staff('tab'), (nd, cls) => nd.tag === 'line' && cls.includes('tab-rhythm'));
     eq(band.map((l) => +(+l.getAttribute('x1')).toFixed(2)), tab.ms[0].elements.map((e) => +e.x.toFixed(2)));
   });
+
+  // two-voice passes (full render): ties, slurs, grace slurs, TAB links per voice
+  const full = (measures, track = {}, width = 900) => renderTree({ tracks: [{ showStandardNotation: true, ...track, measures }] }, width);
+  const curves = (root, cls) => nodes(root, (nd) => nd.tag === 'path' && nd.getAttribute('class') === cls).map((nd) => {
+    const n = nums(nd.getAttribute('d'));
+    return { x1: n[0], y1: n[1], x2: n[6], y2: n[7], above: n[3] < n[1] };
+  });
+  const tied = (p, d = 'half') => [nb([{ pitch: p, tieStart: true }], d), nb([{ pitch: p, tieEnd: true }], d)];
+  test('two-voice passes: voice 1 ties and slurs above, voice 2 below, each within its voice', () => {
+    const svg = full([
+      vm(tied('C5'), tied('E4')),
+      vm([nb(['D5'], 'quarter', { slurStart: true }), nb(['E5']), nb(['F5'], 'quarter', { slurEnd: true }), rs()],
+        [nb(['G4'], 'quarter', { slurStart: true }), nb(['F4']), nb(['E4'], 'quarter', { slurEnd: true }), rs()]),
+    ]);
+    const ties = curves(svg, 'tie').sort((a, b) => a.y1 - b.y1);
+    eq(ties.map((t) => t.above), [true, false]);
+    const slurs = curves(svg, 'slur').sort((a, b) => a.y1 - b.y1);
+    eq(slurs.map((t) => t.above), [true, false]);
+    eq(slurs[0].x1 === slurs[1].x1 && slurs[0].x2 === slurs[1].x2, true, 'same onsets');
+  });
+  test('two-voice passes: ties split across a system break per voice, sides kept', () => {
+    const busy = (p) => [p, p, p, p, p, p, p, p].map((x) => nb([x], '8th'));
+    const svg = full([
+      vm([...busy('B4').slice(0, 6), nb([{ pitch: 'C5', tieStart: true }])], [...busy('E4').slice(0, 6), nb([{ pitch: 'G4', tieStart: true }])]),
+      vm([nb([{ pitch: 'C5', tieEnd: true }], 'whole')], [nb([{ pitch: 'G4', tieEnd: true }], 'whole')]),
+    ], {}, 300);
+    eq(serialize(svg).includes('system-1'), true, 'broken');
+    const ties = curves(svg, 'tie');
+    eq(ties.length, 4);
+    eq(ties.filter((t) => t.above).length, 2);
+  });
+  test('two-voice passes: a slur into a single-voice measure keeps its start voice\'s side', () => {
+    const svg = full([
+      vm(quarters('C5'), [rs('half'), nb(['E4'], 'half', { slurStart: true })]),
+      { beats: [nb(['G4'], 'quarter', { slurEnd: true }), nb(['G4']), nb(['G4'], 'half')] },
+    ]);
+    eq(curves(svg, 'slur').map((c) => c.above), [false]);
+  });
+  test('two-voice passes: H/P links within a voice even when the other voice is nearer on that string (TAB and notation)', () => {
+    const fr = (string, fret, x = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string, fret, ...x }] });
+    const svg = full([vm([fr(2, 5, { hammerPull: true }), rs(), fr(2, 7), rs()], [fr(4, 2), fr(2, 6), fr(4, 2), fr(4, 4)])], { showTablature: true });
+    const sc = normalizeScore({ tracks: [{ showStandardNotation: true, showTablature: true, measures: [vm([fr(2, 5), rs(), fr(2, 7), rs()], [fr(4, 2), fr(2, 6), fr(4, 2), fr(4, 4)])] }] });
+    const els = computeLayout(sc, th, 900).systems[0].tracks[0].measures[0].elements;
+    const hp = nodes(svg, (nd) => nd.tag === 'g' && /^hammer-pull /.test(nd.getAttribute('class') || ''));
+    eq(hp.length, 1);
+    const xs = nums(nodes(hp[0], (nd) => nd.tag === 'path')[0].getAttribute('d')).filter((_, i) => i % 2 === 0);
+    eq([Math.min(...xs) > els[0].x, Math.max(...xs) < els[2].x, Math.max(...xs) > els[1].x], [true, true, true], 'spans to voice 1\'s next note');
+    const sl = curves(svg, 'slur');
+    eq([sl.length, sl[0].above, Math.abs(sl[0].x1 - els[0].x) < 0.01, Math.abs(sl[0].x2 - els[2].x) < 0.01], [1, true, true, true]);
+  });
+  test('two-voice passes: graces stem and slur per voice into their own voice\'s next note', () => {
+    const g = (p) => ({ type: 'grace', duration: '16th', notes: [{ pitch: p }] });
+    const ms = draw2([vm([nb(['C5'], 'half'), g('D5'), nb(['C5'], 'half')], [g('F4'), nb(['E4']), nb(['E4']), nb(['E4'], 'half')])]).ms;
+    eq([ms[0].elements[1].rendered.stemUp, ms[0].elements2[0].rendered.stemUp], [true, false]);
+    eq(ms[0].elements2[0].x < ms[0].elements2[1].x && ms[0].elements[1].x < ms[0].elements[2].x, true, 'anchored to own note');
+    const svg = full([vm([nb(['C5'], 'half'), g('D5'), nb(['C5'], 'half')], [g('F4'), nb(['E4']), nb(['E4']), nb(['E4'], 'half')])]);
+    const sl = curves(svg, 'slur').sort((a, b) => a.x1 - b.x1);
+    eq(sl.length, 2);
+    eq([Math.abs(sl[0].x2 - ms[0].elements2[1].x) < 0.01, Math.abs(sl[1].x2 - ms[0].elements[2].x) < 0.01], [true, true]);
+  });
+  test('two-voice passes: dynamics and chord symbols on a voice-2 beat are not drawn (voice-1 only)', () => {
+    const s2 = serialize(full([vm(quarters('C5'), [nb(['E4'], 'whole', { dynamic: 'f', chord: 'C' })])]));
+    eq([s2.includes('class="dynamic"'), s2.includes('chord-symbol')], [false, false]);
+    const s1 = serialize(full([vm([nb(['C5'], 'quarter', { dynamic: 'f', chord: 'C' }), ...quarters('C5').slice(1)], [nb(['E4'], 'whole')])]));
+    eq([s1.includes('class="dynamic"'), s1.includes('chord-symbol')], [true, true]);
+  });
 }
 
 // ---------- report ----------
