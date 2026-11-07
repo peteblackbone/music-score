@@ -20,6 +20,7 @@ import { glyphBox } from '../glyphMetrics.js';
 
 const STEM_LENGTH_SPACES = 3.5;
 const REST_POSITION = { whole: 6, half: 4, quarter: 4, '8th': 4, '16th': 4, '32nd': 4, '64th': 4 };
+const REST_LEDGER_OVERHANG_SP = 0.3;
 
 // Articulations stack outward from the notehead in this fixed order,
 // regardless of the order the author listed them in.
@@ -72,13 +73,19 @@ export function renderNotationElement(g, layoutEl, measure, track, theme, opts =
   const clef = track.clef;
 
   if (el.type === 'rest') {
+    if (el.hidden) return { isRest: true, hidden: true, x, noteheads: [] };
     if (opts.wholeMeasureRest) {
-      renderWholeMeasureRest(g, x, layoutEl.baselineY, theme);
+      renderWholeMeasureRest(g, x, layoutEl.baselineY, theme, layoutEl.restPos ?? 6);
       return { isRest: true, x, noteheads: [] };
     }
-    const pos = REST_POSITION[el.duration] ?? 4;
+    // Two-voice measures place rests per voice (layout/voices.js), with a ledger line outside the staff.
+    const pos = layoutEl.restPos ?? REST_POSITION[el.duration] ?? 4;
     const glyph = restForDuration(el.duration);
     const y = layoutEl.baselineY + staffPositionToY(pos, spacing);
+    if (layoutEl.restLedger != null) {
+      const half = (glyphBox(glyph).width / 2 + REST_LEDGER_OVERHANG_SP) * spacing;
+      drawLedgerLines(g, x - half, x + half, layoutEl.restLedger, layoutEl.restLedger, layoutEl.baselineY, theme, true);
+    }
     g.appendChild(glyphText(x, y, glyph, theme.fontFamily, fontSize, {
       fill: theme.noteColor, 'text-anchor': 'middle',
     }));
@@ -184,11 +191,11 @@ export function renderNotationElement(g, layoutEl, measure, track, theme, opts =
 
 /**
  * Whole-measure rest (ui.md §4): the whole-rest glyph hung from the fourth
- * line (pos 6), centred on `x` (the layout centres it between the
- * measure's barlines), whatever the meter.
+ * line (pos 6; a two-voice measure passes its voice's line), centred on `x`
+ * (the layout centres it between the measure's barlines), whatever the meter.
  */
-export function renderWholeMeasureRest(g, x, baselineY, theme) {
-  const y = baselineY + staffPositionToY(6, theme.staffLineSpacing);
+export function renderWholeMeasureRest(g, x, baselineY, theme, pos = 6) {
+  const y = baselineY + staffPositionToY(pos, theme.staffLineSpacing);
   g.appendChild(glyphText(x, y, Glyph.restWhole, theme.fontFamily, smuflFontSizePx(theme), {
     fill: theme.noteColor, 'text-anchor': 'middle',
   }));
@@ -224,7 +231,8 @@ function renderGraceNote(g, layoutEl, track, theme) {
   const positions = notes.map((n) => staffPosition(n.pitch, clef));
   const minPos = Math.min(...positions);
   const maxPos = Math.max(...positions);
-  const stemUp = stemUpFor(positions);
+  // Two-voice measures: voice 1's graces stem up, voice 2's down.
+  const stemUp = layoutEl.voice ? layoutEl.voice === 1 : stemUpFor(positions);
 
   const noteheads = [];
   notes.forEach((note, i) => {
@@ -288,13 +296,14 @@ function drawDots(g, x, dotPositions, count, baselineY, theme) {
   });
 }
 
-/** Ledger lines from x1 to x2 for every ledger position the chord range `minPos..maxPos` needs. */
-function drawLedgerLines(g, x1, x2, minPos, maxPos, baselineY, theme) {
+/** Ledger lines from x1 to x2 for every ledger position the chord range `minPos..maxPos` needs (`only`: just the one at maxPos). */
+function drawLedgerLines(g, x1, x2, minPos, maxPos, baselineY, theme, only = false) {
   const spacing = theme.staffLineSpacing;
   const ledger = (p) => {
     const y = baselineY + staffPositionToY(p, spacing);
     g.appendChild(line(x1, y, x2, y, { stroke: theme.staffLineColor, 'stroke-width': theme.staffLineWidth }));
   };
+  if (only) { ledger(maxPos); return; }
   for (let p = 10; p <= maxPos; p += 2) ledger(p);
   for (let p = -2; p >= minPos; p -= 2) ledger(p);
 }
@@ -306,6 +315,7 @@ const MIN_STEM_SPACES = 2.5;             // no beamed note gets a stem shorter t
  * Draw beams for groups of >=2 eligible notes; for groups of length 1 the
  * individual flag glyph (already drawn in renderNotationElement) stands.
  * `rendered` maps element index -> info returned by renderNotationElement.
+ * `forcedStemUp` (two-voice measures) overrides the group's direction.
  *
  * Every note in a beam group shares one stem direction and one straight
  * beam line: the line's natural slope follows the first/last notehead,
@@ -315,7 +325,7 @@ const MIN_STEM_SPACES = 2.5;             // no beamed note gets a stem shorter t
  * renderNotationElement) because they can't be finalized until this
  * shared line is known.
  */
-export function renderBeams(g, measureLayout, rendered, theme, baselineY) {
+export function renderBeams(g, measureLayout, rendered, theme, baselineY, forcedStemUp) {
   const spacing = theme.staffLineSpacing;
   for (const beamGroup of measureLayout.beamGroups) {
     if (beamGroup.length < 2) continue;
@@ -325,7 +335,7 @@ export function renderBeams(g, measureLayout, rendered, theme, baselineY) {
     // One shared stem direction for the whole group, based on its overall pitch range.
     const overallMin = Math.min(...infos.map((i) => i.minPos));
     const overallMax = Math.max(...infos.map((i) => i.maxPos));
-    const stemUp = stemUpFor([overallMin, overallMax]);
+    const stemUp = forcedStemUp ?? stemUpFor([overallMin, overallMax]);
     const dirSign = stemUp ? -1 : 1; // direction from notehead toward the stem tip
     const extendSign = stemUp ? 1 : -1; // secondary beams thicken toward the notehead
 
@@ -443,9 +453,10 @@ export function beamShape(x1, y1, x2, y2, thickness, extendSign, color) {
  * sustained note as rapidly alternate-picked rather than struck once.
  * `info` is the object `renderNotationElement`/`renderBeams` returned for
  * this note, so the marks land on its *final* stem geometry (beamed notes
- * only know their real stem length after `renderBeams` runs).
+ * only know their real stem length after `renderBeams` runs). `below`
+ * (voice 2): a whole note's marks hang below its lowest notehead instead.
  */
-export function renderTremolo(g, info, theme) {
+export function renderTremolo(g, info, theme, { below = false } = {}) {
   const gEl = group({ class: 'tremolo' });
   const color = theme.noteColor;
   const spacing = theme.staffLineSpacing;
@@ -459,6 +470,10 @@ export function renderTremolo(g, info, theme) {
   if (info.stemTopY != null && info.stemBottomY != null) {
     cx = info.stemAttachX;
     midY = (info.stemTopY + info.stemBottomY) / 2;
+  } else if (below) {
+    const bottomY = Math.max(info.articBottomY ?? -Infinity, ...(info.noteheads || []).map((n) => n.y));
+    cx = info.x;
+    midY = bottomY + 1.3 * spacing;
   } else {
     // No stem (whole note) — hang the marks just above the topmost notehead
     // (or its articulations, if it has any above).
@@ -538,16 +553,37 @@ export function normalizeArticulations(raw) {
  * notes (no stem) use the usual middle-line rule. Records the outer edge
  * of the stack as `info.articTopY` (marks above) or `info.articBottomY`
  * (marks below) for the slur/tuplet/vibrato/dynamic/fermata passes.
+ *
+ * In a two-voice measure (`voice` 1 | 2) the marks go on the stem side
+ * instead (above voice 1, below voice 2): the first centred 1 sp beyond
+ * the stem tip or outer beam (a whole note: beyond its outer notehead),
+ * rounded outward to a space inside the staff.
  */
-export function renderArticulations(g, info, marks, baselineY, theme) {
+export function renderArticulations(g, info, marks, baselineY, theme, voice) {
   if (!marks.length || !(info.noteheads || []).length) return;
   const spacing = theme.staffLineSpacing;
   const fontSize = smuflFontSizePx(theme);
-  const stemUp = info.duration === 'whole' ? stemUpFor([info.minPos, info.maxPos]) : info.stemUp;
-  const side = stemUp ? 'below' : 'above';
-  const dir = stemUp ? -1 : 1; // staff-position direction away from the notehead
-  const n = stemUp ? info.minPos : info.maxPos;
-  let pos = n + dir * (Math.abs(n) % 2 === 1 ? 2 : 3);
+  let above;
+  let pos;
+  if (voice) {
+    above = voice === 1;
+    const d = above ? 1 : -1;
+    const tipY = above ? info.stemTopY : info.stemBottomY;
+    if (tipY == null) {
+      const n = above ? info.maxPos : info.minPos;
+      pos = n + d * (Math.abs(n) % 2 === 1 ? 2 : 3);
+    } else {
+      pos = (baselineY - tipY) / (spacing / 2) + d * 2;
+      if (pos >= 0 && pos <= 8) pos = above ? 2 * Math.ceil((pos - 1) / 2) + 1 : 2 * Math.floor((pos - 1) / 2) + 1;
+    }
+  } else {
+    const stemUp = info.duration === 'whole' ? stemUpFor([info.minPos, info.maxPos]) : info.stemUp;
+    above = !stemUp;
+    const n = stemUp ? info.minPos : info.maxPos;
+    pos = n + (stemUp ? -1 : 1) * (Math.abs(n) % 2 === 1 ? 2 : 3);
+  }
+  const side = above ? 'above' : 'below';
+  const dir = above ? 1 : -1; // staff-position direction away from the notehead
 
   const gEl = group({ class: 'articulations' });
   let edgeY;
@@ -561,8 +597,8 @@ export function renderArticulations(g, info, marks, baselineY, theme) {
     pos += dir * 2;
   });
   g.appendChild(gEl);
-  if (stemUp) info.articBottomY = edgeY;
-  else info.articTopY = edgeY;
+  if (above) info.articTopY = edgeY;
+  else info.articBottomY = edgeY;
 }
 
 /**

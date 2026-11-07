@@ -2361,6 +2361,84 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(m.elements2.map((e) => e.tabEl.notes.map((n) => n.string)), [[4], [2]]);
     eq('tremolo' in m.elements2[0].tabEl, false);
   });
+
+  // two-voice drawing (drawSystem: staff groups in local coordinates, top line y = 0, bottom line y = 4 sp)
+  const { drawSystem } = await imp('src/draw/system.js');
+  const { restForDuration } = await imp('src/glyphs.js');
+  const draw2 = (measures, track = {}) => {
+    const sc = normalizeScore({ tracks: [{ showStandardNotation: true, ...track, measures }] });
+    const sys = computeLayout(sc, th, 900).systems[0];
+    const d = drawSystem(makeContainer(), sys, 0, sc, th);
+    const staff = (kind) => d.staves.find((st) => st.kind === kind)?.g;
+    return { ms: sys.tracks[0].measures, staff, svg: serialize(d.systemG) };
+  };
+  const nodes = (g, pred) => [...walk(g)].filter(({ nd, cls }) => pred(nd, cls)).map(({ nd }) => nd);
+  const v2g = (g) => nodes(g, (nd) => nd.tag === 'g' && nd.getAttribute('class') === 'voice-2');
+  const nums = (d) => d.match(/-?\d+(\.\d+)?(e-?\d+)?/g).map(Number);
+  const BL = 4 * S;
+
+  test('two-voice drawing: <g class="voice-2"> only in two-voice measures (not for one entry or hidden-only voice 2)', () => {
+    eq(v2g(draw2([vm(quarters('C5'), [nb(['C4'], 'whole')])]).staff('notation')).length, 1);
+    eq(draw2([{ voices: [{ beats: quarters('C5') }] }, vm(quarters('C5'), [rs('whole', { hidden: true })])]).svg.includes('voice-2'), false);
+  });
+  test('two-voice drawing: stems follow the voice, beamed groups included; beams never span voices', () => {
+    const { ms, staff } = draw2([vm([nb(['C6'], '8th'), nb(['A5'], '8th'), nb(['E5'], 'half'), nb(['C6'])], [nb(['D4'], '8th'), nb(['C4'], '8th'), nb(['F4'], 'half'), nb(['E4'])])]);
+    eq(ms[0].elements.map((e) => e.rendered.stemUp), [true, true, true, true]);
+    eq(ms[0].elements2.map((e) => e.rendered.stemUp), [false, false, false, false]);
+    const beams = (g, inV2) => nodes(g, (nd, cls) => nd.tag === 'path' && nd.getAttribute('stroke') === 'none' && cls.includes('voice-2') === inV2 && !nd.getAttribute('class'));
+    const g = staff('notation');
+    const span = (els) => [Math.min(...els.map((e) => e.rendered.stemAttachX)) - S, Math.max(...els.map((e) => e.rendered.stemAttachX)) + S];
+    [[beams(g, false), ms[0].elements], [beams(g, true), ms[0].elements2]].forEach(([ps, els]) => {
+      eq(ps.length, 1);
+      const xs = nums(ps[0].getAttribute('d')).filter((_, i) => i % 2 === 0);
+      const [lo, hi] = span(els.slice(0, 2));
+      eq(xs.every((x) => x >= lo && x <= hi), true, 'beam within its own voice\'s stems');
+    });
+    eq(ms[0].elements[0].rendered.stemTopY < ms[0].elements[0].rendered.stemBottomY, true);
+  });
+  test('two-voice drawing: voice-2 tuplet bracket below its lowest ink (>= bottom line + 1 sp), ticks up; voice-1 stays above', () => {
+    const t3 = (p) => nb([p], '8th', { tuplet: 3 });
+    const { ms, staff } = draw2([vm([t3('C5'), t3('D5'), t3('E5'), nb(['C5'], 'quarter'), nb(['C5'], 'half')], [t3('C4'), t3('D4'), t3('E4'), nb(['C4']), nb(['C4'], 'half')])]);
+    const [v2] = v2g(staff('notation'));
+    const tp = nodes(v2, (nd) => nd.tag === 'g' && nd.getAttribute('class') === 'tuplet');
+    eq(tp.length, 1);
+    const [x1, yTick, , y] = nums(tp[0].children[0].getAttribute('d'));
+    const lowest = Math.max(...ms[0].elements2.slice(0, 3).map((e) => e.rendered.stemBottomY));
+    eq([y >= BL + S - 1e-9, near(y, Math.max(lowest + 1.6 * S, BL + S)), yTick < y, x1 < ms[0].elements2[0].x], [true, true, true, true]);
+    const tp1 = nodes(staff('notation'), (nd, cls) => nd.tag === 'g' && nd.getAttribute('class') === 'tuplet' && !cls.includes('voice-2'));
+    eq([tp1.length, nums(tp1[0].children[0].getAttribute('d'))[3] < 0], [1, true]);
+    eq([ms[0].elements[0].rendered.tupletY < 0, ms[0].elements2[0].rendered.tupletY], [true, undefined]);
+  });
+  test('two-voice drawing: rest glyphs at their voice position, a ledger line for a half rest above the staff', () => {
+    const { staff } = draw2([vm([rs(), nb(['C5']), rs('half')], [nb(['E4']), rs(), nb(['D5'], 'half')])]);
+    const y = (glyph, inV2) => nodes(staff('notation'), (nd, cls) => nd.tag === 'text' && nd.textContent === glyph && cls.includes('voice-2') === inV2)
+      .map((nd) => +nd.getAttribute('y'));
+    eq([y(restForDuration('quarter'), false), y(restForDuration('quarter'), true), y(restForDuration('half'), false)], [[BL - 8 * S / 2], [BL], [BL - 10 * S / 2]]);
+    const ledgers = nodes(staff('notation'), (nd) => nd.tag === 'line' && near(+nd.getAttribute('y1'), BL - 10 * S / 2) && nd.getAttribute('y1') === nd.getAttribute('y2'));
+    eq(ledgers.length, 1);
+  });
+  test('two-voice drawing: articulations on the stem side, at least 1 sp beyond the stem tip; whole-note tremolo below voice 2', () => {
+    const { ms } = draw2([vm([nb(['G4'], 'quarter', { articulations: ['staccato', 'accent'] }), nb(['G4'], 'quarter'), nb(['B4'], 'half')],
+      [nb(['D4'], 'quarter', { articulations: ['staccato'] }), nb(['D4']), nb(['D4'], 'half', { articulations: ['tenuto'] })])]);
+    const r1 = ms[0].elements[0].rendered; const r2 = ms[0].elements2[0].rendered; const r3 = ms[0].elements2[2].rendered;
+    eq([r1.articTopY <= r1.stemTopY - S, r1.articBottomY, r2.articBottomY >= r2.stemBottomY + S, r2.articTopY, r3.articBottomY >= r3.stemBottomY + S], [true, undefined, true, undefined, true]);
+    const w = draw2([vm([nb(['G4'], 'whole')], [nb(['C4'], 'whole', { tremolo: true })])]);
+    const [v2] = v2g(w.staff('notation'));
+    const tr = nodes(v2, (nd) => nd.tag === 'line' && nd.getAttribute('stroke-linecap') === 'round');
+    const headY = w.ms[0].elements2[0].rendered.noteheads[0].y;
+    eq([tr.length, tr.every((l) => +l.getAttribute('y1') > headY + S / 2 && +l.getAttribute('y2') > headY + S / 2)], [3, true]);
+  });
+  test('two-voice drawing: TAB shows voice 2\'s frets at the column x, voice 1 wins a shared string; rhythm band voice 1 only', () => {
+    const fr = (string, fret, duration = 'quarter') => ({ type: 'note', duration, notes: [{ string, fret }] });
+    const m = vm([fr(2, 5, 'half'), fr(1, 3, 'half')], [fr(2, 7), fr(4, 9), fr(5, 2), fr(5, 4)]);
+    const { ms, staff } = draw2([m], { showTablature: true });
+    const labels = nodes(staff('tab'), (nd) => nd.tag === 'text').map((nd) => [nd.textContent, +(+nd.getAttribute('x')).toFixed(2)]);
+    const xs = ms[0].elements2.map((e) => +(e.x - e.dx).toFixed(2));
+    eq(labels.filter(([t]) => /^\d+$/.test(t)).sort(), [['2', xs[2]], ['3', +ms[0].elements[1].x.toFixed(2)], ['4', xs[3]], ['5', +ms[0].elements[0].x.toFixed(2)], ['9', xs[1]]].sort());
+    const tab = draw2([m], { showStandardNotation: false, showTablature: true });
+    const band = nodes(tab.staff('tab'), (nd, cls) => nd.tag === 'line' && cls.includes('tab-rhythm'));
+    eq(band.map((l) => +(+l.getAttribute('x1')).toFixed(2)), tab.ms[0].elements.map((e) => +e.x.toFixed(2)));
+  });
 }
 
 // ---------- report ----------
