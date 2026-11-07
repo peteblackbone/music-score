@@ -78,6 +78,52 @@ export function dotPosition(pos) {
 }
 
 /**
+ * Right edge (sp from the onset x) of a chord's first accidental column:
+ * ACC_HEAD_GAP_SP left of the leftmost notehead (`hdx` head centres and
+ * `widths`, sp) or of a ghost note's parenthesis.
+ */
+export function accidentalRightSp(notes, hdx, widths) {
+  const headLeft = Math.min(...hdx.map((d, i) => d - widths[i] / 2));
+  // Accidentals go left of a ghost note's parenthesis, not between it and the head.
+  const ghostLeft = notes.some((n) => n.ghost) ? Math.min(...hdx, 0) - GHOST_PAREN_DX_SP - GHOST_PAREN_HALF_SP : headLeft;
+  return Math.min(headLeft, ghostLeft) - ACC_HEAD_GAP_SP;
+}
+
+/**
+ * Accidental columns right to left from `rightSp` (see the header):
+ * `items` `{ key, name, pos, w }` (w = glyph width, sp) in note order.
+ * Returns `{ key, name, dx }` per item, in the same order, `dx` = the
+ * glyph's left edge (sp from the onset x).
+ */
+export function placeAccidentalColumns(items, rightSp) {
+  const accs = items.map((a) => ({ ...a, col: 0 })).sort((a, b) => b.pos - a.pos);
+  const placeOrder = [];
+  for (let lo = 0, hi = accs.length - 1; lo <= hi; lo++, hi--) {
+    placeOrder.push(accs[lo]);
+    if (hi !== lo) placeOrder.push(accs[hi]);
+  }
+  const columns = []; // [{ items: [], width }]
+  placeOrder.forEach((a) => {
+    let c = columns.findIndex((col) => col.items.every((b) => Math.abs(b.pos - a.pos) >= ACC_CLEAR_POSITIONS));
+    if (c === -1) { columns.push({ items: [], width: 0 }); c = columns.length - 1; }
+    columns[c].items.push(a);
+    columns[c].width = Math.max(columns[c].width, a.w);
+    a.col = c;
+  });
+  const colRight = [];
+  let right = rightSp;
+  columns.forEach((col, c) => {
+    colRight[c] = right;
+    right -= Math.max(ACC_COLUMN_SP, col.width + ACC_COLUMN_GAP_SP);
+  });
+  const byKey = new Map(accs.map((a) => [a.key, a]));
+  return items.map(({ key, name }) => {
+    const a = byKey.get(key);
+    return { key, name, dx: colRight[a.col] - a.w };
+  });
+}
+
+/**
  * @param {object[]} notes - the beat's notes
  * @param {number[]} positions - staff position of each note
  * @param {boolean} stemUp - final stem direction (beam group's, when beamed)
@@ -121,30 +167,10 @@ export function layoutChord(notes, positions, stemUp, accNames, opts, theme) {
   const headRight = Math.max(...hdx.map((d, i) => d + widths[i] / 2));
 
   // Accidental columns.
-  const accs = accNames.map((name, i) => (name ? { i, name, pos: positions[i], w: glyphBox(accidentalGlyph(name)).width } : null))
-    .filter(Boolean).sort((a, b) => b.pos - a.pos);
-  const placeOrder = [];
-  for (let lo = 0, hi = accs.length - 1; lo <= hi; lo++, hi--) {
-    placeOrder.push(accs[lo]);
-    if (hi !== lo) placeOrder.push(accs[hi]);
-  }
-  const columns = []; // [{ items: [], width }]
-  placeOrder.forEach((a) => {
-    let c = columns.findIndex((col) => col.items.every((b) => Math.abs(b.pos - a.pos) >= ACC_CLEAR_POSITIONS));
-    if (c === -1) { columns.push({ items: [], width: 0 }); c = columns.length - 1; }
-    columns[c].items.push(a);
-    columns[c].width = Math.max(columns[c].width, a.w);
-    a.col = c;
-  });
-  // Accidentals go left of a ghost note's parenthesis, not between it and the head.
-  const ghostLeft = notes.some((n) => n.ghost) ? Math.min(...hdx, 0) - GHOST_PAREN_DX_SP - GHOST_PAREN_HALF_SP : headLeft;
-  const colRight = [];
-  let right = Math.min(headLeft, ghostLeft) - ACC_HEAD_GAP_SP;
-  columns.forEach((col, c) => {
-    colRight[c] = right;
-    right -= Math.max(ACC_COLUMN_SP, col.width + ACC_COLUMN_GAP_SP);
-  });
-  const accidentals = accs.map((a) => ({ noteIndex: a.i, name: a.name, dx: (colRight[a.col] - a.w) * s }))
+  const accs = accNames.map((name, i) => (name ? { key: i, name, pos: positions[i], w: glyphBox(accidentalGlyph(name)).width } : null))
+    .filter(Boolean);
+  const accidentals = placeAccidentalColumns(accs, accidentalRightSp(notes, hdx, widths))
+    .map((a) => ({ noteIndex: a.key, name: a.name, dx: a.dx * s }))
     .sort((a, b) => a.noteIndex - b.noteIndex);
 
   let leftExt = -headLeft * s;

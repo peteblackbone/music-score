@@ -2233,6 +2233,37 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     normalizeScore(input);
     eq(JSON.stringify(input), before);
   });
+
+  // accidentals shared across voices, in onset order
+  const { resolveVoiceAccidentals, resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
+  const { placeAccidentalColumns, accidentalRightSp } = await imp('src/layout/chord.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const { accidentalGlyph: accidentalGlyphFor } = await imp('src/glyphs.js');
+  const nt = (pitch, duration = 'quarter') => ({ type: 'note', duration, notes: [{ pitch }] });
+  const gr = (pitch) => ({ type: 'grace', duration: '16th', notes: [{ pitch }] });
+  const vAcc = (key, b1, b2) => resolveVoiceAccidentals({ measures: [{ keySignature: key, beats: b1, voice2Beats: b2 }] }, 0)
+    .map((per) => per.map((r) => r.names.join('|')));
+  test('resolveVoiceAccidentals: carry runs across voices by onset, voice 1 first at the same onset', () => {
+    // v1: F#4 at 0, F4 at 1/2; v2: F4 at 0 (after v1's F#4 -> natural), F#4 at 1/4 (after it -> sharp), F4 at 3/4 (after v1's natural -> none)
+    eq(vAcc(0, [nt('F#4', 'half'), nt('F4', 'half')], [nt('F4'), nt('F#4'), nt('C4'), nt('F4')]), [['sharp', 'natural'], ['natural', 'sharp', '', '']]);
+  });
+  test('resolveVoiceAccidentals: graces take their note\'s onset; voice-1 graces and note before voice 2 at that onset', () => {
+    eq(vAcc(0, [nt('C4'), gr('G#4'), nt('G#4')], [nt('E4'), nt('G4')]), [['', 'sharp', ''], ['', 'natural']]);
+    eq(vAcc(0, [nt('C5', 'whole')], [nt('B3', 'half'), gr('Bb3')]), [[''], ['', 'flat']]);
+  });
+  test('resolveVoiceAccidentals: without voice 2 equals resolveMeasureAccidentals', () => {
+    const tr = { measures: [{ keySignature: 2, beats: [nt('F4'), gr('C4'), nt('C#4'), nt('Bb4'), { type: 'rest', duration: 'quarter' }] }] };
+    eq(resolveVoiceAccidentals(tr, 0), [resolveMeasureAccidentals(tr, 0), []]);
+  });
+  test('placeAccidentalColumns: same columns as layoutChord for a cluster; keys kept in input order', () => {
+    const w = glyphBox(accidentalGlyphFor('sharp')).width;
+    const hw = glyphBox(String.fromCodePoint(0xE0A4)).width;
+    const hdx = [0, hw, 0, hw, 0];
+    const items = [0, 1, 2, 3, 4].map((i) => ({ key: `k${i}`, name: 'sharp', pos: i, w }));
+    const out = placeAccidentalColumns(items, accidentalRightSp([{}, {}, {}, {}, {}], hdx, Array(5).fill(hw)));
+    eq(out.map((a) => a.key), ['k0', 'k1', 'k2', 'k3', 'k4']);
+    eq(out.map((a) => +(a.dx * 10).toFixed(3)), [-29.36, -51.36, -62.36, -40.36, -18.36]);
+  });
 }
 
 // ---------- report ----------

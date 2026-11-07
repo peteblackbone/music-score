@@ -11,11 +11,43 @@
  * - an explicit `note.accidental` is always drawn (compatibility) and
  *   becomes the active alteration;
  * - grace notes take part like any other note, in score order: an altered
- *   grace carries into the main notes after it and vice versa.
+ *   grace carries into the main notes after it and vice versa;
+ * - in a two-voice measure both voices share the carry, in onset order
+ *   (voice 1 first at the same onset; graces just before their note).
  *
  * Pure function, no DOM.
  */
 import { parsePitch, createAccidentalState, accidentalNameForAlter, keySignatureAlterations } from '../pitch.js';
+import { durationR } from '../duration.js';
+import { ZERO, add, cmp } from '../rational.js';
+
+/** Names and restates of one beat's notes, advancing the measure's accidental `state`. */
+function resolveBeat(state, keyAlters, el) {
+  const notes = el.notes || [];
+  if (el.type === 'rest') {
+    return { names: notes.map(() => null), restate: notes.map(() => null) };
+  }
+  const names = [];
+  const restate = [];
+  notes.forEach((n) => {
+    if (n.pitch == null) { names.push(null); restate.push(null); return; }
+    const p = parsePitch(n.pitch);
+    if (n.accidental) {
+      names.push(n.accidental); restate.push(n.accidental);
+      state.set(p);
+      return;
+    }
+    const keyName = p.alter !== (keyAlters[p.step] || 0) ? accidentalNameForAlter(p.alter) : null;
+    if (n.tieEnd) {
+      names.push(null); restate.push(keyName);
+      return;
+    }
+    const name = p.alter !== state.current(p) ? accidentalNameForAlter(p.alter) : null;
+    if (name) state.set(p);
+    names.push(name); restate.push(name);
+  });
+  return { names, restate };
+}
 
 /**
  * @param {object} track - normalized track (notes carry their written `pitch`)
@@ -27,30 +59,35 @@ export function resolveMeasureAccidentals(track, mi) {
   const measure = track.measures[mi];
   const state = createAccidentalState(measure.keySignature);
   const keyAlters = keySignatureAlterations(measure.keySignature);
-  return measure.beats.map((el) => {
-    const notes = el.notes || [];
-    if (el.type === 'rest') {
-      return { names: notes.map(() => null), restate: notes.map(() => null) };
-    }
-    const names = [];
-    const restate = [];
-    notes.forEach((n) => {
-      if (n.pitch == null) { names.push(null); restate.push(null); return; }
-      const p = parsePitch(n.pitch);
-      if (n.accidental) {
-        names.push(n.accidental); restate.push(n.accidental);
-        state.set(p);
-        return;
-      }
-      const keyName = p.alter !== (keyAlters[p.step] || 0) ? accidentalNameForAlter(p.alter) : null;
-      if (n.tieEnd) {
-        names.push(null); restate.push(keyName);
-        return;
-      }
-      const name = p.alter !== state.current(p) ? accidentalNameForAlter(p.alter) : null;
-      if (name) state.set(p);
-      names.push(name); restate.push(name);
+  return measure.beats.map((el) => resolveBeat(state, keyAlters, el));
+}
+
+/**
+ * Both voices of a two-voice measure: `[perBeat1, perBeat2]`, each shaped
+ * like resolveMeasureAccidentals' result, resolved in one shared carry.
+ */
+export function resolveVoiceAccidentals(track, mi) {
+  const measure = track.measures[mi];
+  const state = createAccidentalState(measure.keySignature);
+  const keyAlters = keySignatureAlterations(measure.keySignature);
+  // Onset of every beat (a grace takes its next main beat's onset, trailing graces the voice's end).
+  const order = [];
+  [measure.beats, measure.voice2Beats || []].forEach((beats, v) => {
+    let t = ZERO;
+    let pending = [];
+    beats.forEach((el, bi) => {
+      const item = { v, bi, el, t: null };
+      order.push(item);
+      if (el.type === 'grace') { pending.push(item); return; }
+      item.t = t;
+      pending.forEach((g) => { g.t = t; });
+      pending = [];
+      t = add(t, durationR(el));
     });
-    return { names, restate };
+    pending.forEach((g) => { g.t = t; });
   });
+  order.sort((a, b) => cmp(a.t, b.t) || a.v - b.v || a.bi - b.bi);
+  const out = [[], []];
+  order.forEach(({ v, bi, el }) => { out[v][bi] = resolveBeat(state, keyAlters, el); });
+  return out;
 }

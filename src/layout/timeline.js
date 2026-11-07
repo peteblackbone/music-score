@@ -119,36 +119,46 @@ function anchorGraces(pending, anchor) {
  */
 function trackEvents(track, mi, theme) {
   const measure = track.measures[mi];
-  const beams = groupBeams(measure.beats, measure.timeSignature);
+  const accs = track.showStandardNotation ? resolveMeasureAccidentals(track, mi) : null;
+  return voiceEvents(track, measure, measure.beats, accs, null, theme, { tabBand: true, arpeggio: true });
+}
+
+/**
+ * trackEvents for one voice's `beats` of `measure`: `accs` its accidentals
+ * (null without notation), `forcedUp` the forced stem direction (null =
+ * automatic); `tabBand` / `arpeggio` whether TAB rhythm-band extents and
+ * arpeggio room count.
+ */
+function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, arpeggio }) {
+  const beams = groupBeams(beats, measure.timeSignature);
   const positionsOf = (el) => (el.notes || []).map((n) => (n.pitch == null ? 4 : staffPosition(n.pitch, track.clef)));
   // Final stem direction per beat: a beam group's shared direction (its overall range), else the beat's own.
   const groupStem = new Map();
   beams.forEach((grp) => {
     if (grp.length < 2) return;
-    const all = grp.flatMap((i) => positionsOf(measure.beats[i]));
+    const all = grp.flatMap((i) => positionsOf(beats[i]));
     if (!all.length) return;
-    const up = stemUpFor(all);
+    const up = forcedUp ?? stemUpFor(all);
     grp.forEach((i) => groupStem.set(i, up));
   });
-  const accs = track.showStandardNotation ? resolveMeasureAccidentals(track, mi) : null;
   // Beats in a TAB beam group (no flag), only when the TAB staff shows rhythm.
-  const tabBeamed = track.tabRhythm ? new Set(beams.filter((g) => g.length >= 2).flat()) : null;
+  const tabBeamed = tabBand && track.tabRhythm ? new Set(beams.filter((g) => g.length >= 2).flat()) : null;
   const graceW = theme.graceNoteWidthSp * theme.staffLineSpacing;
   // half a grace notehead: the leftmost grace's head pokes this far left of its slot
   const graceHalf = (glyphBox(noteheadForDuration('quarter')).width / 2) * theme.graceNoteScale * theme.staffLineSpacing;
 
-  const mains = measure.beats.filter((b) => b.type !== 'grace');
+  const mains = beats.filter((b) => b.type !== 'grace');
   const wholeMeasureRest = mains.length === 1 && mains[0].type === 'rest'
     && cmp(durationR(mains[0]), barDuration(measure.timeSignature)) >= 0;
 
   let t = ZERO;
   let pending = [];
-  const events = measure.beats.map((el, bi) => {
+  const events = beats.map((el, bi) => {
     if (el.type === 'grace') {
       const accidentals = accs ? accs[bi].names : null;
       const ev = {
         t: null, grace: { anchor: null, k: 0, accDx: 0 }, left: 0, right: 0, ownLeft: 0, chord: null, accidentals,
-        accRoom: graceAccidentalRoom(accidentals, theme, accidentals ? stemUpFor(positionsOf(el)) : true),
+        accRoom: graceAccidentalRoom(accidentals, theme, accidentals ? forcedUp ?? stemUpFor(positionsOf(el)) : true),
       };
       pending.push(ev);
       return ev;
@@ -157,7 +167,7 @@ function trackEvents(track, mi, theme) {
     let leftFirst = 0; let chordFirst = null; let accidentalsFirst = null;
     if (track.showStandardNotation) {
       const positions = positionsOf(el);
-      const stemUp = groupStem.has(bi) ? groupStem.get(bi) : (positions.length ? stemUpFor(positions) : true);
+      const stemUp = groupStem.has(bi) ? groupStem.get(bi) : forcedUp ?? (positions.length ? stemUpFor(positions) : true);
       const beamed = groupStem.has(bi);
       accidentals = accs[bi].names;
       const n = notationExtents(el, positions, stemUp, accidentals, beamed, theme);
@@ -181,7 +191,7 @@ function trackEvents(track, mi, theme) {
       }
     }
     // An arpeggio line sits left of the chord's notation and TAB ink.
-    if (beatArpeggio(el)) {
+    if (arpeggio && beatArpeggio(el)) {
       const room = ARPEGGIO_ROOM_SP * theme.staffLineSpacing;
       const tabIn = track.showTablature ? tabExtents(el, theme).left : 0;
       left = Math.max(left, arpeggioInnerLeft(chord) + room, tabIn + room);

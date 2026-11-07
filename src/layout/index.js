@@ -38,6 +38,39 @@ function closingBarline(track, mi, nextOpening) {
 }
 
 /**
+ * Layout elements of one voice's `beats` from their timeline `events` in
+ * placed column `p` (system-local measure index `li`): onset x, whole-measure
+ * rests centred, graces left of the note they lead into.
+ */
+function placeElements(beats, events, p, li, pad, graceW) {
+  const elements = beats.map((el, bi) => {
+    const ev = events[bi];
+    if (ev.grace) return null; // placed below, once their main note is
+    if (ev.wholeMeasureRest) {
+      return { index: bi, el, x: (p.contentX + p.endX) / 2, width: p.endX - p.contentX, t: ev.t, chord: null, accidentals: null, wholeMeasureRest: true };
+    }
+    return {
+      index: bi, el, x: p.onsetX[ev.onset], width: p.gaps[ev.onset], t: ev.t,
+      chord: li === 0 ? ev.chordFirst : ev.chord,
+      accidentals: li === 0 ? ev.accidentalsFirst : ev.accidentals,
+      wholeMeasureRest: false,
+    };
+  });
+  beats.forEach((el, bi) => {
+    const ev = events[bi];
+    if (!ev.grace) return;
+    const anchorX = ev.grace.anchor === 'end'
+      ? p.endX - pad
+      : elements[ev.grace.anchor].x - events[ev.grace.anchor][li === 0 ? 'ownLeftFirst' : 'ownLeft'];
+    elements[bi] = {
+      index: bi, el, x: anchorX - (ev.grace.k + 1) * graceW - ev.grace.accDx, width: graceW, t: null,
+      chord: null, accidentals: ev.accidentals, wholeMeasureRest: false,
+    };
+  });
+  return elements;
+}
+
+/**
  * Compute the full layout. `containerWidth` is the requested SVG width;
  * the returned `width` only exceeds it when a single measure cannot fit
  * even compressed (`overflow: true`).
@@ -88,30 +121,7 @@ export function computeLayout(score, theme, containerWidth) {
       measures: placed.map((p, li) => {
         const measure = track.measures[p.mi];
         const tev = p.col.tracks[ti];
-        const elements = measure.beats.map((el, bi) => {
-          const ev = tev.events[bi];
-          if (ev.grace) return null; // placed below, once their main note is
-          if (ev.wholeMeasureRest) {
-            return { index: bi, el, x: (p.contentX + p.endX) / 2, width: p.endX - p.contentX, t: ev.t, chord: null, accidentals: null, wholeMeasureRest: true };
-          }
-          return {
-            index: bi, el, x: p.onsetX[ev.onset], width: p.gaps[ev.onset], t: ev.t,
-            chord: li === 0 ? ev.chordFirst : ev.chord,
-            accidentals: li === 0 ? ev.accidentalsFirst : ev.accidentals,
-            wholeMeasureRest: false,
-          };
-        });
-        measure.beats.forEach((el, bi) => {
-          const ev = tev.events[bi];
-          if (!ev.grace) return;
-          const anchorX = ev.grace.anchor === 'end'
-            ? p.endX - pad
-            : elements[ev.grace.anchor].x - tev.events[ev.grace.anchor][li === 0 ? 'ownLeftFirst' : 'ownLeft'];
-          elements[bi] = {
-            index: bi, el, x: anchorX - (ev.grace.k + 1) * graceW - ev.grace.accDx, width: graceW, t: null,
-            chord: null, accidentals: ev.accidentals, wholeMeasureRest: false,
-          };
-        });
+        const elements = placeElements(measure.beats, tev.events, p, li, pad, graceW);
         const next = placed[li + 1];
         const sig = p.opening.sig ? trackSignatureChange(track, p.mi) : null;
         return {
