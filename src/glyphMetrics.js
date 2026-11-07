@@ -83,9 +83,15 @@ export const GLYPH_BOX = {
   articStaccatoBelow: { bBoxNE: [0.336, 0], bBoxSW: [0, -0.336] },
   articTenutoAbove: { bBoxNE: [1.352, 0.164], bBoxSW: [0, 0] },
   articTenutoBelow: { bBoxNE: [1.352, 0], bBoxSW: [0, -0.164] },
-  articStaccatissimoAbove: { bBoxNE: [0.4, 0.8], bBoxSW: [0, 0] },
+  // Staccatissimo and marcato: measured from Bravura.woff2 ink (glyph rasterized on a canvas, 200 px per sp).
+  articStaccatissimoAbove: { bBoxNE: [0.4, 1.18], bBoxSW: [0, 0] },
+  articStaccatissimoBelow: { bBoxNE: [0.4, 0], bBoxSW: [0, -1.18] },
+  articMarcatoAbove: { bBoxNE: [0.94, 1.015], bBoxSW: [0, 0] },
+  articMarcatoBelow: { bBoxNE: [0.94, 0], bBoxSW: [0, -1.015] },
   fermataAbove: { bBoxNE: [2.42, 1.364], bBoxSW: [0, -0.02] },
   fermataBelow: { bBoxNE: [2.42, 0.02], bBoxSW: [0, -1.364] },
+  fermataShortAbove: { bBoxNE: [2.415, 1.365], bBoxSW: [0, 0] }, // measured the same way
+  fermataLongAbove: { bBoxNE: [2.41, 1.335], bBoxSW: [0, -0.005] }, // measured the same way
   // Bowing marks / pick strokes (origin at the glyph's bottom)
   stringsDownBow: { bBoxNE: [1.248, 1.3], bBoxSW: [0, 0] },
   stringsUpBow: { bBoxNE: [1.0, 2.0], bBoxSW: [0, 0] },
