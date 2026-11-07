@@ -1,0 +1,210 @@
+{
+  "example-score-w900": {
+    "model": "8742c4858d17687be916b3e732dd731dddca5e200085f20c5510a951cd614832",
+    "layout": "0ee6fd2e40f96bc7d2e7cd7b5b230fc93d0b90bcdeb6087b863588fc16e88445"
+  },
+  "example-score-w600": {
+    "model": "8742c4858d17687be916b3e732dd731dddca5e200085f20c5510a951cd614832",
+    "layout": "1f03e154e3b5780fa4f8a3dd08907903a1e63ab992f878941054b9583f68cb29"
+  },
+  "example-score-w1400": {
+    "model": "8742c4858d17687be916b3e732dd731dddca5e200085f20c5510a951cd614832",
+    "layout": "4a64ce57e028df72396814de72df027dc95281cdaa9fdbf62588f9713cdfdbc6"
+  },
+  "lead-riff-w900": {
+    "model": "e60e7dee2e3dc8f030cc3b29ed317eeaa61cef479c94dac272f7483d04f9f4a0",
+    "layout": "5453ba41db9c64fd62f7ae4fea3c3bebe63c7eef70f096b081577bb729687430"
+  },
+  "lead-riff-w600": {
+    "model": "e60e7dee2e3dc8f030cc3b29ed317eeaa61cef479c94dac272f7483d04f9f4a0",
+    "layout": "298073c87c7725693d335721cc21ab5bdac1146e378a7d736123ebf34f9acd4b"
+  },
+  "lead-riff-w1400": {
+    "model": "e60e7dee2e3dc8f030cc3b29ed317eeaa61cef479c94dac272f7483d04f9f4a0",
+    "layout": "dafd6c2a98c11e1d8cc43c8c54fd9d30ac7479ca310bd7913f38380af7df0d43"
+  },
+  "lead-solo-f-w900": {
+    "model": "906b70c2b9009f52e355a159560ee3ca04dab5d826ff8ac13cab20bb2f4abad2",
+    "layout": "dea6ff37e3b04a533ad4d2d3ace897ba5e937657023a8bb40a0fa34342ed0c2e"
+  },
+  "lead-solo-f-w600": {
+    "model": "906b70c2b9009f52e355a159560ee3ca04dab5d826ff8ac13cab20bb2f4abad2",
+    "layout": "8b26f4fc33f9fba891bba6e95d3af195a46f46833d23dd4c989cbdc4faa4a6e3"
+  },
+  "lead-solo-f-w1400": {
+    "model": "906b70c2b9009f52e355a159560ee3ca04dab5d826ff8ac13cab20bb2f4abad2",
+    "layout": "128fa4a74ab4dc7c2d39de70ee8610924af6f1de36bb653f45d9884d4134b76b"
+  },
+  "articulations-demo-w900": {
+    "model": "ee1d785ae33a745dd0b88bac4fb99835c4ba64e3f00f0278843226cfaeb51210",
+    "layout": "a0c9790190ae6229234cd5ace981c3e5e1a1b1ebb512180f7bb846828414e347"
+  },
+  "articulations-demo-w600": {
+    "model": "ee1d785ae33a745dd0b88bac4fb99835c4ba64e3f00f0278843226cfaeb51210",
+    "layout": "2e4cc17d7604ac67effdadca79af11bb59d48da2d8115b7c85e1664a0f6fb915"
+  },
+  "char-tab-only-w900": {
+    "model": "5a4e9d513c866b67c834bd261fc513f9b2d021fa34948e556d47064c4623c203",
+    "layout": "dcd5825e933f039290ca537e2adf135c5578d3adad938a5ef61dd7e4f78c4121"
+  },
+  "char-barlines-w900": {
+    "model": "7182a2f39dabe8ad28bf6b1e8d194568652802c7b44bd5b56c211adf9f61e140",
+    "layout": "896c9b2e58d9db5c6143fb8074314580cf3480fcebc65b2a6d248aabd7c4413b"
+  },
+  "char-key-time-changes-w900": {
+    "model": "175aa7c596d0b3bbf64d9c1bb9c4c944326e3f7fa4024c2199583aa93b73b177",
+    "layout": "15bfc0b24f5429c67a5b6f1b87123b4ebd448e3fb9976c60844e3bcbf9c7acaf"
+  },
+  "char-six-eight-w900": {
+    "model": "5eadeacab0b488b338aaa09fdf13fd9ff5963d7efa26f6a29fa14729ba15a6b1",
+    "layout": "eb9a085bd140c828e90c34e890ba779d34861550666b15470e0b828d15c2d6cb"
+  },
+  "char-grace-ghost-mute-w900": {
+    "model": "e67ac9eaf4ed4dd28ecbc2d9ddfa5473d69d0af15c06d379927e15d6c93fe80f",
+    "layout": "a3e567877ed3068bc87ef8c8bfa304e4bace7d8799a4dbe00c2f8903d5dd4e1f"
+  },
+  "char-tie-slur-break-w600": {
+    "model": "34c6d7c467529a70fdd3b08be9226d51d8020536127cf466f19666f1fe26c326",
+    "layout": "45fb65fe75cff1c4fb50757cb993205bd7771f248bda8737e215b43f86ed085e"
+  },
+  "char-three-tracks-w900": {
+    "model": "25ebdc9910d3c89e2195533f872d0239a927efcb69d1d0bc59cba491d756d889",
+    "layout": "b44191278e72ad0a03c29b8c4f0bea2c2a469316db2c876973aade5bb00b3f41"
+  },
+  "char-theme-spacing12-w900": {
+    "model": "f9d4e3d842829c7665d4c2f8acc442875c8dc28a767292c2612d963fc0a1d639",
+    "layout": "c823b7b08de4bacf7465261b4b498a395be33f5a63c9ea138b98964ff72b4715"
+  },
+  "char-dynamic-rfz-w900": {
+    "model": "a4d23ffcd5dc7b6e4206d576e8de01b78d1e564c5f5cafff6b6fdfc43cd35860",
+    "layout": "b1d4d523ea74ec7eca2b04bad9d74102c156747a0d1bc3ec4e7551e3080cfb48"
+  },
+  "char-narrow-300-w300": {
+    "model": "1eb5c773efbb12491837a19dd7ae098a9574bc92ba5a35341bcd629a6a834be8",
+    "layout": "a6733b88d7ba9d9f0eca28934fa0514c8b094f43482330470131487ecd14b0b2"
+  },
+  "char-bass-tab-4string-w900": {
+    "model": "9f2534f8f3cffb18e1596e57af6cb9b9403f5d8d09ebf70de183ec6c88674080",
+    "layout": "bd50560bc3b0dcd3abb69113cfa5c4f4518a9e98c31f05ff86e929a3564b05f4"
+  },
+  "char-bends-w900": {
+    "model": "37a3ed0ec2c215f1ff44cb7a44a5ce1361395ab0afbef736ed2d5f4e10eb7b4b",
+    "layout": "d0590f72202eb7d6601c93bd7851f850d848790a02b859a71be26cb686cd2c5a"
+  },
+  "char-technique-lane-w600": {
+    "model": "f6f95b6fe45d6f5289f382fcc6c71bcd48f603ddb0d8a99fbddb30b29c3a6ce7",
+    "layout": "76e6980dc6e220fadc07a2f58be49549be3ebe4672dd1d513b27bdb82ae414f2"
+  },
+  "char-harmonics-w900": {
+    "model": "1014a6822dbf5c62a3608386580bcfc37cbfce39562cf12601f0f60ebda76206",
+    "layout": "986474596cb29583adbdc65c4a15e7fdc74a0755033e91c1639a2949cbfda5cd"
+  },
+  "char-harmonics-break-w600": {
+    "model": "7b20e9141d955ba6685bf4b3ce5f6ec53a6a8ebf69adfc7ba52a144c79d3937a",
+    "layout": "5e58218efa1dd0627afc6de4de8700e40859866967f64acba39a76ec19aa386b"
+  },
+  "char-tab-marks-w900": {
+    "model": "a7883819a6763f5188cd83cb12911ab59368d8e50e7d4684fb2429b62ae676b5",
+    "layout": "2b0b9a39cbd246a0eb2b2cb5f1bc302bf2ca81dcb9cf5366b1445c27b3fd01e8"
+  },
+  "char-directions-w900": {
+    "model": "deb6c483bd59cd8cc43b51cb8eb81266685f5971c2bff716206e82e8825c1caf",
+    "layout": "541d51d0c011fc1a17b3ef41ec1d9edd523c9170e2f74dc63b82323b73a6b649"
+  },
+  "char-directions-break-w600": {
+    "model": "f2f52aab547cc981990fc7add96e0ffd3b5a361402f9d629530d5da6315192c9",
+    "layout": "82c80d91d5d5167213584f0e460bf2139a7b56b6ea27735681319fbe3cb2cf6e"
+  },
+  "char-tab-rhythm-w900": {
+    "model": "9b40c8c2c8ba698a1dc3bc564a1ad34c65ddafe50a2f2b84d83959e4f752014f",
+    "layout": "83db7671be53352f070bbf76b0f817005f038c6246da70c7c620ceda7dd6a1ee"
+  },
+  "char-tab-rhythm-break-w600": {
+    "model": "e67d696ad7a50c0b59f65b9d02b37de468c9223b7b9e6d0b88a9bb9ddf744ce8",
+    "layout": "0d6319de0cbbae499877b68d81d5557b0b561a8c0daa1acd8eb69450f0a0be6d"
+  },
+  "char-tuplet-spans-w900": {
+    "model": "f5753c58129b1458ad9ad19df86b78ae6f7703307667b8768d1aa381bd0d3939",
+    "layout": "a10ba2862c03de8002f69c63d9d6d567c61fe3ffc571e6c381899ab115b26535"
+  },
+  "char-navigation-w900": {
+    "model": "dac772b8ba9a03af07eee30b226ba0aaacabe713dc97ecae0240f93bbf46dd8e",
+    "layout": "cfd7eb8b0063920b747139f0e33bbd44771f42f4af77b1cf24e4d8ea7e8d9e4b"
+  },
+  "char-navigation-break-w600": {
+    "model": "9730a64117277620a1828e8a3fcfbf61415721bbb454b215d188e300408eab72",
+    "layout": "add83d60f1a1e8215d75acb255ca553da363cae2dace8d8a04b449c30daa354d"
+  },
+  "char-navigation-tab-only-w900": {
+    "model": "2cd0fa5d04a9fdaeaff198426da9d0256510dc755e640ee0379b663685d454c9",
+    "layout": "8cf1abbdea3e61893c8d799294fcd102fb73665718261a02baea0c56c9ca7e2a"
+  },
+  "char-chord-diagrams-w900": {
+    "model": "b045bd0767ea7170e1ba591977a17b4024b9622af958828803d4cac80102ac7b",
+    "layout": "6a6aafefb9e99ca49b780ce35b79b05a64eac103113a3f41bfd83cae3d956d94"
+  },
+  "char-chord-diagrams-tab-w900": {
+    "model": "3afe13b46e6b6e3fc2b30e578a7eef9eac88e7e6c8d46dbb4e23d3d5161e4385",
+    "layout": "0b9ac2c74db239d1dcc4ec63f4125bb195169f054192f43b10a2e085d1fb6378"
+  },
+  "char-chord-diagrams-break-w600": {
+    "model": "51b81859c29770d17965342dbd62ead17a5f533956fec55f0f2467c440cf6497",
+    "layout": "a148aab208687a23d1a3f9c1214eb9dbe85e609d5ead285f14b6b5fd19591145"
+  },
+  "char-techniques-11-w900": {
+    "model": "1b57ff63993ca7d4b1fc9f2326395bdb3492c5bed7aaed8f5d156dc82a87cf12",
+    "layout": "255875ba18e26af9a6269bbcdd8cb1575a503b1e81afc37fe22a05074f58b3f0"
+  },
+  "char-techniques-11-break-w600": {
+    "model": "8a4c85c1633b68b79f5efd28548e2a9e24d020cf1d98d7d6059ce68b2afe0f01",
+    "layout": "f3e416594dfdabbcbb64086c32e64de37cc1638fc59f30ce59e91a922ab62629"
+  },
+  "char-strum-arpeggio-w900": {
+    "model": "b4eb2b785588171519b454d9a206b6895cdf7cf7d790e94e29f5bcf2cd090a31",
+    "layout": "bb64c20f6bc986f615cfcec837b19bb48ba339a733bea10e1636e492396571a0"
+  },
+  "char-strum-arpeggio-break-w600": {
+    "model": "25b1c2c4490da05dbf453963c65aa0f55204643a0ccd85bc920141142e89cd15",
+    "layout": "9f5a1d0b82c29d9b027c0038068904acb78f94efdb6a8e94acce5d7e917a64a7"
+  },
+  "char-legato-slides-w900": {
+    "model": "f6882f6c268b3d14cd083cd91cb0bd596cf10efc7baef2df4108d0c43375ced4",
+    "layout": "8b08d8a1b005cc85b829c002ad959769212ef49413b0c43e37d8c3a031a9b298"
+  },
+  "char-legato-slides-break-w600": {
+    "model": "1ab0093a32f36123a3cdb75a332e5ecf1595e130cbcb7cd8db998eb39ef903a4",
+    "layout": "148658c08a6ae413e6e96b4c0a81a58dbdb269b0c03b7083fa360b8d7df54f6a"
+  },
+  "char-spelling-keys-w900": {
+    "model": "556f2d849dc7a57033236534ba886baa0dda6d7743de9e7ac91ab191a127e351",
+    "layout": "2896abdd7e81d740c6e2e263cf912f85b81e4777fa7ad505909f160f53c90321"
+  },
+  "char-grace-accidentals-w900": {
+    "model": "70e1ced9adfb091f85a547757a32a30dbdc2b5626ca38cd4a7fc77d70cc489bf",
+    "layout": "a7b6468c4946088ecc25aa0f3f932b6c6aee51556e06213dcdd12238b7d77501"
+  },
+  "char-release-adjacent-w900": {
+    "model": "ed38bcb20995a3fabef3a4b45e8e4da1c82391e657bda6bb580658107631fad5",
+    "layout": "ec499972028b97e3cf91ded05a788fb2671f6a11c7656ea0e34a3be222aee7af"
+  },
+  "char-release-adjacent-w600": {
+    "model": "ed38bcb20995a3fabef3a4b45e8e4da1c82391e657bda6bb580658107631fad5",
+    "layout": "ef0d2e74fc23fcccd4eb1fb99fbc93c557d076e5ea0b729ee19a88662e12f7c1"
+  },
+  "char-tab-only-rhythm-off-w900": {
+    "model": "cf58927a683bfdbceefc14c9e1e10def451ec39206cac9b491bce91737a74595",
+    "layout": "dcd5825e933f039290ca537e2adf135c5578d3adad938a5ef61dd7e4f78c4121"
+  },
+  "char-harmonics-rhythm-off-w900": {
+    "model": "55ddc21db2a9a27fa84e3b55ff91becb84af21dc326cfd129f5fae8e32e6b408",
+    "layout": "986474596cb29583adbdc65c4a15e7fdc74a0755033e91c1639a2949cbfda5cd"
+  },
+  "char-tab-marks-rhythm-off-w900": {
+    "model": "dcde0a85a41dce533fa02bdf882394cab60f876d7fbd78740c6810ffe5eb7956",
+    "layout": "2b0b9a39cbd246a0eb2b2cb5f1bc302bf2ca81dcb9cf5366b1445c27b3fd01e8"
+  },
+  "char-directions-rhythm-off-w900": {
+    "model": "96ae80322b05d365a4ee133a11878b22ef0b75253814d3e2844c0b15281b4793",
+    "layout": "541d51d0c011fc1a17b3ef41ec1d9edd523c9170e2f74dc63b82323b73a6b649"
+  }
+}

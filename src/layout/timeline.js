@@ -20,18 +20,23 @@
  *   (trailing graces: the tail, which with accidentals also keeps them clear
  *   of the last onset);
  * - a whole-measure rest (the only event is one rest ≥ the bar) or an empty
- *   measure creates no onset; it is centred in the measure later.
+ *   measure creates no onset; it is centred in the measure later; a hidden
+ *   rest takes time but creates no onset and takes no room;
+ * - a two-voice measure (`voice2Beats`) times each voice separately (voice 1
+ *   stems up, voice 2 down) and combines them (layout/voices.js); equal
+ *   times across voices share an onset like equal times across tracks.
  *
  * All widths are px. Pure functions, no DOM.
  */
 import { R, ZERO, add, sub, cmp, key, toNumber, max as rmax } from '../rational.js';
-import { durationR } from '../duration.js';
+import { durationR, isHiddenRest } from '../duration.js';
 import { staffPosition } from '../pitch.js';
 import { noteheadForDuration, restForDuration, flagForDuration } from '../glyphs.js';
 import { glyphBox } from '../glyphMetrics.js';
 import { groupBeams } from './beams.js';
 import { layoutChord, arpeggioInnerLeft, graceAccidentalRoom, DOT_GAP_SP, DOT_STEP_SP, DOT_RADIUS_SP, ARPEGGIO_ROOM_SP } from './chord.js';
-import { resolveMeasureAccidentals } from './accidentals.js';
+import { resolveMeasureAccidentals, resolveVoiceAccidentals } from './accidentals.js';
+import { combineVoices } from './voices.js';
 import { fretLabel, fretLabelWidth } from '../textMetrics.js';
 import { layoutHeadGlyph } from '../harmonics.js';
 import { tabRhythmExtents } from './tabRhythm.js';
@@ -115,49 +120,80 @@ function anchorGraces(pending, anchor) {
  * trailing graces; `k` = 0 for the grace nearest it; `accDx` = the
  * accidental room of the graces nearer it, `accRoom` its own room; grace events only). The `…First`
  * variants apply when the measure opens a system: tied continuations at
- * the first onset restate their accidental (ui.md §7).
+ * the first onset restate their accidental (ui.md §7). Two-voice measures add
+ * `events2` (voice 2, same shape; main events carry `dx`, rests `restPos` /
+ * `restLedger`; see layout/voices.js); hidden rests are `{ t, hidden: true, … }`.
  */
 function trackEvents(track, mi, theme) {
   const measure = track.measures[mi];
-  const beams = groupBeams(measure.beats, measure.timeSignature);
+  if (!measure.voice2Beats) {
+    const accs = track.showStandardNotation ? resolveMeasureAccidentals(track, mi) : null;
+    return voiceEvents(track, measure, measure.beats, accs, null, theme, { tabBand: true, arpeggio: true });
+  }
+  // Two voices: voice 2 (`events2`) has no TAB rhythm band and no arpeggio.
+  const [a1, a2] = track.showStandardNotation ? resolveVoiceAccidentals(track, mi) : [null, null];
+  const r1 = voiceEvents(track, measure, measure.beats, a1, true, theme, { tabBand: true, arpeggio: true });
+  const r2 = voiceEvents(track, measure, measure.voice2Beats, a2, false, theme, { tabBand: false, arpeggio: false });
+  combineVoices(r1.events, r2.events, measure, theme);
+  return {
+    events: r1.events, events2: r2.events, end: rmax(r1.end, r2.end), wholeMeasureRest: r1.wholeMeasureRest, empty: false,
+    trailingGraces: Math.max(r1.trailingGraces, r2.trailingGraces), trailingAccRoom: Math.max(r1.trailingAccRoom, r2.trailingAccRoom),
+  };
+}
+
+/**
+ * trackEvents for one voice's `beats` of `measure`: `accs` its accidentals
+ * (null without notation), `forcedUp` the forced stem direction (null =
+ * automatic); `tabBand` / `arpeggio` whether TAB rhythm-band extents and
+ * arpeggio room count.
+ */
+function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, arpeggio }) {
+  const beams = groupBeams(beats, measure.timeSignature);
   const positionsOf = (el) => (el.notes || []).map((n) => (n.pitch == null ? 4 : staffPosition(n.pitch, track.clef)));
   // Final stem direction per beat: a beam group's shared direction (its overall range), else the beat's own.
   const groupStem = new Map();
   beams.forEach((grp) => {
     if (grp.length < 2) return;
-    const all = grp.flatMap((i) => positionsOf(measure.beats[i]));
+    const all = grp.flatMap((i) => positionsOf(beats[i]));
     if (!all.length) return;
-    const up = stemUpFor(all);
+    const up = forcedUp ?? stemUpFor(all);
     grp.forEach((i) => groupStem.set(i, up));
   });
-  const accs = track.showStandardNotation ? resolveMeasureAccidentals(track, mi) : null;
   // Beats in a TAB beam group (no flag), only when the TAB staff shows rhythm.
-  const tabBeamed = track.tabRhythm ? new Set(beams.filter((g) => g.length >= 2).flat()) : null;
+  const tabBeamed = tabBand && track.tabRhythm ? new Set(beams.filter((g) => g.length >= 2).flat()) : null;
   const graceW = theme.graceNoteWidthSp * theme.staffLineSpacing;
   // half a grace notehead: the leftmost grace's head pokes this far left of its slot
   const graceHalf = (glyphBox(noteheadForDuration('quarter')).width / 2) * theme.graceNoteScale * theme.staffLineSpacing;
 
-  const mains = measure.beats.filter((b) => b.type !== 'grace');
+  const mains = beats.filter((b) => b.type !== 'grace');
   const wholeMeasureRest = mains.length === 1 && mains[0].type === 'rest'
     && cmp(durationR(mains[0]), barDuration(measure.timeSignature)) >= 0;
 
   let t = ZERO;
   let pending = [];
-  const events = measure.beats.map((el, bi) => {
+  const events = beats.map((el, bi) => {
     if (el.type === 'grace') {
       const accidentals = accs ? accs[bi].names : null;
       const ev = {
         t: null, grace: { anchor: null, k: 0, accDx: 0 }, left: 0, right: 0, ownLeft: 0, chord: null, accidentals,
-        accRoom: graceAccidentalRoom(accidentals, theme, accidentals ? stemUpFor(positionsOf(el)) : true),
+        accRoom: graceAccidentalRoom(accidentals, theme, accidentals ? forcedUp ?? stemUpFor(positionsOf(el)) : true),
       };
       pending.push(ev);
+      return ev;
+    }
+    if (isHiddenRest(el)) {
+      const ev = {
+        t, grace: null, hidden: true, left: 0, right: 0, ownLeft: 0, chord: null, accidentals: null,
+        leftFirst: 0, ownLeftFirst: 0, chordFirst: null, accidentalsFirst: null, wholeMeasureRest: false,
+      };
+      t = add(t, durationR(el));
       return ev;
     }
     let left = 0; let right = 0; let chord = null; let accidentals = null;
     let leftFirst = 0; let chordFirst = null; let accidentalsFirst = null;
     if (track.showStandardNotation) {
       const positions = positionsOf(el);
-      const stemUp = groupStem.has(bi) ? groupStem.get(bi) : (positions.length ? stemUpFor(positions) : true);
+      const stemUp = groupStem.has(bi) ? groupStem.get(bi) : forcedUp ?? (positions.length ? stemUpFor(positions) : true);
       const beamed = groupStem.has(bi);
       accidentals = accs[bi].names;
       const n = notationExtents(el, positions, stemUp, accidentals, beamed, theme);
@@ -181,7 +217,7 @@ function trackEvents(track, mi, theme) {
       }
     }
     // An arpeggio line sits left of the chord's notation and TAB ink.
-    if (beatArpeggio(el)) {
+    if (arpeggio && beatArpeggio(el)) {
       const room = ARPEGGIO_ROOM_SP * theme.staffLineSpacing;
       const tabIn = track.showTablature ? tabExtents(el, theme).left : 0;
       left = Math.max(left, arpeggioInnerLeft(chord) + room, tabIn + room);
@@ -218,13 +254,14 @@ export function buildColumn(mi, score, theme) {
   const graceW = theme.graceNoteWidthSp * s;
   const tracks = score.tracks.map((track) => trackEvents(track, mi, theme));
 
-  // Merge onsets across tracks (whole-measure rests and graces create none).
+  // Merge onsets across tracks and voices (whole-measure rests, hidden rests and graces create none).
   const byKey = new Map();
   let end = ZERO;
+  const allEvents = (tr) => (tr.events2 ? [...tr.events, ...tr.events2] : tr.events);
   tracks.forEach((tr) => {
     end = rmax(end, tr.end);
-    tr.events.forEach((ev) => {
-      if (ev.grace || ev.wholeMeasureRest) return;
+    allEvents(tr).forEach((ev) => {
+      if (ev.grace || ev.wholeMeasureRest || ev.hidden) return;
       const k = key(ev.t);
       const o = byKey.get(k) || { t: ev.t, leftExt: 0, leftExtFirst: 0, rightExt: 0 };
       o.leftExt = Math.max(o.leftExt, ev.left);
@@ -235,8 +272,8 @@ export function buildColumn(mi, score, theme) {
   });
   const onsets = [...byKey.values()].sort((a, b) => cmp(a.t, b.t));
   const index = new Map(onsets.map((o, i) => [key(o.t), i]));
-  tracks.forEach((tr) => tr.events.forEach((ev) => {
-    ev.onset = ev.grace || ev.wholeMeasureRest ? null : index.get(key(ev.t));
+  tracks.forEach((tr) => allEvents(tr).forEach((ev) => {
+    ev.onset = ev.grace || ev.wholeMeasureRest || ev.hidden ? null : index.get(key(ev.t));
   }));
   const trailing = Math.max(0, ...tracks.map((tr) => tr.trailingGraces * graceW + tr.trailingAccRoom));
   const duration = rmax(end, barDuration(score.tracks[0]?.measures[mi].timeSignature || { beats: 4, beatType: 4 }));

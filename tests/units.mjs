@@ -2034,6 +2034,554 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- pre-1.4 characterization (C0): pins taken from the code before two-voice measures ----------
+{
+  const { createHash } = await import('node:crypto');
+  // the 52 pre-1.4 cases (the 1.4.0 two-voice fixtures char-voices-* came later)
+  const isVoices = (id) => id.startsWith('char-voices-');
+  const cases = (await import('./cases.mjs')).cases.filter((c) => !isVoices(c.id));
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
+  const { flattenRuns } = await imp('src/draw/passes/common.js');
+  const theme = resolveTheme();
+  const sha = (s) => createHash('sha256').update(s).digest('hex');
+
+  // Model guard: normalizeScore and computeLayout output of every snapshot case, recorded once from
+  // the pre-1.4 code (tests/fixtures/pre-1.4-model-hashes.json). Never re-record.
+  const model = JSON.parse(fs.readFileSync(path.join(root0, 'tests/fixtures/pre-1.4-model-hashes.json'), 'utf8'));
+  test('pre-1.4 model hashes: fixture covers exactly the 52 snapshot cases', () => {
+    eq(cases.length, 52);
+    eq(Object.keys(model), cases.map((c) => c.id));
+  });
+  test('pre-1.4 model hashes: normalizeScore and computeLayout JSON are unchanged for every snapshot case', () => {
+    const bad = [];
+    for (const c of cases) {
+      const norm = normalizeScore(JSON.parse(JSON.stringify(c.score)));
+      const nh = sha(JSON.stringify(norm));
+      const lh = sha(JSON.stringify(computeLayout(norm, resolveTheme(c.options?.theme), c.width)));
+      if (nh !== model[c.id].model) bad.push(`${c.id} normalize`);
+      if (lh !== model[c.id].layout) bad.push(`${c.id} layout`);
+    }
+    eq(bad, []);
+  });
+  test('no pre-1.4 snapshot SVG contains "voice-2"; every two-voice fixture snapshot does', () => {
+    const dir = path.join(root0, 'tests/snapshots');
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.svg'));
+    const old = files.filter((f) => !isVoices(f));
+    eq(old.length, 52);
+    eq(old.filter((f) => fs.readFileSync(path.join(dir, f), 'utf8').includes('voice-2')), []);
+    eq(files.filter((f) => isVoices(f) && !fs.readFileSync(path.join(dir, f), 'utf8').includes('voice-2')), []);
+  });
+
+  // resolveMeasureAccidentals
+  const pn = (pitch, x = {}) => ({ pitch, ...x });
+  const nb = (pitches, duration = 'quarter') => ({ type: 'note', duration, notes: pitches.map((p) => (typeof p === 'string' ? pn(p) : p)) });
+  const accOf = (key, beats) => resolveMeasureAccidentals({ measures: [{ keySignature: key, beats }] }, 0);
+  const names = (key, beats) => accOf(key, beats).map((r) => r.names.join('|'));
+  const restate = (key, beats) => accOf(key, beats).map((r) => r.restate.join('|'));
+  test('resolveMeasureAccidentals: accidental carries, cancelling natural on the same step+octave, other octave is fresh', () => {
+    eq(accOf(0, [nb(['F#4']), nb(['F4']), nb(['F4']), nb(['F#5'])]), [
+      { names: ['sharp'], restate: ['sharp'] }, { names: ['natural'], restate: ['natural'] },
+      { names: [null], restate: [null] }, { names: ['sharp'], restate: ['sharp'] }]);
+  });
+  test('resolveMeasureAccidentals: tieEnd draws nothing, changes nothing, restates its key-relative accidental', () => {
+    eq(accOf(0, [nb(['F#4']), nb([pn('F#4', { tieEnd: true })]), nb([pn('Bb4', { tieEnd: true })]), nb(['Bb4'])]), [
+      { names: ['sharp'], restate: ['sharp'] }, { names: [null], restate: ['sharp'] },
+      { names: [null], restate: ['flat'] }, { names: ['flat'], restate: ['flat'] }]);
+  });
+  test('resolveMeasureAccidentals: explicit accidental is always drawn and becomes the active alteration', () => {
+    eq(names(0, [nb([pn('C4', { accidental: 'natural' })]), nb([pn('C4', { accidental: 'natural' })]), nb(['C4'])]), ['natural', 'natural', '']);
+  });
+  test('resolveMeasureAccidentals: grace and main notes carry into each other in score order', () => {
+    eq(names(0, [{ type: 'grace', duration: '16th', notes: [pn('G#4')] }, nb(['G#4']), nb(['G4']), { type: 'grace', duration: '16th', notes: [pn('G4')] }, nb(['G4'])]),
+      ['sharp', '', 'natural', '', '']);
+  });
+  test('resolveMeasureAccidentals: key -2 versus +3 and rests / chords', () => {
+    eq(names(-2, [nb(['Bb4']), nb(['B4']), nb(['Eb4']), nb(['E4']), nb(['A4']), nb(['Ab4'])]), ['', 'natural', '', 'natural', '', 'flat']);
+    eq(names(3, [nb(['F#4']), nb(['F4']), nb(['C#5']), nb(['G#4']), nb(['D4']), nb(['G4'])]), ['', 'natural', '', '', '', 'natural']);
+    eq(restate(0, [{ type: 'rest', duration: 'quarter' }, nb(['C4', 'C#4'])]), ['', '|sharp']);
+  });
+
+  // layoutChord accidental dx (px at the default 10 px staff space)
+  const cbase = { headGlyph: String.fromCodePoint(0xE0A4), duration: 'quarter' };
+  const accDx = (c) => c.accidentals.map((a) => +a.dx.toFixed(3));
+  test('layoutChord: accidental dx for a 5-accidental cluster (seconds) and a spread chord', () => {
+    const cl = layoutChord([{}, {}, {}, {}, {}], [0, 1, 2, 3, 4], true, Array(5).fill('sharp'), cbase, theme);
+    eq(accDx(cl), [-29.36, -51.36, -62.36, -40.36, -18.36]);
+    eq(cl.heads.map((h) => +h.dx.toFixed(3)), [0, 11.8, 0, 11.8, 0]);
+    eq([+cl.leftExt.toFixed(3), +cl.rightExt.toFixed(3)], [62.36, 17.7]);
+    const sp = layoutChord([{}, {}, {}, {}, {}], [0, 2, 4, 6, 8], true, ['sharp', 'flat', 'natural', 'sharp', 'flat'], cbase, theme);
+    eq(accDx(sp), [-18.36, -39.44, -48.12, -29.36, -17.44]);
+  });
+  test('layoutChord: stem-down chord with a second keeps its accidental left of the displaced head', () => {
+    const c = layoutChord([{}, {}, {}], [3, 4, 8], false, [null, 'sharp', null], cbase, theme);
+    eq(accDx(c), [-30.16]);
+    eq(c.heads.map((h) => +h.dx.toFixed(3)), [-11.8, 0, 0]);
+    eq(+c.stemDx.toFixed(3), -5.9);
+  });
+  test('layoutChord: a ghost note pushes accidentals left of its parenthesis', () => {
+    const c = layoutChord([{ ghost: true }, {}], [2, 5], true, ['flat', 'sharp'], cbase, theme);
+    eq(accDx(c), [-35.74, -25.66]);
+    eq([+c.leftExt.toFixed(3), +c.rightExt.toFixed(3)], [35.74, 13.2]);
+  });
+
+  // stems, element index and x per onset, via computeLayout
+  const lay = (measures) => computeLayout(normalizeScore({ tracks: [{ name: 'T', showStandardNotation: true, measures }] }), theme, 900);
+  const rows = (m) => m.elements.map((e) => [e.index, +e.x.toFixed(2), e.t ? `${e.t.n}/${e.t.d}` : null, e.chord ? e.chord.stemUp : null]);
+  test('computeLayout stems: beam groups, single notes above / below the middle line, whole note', () => {
+    const l = lay([
+      { beats: [nb(['A4'], '8th'), nb(['C5'], '8th'), nb(['E5'], '8th'), nb(['G5'], '8th'), nb(['C4'], '8th'), nb(['E4'], '8th'), nb(['F4'], '8th'), nb(['F5'], '8th')] },
+      { beats: [nb(['C4']), nb(['B4']), nb(['C6']), nb(['D4', 'F5'])] },
+      { beats: [nb(['G4'], 'whole')] },
+      { beats: [nb(['C5'], 'half'), nb(['C4'], 'half')] },
+    ]);
+    eq(l.systems.length, 1);
+    const ms = l.systems[0].tracks[0].measures;
+    eq(ms[0].beamGroups, [[0, 1], [2, 3], [4, 5], [6, 7]]);
+    eq(ms[0].elements.map((e) => e.chord.stemUp), [false, false, false, false, true, true, false, false]);
+    eq(ms[1].elements.map((e) => e.chord.stemUp), [true, false, false, true]);
+    eq(ms[2].elements.map((e) => e.chord.stemUp), [true]);
+    eq(ms[3].elements.map((e) => e.chord.stemUp), [false, true]);
+  });
+  test('computeLayout: element index equals beat index and x follows onsets (rests, graces, chords, second measure)', () => {
+    const l = lay([
+      { beats: [nb(['C4']), { type: 'rest', duration: 'quarter' }, { type: 'grace', duration: '16th', notes: [pn('D5')] }, nb(['E4', 'G4']), nb(['C5'])] },
+      { beats: [nb(['G4'], 'whole')] },
+    ]);
+    const ms = l.systems[0].tracks[0].measures;
+    eq(rows(ms[0]), [[0, 133.9, '0/1', true], [1, 168.9, '1/4', null], [2, 186, null, null], [3, 203.9, '1/2', true], [4, 238.9, '3/4', false]]);
+    eq(rows(ms[1]), [[0, 289.84, '0/1', true]]);
+    eq(ms.map((m) => [m.x, m.contentX, m.endX]), [[115.5, 115.5, 268.9], [268.9, 268.9, 354.84]]);
+  });
+
+  // flattenRuns order on a 2-system fake
+  test("flattenRuns: visits only the track's runs, system by system, measure by measure, element by element", () => {
+    const els = (p, n) => Array.from({ length: n }, (_, i) => ({ id: `${p}${i}` }));
+    const runs = [
+      { track: 'A', measures: [{ elements: els('s1m1e', 2) }, { elements: els('s1m2e', 1) }] },
+      { track: 'B', measures: [{ elements: els('bs1m1e', 1) }] },
+      { track: 'A', measures: [{ elements: [{ id: 'grace' }, { id: 'main' }] }, { elements: [] }, { elements: els('s2m3e', 1) }] },
+    ];
+    const seen = [];
+    flattenRuns(runs, 'A', (le, run) => seen.push([le.id, runs.indexOf(run)]));
+    eq(seen, [['s1m1e0', 0], ['s1m1e1', 0], ['s1m2e0', 0], ['grace', 2], ['main', 2], ['s2m3e0', 2]]);
+  });
+
+  // groupBeams / tupletGroups: leading rest and grace before a beamed pair
+  test('groupBeams / tupletGroups: a leading 8th rest and a grace before 8ths pair', () => {
+    const r8 = { type: 'rest', duration: '8th' };
+    const g16 = { type: 'grace', duration: '16th', notes: [pn('D4')] };
+    const e8 = nb(['E4'], '8th');
+    const qn = nb(['E4']);
+    const bs = [r8, g16, e8, e8, qn, qn, qn];
+    eq(groupBeams(bs, T44), [[2], [3]]);
+    eq(tupletGroups(bs, T44), []);
+    const t3 = { ...e8, tuplet: { actual: 3, normal: 2 } };
+    const bt = [r8, g16, t3, t3, t3, qn, qn, qn];
+    eq(groupBeams(bt, T44), [[2, 3], [4]]);
+    eq(tupletGroups(bt, T44), [{ indices: [2, 3, 4], count: 3 }]);
+  });
+}
+
+// ---------- two-voice measures (1.4.0): normalize ----------
+{
+  const { deepStrictEqual } = await import('node:assert');
+  const { isHiddenRest } = await imp('src/duration.js');
+  const q = (pitch) => ({ type: 'note', duration: 'quarter', notes: [{ pitch }] });
+  const hid = (duration = 'half') => ({ type: 'rest', duration, hidden: true });
+  const norm1 = (m, track = {}) => normalizeScore({ tracks: [{ ...track, measures: [m] }] }).tracks[0];
+  const m0 = (m, track) => norm1(m, track).measures[0];
+  const v1 = [q('C5'), q('D5'), q('E5'), q('F5')];
+  const v2 = [{ type: 'note', duration: 'whole', notes: [{ pitch: 'C4' }] }];
+
+  test('isHiddenRest: only rests with a truthy hidden flag', () => {
+    eq([hid(), { type: 'rest', duration: 'half' }, { type: 'note', duration: 'half', hidden: true, notes: [] }, { type: 'rest', hidden: 1 }].map(isHiddenRest),
+      [true, false, false, true]);
+  });
+  test('normalize voices: one entry is the same measure as `beats` (deep-equal, same SVG)', () => {
+    deepStrictEqual(m0({ voices: [{ beats: v1 }] }), m0({ beats: v1 }));
+    eq(serialize(renderTree({ tracks: [{ measures: [{ voices: [{ beats: v1 }] }] }] })), serialize(renderTree({ tracks: [{ measures: [{ beats: v1 }] }] })));
+  });
+  test('normalize voices: non-array or empty `voices` falls back to `beats` (key kept, no voice2Beats)', () => {
+    [{}, [], 'x', null].forEach((voices) => {
+      const m = m0({ voices, beats: v1 });
+      eq(m.beats.map((b) => b.notes[0].pitch), ['C5', 'D5', 'E5', 'F5']);
+      eq('voice2Beats' in m, false);
+      eq(m.voices, voices);
+    });
+  });
+  test('normalize voices: two entries -> beats + voice2Beats, raw voices dropped; entries after the second ignored', () => {
+    const m = m0({ voices: [{ beats: v1 }, { beats: v2 }, { beats: [q('A4')] }], beats: [q('G4')] });
+    eq(m.beats.map((b) => b.notes[0].pitch), ['C5', 'D5', 'E5', 'F5']);
+    eq(m.voice2Beats.map((b) => b.notes[0].pitch), ['C4']);
+    eq('voices' in m, false);
+    eq(Object.keys(m).at(-1), 'voice2Beats');
+    eq(Object.keys(m0({ voices: [{ beats: v1 }, { beats: v2 }] })).slice(-2), ['beats', 'voice2Beats']);
+  });
+  test('normalize voices: voice 2 missing, empty or only hidden rests -> single-voice measure', () => {
+    [[{ beats: v1 }, {}], [{ beats: v1 }, { beats: [] }], [{ beats: v1 }, { beats: [hid(), hid()] }], [{ beats: v1 }, null]].forEach((voices) => {
+      eq('voice2Beats' in m0({ voices }), false);
+    });
+    eq(m0({ voices: [{ beats: v1 }, { beats: [hid(), q('C4')] }] }).voice2Beats.length, 2);
+  });
+  test('normalize voices: voice 2 is normalized like voice 1 (fret -> written pitch in the key, octave clef, dots clamped)', () => {
+    const t = norm1({ keySignature: -1, voices: [{ beats: [q('C5')] }, { beats: [{ type: 'note', duration: 'quarter', dots: '9', notes: [{ string: 3, fret: 3 }] }] }] });
+    const b = t.measures[0].voice2Beats[0];
+    eq([b.dots, b.notes[0].pitch, b.notes[0].soundingPitch, b.notes[0].fromFret], [4, 'Bb4', 'Bb3', true]);
+    eq(t.octaveClef, true);
+    eq(m0({ voices: [{ beats: [q('C5')] }, { beats: [{ type: 'rest', duration: 'quarter', dots: -2 }] }] }).voice2Beats[0].dots, 0);
+  });
+  test('normalize voices: input is not mutated', () => {
+    const input = { tracks: [{ measures: [{ voices: [{ beats: v1 }, { beats: [{ type: 'note', duration: 'whole', notes: [{ string: 5, fret: 3 }] }] }] }] }] };
+    const before = JSON.stringify(input);
+    normalizeScore(input);
+    eq(JSON.stringify(input), before);
+  });
+
+  // accidentals shared across voices, in onset order
+  const { resolveVoiceAccidentals, resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
+  const { placeAccidentalColumns, accidentalRightSp } = await imp('src/layout/chord.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const { accidentalGlyph: accidentalGlyphFor } = await imp('src/glyphs.js');
+  const nt = (pitch, duration = 'quarter') => ({ type: 'note', duration, notes: [{ pitch }] });
+  const gr = (pitch) => ({ type: 'grace', duration: '16th', notes: [{ pitch }] });
+  const vAcc = (key, b1, b2) => resolveVoiceAccidentals({ measures: [{ keySignature: key, beats: b1, voice2Beats: b2 }] }, 0)
+    .map((per) => per.map((r) => r.names.join('|')));
+  test('resolveVoiceAccidentals: carry runs across voices by onset, voice 1 first at the same onset', () => {
+    // v1: F#4 at 0, F4 at 1/2; v2: F4 at 0 (after v1's F#4 -> natural), F#4 at 1/4 (after it -> sharp), F4 at 3/4 (after v1's natural -> none)
+    eq(vAcc(0, [nt('F#4', 'half'), nt('F4', 'half')], [nt('F4'), nt('F#4'), nt('C4'), nt('F4')]), [['sharp', 'natural'], ['natural', 'sharp', '', '']]);
+  });
+  test('resolveVoiceAccidentals: graces take their note\'s onset; voice-1 graces and note before voice 2 at that onset', () => {
+    eq(vAcc(0, [nt('C4'), gr('G#4'), nt('G#4')], [nt('E4'), nt('G4')]), [['', 'sharp', ''], ['', 'natural']]);
+    eq(vAcc(0, [nt('C5', 'whole')], [nt('B3', 'half'), gr('Bb3')]), [[''], ['', 'flat']]);
+  });
+  test('resolveVoiceAccidentals: without voice 2 equals resolveMeasureAccidentals', () => {
+    const tr = { measures: [{ keySignature: 2, beats: [nt('F4'), gr('C4'), nt('C#4'), nt('Bb4'), { type: 'rest', duration: 'quarter' }] }] };
+    eq(resolveVoiceAccidentals(tr, 0), [resolveMeasureAccidentals(tr, 0), []]);
+  });
+  test('placeAccidentalColumns: same columns as layoutChord for a cluster; keys kept in input order', () => {
+    const w = glyphBox(accidentalGlyphFor('sharp')).width;
+    const hw = glyphBox(String.fromCodePoint(0xE0A4)).width;
+    const hdx = [0, hw, 0, hw, 0];
+    const items = [0, 1, 2, 3, 4].map((i) => ({ key: `k${i}`, name: 'sharp', pos: i, w }));
+    const out = placeAccidentalColumns(items, accidentalRightSp([{}, {}, {}, {}, {}], hdx, Array(5).fill(hw)));
+    eq(out.map((a) => a.key), ['k0', 'k1', 'k2', 'k3', 'k4']);
+    eq(out.map((a) => +(a.dx * 10).toFixed(3)), [-29.36, -51.36, -62.36, -40.36, -18.36]);
+  });
+
+  // two-voice layout (computeLayout)
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { buildColumn } = await imp('src/layout/timeline.js');
+  const { stemDxSp } = await imp('src/layout/chord.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const NH = String.fromCodePoint(0xE0A4);
+  const nb = (ps, duration = 'quarter', x = {}) => ({ type: 'note', duration, notes: ps.map((p) => (typeof p === 'string' ? { pitch: p } : p)), ...x });
+  const rs = (duration = 'quarter', x = {}) => ({ type: 'rest', duration, ...x });
+  const vm = (b1, b2, x = {}) => ({ ...x, voices: [{ beats: b1 }, { beats: b2 }] });
+  const lay2 = (measures, track = {}) => computeLayout(normalizeScore({ tracks: [{ showStandardNotation: true, ...track, measures }] }), th, 900).systems[0].tracks[0].measures;
+  const col = (b1, b2) => lay2([vm(b1, b2)])[0];
+  const quarters = (p) => [p, p, p, p].map((x) => nb([x]));
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+
+  test('two-voice layout: voice 1 stems up and voice 2 down, beam groups and whole notes included; tags and groups', () => {
+    const m = col([nb(['C6']), nb(['A5'], '8th'), nb(['B5'], '8th'), nb(['C6'], 'half')], [nb(['C4'], '8th'), nb(['D4'], '8th'), nb(['E4']), nb(['C4'], 'half')]);
+    eq(m.elements.map((e) => e.chord.stemUp), [true, true, true, true]);
+    eq(m.elements2.map((e) => e.chord.stemUp), [false, false, false, false]);
+    eq([m.beamGroups, m.beamGroups2], [[[1, 2]], [[0, 1]]]);
+    eq([m.elements.map((e) => e.voice), m.elements2.map((e) => e.voice), m.wholeRest, m.tupletGroups2], [[1, 1, 1, 1], [2, 2, 2, 2], null, []]);
+    const w = col([nb(['G4'], 'whole')], [nb(['C4'], 'whole')]);
+    eq([w.elements[0].chord.stemUp, w.elements2[0].chord.stemUp], [true, false]);
+  });
+  test('two-voice layout: equal onsets share x; voice-2 onsets between voice-1 onsets get their own', () => {
+    const m = col([nb(['C5'], 'half'), nb(['C5'], 'half')], quarters('E4'));
+    eq(m.elements2.map((e) => e.x === m.elements[0].x || e.x === m.elements[1].x), [true, false, true, false]);
+    const sc = normalizeScore({ tracks: [{ measures: [vm([nb(['C5'], 'half'), nb(['C5'], 'half')], quarters('E4'))] }] });
+    eq(buildColumn(0, sc, th).onsets.length, 4);
+  });
+  test('two-voice layout: clash shift for a second, a unison and crossed voices; none for a third or a rest', () => {
+    const plain = (stemDxSp(NH, true) - stemDxSp(NH, false)) * S;
+    const dx = (p1, p2) => col(quarters(p1), quarters(p2)).elements2[0].dx;
+    eq([near(dx('A4', 'G4'), plain), near(dx('G4', 'G4'), plain), near(dx('E4', 'G4'), plain), dx('B4', 'G4'), dx('C5', 'E4')], [true, true, true, 0, 0]);
+    const m = col([nb(['A4']), rs(), rs('half')], [nb(['G4']), nb(['G4']), rs('half')]);
+    eq([near(m.elements2[0].x - m.elements[0].x, plain), m.elements2[1].dx, m.elements2[1].x === m.elements[1].x], [true, 0, true]);
+    const w = col([nb(['A4'], 'whole')], [nb(['G4'], 'whole')]);
+    eq(near(w.elements2[0].dx, w.elements[0].chord.headWidth), true, 'whole heads touch');
+    // a voice-1 second displaced right of the stem adds a head width
+    const d = col([nb(['G4', 'A4']), rs(), rs('half')], [nb(['F4']), rs(), rs('half')]);
+    eq(near(d.elements2[0].dx, plain + d.elements[0].chord.headWidth), true, 'displaced head');
+  });
+  test('two-voice layout: one accidental stack for both voices, left of every head, columns not overlapping', () => {
+    const m = col([nb(['F#4', 'C#5']), rs(), rs('half')], [nb(['Eb4', 'Bb3']), rs(), rs('half')]);
+    const v1 = m.elements[0]; const v2 = m.elements2[0];
+    const accs = [...v1.chord.accidentals.map((a) => ({ pos: v1.chord.heads[a.noteIndex].pos, x1: a.dx, name: a.name })),
+      ...v2.chord.accidentals.map((a) => ({ pos: v2.chord.heads[a.noteIndex].pos, x1: a.dx + v2.dx, name: a.name }))];
+    eq(accs.length, 4);
+    const heads = [...v1.chord.heads.map((h) => h.dx - h.width / 2), ...v2.chord.heads.map((h) => v2.dx + h.dx - h.width / 2)];
+    accs.forEach((a) => { a.x2 = a.x1 + glyphBox(accidentalGlyphFor(a.name)).width * S; eq(a.x2 <= Math.min(...heads) + 1e-9, true, 'left of heads'); });
+    accs.forEach((a, i) => accs.slice(i + 1).forEach((b) => eq(Math.abs(a.pos - b.pos) >= 6 || a.x2 <= b.x1 + 1e-9 || b.x2 <= a.x1 + 1e-9, true, 'overlap')));
+    eq(v1.chord.leftExt >= Math.max(...accs.map((a) => -a.x1)) - 1e-9, true, 'left extent');
+  });
+  test('two-voice layout: voice-2 dots below a line note; one dot column on a clash, a shared dot position moves down a space', () => {
+    const lone = col([nb(['C5'], 'half'), rs('half')], [nb(['G4'], 'half', { dots: 1 }), rs()]);
+    eq(lone.elements2[0].chord.dots.positions, [1]);
+    const m = col([nb(['B4'], 'half', { dots: 1 }), rs()], [nb(['C5'], 'half', { dots: 1 }), rs()]);
+    const c1 = m.elements[0].chord; const c2 = m.elements2[0].chord;
+    eq([c1.dots.positions, c2.dots.positions], [[5], [3]]);
+    eq(near(c1.dots.dx, c2.dots.dx + m.elements2[0].dx), true, 'one column');
+    eq(c1.dots.dx >= Math.max(...c1.heads.map((h) => h.dx + h.width / 2), ...c2.heads.map((h) => m.elements2[0].dx + h.dx + h.width / 2)) + 0.5 * S - 1e-9, true);
+  });
+  test('two-voice layout: rest positions 8 / 0, whole-measure rests 8 / 2', () => {
+    const m = col([rs(), nb(['C5']), rs('half')], [nb(['E4']), rs(), rs('half')]);
+    eq([m.elements[0].restPos, m.elements2[1].restPos, m.elements[2].restPos, m.elements2[2].restPos], [8, 0, 8, 0]);
+    const w = lay2([vm([rs('whole')], quarters('E4')), vm(quarters('C5'), [rs('whole')])]);
+    eq([w[0].elements[0].restPos, w[0].elements[0].wholeMeasureRest, w[1].elements2[0].restPos, w[1].elements2[0].wholeMeasureRest], [8, true, 2, true]);
+    eq('restPos' in w[0].elements2[0], false);
+  });
+  test('two-voice layout: a rest moves a whole space at a time clear of the other voice\'s heads; ledger outside the staff', () => {
+    const m = col([rs(), rs('half'), rs()], [nb(['D5']), nb(['D5'], 'half'), nb(['B4'])]);
+    eq([m.elements[0].restPos, m.elements[1].restPos, m.elements[2].restPos], [12, 10, 10]);
+    eq([m.elements[0].restLedger, m.elements[1].restLedger], [undefined, 10]);
+    const v2 = col([nb(['E4'], 'half'), nb(['E4'], 'half')], [rs('half'), rs('half')]);
+    eq([v2.elements2[0].restPos, v2.elements2[0].restLedger], [-4, -4]);
+  });
+  test('two-voice layout: hidden rests take time but no onset, in either kind of measure', () => {
+    const sc = normalizeScore({ tracks: [{ measures: [
+      vm(quarters('C5'), [rs('half', { hidden: true }), nb(['E4'], 'half')]),
+      { beats: [rs('quarter', { hidden: true }), nb(['C5']), nb(['C5']), nb(['C5'])] },
+    ] }] });
+    eq([buildColumn(0, sc, th).onsets.length, buildColumn(1, sc, th).onsets.length], [4, 3]);
+    const ms = computeLayout(sc, th, 900).systems[0].tracks[0].measures;
+    eq([ms[0].elements2[0].x === ms[0].elements[0].x, ms[0].elements2[1].x === ms[0].elements[2].x], [true, true]);
+    eq([ms[1].elements[0].x === ms[1].elements[1].x, ms[1].elements[0].width], [true, 0]);
+    // a measure whose voice 2 has only hidden rests lays out like the single-voice measure
+    const one = lay2([vm(quarters('C5'), [rs('whole', { hidden: true })])])[0];
+    eq([one.elements2, one.elements[0].voice, one.elements[0].chord.stemUp], [undefined, undefined, false]);
+  });
+  test('two-voice layout: voice-2 TAB beat drops notes on strings voice 1 frets at the same onset, and beat marks', () => {
+    const m = lay2([vm([nb([{ string: 2, fret: 5 }], 'half'), nb([{ string: 1, fret: 3 }], 'half')],
+      [nb([{ string: 2, fret: 7 }, { string: 4, fret: 5 }], 'half', { tremolo: true }), nb([{ string: 2, fret: 3 }], 'half')])],
+    { showTablature: true })[0];
+    eq(m.elements2.map((e) => e.tabEl.notes.map((n) => n.string)), [[4], [2]]);
+    eq('tremolo' in m.elements2[0].tabEl, false);
+  });
+
+  // two-voice drawing (drawSystem: staff groups in local coordinates, top line y = 0, bottom line y = 4 sp)
+  const { drawSystem } = await imp('src/draw/system.js');
+  const { restForDuration } = await imp('src/glyphs.js');
+  const draw2 = (measures, track = {}) => {
+    const sc = normalizeScore({ tracks: [{ showStandardNotation: true, ...track, measures }] });
+    const sys = computeLayout(sc, th, 900).systems[0];
+    const d = drawSystem(makeContainer(), sys, 0, sc, th);
+    const staff = (kind) => d.staves.find((st) => st.kind === kind)?.g;
+    return { ms: sys.tracks[0].measures, staff, svg: serialize(d.systemG) };
+  };
+  const nodes = (g, pred) => [...walk(g)].filter(({ nd, cls }) => pred(nd, cls)).map(({ nd }) => nd);
+  const v2g = (g) => nodes(g, (nd) => nd.tag === 'g' && nd.getAttribute('class') === 'voice-2');
+  const nums = (d) => d.match(/-?\d+(\.\d+)?(e-?\d+)?/g).map(Number);
+  const BL = 4 * S;
+
+  test('two-voice drawing: <g class="voice-2"> only in two-voice measures (not for one entry or hidden-only voice 2)', () => {
+    eq(v2g(draw2([vm(quarters('C5'), [nb(['C4'], 'whole')])]).staff('notation')).length, 1);
+    eq(draw2([{ voices: [{ beats: quarters('C5') }] }, vm(quarters('C5'), [rs('whole', { hidden: true })])]).svg.includes('voice-2'), false);
+  });
+  test('two-voice drawing: stems follow the voice, beamed groups included; beams never span voices', () => {
+    const { ms, staff } = draw2([vm([nb(['C6'], '8th'), nb(['A5'], '8th'), nb(['E5'], 'half'), nb(['C6'])], [nb(['D4'], '8th'), nb(['C4'], '8th'), nb(['F4'], 'half'), nb(['E4'])])]);
+    eq(ms[0].elements.map((e) => e.rendered.stemUp), [true, true, true, true]);
+    eq(ms[0].elements2.map((e) => e.rendered.stemUp), [false, false, false, false]);
+    const beams = (g, inV2) => nodes(g, (nd, cls) => nd.tag === 'path' && nd.getAttribute('stroke') === 'none' && cls.includes('voice-2') === inV2 && !nd.getAttribute('class'));
+    const g = staff('notation');
+    const span = (els) => [Math.min(...els.map((e) => e.rendered.stemAttachX)) - S, Math.max(...els.map((e) => e.rendered.stemAttachX)) + S];
+    [[beams(g, false), ms[0].elements], [beams(g, true), ms[0].elements2]].forEach(([ps, els]) => {
+      eq(ps.length, 1);
+      const xs = nums(ps[0].getAttribute('d')).filter((_, i) => i % 2 === 0);
+      const [lo, hi] = span(els.slice(0, 2));
+      eq(xs.every((x) => x >= lo && x <= hi), true, 'beam within its own voice\'s stems');
+    });
+    eq(ms[0].elements[0].rendered.stemTopY < ms[0].elements[0].rendered.stemBottomY, true);
+  });
+  test('two-voice drawing: voice-2 tuplet bracket below its lowest ink (>= bottom line + 1 sp), ticks up; voice-1 stays above', () => {
+    const t3 = (p) => nb([p], '8th', { tuplet: 3 });
+    const { ms, staff } = draw2([vm([t3('C5'), t3('D5'), t3('E5'), nb(['C5'], 'quarter'), nb(['C5'], 'half')], [t3('C4'), t3('D4'), t3('E4'), nb(['C4']), nb(['C4'], 'half')])]);
+    const [v2] = v2g(staff('notation'));
+    const tp = nodes(v2, (nd) => nd.tag === 'g' && nd.getAttribute('class') === 'tuplet');
+    eq(tp.length, 1);
+    const [x1, yTick, , y] = nums(tp[0].children[0].getAttribute('d'));
+    const lowest = Math.max(...ms[0].elements2.slice(0, 3).map((e) => e.rendered.stemBottomY));
+    eq([y >= BL + S - 1e-9, near(y, Math.max(lowest + 1.6 * S, BL + S)), yTick < y, x1 < ms[0].elements2[0].x], [true, true, true, true]);
+    const tp1 = nodes(staff('notation'), (nd, cls) => nd.tag === 'g' && nd.getAttribute('class') === 'tuplet' && !cls.includes('voice-2'));
+    eq([tp1.length, nums(tp1[0].children[0].getAttribute('d'))[3] < 0], [1, true]);
+    eq([ms[0].elements[0].rendered.tupletY < 0, ms[0].elements2[0].rendered.tupletY], [true, undefined]);
+  });
+  test('two-voice drawing: rest glyphs at their voice position, a ledger line for a half rest above the staff', () => {
+    const { staff } = draw2([vm([rs(), nb(['C5']), rs('half')], [nb(['E4']), rs(), nb(['D5'], 'half')])]);
+    const y = (glyph, inV2) => nodes(staff('notation'), (nd, cls) => nd.tag === 'text' && nd.textContent === glyph && cls.includes('voice-2') === inV2)
+      .map((nd) => +nd.getAttribute('y'));
+    eq([y(restForDuration('quarter'), false), y(restForDuration('quarter'), true), y(restForDuration('half'), false)], [[BL - 8 * S / 2], [BL], [BL - 10 * S / 2]]);
+    const ledgers = nodes(staff('notation'), (nd) => nd.tag === 'line' && near(+nd.getAttribute('y1'), BL - 10 * S / 2) && nd.getAttribute('y1') === nd.getAttribute('y2'));
+    eq(ledgers.length, 1);
+  });
+  test('two-voice drawing: articulations on the stem side, at least 1 sp beyond the stem tip; whole-note tremolo below voice 2', () => {
+    const { ms } = draw2([vm([nb(['G4'], 'quarter', { articulations: ['staccato', 'accent'] }), nb(['G4'], 'quarter'), nb(['B4'], 'half')],
+      [nb(['D4'], 'quarter', { articulations: ['staccato'] }), nb(['D4']), nb(['D4'], 'half', { articulations: ['tenuto'] })])]);
+    const r1 = ms[0].elements[0].rendered; const r2 = ms[0].elements2[0].rendered; const r3 = ms[0].elements2[2].rendered;
+    eq([r1.articTopY <= r1.stemTopY - S, r1.articBottomY, r2.articBottomY >= r2.stemBottomY + S, r2.articTopY, r3.articBottomY >= r3.stemBottomY + S], [true, undefined, true, undefined, true]);
+    const w = draw2([vm([nb(['G4'], 'whole')], [nb(['C4'], 'whole', { tremolo: true })])]);
+    const [v2] = v2g(w.staff('notation'));
+    const tr = nodes(v2, (nd) => nd.tag === 'line' && nd.getAttribute('stroke-linecap') === 'round');
+    const headY = w.ms[0].elements2[0].rendered.noteheads[0].y;
+    eq([tr.length, tr.every((l) => +l.getAttribute('y1') > headY + S / 2 && +l.getAttribute('y2') > headY + S / 2)], [3, true]);
+  });
+  test('two-voice drawing: TAB shows voice 2\'s frets at the column x, voice 1 wins a shared string; rhythm band voice 1 only', () => {
+    const fr = (string, fret, duration = 'quarter') => ({ type: 'note', duration, notes: [{ string, fret }] });
+    const m = vm([fr(2, 5, 'half'), fr(1, 3, 'half')], [fr(2, 7), fr(4, 9), fr(5, 2), fr(5, 4)]);
+    const { ms, staff } = draw2([m], { showTablature: true });
+    const labels = nodes(staff('tab'), (nd) => nd.tag === 'text').map((nd) => [nd.textContent, +(+nd.getAttribute('x')).toFixed(2)]);
+    const xs = ms[0].elements2.map((e) => +(e.x - e.dx).toFixed(2));
+    eq(labels.filter(([t]) => /^\d+$/.test(t)).sort(), [['2', xs[2]], ['3', +ms[0].elements[1].x.toFixed(2)], ['4', xs[3]], ['5', +ms[0].elements[0].x.toFixed(2)], ['9', xs[1]]].sort());
+    const tab = draw2([m], { showStandardNotation: false, showTablature: true });
+    const band = nodes(tab.staff('tab'), (nd, cls) => nd.tag === 'line' && cls.includes('tab-rhythm'));
+    eq(band.map((l) => +(+l.getAttribute('x1')).toFixed(2)), tab.ms[0].elements.map((e) => +e.x.toFixed(2)));
+  });
+
+  // two-voice passes (full render): ties, slurs, grace slurs, TAB links per voice
+  const full = (measures, track = {}, width = 900) => renderTree({ tracks: [{ showStandardNotation: true, ...track, measures }] }, width);
+  const curves = (root, cls) => nodes(root, (nd) => nd.tag === 'path' && nd.getAttribute('class') === cls).map((nd) => {
+    const n = nums(nd.getAttribute('d'));
+    return { x1: n[0], y1: n[1], x2: n[6], y2: n[7], above: n[3] < n[1] };
+  });
+  const tied = (p, d = 'half') => [nb([{ pitch: p, tieStart: true }], d), nb([{ pitch: p, tieEnd: true }], d)];
+  test('two-voice passes: voice 1 ties and slurs above, voice 2 below, each within its voice', () => {
+    const svg = full([
+      vm(tied('C5'), tied('E4')),
+      vm([nb(['D5'], 'quarter', { slurStart: true }), nb(['E5']), nb(['F5'], 'quarter', { slurEnd: true }), rs()],
+        [nb(['G4'], 'quarter', { slurStart: true }), nb(['F4']), nb(['E4'], 'quarter', { slurEnd: true }), rs()]),
+    ]);
+    const ties = curves(svg, 'tie').sort((a, b) => a.y1 - b.y1);
+    eq(ties.map((t) => t.above), [true, false]);
+    const slurs = curves(svg, 'slur').sort((a, b) => a.y1 - b.y1);
+    eq(slurs.map((t) => t.above), [true, false]);
+    eq(slurs[0].x1 === slurs[1].x1 && slurs[0].x2 === slurs[1].x2, true, 'same onsets');
+  });
+  test('two-voice passes: ties split across a system break per voice, sides kept', () => {
+    const busy = (p) => [p, p, p, p, p, p, p, p].map((x) => nb([x], '8th'));
+    const svg = full([
+      vm([...busy('B4').slice(0, 6), nb([{ pitch: 'C5', tieStart: true }])], [...busy('E4').slice(0, 6), nb([{ pitch: 'G4', tieStart: true }])]),
+      vm([nb([{ pitch: 'C5', tieEnd: true }], 'whole')], [nb([{ pitch: 'G4', tieEnd: true }], 'whole')]),
+    ], {}, 300);
+    eq(serialize(svg).includes('system-1'), true, 'broken');
+    const ties = curves(svg, 'tie');
+    eq(ties.length, 4);
+    eq(ties.filter((t) => t.above).length, 2);
+  });
+  test('two-voice passes: a slur into a single-voice measure keeps its start voice\'s side', () => {
+    const svg = full([
+      vm(quarters('C5'), [rs('half'), nb(['E4'], 'half', { slurStart: true })]),
+      { beats: [nb(['G4'], 'quarter', { slurEnd: true }), nb(['G4']), nb(['G4'], 'half')] },
+    ]);
+    eq(curves(svg, 'slur').map((c) => c.above), [false]);
+  });
+  test('two-voice passes: H/P links within a voice even when the other voice is nearer on that string (TAB and notation)', () => {
+    const fr = (string, fret, x = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string, fret, ...x }] });
+    const svg = full([vm([fr(2, 5, { hammerPull: true }), rs(), fr(2, 7), rs()], [fr(4, 2), fr(2, 6), fr(4, 2), fr(4, 4)])], { showTablature: true });
+    const sc = normalizeScore({ tracks: [{ showStandardNotation: true, showTablature: true, measures: [vm([fr(2, 5), rs(), fr(2, 7), rs()], [fr(4, 2), fr(2, 6), fr(4, 2), fr(4, 4)])] }] });
+    const els = computeLayout(sc, th, 900).systems[0].tracks[0].measures[0].elements;
+    const hp = nodes(svg, (nd) => nd.tag === 'g' && /^hammer-pull /.test(nd.getAttribute('class') || ''));
+    eq(hp.length, 1);
+    const xs = nums(nodes(hp[0], (nd) => nd.tag === 'path')[0].getAttribute('d')).filter((_, i) => i % 2 === 0);
+    eq([Math.min(...xs) > els[0].x, Math.max(...xs) < els[2].x, Math.max(...xs) > els[1].x], [true, true, true], 'spans to voice 1\'s next note');
+    const sl = curves(svg, 'slur');
+    eq([sl.length, sl[0].above, Math.abs(sl[0].x1 - els[0].x) < 0.01, Math.abs(sl[0].x2 - els[2].x) < 0.01], [1, true, true, true]);
+  });
+  test('two-voice passes: graces stem and slur per voice into their own voice\'s next note', () => {
+    const g = (p) => ({ type: 'grace', duration: '16th', notes: [{ pitch: p }] });
+    const ms = draw2([vm([nb(['C5'], 'half'), g('D5'), nb(['C5'], 'half')], [g('F4'), nb(['E4']), nb(['E4']), nb(['E4'], 'half')])]).ms;
+    eq([ms[0].elements[1].rendered.stemUp, ms[0].elements2[0].rendered.stemUp], [true, false]);
+    eq(ms[0].elements2[0].x < ms[0].elements2[1].x && ms[0].elements[1].x < ms[0].elements[2].x, true, 'anchored to own note');
+    const svg = full([vm([nb(['C5'], 'half'), g('D5'), nb(['C5'], 'half')], [g('F4'), nb(['E4']), nb(['E4']), nb(['E4'], 'half')])]);
+    const sl = curves(svg, 'slur').sort((a, b) => a.x1 - b.x1);
+    eq(sl.length, 2);
+    eq([Math.abs(sl[0].x2 - ms[0].elements2[1].x) < 0.01, Math.abs(sl[1].x2 - ms[0].elements[2].x) < 0.01], [true, true]);
+  });
+  test('two-voice passes: dynamics and chord symbols on a voice-2 beat are not drawn (voice-1 only)', () => {
+    const s2 = serialize(full([vm(quarters('C5'), [nb(['E4'], 'whole', { dynamic: 'f', chord: 'C' })])]));
+    eq([s2.includes('class="dynamic"'), s2.includes('chord-symbol')], [false, false]);
+    const s1 = serialize(full([vm([nb(['C5'], 'quarter', { dynamic: 'f', chord: 'C' }), ...quarters('C5').slice(1)], [nb(['E4'], 'whole')])]));
+    eq([s1.includes('class="dynamic"'), s1.includes('chord-symbol')], [true, true]);
+  });
+
+  // ---- verification gaps (AC audit) ----
+  test('voices[0].beats not an array is treated as empty voice 1, never throws (voice 2 kept)', () => {
+    [{ beats: 'x' }, { beats: {} }, {}, null].forEach((first) => {
+      const m = m0({ voices: [first, { beats: v2 }] });
+      eq([m.beats, m.voice2Beats.length], [[], 1]);
+      m0({ voices: [first] });
+      eq(m0({ voices: [first] }).beats, []);
+    });
+    full([{ voices: [{ beats: 'x' }, { beats: v2 }] }, { voices: [{ beats: 5 }] }]);
+  });
+  test('voices: every single-voice spelling renders byte-identical to `beats` (non-array, empty, 1 entry, hidden-only/empty/missing voice 2)', () => {
+    const ref = serialize(full([{ beats: v1 }, { beats: v1 }]));
+    const hw = [rs('whole', { hidden: true })];
+    [{}, [], 'x', null, 7].forEach((voices) => eq(serialize(full([{ voices, beats: v1 }, { beats: v1 }])) === ref, true, `voices=${JSON.stringify(voices)}`));
+    [[{ beats: v1 }], [{ beats: v1 }, {}], [{ beats: v1 }, { beats: [] }], [{ beats: v1 }, { beats: hw }], [{ beats: v1 }, { beats: [rs('half', { hidden: true }), rs('half', { hidden: true })] }]]
+      .forEach((voices, i) => eq(serialize(full([{ voices }, { voices }])) === ref, true, `case ${i}`));
+    // hidden-only voice 2 on a TAB track too
+    const fr = [{ type: 'note', duration: 'whole', notes: [{ string: 2, fret: 3 }] }];
+    eq(serialize(full([{ voices: [{ beats: fr }, { beats: hw }] }], { showTablature: true })) === serialize(full([{ beats: fr }], { showTablature: true })), true, 'TAB');
+  });
+  test('voices: entries after the second change nothing (byte-identical to two entries)', () => {
+    const two = [{ beats: v1 }, { beats: v2 }];
+    eq(serialize(full([{ voices: [...two, { beats: [q('A4'), q('B4')] }, 'junk'] }])) === serialize(full([{ voices: two }])), true);
+  });
+  test('voices: rendering is deterministic and leaves the input untouched', () => {
+    const score = { tracks: [{ showStandardNotation: true, showTablature: true, measures: [vm([nb([{ string: 2, fret: 5, hammerPull: true }], 'half'), rs('half'), nb(['C5'])], [rs('half', { hidden: true }), nb([{ string: 4, fret: 2 }], 'half', { tuplet: 3 })])] }] };
+    const before = JSON.stringify(score);
+    const a = serialize(renderTree(score, 600)); const b = serialize(renderTree(score, 600));
+    eq([a === b, JSON.stringify(score) === before], [true, true]);
+  });
+  test('beat marks on a voice-2 beat draw nothing: output is byte-identical to the same beat without them', () => {
+    const marks = { pickStroke: 'down', strum: 'up', arpeggio: true, letRing: true, palmMute: true, rake: 'down', whammy: true, vibrato: true, fermata: true, dynamic: 'ff', chord: 'Am', tap: true, slap: true, pop: true, trill: true };
+    const mk = (extra, track) => serialize(full([vm([nb([{ string: 3, fret: 2 }, { string: 4, fret: 2 }]), nb([{ string: 3, fret: 3 }]), nb([{ string: 3, fret: 4 }], 'half')],
+      [nb([{ string: 5, fret: 2 }, { string: 6, fret: 2 }], 'quarter', extra), rs(), nb([{ string: 5, fret: 3 }], 'half', extra)])], track));
+    [{ showTablature: true }, { showStandardNotation: false, showTablature: true }, {}].forEach((track, i) => eq(mk(marks, track) === mk({}, track), true, `track ${i}`));
+    // a mark that is honoured on voice 1 would differ, so the comparison is not vacuous
+    const one = serialize(full([vm([nb([{ string: 3, fret: 2 }], 'quarter', { pickStroke: 'down' }), rs('half'), rs()], [nb([{ string: 5, fret: 2 }], 'whole')])], { showTablature: true }));
+    const none = serialize(full([vm([nb([{ string: 3, fret: 2 }]), rs('half'), rs()], [nb([{ string: 5, fret: 2 }], 'whole')])], { showTablature: true }));
+    eq(one === none, false);
+  });
+  test('ties and links do not cross voices', () => {
+    // voice 1 tie-start with its match only in voice 2 of the next measure: no tie
+    const svg = full([vm([nb([{ pitch: 'C5', tieStart: true }], 'whole')], [nb(['E4'], 'whole')]), vm([nb(['G4'], 'whole')], [nb([{ pitch: 'C5', tieEnd: true }], 'whole')])]);
+    eq(curves(svg, 'tie').length, 0);
+    // voice 2 slur-start, slur-end only on voice 1: no slur
+    const sv = full([vm([nb(['C5'], 'half'), nb(['D5'], 'half', { slurEnd: true })], [nb(['E4'], 'half', { slurStart: true }), nb(['F4'], 'half')])]);
+    eq(curves(sv, 'slur').length, 0);
+    // hammer-on in voice 1 with only voice 2 fretting later on that string: no H/P arc
+    const fr = (string, fret, x = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string, fret, ...x }] });
+    const hp = full([vm([fr(2, 5, { hammerPull: true }), rs(), rs('half')], [rs(), fr(2, 7), rs('half')])], { showTablature: true });
+    eq(nodes(hp, (nd) => nd.tag === 'g' && /^hammer-pull /.test(nd.getAttribute('class') || '')).length, 0);
+  });
+  test('two-voice layout: tracks share onset columns; a voice-2 onset in one track opens a column for the others', () => {
+    const sc = normalizeScore({ tracks: [
+      { showStandardNotation: true, measures: [vm([nb(['C5'], 'half'), nb(['C5'], 'half')], [nb(['E4']), nb(['E4']), nb(['E4']), nb(['E4'])])] },
+      { showStandardNotation: true, measures: [{ beats: [nb(['C4'], 'half'), nb(['C4'], 'half')] }] },
+    ] });
+    const [a, b] = computeLayout(sc, th, 900).systems[0].tracks.map((t) => t.measures[0]);
+    eq([b.elements[0].x === a.elements[0].x, b.elements[1].x === a.elements[1].x], [true, true]);
+    eq(a.elements[1].x - a.elements[0].x > a.elements2[1].x - a.elements2[0].x, true, 'half note spans two voice-2 gaps');
+    eq(buildColumn(0, sc, th).onsets.length, 4);
+  });
+  test('hand-computed: a second clash moves voice 2 right by exactly stem-right minus stem-left of one notehead', () => {
+    const m = col([nb(['A4']), rs(), rs('half')], [nb(['G4']), rs(), rs('half')]);
+    const hw = m.elements[0].chord.headWidth;
+    // voice 1 stems up (stem on the head's right edge), voice 2 down (left edge): the heads sit one head width apart
+    eq(near(m.elements2[0].x - m.elements[0].x, (stemDxSp(NH, true) - stemDxSp(NH, false)) * S), true);
+    eq(near(m.elements2[0].x - m.elements[0].x, hw), true, 'one head width');
+    eq(near(hw, glyphBox(NH).width * S), true);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

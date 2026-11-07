@@ -18,8 +18,15 @@
  * startBarline: { type, x } | null, midSig: { keyX, timeX, key, time } | null,
  * wholeRest: { x } | null, padded, showHeader, elements: [{ index, el, x, width, t,
  * chord, accidentals, wholeMeasureRest }], beamGroups, tupletGroups }`.
+ * Two-voice measures (normalize.js `voice2Beats`) also get `elements2`,
+ * `beamGroups2`, `tupletGroups2` (voice 2, indices into `voice2Beats`) and
+ * `wholeRest: null`; every element of such a measure has `voice` (1 | 2),
+ * rests their `restPos` (`restLedger`), voice-2 elements `dx` (clash shift,
+ * already in `x`) and `tabEl` (the beat as drawn on TAB: no beat marks,
+ * no note on a string voice 1 frets at the same onset).
  */
 import { groupBeams, tupletGroups } from './beams.js';
+import { cmp, key } from '../rational.js';
 import { buildColumn } from './timeline.js';
 import {
   breakSystems, justifySystem, openingLayout, courtesyWidth, courtesyLayout, trackSignatureChange,
@@ -35,6 +42,73 @@ function closingBarline(track, mi, nextOpening) {
   // A key change turns a preceding single barline into a thin double (ui.md §3).
   if (next && next.keyChanged && m.barline === 'single' && track.showStandardNotation) return 'double';
   return m.barline;
+}
+
+/**
+ * Layout elements of one voice's `beats` from their timeline `events` in
+ * placed column `p` (system-local measure index `li`): onset x, whole-measure
+ * rests centred, graces left of the note they lead into.
+ */
+function placeElements(beats, events, p, li, pad, graceW) {
+  const elements = beats.map((el, bi) => {
+    const ev = events[bi];
+    if (ev.grace) return null; // placed below, once their main note is
+    if (ev.hidden) {
+      // no ink: at the last onset at or before it (passes that look it up get a sensible x)
+      let i = -1;
+      p.col.onsets.forEach((o, oi) => { if (cmp(o.t, ev.t) <= 0) i = oi; });
+      const x = p.onsetX.length ? p.onsetX[Math.max(i, 0)] : (p.contentX + p.endX) / 2;
+      return { index: bi, el, x, width: 0, t: ev.t, chord: null, accidentals: null, wholeMeasureRest: false };
+    }
+    if (ev.wholeMeasureRest) {
+      return { index: bi, el, x: (p.contentX + p.endX) / 2, width: p.endX - p.contentX, t: ev.t, chord: null, accidentals: null, wholeMeasureRest: true };
+    }
+    return {
+      index: bi, el, x: p.onsetX[ev.onset], width: p.gaps[ev.onset], t: ev.t,
+      chord: li === 0 ? ev.chordFirst : ev.chord,
+      accidentals: li === 0 ? ev.accidentalsFirst : ev.accidentals,
+      wholeMeasureRest: false,
+    };
+  });
+  beats.forEach((el, bi) => {
+    const ev = events[bi];
+    if (!ev.grace) return;
+    const anchorX = ev.grace.anchor === 'end'
+      ? p.endX - pad
+      : elements[ev.grace.anchor].x - events[ev.grace.anchor][li === 0 ? 'ownLeftFirst' : 'ownLeft'];
+    elements[bi] = {
+      index: bi, el, x: anchorX - (ev.grace.k + 1) * graceW - ev.grace.accDx, width: graceW, t: null,
+      chord: null, accidentals: ev.accidentals, wholeMeasureRest: false,
+    };
+  });
+  return elements;
+}
+
+/** Voice tags of a two-voice measure's elements of voice `voice` (see the header). */
+function tagVoice(elements, events, voice) {
+  elements.forEach((le) => {
+    const ev = events[le.index];
+    le.voice = voice;
+    if (ev.restPos != null) le.restPos = ev.restPos;
+    if (ev.restLedger != null) le.restLedger = ev.restLedger;
+    if (voice === 2) { le.dx = ev.dx || 0; le.x += le.dx; }
+  });
+}
+
+/** Voice 2's beat as drawn on TAB: no beat-level marks, no note on a string voice 1 frets at the same onset. */
+function tabElements(elements, elements2) {
+  const fretted = new Map();
+  elements.forEach((le) => {
+    if (!le.t) return;
+    const set = fretted.get(key(le.t)) || new Set();
+    (le.el.notes || []).forEach((n) => { if (n.string != null && n.fret != null) set.add(n.string); });
+    fretted.set(key(le.t), set);
+  });
+  elements2.forEach((le) => {
+    const { type, duration, dots, tuplet } = le.el;
+    const taken = le.t && !le.wholeMeasureRest ? fretted.get(key(le.t)) : null;
+    le.tabEl = { type, duration, dots, tuplet, notes: (le.el.notes || []).filter((n) => !taken || !taken.has(n.string)) };
+  });
 }
 
 /**
@@ -88,30 +162,16 @@ export function computeLayout(score, theme, containerWidth) {
       measures: placed.map((p, li) => {
         const measure = track.measures[p.mi];
         const tev = p.col.tracks[ti];
-        const elements = measure.beats.map((el, bi) => {
-          const ev = tev.events[bi];
-          if (ev.grace) return null; // placed below, once their main note is
-          if (ev.wholeMeasureRest) {
-            return { index: bi, el, x: (p.contentX + p.endX) / 2, width: p.endX - p.contentX, t: ev.t, chord: null, accidentals: null, wholeMeasureRest: true };
-          }
-          return {
-            index: bi, el, x: p.onsetX[ev.onset], width: p.gaps[ev.onset], t: ev.t,
-            chord: li === 0 ? ev.chordFirst : ev.chord,
-            accidentals: li === 0 ? ev.accidentalsFirst : ev.accidentals,
-            wholeMeasureRest: false,
-          };
-        });
-        measure.beats.forEach((el, bi) => {
-          const ev = tev.events[bi];
-          if (!ev.grace) return;
-          const anchorX = ev.grace.anchor === 'end'
-            ? p.endX - pad
-            : elements[ev.grace.anchor].x - tev.events[ev.grace.anchor][li === 0 ? 'ownLeftFirst' : 'ownLeft'];
-          elements[bi] = {
-            index: bi, el, x: anchorX - (ev.grace.k + 1) * graceW - ev.grace.accDx, width: graceW, t: null,
-            chord: null, accidentals: ev.accidentals, wholeMeasureRest: false,
-          };
-        });
+        const elements = placeElements(measure.beats, tev.events, p, li, pad, graceW);
+        let voice2 = null;
+        if (tev.events2) {
+          voice2 = { elements2: placeElements(measure.voice2Beats, tev.events2, p, li, pad, graceW) };
+          tagVoice(elements, tev.events, 1);
+          tagVoice(voice2.elements2, tev.events2, 2);
+          tabElements(elements, voice2.elements2);
+          voice2.beamGroups2 = groupBeams(measure.voice2Beats, measure.timeSignature);
+          voice2.tupletGroups2 = tupletGroups(measure.voice2Beats, measure.timeSignature);
+        }
         const next = placed[li + 1];
         const sig = p.opening.sig ? trackSignatureChange(track, p.mi) : null;
         return {
@@ -131,6 +191,7 @@ export function computeLayout(score, theme, containerWidth) {
           elements,
           beamGroups: groupBeams(measure.beats, measure.timeSignature),
           tupletGroups: tupletGroups(measure.beats, measure.timeSignature),
+          ...voice2,
         };
       }),
     }));

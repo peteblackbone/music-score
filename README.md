@@ -1,6 +1,6 @@
 # music-score
 
-Version 1.3.1 · MIT licence
+Version 1.4.0 · MIT licence
 
 A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL).
 
@@ -175,7 +175,8 @@ Measure columns line up across tracks. The number of measures is the longest tra
 
 | Field | Type | Notes |
 |---|---|---|
-| `beats` | array | Required. An empty array (`[]`) draws a whole-measure rest. |
+| `beats` | array | Required unless `voices` is given. An empty array (`[]`) draws a whole-measure rest. |
+| `voices` | array of `{ beats }` | Optional. Two rhythms on one staff: the first entry is voice 1 (stems up), the second is voice 2 (stems down). When it is set, `beats` is ignored. See [Voices](#voices). |
 | `timeSignature` | `{ beats, beatType }` | Optional. Applies from this measure until it changes. |
 | `keySignature` | integer | Optional. Applies from this measure until it changes. |
 | `barline` | string | `'single'` (default), `'double'`, `'final'`, `'repeatStart'`, or `'repeatEnd'`. The last measure of the score defaults to `'final'`. |
@@ -219,6 +220,7 @@ Beats are the rhythmic events in a measure, in order. Each beat is one note, one
 | `duration` | `'whole'`, `'half'`, `'quarter'`, `'8th'`, `'16th'`, `'32nd'`, `'64th'` | Required, except for grace notes. An unknown name throws an error. |
 | `dots` | integer, 0 to 4 | Augmentation dots. Default 0. Values above 4 are capped at 4, fractions are rounded down, and numeric strings count as their number (`'1'` is one dot). Anything else that isn't a number counts as 0. |
 | `tuplet` | number or `{ count, of }` | `3` means a triplet (3 notes in the time of 2). `of` defaults to 2. Consecutive beats with the same ratio form one bracket once they add up to a complete tuplet. |
+| `hidden` | boolean | Rests only (`{ type: 'rest', hidden: true }`). The rest takes its time but draws nothing and takes no room. Works in any measure. See [Voices](#voices). |
 | `notes` | array of notes | Required for `note` and `grace`. Several entries make a chord. Rests have no notes. |
 | `dynamic` | string | `'p'`, `'pp'`, `'ppp'`, `'mp'`, `'mf'`, `'f'`, `'ff'`, `'fff'`, `'sfz'`, `'rfz'`, `'n'`. Other values print as plain text. Drawn below the notation staff. |
 | `chord` | string | Chord symbol drawn above the staff, e.g. `'C'` or `'F/A'`. With a chord diagram, the name is centred above the diagram. |
@@ -449,8 +451,8 @@ The renderer spaces and breaks the score for you. A short list of what to expect
 - **Measure numbers** are shown at the start of systems 2 onward, in italics above the top staff. Measure 1 is not numbered.
 - **Joining line and bracket.** Staves in a system are joined by a line at the left. A notation staff and its tab staff are bracketed when the system holds two or more instruments.
 - **Instrument names** are drawn horizontally to the left of the system. See [Instrument names](#instrument-names).
-- **Accidentals** last until the end of their measure. Grace notes take part too: an altered grace note carries into the notes after it in the measure, and an altered note carries into the grace notes after it. A grace note's accidental is drawn at grace size, left of its head, or left of the slash on a stem-down grace. The next measure starts again from the key signature. A tied note that starts a new system repeats its accidental.
-- **Ties and slurs** sit on the side opposite the stems. Ties, slurs, hammer-ons and pull-offs that cross a line break are split into two parts.
+- **Accidentals** last until the end of their measure. In a two-voice measure they carry across both voices (see [Voices](#voices)). Grace notes take part too: an altered grace note carries into the notes after it in the measure, and an altered note carries into the grace notes after it. A grace note's accidental is drawn at grace size, left of its head, or left of the slash on a stem-down grace. The next measure starts again from the key signature. A tied note that starts a new system repeats its accidental.
+- **Ties and slurs** sit on the side opposite the stems. In a two-voice measure, voice 1's sit above the notes and voice 2's below (see [Voices](#voices)). Ties, slurs, hammer-ons and pull-offs that cross a line break are split into two parts.
 - **Beaming.** Eighth notes and shorter beam within each beat. Compound meters group by dotted beat, so 6/8 beams as two groups of three and 12/8 as four.
 - **Chord symbols and dynamics** each sit on one line per system: chord symbols above the staff, dynamics below it. Both are kept clear of the notes. Chord diagrams sit in one row per system staff, between the music and the chord-symbol line (see [Chord diagrams](#chord-diagrams)).
 - **Technique labels** (P.M. and harmonic labels) are placed clear of bend arrows and text, starting after a bend or moving out a lane when needed.
@@ -479,7 +481,7 @@ Two optional beat fields. Both draw on the notation staff only.
 An array of strings on a `note` beat. Allowed values: `'staccato'`, `'accent'`, `'tenuto'`. Values are case-sensitive.
 
 - Marks are drawn once per beat and apply to the whole chord. You do not choose a side.
-- Marks go on the side opposite the stem. A note whose stem points up gets its marks below. A note whose stem points down gets its marks above.
+- Marks go on the side opposite the stem. A note whose stem points up gets its marks below. A note whose stem points down gets its marks above. In a two-voice measure they go on the stem side instead (see [Voices](#voices)).
 - A beamed note takes its beam group's stem direction, so the group decides the side.
 - A whole note has no stem. It gets marks below if its position is below the middle line, otherwise above.
 - In a chord, the marks attach to the outermost notehead on that side.
@@ -507,6 +509,48 @@ The demo score in `examples/articulations-demo.js` (exported as `articulationsSc
 
 These fields do not change the API or the theme.
 
+## Voices
+
+A measure can hold two rhythms on one staff, for example a melody over a held bass. Give the measure `voices` instead of `beats`. The first entry is voice 1 and the second is voice 2. Both voices are drawn on the notation staff and on the TAB staff.
+
+```json
+{
+  "name": "Gtr.", "showStandardNotation": true, "showTablature": true,
+  "measures": [
+    {
+      "voices": [
+        { "beats": [
+          { "type": "note", "duration": "quarter", "notes": [{ "string": 1, "fret": 5 }] },
+          { "type": "note", "duration": "quarter", "notes": [{ "string": 1, "fret": 7 }] },
+          { "type": "note", "duration": "quarter", "notes": [{ "string": 1, "fret": 8 }] },
+          { "type": "note", "duration": "quarter", "notes": [{ "string": 1, "fret": 7 }] }
+        ] },
+        { "beats": [
+          { "type": "note", "duration": "whole", "notes": [{ "string": 6, "fret": 0 }] }
+        ] }
+      ]
+    }
+  ]
+}
+```
+
+- **Stems, beams and tuplets.** Voice 1's stems always point up and voice 2's always point down, even for a single note. Each voice beams and groups its own notes, so a beam never joins the two. Voice 2's tuplet brackets go below the staff.
+- **Notes that sound together.** Where both voices have notes at the same time, they share one column. If voice 2's notes form a unison, second or crossed with voice 1's, voice 2 moves right. In the usual case its stem then lines up with voice 1's stem.
+- **Accidentals.** An accidental carries to later notes in the measure in either voice, as it does within one voice. Accidentals in a shared column are drawn as one stack.
+- **Dots.** A dot on a voice 2 note that sits on a line goes in the space below the line. A voice 1 dot on a line goes in the space above.
+- **Rests.** Each voice's rests are drawn separately and never merged. Voice 1's rests sit near the top line and voice 2's near the bottom line. A rest moves in whole staff spaces to clear the other voice's noteheads at the same time. A whole or half rest outside the staff gets a ledger line.
+- **Ties and slurs.** Voice 1's ties and slurs go above the notes and voice 2's go below, on the outside of the pair. Each stays within its own voice, including the hammer-on and pull-off slurs on the notation staff.
+- **Grace notes.** Voice 1's grace notes have stems up and voice 2's have stems down. Each voice's grace notes lead into that voice's next note.
+- **Articulations and tremolo.** Articulation marks go on the stem side: above voice 1 and below voice 2. A whole-note tremolo in voice 2 goes below the note.
+- **TAB.** The frets of both voices show in the same columns. If both voices play the same string at the same time, voice 1's fret is drawn and voice 2's is left off the TAB staff. It still shows on the notation staff. Hammer-ons, pull-offs, slides, slide-ins, slide-outs and bends link within each voice.
+- **Rhythm on TAB.** The rhythm band (stems, beams, flags, dots, tuplets and rests) shows voice 1 only. Voice 2's frets still appear, so a note that only voice 2 plays shows on the TAB staff without a stem.
+- **Beat marks are read from voice 1 only.** These marks are not drawn on a voice 2 beat: chord symbols and chord diagrams, dynamics, fermatas, pick strokes, strum arrows, arpeggios, let ring, P.M., rakes, whammy, vibrato, harmonic labels (A.H., T.H., P.H., S.H.), tap, slap, pop and trill. Put them on a voice 1 beat.
+- **Hidden rests.** `{ "type": "rest", "duration": "half", "hidden": true }` takes its time but draws nothing and takes no room. Use one to start a voice later. A hidden rest works in any measure.
+- **When a measure has two voices.** A measure has two voices when voice 2 has at least one beat that is not a hidden rest. A voice 2 made only of hidden rests leaves the measure as a single-voice measure, with automatic stems.
+- **Other cases.** A `voices` list with one entry is the same as `beats`. An empty `voices` array, or a value that is not an array, falls back to `beats`. Entries after the second are ignored, so a measure has at most two voices. If voice 1 is empty and voice 2 has notes, voice 1 draws nothing.
+- **No bar-length check.** Voices are not compared with the time signature. Each voice is drawn with the beats it has, even if it is longer or shorter than the bar.
+- **SVG.** In a two-voice measure, voice 2's noteheads, accidentals, dots, ledger lines, stems, beams, grace notes, rests, articulations, tremolo and tuplets are inside a `<g class="voice-2">` group on the notation staff. Single-voice measures have no such group. TAB frets, ties and slurs are not inside it.
+
 ## Known limitations
 
 - **Dots on chords with seconds.** Augmentation dots on a chord whose notes sit a second apart may not be placed cleanly.
@@ -518,7 +562,7 @@ These fields do not change the API or the theme.
 - **Chord diagrams: taller systems.** With diagrams, a staff reaches about 10 to 11 staff spaces above its top line, against about 4 for a plain chord symbol, so systems get taller and fewer fit on a page.
 - **Time signatures across tracks.** Tracks cannot have different time signatures within the same measure column.
 - **Estimated sizes.** Glyph and text widths are estimated, not measured from the font. Spacing may look slightly different with another font or at unusual sizes.
-- **Rhythm on TAB staves.** One voice per track only. Ties are not shown in the rhythm band, and rhythm slashes and tied-fret display are not drawn. Tremolo picking stays above the fret number and is not drawn on the stem. On staves with four strings or fewer, 32nd and 64th rests can reach a little past the outer string lines; the gap to the staff above grows to fit them.
+- **Rhythm on TAB staves.** In a two-voice measure the rhythm band shows voice 1 only (see [Voices](#voices)). Ties are not shown in the rhythm band, and rhythm slashes and tied-fret display are not drawn. Tremolo picking stays above the fret number and is not drawn on the stem. On staves with four strings or fewer, 32nd and 64th rests can reach a little past the outer string lines; the gap to the staff above grows to fit them.
 - **Measure count.** Shorter tracks are padded with empty measures (whole-measure rests in notation, blank tab, no rest on a TAB rhythm staff). Their `measures` array is not extended in the input.
 - **Errors.** An unknown duration or an invalid pitch throws an error, and nothing is drawn for that score.
 - **Dynamics.** Only the names listed under `dynamic` are drawn as symbols. Other names print as plain text.
@@ -547,7 +591,15 @@ These fields do not change the API or the theme.
 - **Navigation on the top staff only.** Brackets and marks are drawn once per system, above the top staff. There are no brackets per instrument group.
 - **One bracket height per system.** All volta brackets of a system sit at the height of the tallest one.
 - **Long navigation text.** A long jump text can reach left into the previous measures, and marks in adjacent narrow measures can crowd each other. A long ending label can run past the end of its bracket. Text widths are estimated, so the spacing around these marks is approximate.
-- **Not included:** playback, an editor, import/export of other file formats, and multiple voices in one track.
+- **Voices: two at most.** A measure cannot have a third voice.
+- **Voices: beat marks on voice 2.** Chord symbols and diagrams, dynamics, fermatas, pick strokes, strums, arpeggios, let ring, P.M., rakes, whammy, vibrato, harmonic labels, tap, slap, pop and trill are drawn for voice 1 only. Voice 2 still draws its notes, articulations, tremolo, ties, slurs and slides.
+- **Voices: no shared noteheads or merged rests.** A unison is drawn with voice 2's noteheads moved to the right. Rests are never merged.
+- **Voices: whole-measure rests.** A whole-measure rest is centred in the bar and does not move to clear the other voice's notes.
+- **Voices: links from a single-voice measure.** A tie, slur, hammer-on, pull-off or slide that starts in a single-voice measure and ends in voice 2 of the next measure is not drawn.
+- **Voices: grace notes.** Graces of both voices that lead into notes at the same time can collide.
+- **Voices: TAB.** A voice 2 fret on the same string as a voice 1 fret at the same time is left off the TAB staff. A voice 1 rest in the rhythm band is drawn over voice 2 frets and can hide them.
+- **Voices: dots.** Where the voices do not clash, a dot can sit close to the other voice's noteheads.
+- **Not included:** playback, an editor, and import/export of other file formats.
 
 ## Running tests
 
@@ -573,6 +625,15 @@ It prints `ALL PASSED` and exits with code 0 on success.
 - To run one group on its own: `node tests/units.mjs`, `node tests/engraving.mjs`, or `node tests/articulations.mjs`.
 
 ## Changelog
+
+### 1.4.0 — 2026-11-08
+
+Two voices on one staff. Nothing changes for scores that do not use them.
+
+- `voices` on a measure: two rhythms on one staff, such as a melody over a held bass. Voice 1 stems up and voice 2 stems down, on notation and TAB. See [Voices](#voices).
+- `hidden: true` on a rest: the rest keeps its time and draws nothing.
+- Playing marks such as chord symbols, dynamics, fermatas, pick strokes and tap or trill letters are drawn for voice 1 only. Voice 2 draws its notes, articulations, tremolo, ties, slurs and slides.
+- New SVG class: `voice-2`, on the notation of voice 2 in a two-voice measure.
 
 ### 1.3.1 — 2026-11-01
 
@@ -670,6 +731,7 @@ Initial public release.
     - `timeline.js`: the shared note timeline across tracks and the horizontal spacing.
     - `chord.js`: chord geometry (seconds, accidental columns, dots, ledger lines) and the room an arpeggio line needs.
     - `accidentals.js`: accidentals carried through a measure.
+    - `voices.js`: the shared columns of a two-voice measure (clash shift, shared accidentals, dots, rest positions).
     - `systems.js`: system breaking, justification, headers, courtesy signatures, instrument-name indents.
     - `beams.js`: beams and tuplet groups, including compound meters.
     - `vertical.js`: places each staff vertically from its content.

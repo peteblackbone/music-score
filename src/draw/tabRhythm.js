@@ -36,7 +36,7 @@ import { TEXT_ASCENT_EM } from '../layout/ink.js';
 import { restForDuration } from '../glyphs.js';
 import { glyphBox } from '../glyphMetrics.js';
 import { smuflFontSizePx } from '../theme.js';
-import { beamCount } from '../duration.js';
+import { beamCount, isHiddenRest } from '../duration.js';
 import { DOT_STEP_SP, DOT_RADIUS_SP } from '../layout/chord.js';
 
 const TUPLET_NUMBER_GAP_SP = 0.3; // primary beam's lower edge -> top of the tuplet number
@@ -124,6 +124,7 @@ export function drawTabRhythm(g, measure, stringCount, lineBottom, theme) {
     const { el, x, index } = layoutEl;
     if (el.type === 'grace') return;
     if (el.type === 'rest') {
+      if (isHiddenRest(el)) return;
       drawn.set(index, drawRest(gEl, x, el, stringCount, lineBottom, theme, layoutEl.wholeMeasureRest));
       return;
     }

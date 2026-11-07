@@ -3033,9 +3033,15 @@ test('tab-rhythm', 'notation tuplet brackets stay outside the staff: bracket lin
   for (const [name, score, options] of SCORES) for (const width of [600, 900]) {
     const sp = (options.theme && options.theme.staffLineSpacing) || 10;
     const svg = renderTree(score, width, options);
-    byClass(svg, 'tuplet', 'g').forEach(({ n }) => {
+    byClass(svg, 'tuplet', 'g').forEach(({ n, parents }) => {
       // Staff groups put the top line at local y = 0; the tuplet group lives inside one.
       const ys = n.children.filter((c) => c.tag === 'path').flatMap((p) => pathNums(p).filter((_, i) => i % 2 === 1));
+      if (parents.some((p) => cls(p) === 'voice-2')) {
+        // Two-voice measures (1.4.0): voice 2's brackets mirror the rule below the bottom line (y = 4 sp).
+        ok(Math.min(...ys) >= 4.5 * sp - EPS, `${name}@${width}: voice-2 tuplet bracket reaches y ${Math.min(...ys)} (bottom line ${4 * sp})`);
+        ok(Math.max(...ys) >= 5 * sp - EPS, `${name}@${width}: voice-2 tuplet bracket line at ${Math.max(...ys)}, want >= ${5 * sp}`);
+        return;
+      }
       ok(Math.max(...ys) <= -0.5 * sp + EPS, `${name}@${width}: tuplet bracket reaches y ${Math.max(...ys)} (top line 0)`);
       const line = Math.min(...ys);
       ok(line <= -1 * sp + EPS, `${name}@${width}: tuplet bracket line at ${line}, want <= ${-sp}`);
@@ -5573,6 +5579,24 @@ test('releaseCap', 'release-adjacent fixture: m1, m2 (release note), m5 (16ths) 
   }
 });
 }
+
+// ======================= two voices (1.4.0) =======================
+test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing or bad numbers, deterministically, input untouched', () => {
+  const fixtures = characterizationCases.filter((c) => c.name.startsWith('voices'));
+  ok(fixtures.length === 3, `expected 3 voices fixtures, got ${fixtures.length}`);
+  for (const fx of fixtures) {
+    const before = JSON.stringify(fx.score);
+    for (const w of [600, 900, 1400]) {
+      let out = '';
+      try { out = serialize(renderTree(fx.score, w, fx.options || {})); } catch (e) { ok(false, `${fx.name}@${w}: threw ${e.message}`); continue; }
+      ok(!/NaN|Infinity|undefined/.test(out), `${fx.name}@${w}: bad number`);
+      ok(out.includes('voice-2'), `${fx.name}@${w}: no voice-2 group`);
+      ok(out === serialize(renderTree(fx.score, w, fx.options || {})), `${fx.name}@${w}: two renders differ`);
+    }
+    const box = makeContainer(); new MusicScoreRenderer(box, fx.score, { width: fx.width }).render();
+    ok(JSON.stringify(fx.score) === before, `${fx.name}: input score mutated by render`);
+  }
+});
 
 // ---------- report ----------
 export function summary() {

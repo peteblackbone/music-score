@@ -64,17 +64,32 @@ const SLIDE_MARK_MIN_SP = 0.4;   // ...and skipped when clamping leaves less tha
  * practice); each is drawn independently off the same string-position
  * data.
  *
+ * Two-voice measures link within each voice (flattenRuns' voice streams;
+ * voice 2's notes as drawn on TAB, `tabEl`), while neighbour, next-note and
+ * obstacle limits also look at the other voice's notes there.
+ *
  * `helpers` are draw/passes/common.js's `{ flattenRuns, breakEndX,
  * breakStartX }`. Returns the track's TAB notes in score order
- * (`{ run, sysIdx, g, x, y, string, fret, ... }`), for the pass's
- * per-beat marks.
+ * (`{ run, sysIdx, g, x, y, string, fret, ... }`; voice 1 in two-voice
+ * measures), for the pass's per-beat marks.
  */
-export function renderTabLinks(track, trackRuns, systems, theme, { flattenRuns, breakEndX, breakStartX }) {
+export function renderTabLinks(track, trackRuns, systems, theme, helpers) {
+  const runs = trackRuns.filter((r) => r.track === track);
+  const flat = collectTabNotes(track, trackRuns, theme, helpers.flattenRuns, 1);
+  if (!runs.some((r) => r.measures.some((m) => m.elements2))) {
+    drawTabLinks(flat, [], () => true, systems, theme, helpers);
+    return flat;
+  }
+  const flat2 = collectTabNotes(track, trackRuns, theme, helpers.flattenRuns, 2);
+  drawTabLinks(flat, flat2.filter((c) => c.voice === 2), () => true, systems, theme, helpers);
+  drawTabLinks(flat2, flat.filter((c) => c.measure.elements2), (item) => item.voice === 2, systems, theme, helpers);
+  return flat;
+}
+
+/** The TAB notes of one voice stream of `track` in score order (see renderTabLinks). */
+function collectTabNotes(track, trackRuns, theme, flattenRuns, voice) {
   const s = theme.staffLineSpacing;
   const stringCount = track.tuning.length;
-  const measureOf = new Map();
-  trackRuns.filter((r) => r.track === track).forEach((run) => run.measures
-    .forEach((m) => m.elements.forEach((le) => measureOf.set(le, m))));
   const flat = [];
   // A note's fret-label knock-out box (null without a fret), an obstacle for release falls.
   const knockHalf = tabFretKnockoutHalf(theme);
@@ -83,8 +98,9 @@ export function renderTabLinks(track, trackRuns, systems, theme, { flattenRuns, 
     const w = fretLabelWidth(fretLabel(n), theme);
     return { x1: x - w / 2, x2: x + w / 2, top: y - knockHalf, bottom: y + knockHalf };
   };
-  flattenRuns(trackRuns, track, (layoutEl, run) => {
-    const elDef = layoutEl.el;
+  flattenRuns(trackRuns, track, (layoutEl, run, measure) => {
+    const elDef = layoutEl.tabEl || layoutEl.el;
+    const x = layoutEl.x - (layoutEl.dx || 0); // TAB has no clash shift
     (elDef.notes || []).forEach((n) => {
       if (n.string == null) return;
       const y = run.tabBaselineY - (stringCount - n.string) * theme.tabStaffLineSpacing;
@@ -94,23 +110,37 @@ export function renderTabLinks(track, trackRuns, systems, theme, { flattenRuns, 
         ? Math.max(SLIDE_END_INSET_SP * s, fretLabelWidth(fretLabel(n), theme) / 2 + SLIDE_LABEL_CLEAR_SP * s)
         : SLIDE_END_INSET_SP * s;
       flat.push({
-        run, sysIdx: run.sysIdx, g: run.tabG, x: layoutEl.x, y,
+        run, sysIdx: run.sysIdx, g: run.tabG, x, y,
         string: n.string, fret: n.fret, hammerPull: n.hammerPull, slide: n.slide, bend: n.bend,
         naturalHarmonic: isNaturalHarmonic(n), slideInset,
-        grace: elDef.type === 'grace', slideIn: n.slideIn, slideOut: n.slideOut, measure: measureOf.get(layoutEl),
-        knock: knockOf(n, layoutEl.x, y),
+        grace: elDef.type === 'grace', slideIn: n.slideIn, slideOut: n.slideOut, measure,
+        knock: knockOf(n, x, y),
+        ...(layoutEl.voice ? { voice: layoutEl.voice } : {}),
       });
     });
-  });
+  }, voice);
+  return flat;
+}
+
+/**
+ * Draw the links of the TAB notes `flat` (one voice stream) that start on
+ * an item passing `startFilter`; `other` holds the other voice's notes,
+ * which only limit lengths.
+ */
+function drawTabLinks(flat, other, startFilter, systems, theme, { breakEndX, breakStartX }) {
+  const s = theme.staffLineSpacing;
   const marks = slideMarks(flat);
   const lastBendAmount = new Map(); // string -> amount of its latest bend / pre-bend, a release note's default
+  const all = other.length ? flat.concat(other) : flat;
   // Nearest other note x on the item's system before (-1) / after (+1) it, or -/+Infinity.
   const neighbourX = (item, dir) => (dir < 0 ? Math.max : Math.min)(
-    dir * Infinity, ...flat.filter((c) => c.sysIdx === item.sysIdx && dir * (c.x - item.x) > 0).map((c) => c.x));
+    dir * Infinity, ...all.filter((c) => c.sysIdx === item.sysIdx && dir * (c.x - item.x) > 0).map((c) => c.x));
+  const later = (item) => (c) => c.sysIdx === item.sysIdx && c.x > item.x;
 
   flat.forEach((item, i) => {
     const { slideIn, slideOut } = marks[i];
     if (!item.hammerPull && !item.slide && !item.bend && !slideIn && !slideOut) return;
+    if (!startFilter(item)) return;
     const target = flat[linkTarget(flat, i)];
     const sameSystem = target && target.sysIdx === item.sysIdx;
     const ascending = target && target.fret != null && item.fret != null ? target.fret > item.fret : true;
@@ -173,9 +203,11 @@ export function renderTabLinks(track, trackRuns, systems, theme, { flattenRuns, 
       // 1.0 baseline) so a half bend visibly reads as smaller than a
       // full one, instead of every amount drawing the same size arc.
       bendInfo.heightFrac = Math.max(0.55, Math.min(1.3, semitones / 2));
-      const next = flat.slice(i + 1).find((c) => c.sysIdx === item.sysIdx && c.x > item.x)?.x;
-      // Never past the system's last barline.
-      const nextX = Math.min(next ?? Infinity, systems[item.sysIdx].lastBarlineX);
+      const next = flat.slice(i + 1).find(later(item))?.x;
+      // Never past the system's last barline (nor the other voice's next note).
+      const nextX = other.length
+        ? Math.min(next ?? Infinity, ...other.filter(later(item)).map((c) => c.x), systems[item.sysIdx].lastBarlineX)
+        : Math.min(next ?? Infinity, systems[item.sysIdx].lastBarlineX);
       // The landing fret in parentheses is only meaningful for a bend
       // that's held at pitch with nothing else going on. A release
       // returns to the original pitch, and a "hold" bend sustains into
@@ -188,11 +220,10 @@ export function renderTabLinks(track, trackRuns, systems, theme, { flattenRuns, 
         ? Math.round(item.fret + semitones) : null;
       // A release fall ends short of later fret labels its arrowhead would reach.
       const obstacles = bendInfo.release
-        ? flat.slice(i + 1).filter((c) => c.sysIdx === item.sysIdx && c.x > item.x && c.knock).map((c) => c.knock) : null;
+        ? flat.slice(i + 1).concat(other).filter((c) => later(item)(c) && c.knock).map((c) => c.knock) : null;
       // Record its ink on the run (tagged with the note's x) for the technique-label pass.
       renderBend(item.g, item.x, item.y, bendInfo, theme, nextX, targetFret, obstacles)
         .forEach((b) => item.run.tabInkBoxes.push({ ...b, noteX: item.x }));
     }
   });
-  return flat;
 }

@@ -21,6 +21,7 @@ const tabc = (frets, extra = {}, duration = 'quarter') => ({ type: 'note', durat
 const pc = (pitches, extra = {}, duration = 'quarter') => ({ type: 'note', duration, notes: pitches.map((p) => (typeof p === 'string' ? n(p) : p)), ...extra });
 const C_CHORD = [[5, 3], [4, 2], [3, 0], [2, 1]];
 const E_TOP = [[3, 1], [2, 0], [1, 0]];
+const vm = (beats1, beats2) => ({ voices: [{ beats: beats1 }, { beats: beats2 }] });
 const ras = (k) => tabc(E_TOP, { strum: k % 2 ? 'up' : 'down' }, '16th');
 
 export const characterizationCases = [
@@ -1117,6 +1118,84 @@ export const characterizationCases = [
           { beats: [tabq(1, 8), tabq(1, 5), tabq(1, 7), tabh(2, 7, { bend: 'full release' })] },
           { beats: [tabq(1, 8), tabq(1, 5), tabq(1, 7), tabh(2, 7, { bend: 'full release' })] },
           { beats: [tabq(1, 8), tabq(1, 5), tabq(1, 7), tabq(1, 8)] },
+        ],
+      }],
+    },
+  },
+  {
+    // 1.4.0 two-voice measures (voice 1 stems up, voice 2 down), key 1#: m1 quarter melody over a whole-note bass;
+    // m2 beamed 8ths in both voices, a voice-2 8th triplet, a voice-1 dotted quarter; m3 clash columns (a second, a
+    // dotted unison, a second with accidentals in both voices -> one stack); m4 a voice-2 whole-measure rest; m5 a
+    // voice-1 half rest raised clear of voice 2's D5 (ledger line); m6 a leading hidden half rest in voice 2, a stemmed
+    // voice-2 tremolo, a voice-1 rest; m7 slurs per voice, graces in both voices, articulations on both stem sides,
+    // voice 1's C#5 carrying into voice 2's C5 (natural); m7-m8 a tie per voice, a voice-2 whole-note tremolo below;
+    // m9 voice 2 only hidden rests (single-voice: automatic stems); m10 a one-entry `voices` (= beats).
+    name: 'voices', width: 900,
+    score: {
+      keySignature: 1,
+      tracks: [{
+        name: 'Gt.', showTablature: true,
+        measures: [
+          vm([tabq(2, 0), tabq(1, 0), tabq(1, 2), tabq(1, 3)], [tabd('whole', 6, 3)]),
+          vm([tabe(2, 1), tabe(2, 3), tabe(1, 0), tabe(2, 3), tabd('quarter', 2, 1, {}, { dots: 1 }), tabe(2, 0)],
+            [tabe(4, 0, { tuplet: 3 }), tabe(4, 2, { tuplet: 3 }), tabe(4, 4, { tuplet: 3 }), tabq(5, 2), tabd('half', 4, 0)]),
+          vm([tabq(3, 2), tabd('quarter', 3, 0, {}, { dots: 1 }), tabe(3, 1), tabq(2, 1)],
+            [tabq(3, 0), tabd('quarter', 4, 5, {}, { dots: 1 }), tabe(4, 3), tabq(4, 2)]),
+          vm([tabq(1, 0), tabq(1, 2), tabq(1, 3), tabq(1, 5)], [{ type: 'rest', duration: 'whole' }]),
+          vm([{ type: 'rest', duration: 'half' }, tabd('half', 1, 3)], [tabd('half', 2, 3), { type: 'rest', duration: 'half' }]),
+          vm([tabq(2, 0), tabq(2, 1), tabq(2, 3), qr()], [{ type: 'rest', duration: 'half', hidden: true }, tabd('half', 5, 2, {}, { tremolo: true })]),
+          vm([tabgr([[1, 1]]), tabq(2, 2, { slurStart: true, articulations: ['staccato'] }), tabq(1, 2), tabq(1, 3, { slurEnd: true }), tabh(1, 0, { tieStart: true }, { articulations: ['accent'] })],
+            [tabgr([[5, 0]]), tabq(4, 2, { slurStart: true, articulations: ['tenuto'] }), tabq(3, 5), tabq(4, 0, { slurEnd: true }), tabh(4, 2, { tieStart: true })]),
+          vm([tabd('half', 1, 0, { tieEnd: true }), tabd('half', 2, 3)], [tabd('whole', 4, 2, { tieEnd: true }, { tremolo: true })]),
+          vm([tabq(2, 0), tabq(2, 1), tabq(2, 3), tabq(1, 0)], [{ type: 'rest', duration: 'whole', hidden: true }]),
+          { voices: [{ beats: [tabq(2, 0), tabq(2, 1), tabq(2, 3), tabq(1, 0)] }] },
+        ],
+      }],
+    },
+  },
+  {
+    // Two voices across system breaks (600): a tie and a slur per voice from m2 into m3 split per voice (voice 1
+    // above, voice 2 below); voice 2's tied D#4 restates its sharp at the system start; m4 closes both.
+    name: 'voices-break', width: 600,
+    score: {
+      tracks: [{
+        name: 'Gt.', showTablature: true,
+        measures: [
+          vm([tabe(2, 1), tabe(2, 3), tabe(1, 0), tabe(2, 3), tabe(2, 1), tabe(2, 3), tabe(1, 0), tabe(1, 1)],
+            [tabe(4, 2), tabe(4, 3), tabe(4, 2), tabe(4, 0), tabe(5, 2), tabe(5, 3), tabe(5, 2), tabe(5, 0)]),
+          vm([tabe(2, 1), tabe(2, 3), tabe(1, 0), tabe(2, 3), tabe(2, 1), tabe(2, 3, { slurStart: true }), tabh(1, 0, { tieStart: true })],
+            [tabe(4, 2), tabe(4, 3), tabe(4, 2), tabe(4, 0), tabe(5, 2), tabe(5, 3, { slurStart: true }), tabh(5, 6, { tieStart: true })]),
+          vm([tabd('half', 1, 0, { tieEnd: true }), tabq(1, 1), tabq(1, 3, { slurEnd: true })],
+            [tabd('half', 5, 6, { tieEnd: true }), tabq(4, 0), tabq(4, 2, { slurEnd: true })]),
+          vm([tabe(2, 1), tabe(2, 3), tabe(1, 0), tabe(2, 3), tabd('half', 2, 1)], [tabd('whole', 5, 3)]),
+        ],
+      }],
+    },
+  },
+  {
+    // Two voices on TAB (both tracks the same): m1 a voice-2 hammer-on and slide on string 3 while voice 1 plays
+    // string 3 in between (links stay within the voice); m2 a voice-2 bend and release, same-string conflict at beat 1
+    // (voice 1's fret wins); m3 slide-in / slide-out in both voices; m4 voice-2-only onsets (TAB-only track's rhythm
+    // band, voice 1 only: frets without stems), a voice-1 rest over voice-2 frets (its knock-out wins, accepted).
+    name: 'voices-tab', width: 900,
+    score: {
+      tracks: [{
+        name: 'Gt.', showTablature: true,
+        measures: [
+          vm([tabq(1, 3), tabq(3, 5), tabq(1, 5), tabq(1, 3)], [tabd('half', 3, 4, { hammerPull: true }), tabh(3, 6, { slide: true }), tabq(3, 9)]),
+          vm([tabd('half', 2, 5), tabd('half', 1, 3)], [tabh(2, 7), tabh(3, 7, { bend: 'full release' }), tabq(3, 5), tabq(4, 7)]),
+          vm([tabh(1, 5, { slideIn: 'below' }), tabq(1, 7), tabd('half', 1, 8, { slideOut: 'down' })],
+            [tabd('half', 4, 5, { slideIn: 'above' }), tabh(4, 7, { slideOut: 'up' }), qr()]),
+          vm([qr(), tabd('half', 1, 5), tabq(1, 3)], [tabe(4, 2), tabe(4, 4), tabe(4, 5), tabe(4, 7), tabd('half', 3, 4)]),
+        ],
+      }, {
+        name: 'TAB', showStandardNotation: false, showTablature: true,
+        measures: [
+          vm([tabq(1, 3), tabq(3, 5), tabq(1, 5), tabq(1, 3)], [tabd('half', 3, 4, { hammerPull: true }), tabh(3, 6, { slide: true }), tabq(3, 9)]),
+          vm([tabd('half', 2, 5), tabd('half', 1, 3)], [tabh(2, 7), tabh(3, 7, { bend: 'full release' }), tabq(3, 5), tabq(4, 7)]),
+          vm([tabh(1, 5, { slideIn: 'below' }), tabq(1, 7), tabd('half', 1, 8, { slideOut: 'down' })],
+            [tabd('half', 4, 5, { slideIn: 'above' }), tabh(4, 7, { slideOut: 'up' }), qr()]),
+          vm([qr(), tabd('half', 1, 5), tabq(1, 3)], [tabe(4, 2), tabe(4, 4), tabe(4, 5), tabe(4, 7), tabd('half', 3, 4)]),
         ],
       }],
     },

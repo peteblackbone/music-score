@@ -9,15 +9,22 @@ const BREAK_GAP_SP = 0.5;        // split arc -> last barline / system header
 
 /**
  * Visit every layout element of `track`, in score order (system by system,
- * measure by measure), calling `visit(layoutEl, run)` where `run` is the
- * `trackRuns` entry the element belongs to.
+ * measure by measure), calling `visit(layoutEl, run, measure)` where `run`
+ * is the `trackRuns` entry the element belongs to. `voice` 2 walks voice 2
+ * of two-voice measures (`elements2`) and the elements of single-voice ones;
+ * voice-2 consumers start links only on elements with `voice === 2`.
  */
-export function flattenRuns(trackRuns, track, visit) {
+export function flattenRuns(trackRuns, track, visit, voice = 1) {
   trackRuns.filter((r) => r.track === track).forEach((run) => {
     run.measures.forEach((measure) => {
-      measure.elements.forEach((layoutEl) => visit(layoutEl, run));
+      (voice === 2 ? (measure.elements2 || measure.elements) : measure.elements).forEach((layoutEl) => visit(layoutEl, run, measure));
     });
   });
+}
+
+/** Whether any measure of `track` has two voices (else passes skip their voice-2 walk). */
+export function hasVoice2(trackRuns, track) {
+  return trackRuns.some((r) => r.track === track && r.measures.some((m) => m.elements2));
 }
 
 /** y of the top line of a run's TAB staff with `stringCount` strings. */
