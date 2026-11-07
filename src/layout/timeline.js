@@ -20,18 +20,23 @@
  *   (trailing graces: the tail, which with accidentals also keeps them clear
  *   of the last onset);
  * - a whole-measure rest (the only event is one rest ≥ the bar) or an empty
- *   measure creates no onset; it is centred in the measure later.
+ *   measure creates no onset; it is centred in the measure later; a hidden
+ *   rest takes time but creates no onset and takes no room;
+ * - a two-voice measure (`voice2Beats`) times each voice separately (voice 1
+ *   stems up, voice 2 down) and combines them (layout/voices.js); equal
+ *   times across voices share an onset like equal times across tracks.
  *
  * All widths are px. Pure functions, no DOM.
  */
 import { R, ZERO, add, sub, cmp, key, toNumber, max as rmax } from '../rational.js';
-import { durationR } from '../duration.js';
+import { durationR, isHiddenRest } from '../duration.js';
 import { staffPosition } from '../pitch.js';
 import { noteheadForDuration, restForDuration, flagForDuration } from '../glyphs.js';
 import { glyphBox } from '../glyphMetrics.js';
 import { groupBeams } from './beams.js';
 import { layoutChord, arpeggioInnerLeft, graceAccidentalRoom, DOT_GAP_SP, DOT_STEP_SP, DOT_RADIUS_SP, ARPEGGIO_ROOM_SP } from './chord.js';
-import { resolveMeasureAccidentals } from './accidentals.js';
+import { resolveMeasureAccidentals, resolveVoiceAccidentals } from './accidentals.js';
+import { combineVoices } from './voices.js';
 import { fretLabel, fretLabelWidth } from '../textMetrics.js';
 import { layoutHeadGlyph } from '../harmonics.js';
 import { tabRhythmExtents } from './tabRhythm.js';
@@ -115,12 +120,25 @@ function anchorGraces(pending, anchor) {
  * trailing graces; `k` = 0 for the grace nearest it; `accDx` = the
  * accidental room of the graces nearer it, `accRoom` its own room; grace events only). The `…First`
  * variants apply when the measure opens a system: tied continuations at
- * the first onset restate their accidental (ui.md §7).
+ * the first onset restate their accidental (ui.md §7). Two-voice measures add
+ * `events2` (voice 2, same shape; main events carry `dx`, rests `restPos` /
+ * `restLedger`; see layout/voices.js); hidden rests are `{ t, hidden: true, … }`.
  */
 function trackEvents(track, mi, theme) {
   const measure = track.measures[mi];
-  const accs = track.showStandardNotation ? resolveMeasureAccidentals(track, mi) : null;
-  return voiceEvents(track, measure, measure.beats, accs, null, theme, { tabBand: true, arpeggio: true });
+  if (!measure.voice2Beats) {
+    const accs = track.showStandardNotation ? resolveMeasureAccidentals(track, mi) : null;
+    return voiceEvents(track, measure, measure.beats, accs, null, theme, { tabBand: true, arpeggio: true });
+  }
+  // Two voices: voice 2 (`events2`) has no TAB rhythm band and no arpeggio.
+  const [a1, a2] = track.showStandardNotation ? resolveVoiceAccidentals(track, mi) : [null, null];
+  const r1 = voiceEvents(track, measure, measure.beats, a1, true, theme, { tabBand: true, arpeggio: true });
+  const r2 = voiceEvents(track, measure, measure.voice2Beats, a2, false, theme, { tabBand: false, arpeggio: false });
+  combineVoices(r1.events, r2.events, measure, theme);
+  return {
+    events: r1.events, events2: r2.events, end: rmax(r1.end, r2.end), wholeMeasureRest: r1.wholeMeasureRest, empty: false,
+    trailingGraces: Math.max(r1.trailingGraces, r2.trailingGraces), trailingAccRoom: Math.max(r1.trailingAccRoom, r2.trailingAccRoom),
+  };
 }
 
 /**
@@ -161,6 +179,14 @@ function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, ar
         accRoom: graceAccidentalRoom(accidentals, theme, accidentals ? forcedUp ?? stemUpFor(positionsOf(el)) : true),
       };
       pending.push(ev);
+      return ev;
+    }
+    if (isHiddenRest(el)) {
+      const ev = {
+        t, grace: null, hidden: true, left: 0, right: 0, ownLeft: 0, chord: null, accidentals: null,
+        leftFirst: 0, ownLeftFirst: 0, chordFirst: null, accidentalsFirst: null, wholeMeasureRest: false,
+      };
+      t = add(t, durationR(el));
       return ev;
     }
     let left = 0; let right = 0; let chord = null; let accidentals = null;
@@ -228,13 +254,14 @@ export function buildColumn(mi, score, theme) {
   const graceW = theme.graceNoteWidthSp * s;
   const tracks = score.tracks.map((track) => trackEvents(track, mi, theme));
 
-  // Merge onsets across tracks (whole-measure rests and graces create none).
+  // Merge onsets across tracks and voices (whole-measure rests, hidden rests and graces create none).
   const byKey = new Map();
   let end = ZERO;
+  const allEvents = (tr) => (tr.events2 ? [...tr.events, ...tr.events2] : tr.events);
   tracks.forEach((tr) => {
     end = rmax(end, tr.end);
-    tr.events.forEach((ev) => {
-      if (ev.grace || ev.wholeMeasureRest) return;
+    allEvents(tr).forEach((ev) => {
+      if (ev.grace || ev.wholeMeasureRest || ev.hidden) return;
       const k = key(ev.t);
       const o = byKey.get(k) || { t: ev.t, leftExt: 0, leftExtFirst: 0, rightExt: 0 };
       o.leftExt = Math.max(o.leftExt, ev.left);
@@ -245,8 +272,8 @@ export function buildColumn(mi, score, theme) {
   });
   const onsets = [...byKey.values()].sort((a, b) => cmp(a.t, b.t));
   const index = new Map(onsets.map((o, i) => [key(o.t), i]));
-  tracks.forEach((tr) => tr.events.forEach((ev) => {
-    ev.onset = ev.grace || ev.wholeMeasureRest ? null : index.get(key(ev.t));
+  tracks.forEach((tr) => allEvents(tr).forEach((ev) => {
+    ev.onset = ev.grace || ev.wholeMeasureRest || ev.hidden ? null : index.get(key(ev.t));
   }));
   const trailing = Math.max(0, ...tracks.map((tr) => tr.trailingGraces * graceW + tr.trailingAccRoom));
   const duration = rmax(end, barDuration(score.tracks[0]?.measures[mi].timeSignature || { beats: 4, beatType: 4 }));

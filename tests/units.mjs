@@ -2264,6 +2264,103 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(out.map((a) => a.key), ['k0', 'k1', 'k2', 'k3', 'k4']);
     eq(out.map((a) => +(a.dx * 10).toFixed(3)), [-29.36, -51.36, -62.36, -40.36, -18.36]);
   });
+
+  // two-voice layout (computeLayout)
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { buildColumn } = await imp('src/layout/timeline.js');
+  const { stemDxSp } = await imp('src/layout/chord.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const NH = String.fromCodePoint(0xE0A4);
+  const nb = (ps, duration = 'quarter', x = {}) => ({ type: 'note', duration, notes: ps.map((p) => (typeof p === 'string' ? { pitch: p } : p)), ...x });
+  const rs = (duration = 'quarter', x = {}) => ({ type: 'rest', duration, ...x });
+  const vm = (b1, b2, x = {}) => ({ ...x, voices: [{ beats: b1 }, { beats: b2 }] });
+  const lay2 = (measures, track = {}) => computeLayout(normalizeScore({ tracks: [{ showStandardNotation: true, ...track, measures }] }), th, 900).systems[0].tracks[0].measures;
+  const col = (b1, b2) => lay2([vm(b1, b2)])[0];
+  const quarters = (p) => [p, p, p, p].map((x) => nb([x]));
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+
+  test('two-voice layout: voice 1 stems up and voice 2 down, beam groups and whole notes included; tags and groups', () => {
+    const m = col([nb(['C6']), nb(['A5'], '8th'), nb(['B5'], '8th'), nb(['C6'], 'half')], [nb(['C4'], '8th'), nb(['D4'], '8th'), nb(['E4']), nb(['C4'], 'half')]);
+    eq(m.elements.map((e) => e.chord.stemUp), [true, true, true, true]);
+    eq(m.elements2.map((e) => e.chord.stemUp), [false, false, false, false]);
+    eq([m.beamGroups, m.beamGroups2], [[[1, 2]], [[0, 1]]]);
+    eq([m.elements.map((e) => e.voice), m.elements2.map((e) => e.voice), m.wholeRest, m.tupletGroups2], [[1, 1, 1, 1], [2, 2, 2, 2], null, []]);
+    const w = col([nb(['G4'], 'whole')], [nb(['C4'], 'whole')]);
+    eq([w.elements[0].chord.stemUp, w.elements2[0].chord.stemUp], [true, false]);
+  });
+  test('two-voice layout: equal onsets share x; voice-2 onsets between voice-1 onsets get their own', () => {
+    const m = col([nb(['C5'], 'half'), nb(['C5'], 'half')], quarters('E4'));
+    eq(m.elements2.map((e) => e.x === m.elements[0].x || e.x === m.elements[1].x), [true, false, true, false]);
+    const sc = normalizeScore({ tracks: [{ measures: [vm([nb(['C5'], 'half'), nb(['C5'], 'half')], quarters('E4'))] }] });
+    eq(buildColumn(0, sc, th).onsets.length, 4);
+  });
+  test('two-voice layout: clash shift for a second, a unison and crossed voices; none for a third or a rest', () => {
+    const plain = (stemDxSp(NH, true) - stemDxSp(NH, false)) * S;
+    const dx = (p1, p2) => col(quarters(p1), quarters(p2)).elements2[0].dx;
+    eq([near(dx('A4', 'G4'), plain), near(dx('G4', 'G4'), plain), near(dx('E4', 'G4'), plain), dx('B4', 'G4'), dx('C5', 'E4')], [true, true, true, 0, 0]);
+    const m = col([nb(['A4']), rs(), rs('half')], [nb(['G4']), nb(['G4']), rs('half')]);
+    eq([near(m.elements2[0].x - m.elements[0].x, plain), m.elements2[1].dx, m.elements2[1].x === m.elements[1].x], [true, 0, true]);
+    const w = col([nb(['A4'], 'whole')], [nb(['G4'], 'whole')]);
+    eq(near(w.elements2[0].dx, w.elements[0].chord.headWidth), true, 'whole heads touch');
+    // a voice-1 second displaced right of the stem adds a head width
+    const d = col([nb(['G4', 'A4']), rs(), rs('half')], [nb(['F4']), rs(), rs('half')]);
+    eq(near(d.elements2[0].dx, plain + d.elements[0].chord.headWidth), true, 'displaced head');
+  });
+  test('two-voice layout: one accidental stack for both voices, left of every head, columns not overlapping', () => {
+    const m = col([nb(['F#4', 'C#5']), rs(), rs('half')], [nb(['Eb4', 'Bb3']), rs(), rs('half')]);
+    const v1 = m.elements[0]; const v2 = m.elements2[0];
+    const accs = [...v1.chord.accidentals.map((a) => ({ pos: v1.chord.heads[a.noteIndex].pos, x1: a.dx, name: a.name })),
+      ...v2.chord.accidentals.map((a) => ({ pos: v2.chord.heads[a.noteIndex].pos, x1: a.dx + v2.dx, name: a.name }))];
+    eq(accs.length, 4);
+    const heads = [...v1.chord.heads.map((h) => h.dx - h.width / 2), ...v2.chord.heads.map((h) => v2.dx + h.dx - h.width / 2)];
+    accs.forEach((a) => { a.x2 = a.x1 + glyphBox(accidentalGlyphFor(a.name)).width * S; eq(a.x2 <= Math.min(...heads) + 1e-9, true, 'left of heads'); });
+    accs.forEach((a, i) => accs.slice(i + 1).forEach((b) => eq(Math.abs(a.pos - b.pos) >= 6 || a.x2 <= b.x1 + 1e-9 || b.x2 <= a.x1 + 1e-9, true, 'overlap')));
+    eq(v1.chord.leftExt >= Math.max(...accs.map((a) => -a.x1)) - 1e-9, true, 'left extent');
+  });
+  test('two-voice layout: voice-2 dots below a line note; one dot column on a clash, a shared dot position moves down a space', () => {
+    const lone = col([nb(['C5'], 'half'), rs('half')], [nb(['G4'], 'half', { dots: 1 }), rs()]);
+    eq(lone.elements2[0].chord.dots.positions, [1]);
+    const m = col([nb(['B4'], 'half', { dots: 1 }), rs()], [nb(['C5'], 'half', { dots: 1 }), rs()]);
+    const c1 = m.elements[0].chord; const c2 = m.elements2[0].chord;
+    eq([c1.dots.positions, c2.dots.positions], [[5], [3]]);
+    eq(near(c1.dots.dx, c2.dots.dx + m.elements2[0].dx), true, 'one column');
+    eq(c1.dots.dx >= Math.max(...c1.heads.map((h) => h.dx + h.width / 2), ...c2.heads.map((h) => m.elements2[0].dx + h.dx + h.width / 2)) + 0.5 * S - 1e-9, true);
+  });
+  test('two-voice layout: rest positions 8 / 0, whole-measure rests 8 / 2', () => {
+    const m = col([rs(), nb(['C5']), rs('half')], [nb(['E4']), rs(), rs('half')]);
+    eq([m.elements[0].restPos, m.elements2[1].restPos, m.elements[2].restPos, m.elements2[2].restPos], [8, 0, 8, 0]);
+    const w = lay2([vm([rs('whole')], quarters('E4')), vm(quarters('C5'), [rs('whole')])]);
+    eq([w[0].elements[0].restPos, w[0].elements[0].wholeMeasureRest, w[1].elements2[0].restPos, w[1].elements2[0].wholeMeasureRest], [8, true, 2, true]);
+    eq('restPos' in w[0].elements2[0], false);
+  });
+  test('two-voice layout: a rest moves a whole space at a time clear of the other voice\'s heads; ledger outside the staff', () => {
+    const m = col([rs(), rs('half'), rs()], [nb(['D5']), nb(['D5'], 'half'), nb(['B4'])]);
+    eq([m.elements[0].restPos, m.elements[1].restPos, m.elements[2].restPos], [12, 10, 10]);
+    eq([m.elements[0].restLedger, m.elements[1].restLedger], [undefined, 10]);
+    const v2 = col([nb(['E4'], 'half'), nb(['E4'], 'half')], [rs('half'), rs('half')]);
+    eq([v2.elements2[0].restPos, v2.elements2[0].restLedger], [-4, -4]);
+  });
+  test('two-voice layout: hidden rests take time but no onset, in either kind of measure', () => {
+    const sc = normalizeScore({ tracks: [{ measures: [
+      vm(quarters('C5'), [rs('half', { hidden: true }), nb(['E4'], 'half')]),
+      { beats: [rs('quarter', { hidden: true }), nb(['C5']), nb(['C5']), nb(['C5'])] },
+    ] }] });
+    eq([buildColumn(0, sc, th).onsets.length, buildColumn(1, sc, th).onsets.length], [4, 3]);
+    const ms = computeLayout(sc, th, 900).systems[0].tracks[0].measures;
+    eq([ms[0].elements2[0].x === ms[0].elements[0].x, ms[0].elements2[1].x === ms[0].elements[2].x], [true, true]);
+    eq([ms[1].elements[0].x === ms[1].elements[1].x, ms[1].elements[0].width], [true, 0]);
+    // a measure whose voice 2 has only hidden rests lays out like the single-voice measure
+    const one = lay2([vm(quarters('C5'), [rs('whole', { hidden: true })])])[0];
+    eq([one.elements2, one.elements[0].voice, one.elements[0].chord.stemUp], [undefined, undefined, false]);
+  });
+  test('two-voice layout: voice-2 TAB beat drops notes on strings voice 1 frets at the same onset, and beat marks', () => {
+    const m = lay2([vm([nb([{ string: 2, fret: 5 }], 'half'), nb([{ string: 1, fret: 3 }], 'half')],
+      [nb([{ string: 2, fret: 7 }, { string: 4, fret: 5 }], 'half', { tremolo: true }), nb([{ string: 2, fret: 3 }], 'half')])],
+    { showTablature: true })[0];
+    eq(m.elements2.map((e) => e.tabEl.notes.map((n) => n.string)), [[4], [2]]);
+    eq('tremolo' in m.elements2[0].tabEl, false);
+  });
 }
 
 // ---------- report ----------
