@@ -10,17 +10,20 @@ import { smuflFontSizePx } from '../theme.js';
 import { stemUpFor } from '../layout/timeline.js';
 
 // Articulations stack outward from the notehead in this fixed order,
-// regardless of the order the author listed them in.
-const ARTIC_ORDER = ['staccato', 'tenuto', 'accent'];
+// regardless of the order the author listed them in: staccatissimo or
+// staccato, then tenuto, then marcato or accent (normalizeArticulations).
 const ARTIC_GLYPHS = {
   staccato: { above: Glyph.articStaccatoAbove, below: Glyph.articStaccatoBelow },
+  staccatissimo: { above: Glyph.articStaccatissimoAbove, below: Glyph.articStaccatissimoBelow },
   tenuto: { above: Glyph.articTenutoAbove, below: Glyph.articTenutoBelow },
   accent: { above: Glyph.articAccentAbove, below: Glyph.articAccentBelow },
+  marcato: { above: Glyph.articMarcatoAbove, below: Glyph.articMarcatoBelow },
 };
 // Bravura draws each articulation with its origin on the edge nearest the
 // staff, so shifting by half the glyph's height (in staff spaces) centres
-// it on its target staff position.
-const ARTIC_HALF_HEIGHT_SP = { staccato: 0.17, tenuto: 0.08, accent: 0.37 };
+// it on its target staff position (staccatissimo and marcato: half the
+// measured glyphMetrics.js heights).
+const ARTIC_HALF_HEIGHT_SP = { staccato: 0.17, staccatissimo: 0.59, tenuto: 0.08, accent: 0.37, marcato: 0.5 };
 
 /**
  * Draw tremolo-picking marks: three short parallel diagonal strokes
@@ -113,11 +116,18 @@ export function elementBottom(info) {
 
 /**
  * Turn a beat's raw `articulations` field into the list of marks to draw,
- * in stacking order (nearest the notehead first). Unknown names,
- * duplicates and non-array values are silently dropped.
+ * in stacking order (nearest the notehead first): staccatissimo (beats
+ * staccato) or staccato, then tenuto, then marcato (alias 'heavyAccent';
+ * beats accent) or accent. Names match exactly; unknown names, duplicates
+ * and non-array values are silently dropped.
  */
 export function normalizeArticulations(raw) {
-  return Array.isArray(raw) ? ARTIC_ORDER.filter((name) => raw.includes(name)) : [];
+  if (!Array.isArray(raw)) return [];
+  const has = (name) => raw.includes(name);
+  const inner = has('staccatissimo') ? 'staccatissimo' : has('staccato') ? 'staccato' : null;
+  const mid = has('tenuto') ? 'tenuto' : null;
+  const outer = has('marcato') || has('heavyAccent') ? 'marcato' : has('accent') ? 'accent' : null;
+  return [inner, mid, outer].filter(Boolean);
 }
 
 /**

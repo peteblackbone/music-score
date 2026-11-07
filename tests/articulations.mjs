@@ -10,7 +10,7 @@ const root0 = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const imp = (p) => import(pathToFileURL(path.join(root0, p)).href);
 const { makeContainer, serialize } = await import('./dom-shim.mjs');
 const { MusicScoreRenderer } = await imp('src/MusicScoreRenderer.js');
-const { normalizeArticulations } = await imp('src/draw/notation.js');
+const { normalizeArticulations, renderArticulations } = await imp('src/draw/notation.js');
 const { Glyph } = await imp('src/glyphs.js');
 const { articulationsScore } = await imp('examples/articulations-demo.js');
 const { exampleScore } = await imp('examples/example-score.js');
@@ -43,9 +43,11 @@ const staffTopOf = (tree) => baselineOf(tree) - 4 * SP;
 // y of a staff position (E4 = 0 is the bottom line; +1 per half space)
 const posY = (tree, pos) => baselineOf(tree) - pos * (SP / 2);
 
-const HALF = { E4A2: 0.17, E4A3: 0.17, E4A4: 0.08, E4A5: 0.08, E4A0: 0.37, E4A1: 0.37 }; // design half-heights (sp)
-const NAME = { E4A2: 'staccato', E4A3: 'staccato', E4A4: 'tenuto', E4A5: 'tenuto', E4A0: 'accent', E4A1: 'accent' };
-const BELOW = new Set(['E4A3', 'E4A5', 'E4A1']);
+const HALF = { E4A2: 0.17, E4A3: 0.17, E4A4: 0.08, E4A5: 0.08, E4A0: 0.37, E4A1: 0.37, // design half-heights (sp)
+  E4A6: 0.59, E4A7: 0.59, E4AC: 0.5, E4AD: 0.5 };
+const NAME = { E4A2: 'staccato', E4A3: 'staccato', E4A4: 'tenuto', E4A5: 'tenuto', E4A0: 'accent', E4A1: 'accent',
+  E4A6: 'staccatissimo', E4A7: 'staccatissimo', E4AC: 'marcato', E4AD: 'marcato' };
+const BELOW = new Set(['E4A3', 'E4A5', 'E4A1', 'E4A7', 'E4AD']);
 // Mark descriptors for one `articulations` group: centre y is the glyph origin
 // shifted back by half its height (the renderer shifts origin toward the far edge).
 function marksOf(g) {
@@ -80,7 +82,7 @@ function deepEq(a, b, what = '') { eq(JSON.stringify(a), JSON.stringify(b), what
 // ---------- AC6/AC7: inert inputs ----------
 const mapBeats = (score, f) => { const s = clone(score); s.tracks.forEach((t) => t.measures.forEach((m) => { m.beats = m.beats.map(f); })); return s; };
 const INERT = [
-  { articulations: [] }, { articulations: 'staccato' }, { articulations: ['bogus', 1, null, 'marcato'] },
+  { articulations: [] }, { articulations: 'staccato' }, { articulations: ['bogus', 1, null, 'zzz'] },
   { articulations: null }, { articulations: { 0: 'staccato' } },
   { fermata: false }, { fermata: 'true' }, { fermata: 1 }, { fermata: null },
   { articulations: [], fermata: false },
@@ -93,7 +95,7 @@ for (const [nm, sc] of [['example-score', exampleScore], ['lead-riff', leadRiff]
 }
 test('[AC6] unknown-only articulations leave a dynamic beat byte-identical (same node order)', () => {
   const a = oneTrack([q('E4', { dynamic: 'mf' }), q('G4')]);
-  const b = oneTrack([q('E4', { dynamic: 'mf', articulations: ['marcato', 'bogus'] }), q('G4')]);
+  const b = oneTrack([q('E4', { dynamic: 'mf', articulations: ['zzz', 'bogus'] }), q('G4')]);
   ok(render(b) === render(a), 'differs');
 });
 
@@ -101,7 +103,7 @@ test('[AC6] unknown-only articulations leave a dynamic beat byte-identical (same
 test('[AC2,AC6] normalizeArticulations: fixed order, dedupe, drop unknown/non-array', () => {
   deepEq(normalizeArticulations(['accent', 'staccato', 'tenuto']), ['staccato', 'tenuto', 'accent']);
   deepEq(normalizeArticulations(['accent', 'accent', 'staccato', 'staccato']), ['staccato', 'accent']);
-  deepEq(normalizeArticulations(['marcato', 'bogus', 1, null, 'tenuto']), ['tenuto']);
+  deepEq(normalizeArticulations(['marcato', 'bogus', 1, null, 'tenuto']), ['tenuto', 'marcato']);
   deepEq(normalizeArticulations('staccato'), []);
   deepEq(normalizeArticulations(undefined), []);
   deepEq(normalizeArticulations(null), []);
@@ -442,11 +444,14 @@ test('[PIN-1.5] fermata "true" and 1 draw no fermata (output equals no fermata)'
   });
 });
 
-// flip-later (A): commit A adds marcato / heavyAccent / staccatissimo; these then stop being inert
-test('[PIN-1.5][flip-later A] articulations [marcato] / [heavyAccent] / [staccatissimo] are byte-equal to none', () => {
+// flipped by commit A (was: articulations [marcato] / [heavyAccent] / [staccatissimo] byte-equal to none)
+test('[PIN-1.5][flipped A] articulations [marcato] / [heavyAccent] / [staccatissimo] now draw one mark', () => {
   const base = render(oneTrack([q('E4'), q('G4')]));
-  ['marcato', 'heavyAccent', 'staccatissimo'].forEach((n) =>
-    ok(render(oneTrack([q('E4', { articulations: [n] }), q('G4')])) === base, n));
+  [['marcato', 'E4AD'], ['heavyAccent', 'E4AD'], ['staccatissimo', 'E4A7']].forEach(([n, code]) => {
+    const tree = renderTree(oneTrack([q('E4', { articulations: [n] }), q('G4')]));
+    ok(serialize(tree) !== base, n);
+    deepEq(marksOf(groups(tree, 'articulations')[0]).map((m) => m.code), [code], n);
+  });
 });
 // flip-later (T): commit T gives named tremolo values meaning; today any truthy value draws 3 strokes
 test('[PIN-1.5][flip-later T] tremolo "8th" and "16th" draw 3 strokes with class "tremolo"', () => {
@@ -463,6 +468,94 @@ test('[PIN-1.5][flip-later W] vibrato "wide" renders byte-equal to vibrato true'
 test('[PIN-1.5][flip-later F] fermata "short" / "long" / "normal" draw no g.fermata', () => {
   ['short', 'long', 'normal'].forEach((v) =>
     eq(groups(renderTree(oneTrack([q('E4', { fermata: v })])), 'fermata').length, 0, `fermata ${v}`));
+});
+
+// ---------- 1.5 marcato / staccatissimo (A1-A3) ----------
+// Proof for the re-recorded articulations-demo snapshots: the demo's only new mark is one 'marcato'; renamed to an
+// unknown name it must still hash to the opt-out baselines recorded before 1.5.0 (tests/fixtures/pre-1.3-hashes.json
+// at 588220a), so nothing but that mark changed.
+{
+  const { createHash } = await import('node:crypto');
+  const OLD = {
+    600: '9afeb20459b9de681ade0b5ac41b81cb67283f350c60964a837eb69f22d1be7e',
+    900: '467bf13ef094295d2b3dcafceadec44e114a6c6a649c7ec430d8fda3292c6a45',
+  };
+  const swapped = mapBeats(articulationsScore, (b) => (b.articulations
+    ? { ...b, articulations: b.articulations.map((n) => (n === 'marcato' ? 'zzz' : n)) } : b));
+  for (const w of [900, 600]) {
+    test(`[A1] articulations demo with 'marcato' renamed to 'zzz' hashes to its pre-1.5 opt-out baseline @${w}`, () => {
+      const box = makeContainer();
+      new MusicScoreRenderer(box, clone(swapped), { width: w, theme: { hammerPullSlurs: false } }).render();
+      eq(createHash('sha256').update(serialize(box.children[0])).digest('hex'), OLD[w]);
+    });
+  }
+  test('[A1] the demo uses exactly one marcato (its only 1.5 mark)', () => {
+    const names = articulationsScore.tracks.flatMap((t) => t.measures.flatMap((m) => m.beats.flatMap((b) => b.articulations || [])));
+    eq(names.filter((n) => n === 'marcato').length, 1);
+    ok(!names.some((n) => ['heavyAccent', 'staccatissimo'].includes(n)), 'no other 1.5 names');
+  });
+}
+const codesOf = (tree) => groups(tree, 'articulations').map((g) => marksOf(g).map((m) => m.code));
+test('[A1] stem up -> Below glyphs, stem down -> Above glyphs', () => {
+  deepEq(codesOf(renderTree(oneTrack([q('E4', { articulations: ['staccatissimo', 'marcato'] })]))), [['E4A7', 'E4AD']]);
+  deepEq(codesOf(renderTree(oneTrack([q('D5', { articulations: ['staccatissimo', 'marcato'] })]))), [['E4A6', 'E4AC']]);
+  deepEq(codesOf(renderTree(oneTrack([whole(['D5'], { articulations: ['heavyAccent'] })]))), [['E4AC']]);
+  deepEq(codesOf(renderTree(oneTrack([whole(['G4'], { articulations: ['heavyAccent'] })]))), [['E4AD']]);
+});
+test('[A1] two voices: voice 1 marks above, voice 2 marks below', () => {
+  const rests = [{ type: 'rest', duration: 'quarter' }, { type: 'rest', duration: 'half' }];
+  const sc = oneTrack([]);
+  sc.tracks[0].measures = [{ voices: [
+    { beats: [q('E5', { articulations: ['marcato', 'staccatissimo'] }), ...rests] },
+    { beats: [q('E4', { articulations: ['marcato', 'staccatissimo'] }), ...rests] },
+  ] }];
+  const [g1, g2] = groups(renderTree(sc), 'articulations').map(marksOf);
+  deepEq(g1.map((m) => m.code), ['E4A6', 'E4AC']);
+  deepEq(g2.map((m) => m.code), ['E4A7', 'E4AD']);
+  eq(g1[0].center - g1[1].center, SP, 'voice 1 stacks upward');
+  eq(g2[1].center - g2[0].center, SP, 'voice 2 stacks downward');
+});
+test('[A2] normalizeArticulations: precedence, order, alias, exact names', () => {
+  deepEq(normalizeArticulations(['accent', 'marcato', 'staccato', 'staccatissimo', 'tenuto']), ['staccatissimo', 'tenuto', 'marcato']);
+  deepEq(normalizeArticulations(['heavyAccent', 'accent']), ['marcato']);
+  deepEq(normalizeArticulations(['marcato', 'heavyAccent', 'marcato']), ['marcato']);
+  deepEq(normalizeArticulations(['staccato', 'staccatissimo']), ['staccatissimo']);
+  deepEq(normalizeArticulations(['accent', 'staccatissimo']), ['staccatissimo', 'accent']);
+  deepEq(normalizeArticulations(['Marcato', ' marcato', 'STACCATISSIMO', 'heavyaccent', 'marcato ']), []);
+  deepEq(normalizeArticulations(['tenuto', 'staccato', 'accent']), ['staccato', 'tenuto', 'accent']);
+  const once = normalizeArticulations(['accent', 'heavyAccent', 'staccato', 'staccatissimo', 'tenuto']);
+  deepEq(normalizeArticulations(once), once, 'idempotent');
+});
+test('[A2] stacked centres step 1 sp from the first staff space out, both sides', () => {
+  const up = renderTree(oneTrack([q('E4', { articulations: ['marcato', 'tenuto', 'staccatissimo'] })]));
+  const ms = marksOf(groups(up, 'articulations')[0]);
+  deepEq(ms.map((m) => m.name), ['staccatissimo', 'tenuto', 'marcato']);
+  [-3, -5, -7].forEach((p, i) => eq(ms[i].center, posY(up, p), `up ${i}`));
+  const dn = renderTree(oneTrack([q('E5', { articulations: ['heavyAccent', 'staccatissimo'] })]));
+  const md = marksOf(groups(dn, 'articulations')[0]);
+  [9, 11].forEach((p, i) => eq(md[i].center, posY(dn, p), `down ${i}`));
+});
+test('[A2] articTopY / articBottomY use the new half heights', () => {
+  const theme = { staffLineSpacing: SP, fontFamily: 'Bravura', noteColor: '#000', fontSize: 40 };
+  const g = makeContainer();
+  // baseline y 0: staff position p sits at y = -p * SP / 2
+  const below = { x: 0, noteheads: [{ y: 0 }], stemUp: true, minPos: 0, maxPos: 0, duration: 'quarter' };
+  renderArticulations(g, below, ['staccatissimo', 'marcato'], 0, theme);
+  eq(below.articBottomY, 5 * (SP / 2) + 0.5 * SP, 'marcato outer edge below (pos -5)');
+  const above = { x: 0, noteheads: [{ y: 0 }], stemUp: false, minPos: 8, maxPos: 8, duration: 'quarter' };
+  renderArticulations(g, above, ['staccatissimo'], 0, theme);
+  eq(above.articTopY, -11 * (SP / 2) - 0.59 * SP, 'staccatissimo outer edge above (pos 11)');
+});
+test('[A3] marcato / staccatissimo ignored on rests, graces and a tab-only track', () => {
+  const r = renderTree(oneTrack([{ type: 'rest', duration: 'quarter', articulations: ['marcato', 'staccatissimo'] }, q('E4')]));
+  eq(groups(r, 'articulations').length, 0);
+  const plain = oneTrack([{ type: 'grace', notes: [{ pitch: 'E4' }] }, q('B4')]);
+  const marked = oneTrack([{ type: 'grace', articulations: ['marcato', 'heavyAccent', 'staccatissimo'], notes: [{ pitch: 'E4' }] }, q('B4')]);
+  ok(render(marked) === render(plain), 'grace differs');
+  const mk = (extra) => ({ tracks: [{ name: 'Tab', clef: 'treble', showStandardNotation: false, showTablature: true,
+    tuning: TUNING, timeSignature: { beats: 4, beatType: 4 }, keySignature: 0,
+    measures: [{ beats: [{ type: 'note', duration: 'whole', ...extra, notes: [{ string: 2, fret: 3 }] }] }] }] });
+  ok(render(mk({ articulations: ['marcato', 'staccatissimo', 'heavyAccent'] })) === render(mk({})), 'tab-only differs');
 });
 
 // ---------- report ----------

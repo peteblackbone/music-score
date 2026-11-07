@@ -106,6 +106,7 @@
       </g>
       <g class="articulations">
         <text x="196.05" y="6.7" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+        <text x="196.05" y="0" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
       </g>
       <g class="barline">
         <line x1="226.65" y1="0" x2="226.65" y2="40" stroke="#1a1a1a" stroke-width="1"/>
