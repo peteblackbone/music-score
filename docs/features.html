@@ -81,6 +81,7 @@
   <a href="#harmonics">Harmonics</a>
   <a href="#directions">Picking &amp; directions</a>
   <a href="#tab-rhythm">Rhythm on tab</a>
+  <a href="#voices">Two voices</a>
   <a href="#theme">Theming</a>
   <a href="#limits">Not included</a>
 </nav>
@@ -257,6 +258,16 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 </ul>
 <div class="demo" data-demo="tabRhythm" data-width="680"></div>
 
+<h2 id="voices">Two voices on one staff</h2>
+<p>A measure can hold two rhythms at once, as in a melody over a held bass. Give the measure <code>voices</code> instead of <code>beats</code>: the first entry is voice 1 (stems up) and the second is voice 2 (stems down). Both show on notation and on TAB.</p>
+<ul class="points">
+  <li>Ties and slurs stay within their voice: voice 1 above the notes, voice 2 below. Articulations sit on the stem side.</li>
+  <li>Where the voices clash, voice 2 moves right, and accidentals are shared between them.</li>
+  <li>A <code>{ type: 'rest', hidden: true }</code> takes time without drawing anything, which lets a voice start later.</li>
+  <li>Chord symbols, dynamics, fermatas and the other playing marks are read from voice 1 only.</li>
+</ul>
+<div class="demo" data-demo="voices" data-width="680"></div>
+
 <h2 id="theme">Theming</h2>
 <p>Pass <code>options.theme</code> to override any key of <code>defaultTheme</code>: colours (<code>noteColor</code>, <code>staffLineColor</code>, <code>tabFretColor</code>, <code>background</code>), fonts, line widths and spacing. Spacing keys ending in <code>Sp</code> are in staff spaces, so <code>staffLineSpacing</code> scales the whole score. Rhythm on tab uses <code>tabStemGapSp</code>, <code>tabStemLengthSp</code>, <code>tabHalfStemLengthSp</code>, <code>tabFlagScale</code> and <code>tabFretColor</code>.</p>
 <div class="demo" data-demo="theme" data-width="640" data-theme='{"staffLineSpacing":13,"noteColor":"#1f3a8a","staffLineColor":"#64748b","tabFretColor":"#1f3a8a","background":"#fbfaf6"}'></div>
@@ -264,7 +275,7 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 <h2 id="limits">Not included</h2>
 <ul class="points">
   <li>Playback, an editor, and import/export of other formats (design notes for these are in <a href="ARCHITECTURE.md">ARCHITECTURE.md</a>).</li>
-  <li>Multiple voices in one track, and different time signatures across tracks in the same measure.</li>
+  <li>Different time signatures across tracks in the same measure.</li>
   <li>Glyph and text widths are estimated, not measured from the font.</li>
 </ul>
 <p class="note">See "Known limitations" in the README for the full list.</p>
@@ -545,6 +556,25 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
         measures: [
           { beats: [t('quarter', 3, 2), t('8th', 3, 4), t('8th', 2, 3), t('half', 2, 5)] },
           { beats: [t('quarter', 1, 3), t('quarter', 1, 2), t('half', 2, 3)] },
+        ],
+      }],
+    },
+    voices: {
+      tracks: [{
+        name: 'Gtr.', showStandardNotation: true, showTablature: true,
+        measures: [
+          { voices: [
+            { beats: [t('quarter', 1, 5), t('quarter', 1, 7), t('quarter', 1, 8), t('quarter', 1, 7)] },
+            { beats: [t('whole', 6, 0)] },
+          ] },
+          { voices: [
+            { beats: [t('quarter', 1, 5, {}, { slurStart: true }), t('quarter', 1, 7), t('quarter', 1, 8), t('quarter', 1, 5, {}, { slurEnd: true })] },
+            { beats: [t('half', 6, 3), t('half', 6, 5)] },
+          ] },
+          { voices: [
+            { beats: [t('quarter', 1, 5), t('quarter', 1, 3), t('half', 2, 5)] },
+            { beats: [r('half', { hidden: true }), t('half', 6, 3)] },
+          ] },
         ],
       }],
     },
