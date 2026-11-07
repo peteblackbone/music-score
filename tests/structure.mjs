@@ -96,6 +96,12 @@ export const checks = {
     return probs;
   },
 
+  'draw/noteMarks.js does not import draw/notation.js': (f) => {
+    const p = 'src/draw/noteMarks.js';
+    if (!(p in f)) return [`${p} missing`];
+    return relOnly(f[p]).filter((s) => resolveSpec(p, s) === 'src/draw/notation.js').map((s) => `${p} imports ${s}`);
+  },
+
   'MusicScoreRenderer.js calls the 7 passes in order': (f) => {
     const t = f['src/MusicScoreRenderer.js'];
     if (t === undefined) return ['MusicScoreRenderer.js missing'];
@@ -123,6 +129,21 @@ export async function barrelProblems() {
   return probs;
 }
 
+// draw/notation.js export names recorded before the 1.5 move of the beat marks into draw/noteMarks.js
+// (notation.js re-exports the moved names, so callers are unchanged).
+const NOTATION_EXPORTS = ['BEAM_LEVEL_GAP_SP', 'BEAM_STUB_SP', 'TUPLET_LABEL_SIZE_SP', 'beamShape', 'beamStemCap',
+  'chordSymbolFontSize', 'curveBow', 'curveOuterPoints', 'dynamicFontSizePx', 'elementBottom', 'elementTop',
+  'normalizeArticulations', 'renderArticulations', 'renderBeams', 'renderChordSymbol', 'renderCurve', 'renderDynamic',
+  'renderFermata', 'renderNotationElement', 'renderNoteSlide', 'renderPickStroke', 'renderTremolo',
+  'renderTupletBracket', 'renderVibrato', 'renderWholeMeasureRest', 'stemGeometry', 'tupletBracket', 'tupletLabel'];
+
+export async function notationExportProblems(extra = []) {
+  const ns = await import(pathToFileURL(path.join(root, 'src/draw/notation.js')).href);
+  const names = Object.keys(ns).sort();
+  const want = [...NOTATION_EXPORTS, ...extra].sort();
+  return JSON.stringify(names) === JSON.stringify(want) ? [] : [`notation.js exports [${names}]`];
+}
+
 export async function summary() {
   let fail = 0;
   const files = loadSrc();
@@ -131,6 +152,7 @@ export async function summary() {
     else console.log(`PASS structure: ${name}`);
   };
   report('barrel exports exactly the 8 pass functions', await barrelProblems());
+  report('notation.js exports the pre-1.5 names', await notationExportProblems());
   for (const [name, fn] of Object.entries(checks)) report(name, fn(files));
   return fail;
 }
