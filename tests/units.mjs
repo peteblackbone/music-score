@@ -2037,9 +2037,10 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
 // ---------- pre-1.4 characterization (C0): pins taken from the code before two-voice measures ----------
 {
   const { createHash } = await import('node:crypto');
-  // the 52 pre-1.4 cases (the 1.4.0 two-voice fixtures char-voices-* came later)
+  // the 52 pre-1.4 cases (the 1.4.0 two-voice fixtures char-voices-* and the 1.5.0 char-note-effects-* came later)
   const isVoices = (id) => id.startsWith('char-voices-');
-  const cases = (await import('./cases.mjs')).cases.filter((c) => !isVoices(c.id));
+  const isPost14 = (id) => /^char-(voices|note-effects)-/.test(id);
+  const cases = (await import('./cases.mjs')).cases.filter((c) => !isPost14(c.id));
   const { computeLayout } = await imp('src/layout/index.js');
   const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
   const { flattenRuns } = await imp('src/draw/passes/common.js');
@@ -2067,7 +2068,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   test('no pre-1.4 snapshot SVG contains "voice-2"; every two-voice fixture snapshot does', () => {
     const dir = path.join(root0, 'tests/snapshots');
     const files = fs.readdirSync(dir).filter((f) => f.endsWith('.svg'));
-    const old = files.filter((f) => !isVoices(f));
+    const old = files.filter((f) => !isPost14(f));
     eq(old.length, 52);
     eq(old.filter((f) => fs.readFileSync(path.join(dir, f), 'utf8').includes('voice-2')), []);
     eq(files.filter((f) => isVoices(f) && !fs.readFileSync(path.join(dir, f), 'utf8').includes('voice-2')), []);
