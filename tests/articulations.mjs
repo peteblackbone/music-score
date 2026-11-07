@@ -398,6 +398,73 @@ test('determinism: demo renders identically twice, re-render is stable, input no
   eq(JSON.stringify(articulationsScore), before);
 });
 
+// ---------- [PIN-1.5] characterization of today's tremolo / vibrato / fermata / articulation handling ----------
+// Written before the note-effects 1.5 work. "Permanent" pins must survive it; "flip-later" pins
+// record behavior a named commit will deliberately change (A, T, W, F) and are updated by that commit.
+const pinBoth = (beats) => ({ tracks: [{ name: 'G', clef: 'treble', showStandardNotation: true, showTablature: true,
+  tuning: TUNING, timeSignature: { beats: 4, beatType: 4 }, keySignature: 0, measures: [{ beats }] }] });
+const pinNote = (duration, extra = {}) => ({ type: 'note', duration, ...extra, notes: [{ string: 2, fret: 3 }] });
+const strokes = (tree, cls) => groups(tree, cls).map((g) => g.children.map((c) => c.tag));
+const THREE = ['line', 'line', 'line'];
+
+// permanent: tremolo 2 -> three strokes in g.tremolo (stemmed and whole) and g.tab-tremolo
+for (const [nm, dur] of [['stemmed quarter', 'quarter'], ['whole note', 'whole']]) {
+  test(`[PIN-1.5] tremolo: 2 on a ${nm}: one g.tremolo with 3 lines and one g.tab-tremolo with 3 lines`, () => {
+    const tree = renderTree(pinBoth([pinNote(dur, { tremolo: 2 })]));
+    deepEq(strokes(tree, 'tremolo'), [THREE], 'tremolo');
+    deepEq(strokes(tree, 'tab-tremolo'), [THREE], 'tab-tremolo');
+  });
+}
+test('[PIN-1.5] tremolo group class is exactly "tremolo" (not tremolo-N / tremolo-2)', () => {
+  const sc = pinBoth([pinNote('quarter', { tremolo: 2 })]);
+  const classes = all(renderTree(sc)).filter((x) => x.n.tag === 'g' && /tremolo/.test(x.n.getAttribute('class') || '')).map((x) => x.n.getAttribute('class'));
+  deepEq(classes, ['tremolo', 'tab-tremolo']);
+  ok(!render(sc).includes('tremolo-'), 'suffixed class');
+});
+test('[PIN-1.5] tremolo 8 / 16 / 32 each draw 3 strokes (same as 2)', () => {
+  [8, 16, 32].forEach((v) => {
+    const tree = renderTree(pinBoth([pinNote('quarter', { tremolo: v })]));
+    deepEq(strokes(tree, 'tremolo'), [THREE], `tremolo ${v}`);
+    deepEq(strokes(tree, 'tab-tremolo'), [THREE], `tab-tremolo ${v}`);
+  });
+});
+test('[PIN-1.5] vibrato 1 and "x" render byte-equal to vibrato true', () => {
+  const base = render(pinBoth([pinNote('quarter', { vibrato: true })]));
+  ok(base.includes('class="vibrato"'), 'baseline has vibrato');
+  [1, 'x'].forEach((v) => ok(render(pinBoth([pinNote('quarter', { vibrato: v })])) === base, `vibrato ${JSON.stringify(v)}`));
+});
+test('[PIN-1.5] fermata "true" and 1 draw no fermata (output equals no fermata)', () => {
+  const base = render(oneTrack([q('E4'), q('G4')]));
+  ['true', 1].forEach((v) => {
+    const s = render(oneTrack([q('E4', { fermata: v }), q('G4')]));
+    ok(!s.includes('class="fermata"'), `fermata ${JSON.stringify(v)} drew one`);
+    ok(s === base, `fermata ${JSON.stringify(v)} differs`);
+  });
+});
+
+// flip-later (A): commit A adds marcato / heavyAccent / staccatissimo; these then stop being inert
+test('[PIN-1.5][flip-later A] articulations [marcato] / [heavyAccent] / [staccatissimo] are byte-equal to none', () => {
+  const base = render(oneTrack([q('E4'), q('G4')]));
+  ['marcato', 'heavyAccent', 'staccatissimo'].forEach((n) =>
+    ok(render(oneTrack([q('E4', { articulations: [n] }), q('G4')])) === base, n));
+});
+// flip-later (T): commit T gives named tremolo values meaning; today any truthy value draws 3 strokes
+test('[PIN-1.5][flip-later T] tremolo "8th" and "16th" draw 3 strokes with class "tremolo"', () => {
+  ['8th', '16th'].forEach((v) => {
+    deepEq(strokes(renderTree(oneTrack([q('E4', { tremolo: v })])), 'tremolo'), [THREE], `tremolo ${v}`);
+  });
+});
+// flip-later (W): commit W gives 'wide' its own look
+test('[PIN-1.5][flip-later W] vibrato "wide" renders byte-equal to vibrato true', () => {
+  const base = render(pinBoth([pinNote('quarter', { vibrato: true })]));
+  ok(render(pinBoth([pinNote('quarter', { vibrato: 'wide' })])) === base, 'wide differs');
+});
+// flip-later (F): commit F gives fermata 'short' / 'long' / 'normal' a glyph
+test('[PIN-1.5][flip-later F] fermata "short" / "long" / "normal" draw no g.fermata', () => {
+  ['short', 'long', 'normal'].forEach((v) =>
+    eq(groups(renderTree(oneTrack([q('E4', { fermata: v })])), 'fermata').length, 0, `fermata ${v}`));
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
