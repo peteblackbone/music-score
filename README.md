@@ -549,7 +549,7 @@ A measure can hold two rhythms on one staff, for example a melody over a held ba
 - **When a measure has two voices.** A measure has two voices when voice 2 has at least one beat that is not a hidden rest. A voice 2 made only of hidden rests leaves the measure as a single-voice measure, with automatic stems.
 - **Other cases.** A `voices` list with one entry is the same as `beats`. An empty `voices` array, or a value that is not an array, falls back to `beats`. Entries after the second are ignored, so a measure has at most two voices. If voice 1 is empty and voice 2 has notes, voice 1 draws nothing.
 - **No bar-length check.** Voices are not compared with the time signature. Each voice is drawn with the beats it has, even if it is longer or shorter than the bar.
-- **SVG.** In a two-voice measure, voice 2's noteheads, stems, beams, rests, articulations, tremolo and tuplets are inside a `<g class="voice-2">` group on the notation staff. Single-voice measures have no such group. TAB frets, ties and slurs are not inside it.
+- **SVG.** In a two-voice measure, voice 2's noteheads, accidentals, dots, ledger lines, stems, beams, grace notes, rests, articulations, tremolo and tuplets are inside a `<g class="voice-2">` group on the notation staff. Single-voice measures have no such group. TAB frets, ties and slurs are not inside it.
 
 ## Known limitations
 
