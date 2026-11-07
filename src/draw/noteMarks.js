@@ -8,6 +8,7 @@ import { Glyph } from '../glyphs.js';
 import { staffPositionToY } from '../pitch.js';
 import { smuflFontSizePx } from '../theme.js';
 import { stemUpFor } from '../layout/timeline.js';
+import { tremoloStrokes } from '../noteEffects.js';
 
 // Articulations stack outward from the notehead in this fixed order,
 // regardless of the order the author listed them in: staccatissimo or
@@ -26,17 +27,28 @@ const ARTIC_GLYPHS = {
 const ARTIC_HALF_HEIGHT_SP = { staccato: 0.17, staccatissimo: 0.59, tenuto: 0.08, accent: 0.37, marcato: 0.5 };
 
 /**
- * Draw tremolo-picking marks: three short parallel diagonal strokes
- * crossing the note's stem (or, for a stemless whole note, hanging just
+ * Vertical offsets (in stroke gaps) of `n` tremolo strokes, centred on 0:
+ * n = 3 gives -1, 0, 1; n = 2 gives -0.5, 0.5; n = 1 gives 0.
+ */
+export function strokeOffsets(n) {
+  return Array.from({ length: n }, (_, i) => i - (n - 1) / 2);
+}
+
+/**
+ * Draw tremolo-picking marks: short parallel diagonal strokes (three by
+ * default) crossing the note's stem (or, for a stemless whole note, hanging just
  * above its topmost notehead) — the standard way to mark a single
  * sustained note as rapidly alternate-picked rather than struck once.
  * `info` is the object `renderNotationElement`/`renderBeams` returned for
  * this note, so the marks land on its *final* stem geometry (beamed notes
  * only know their real stem length after `renderBeams` runs). `below`
  * (voice 2): a whole note's marks hang below its lowest notehead instead.
+ * `speed` (noteEffects.js tremoloOf): '8th' | '16th' | '32nd' draws 1 / 2 / 3
+ * strokes centred where the three would be and adds the class
+ * `tremolo-<speed>`; true draws the plain three.
  */
-export function renderTremolo(g, info, theme, { below = false } = {}) {
-  const gEl = group({ class: 'tremolo' });
+export function renderTremolo(g, info, theme, { below = false, speed = true } = {}) {
+  const gEl = group({ class: typeof speed === 'string' ? `tremolo tremolo-${speed}` : 'tremolo' });
   const color = theme.noteColor;
   const spacing = theme.staffLineSpacing;
   const strokeLen = 0.8 * spacing;
@@ -61,8 +73,8 @@ export function renderTremolo(g, info, theme, { below = false } = {}) {
     midY = topY - 1.3 * spacing;
   }
 
-  for (let i = -1; i <= 1; i++) {
-    const cy = midY + i * gap;
+  for (const k of strokeOffsets(tremoloStrokes(speed))) {
+    const cy = midY + k * gap;
     gEl.appendChild(line(cx - hx, cy + hy, cx + hx, cy - hy, {
       stroke: color, 'stroke-width': 1.6, 'stroke-linecap': 'round',
     }));

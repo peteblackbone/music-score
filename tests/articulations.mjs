@@ -453,10 +453,12 @@ test('[PIN-1.5][flipped A] articulations [marcato] / [heavyAccent] / [staccatiss
     deepEq(marksOf(groups(tree, 'articulations')[0]).map((m) => m.code), [code], n);
   });
 });
-// flip-later (T): commit T gives named tremolo values meaning; today any truthy value draws 3 strokes
-test('[PIN-1.5][flip-later T] tremolo "8th" and "16th" draw 3 strokes with class "tremolo"', () => {
-  ['8th', '16th'].forEach((v) => {
-    deepEq(strokes(renderTree(oneTrack([q('E4', { tremolo: v })])), 'tremolo'), [THREE], `tremolo ${v}`);
+// flipped by commit T (was: tremolo "8th" and "16th" draw 3 strokes with class "tremolo")
+test('[PIN-1.5][flipped T] tremolo "8th" / "16th" draw 1 / 2 strokes with a speed class', () => {
+  [['8th', 1], ['16th', 2]].forEach(([v, n]) => {
+    const tree = renderTree(oneTrack([q('E4', { tremolo: v })]));
+    deepEq(strokes(tree, `tremolo tremolo-${v}`), [Array(n).fill('line')], `tremolo ${v}`);
+    eq(groups(tree, 'tremolo').length, 0, `no plain tremolo group for ${v}`);
   });
 });
 // flip-later (W): commit W gives 'wide' its own look
@@ -556,6 +558,73 @@ test('[A3] marcato / staccatissimo ignored on rests, graces and a tab-only track
     tuning: TUNING, timeSignature: { beats: 4, beatType: 4 }, keySignature: 0,
     measures: [{ beats: [{ type: 'note', duration: 'whole', ...extra, notes: [{ string: 2, fret: 3 }] }] }] }] });
   ok(render(mk({ articulations: ['marcato', 'staccatissimo', 'heavyAccent'] })) === render(mk({})), 'tab-only differs');
+});
+
+// ---------- 1.5 tremolo speeds (T1-T2) ----------
+// All tremolo groups of a tree, in document order: { cls, centres: stroke centre y's }.
+const tremolos = (tree) => all(tree).filter((x) => x.n.tag === 'g' && /(^| )(tab-)?tremolo( |$)/.test(x.n.getAttribute('class') || ''))
+  .map((x) => ({ cls: x.n.getAttribute('class'), x: (num(x.n.children[0], 'x1') + num(x.n.children[0], 'x2')) / 2,
+    centres: x.n.children.map((l) => (num(l, 'y1') + num(l, 'y2')) / 2) }));
+const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+const nearly = (a, b, what) => ok(Math.abs(a - b) < 1e-9, `${what}: ${a} vs ${b}`);
+const SPEEDS = [['8th', 1], ['16th', 2], ['32nd', 3]];
+test('[T1] notation + TAB: 1 / 2 / 3 strokes per speed, centred where the plain three are, speed classes', () => {
+  for (const dur of ['quarter', 'whole']) {
+    const plain = tremolos(renderTree(pinBoth([pinNote(dur, { tremolo: true })])));
+    deepEq(plain.map((t) => t.cls), ['tremolo', 'tab-tremolo'], dur);
+    for (const [v, n] of SPEEDS) {
+      const ts = tremolos(renderTree(pinBoth([pinNote(dur, { tremolo: v })])));
+      deepEq(ts.map((t) => t.cls), [`tremolo tremolo-${v}`, `tab-tremolo tab-tremolo-${v}`], `${dur} ${v}`);
+      ts.forEach((t, i) => {
+        eq(t.centres.length, n, `${dur} ${v} ${t.cls} strokes`);
+        nearly(mean(t.centres), mean(plain[i].centres), `${dur} ${v} ${t.cls} centre`);
+        nearly(t.x, plain[i].x, `${dur} ${v} ${t.cls} x`);
+      });
+    }
+  }
+});
+test('[T1] stemmed and beamed: mean stroke centre is the stem midpoint', () => {
+  const stemMid = (tree, x) => {
+    const st = all(tree).filter((e) => e.n.tag === 'line' && near(num(e.n, 'x1'), x) && near(num(e.n, 'x2'), x)
+      && !e.cls.some((c) => /tremolo/.test(c)));
+    ok(st.length === 1, `one stem at x ${x}, got ${st.length}`);
+    return (num(st[0].n, 'y1') + num(st[0].n, 'y2')) / 2;
+  };
+  const e8 = (p, extra) => ({ type: 'note', duration: '8th', notes: [{ pitch: p }], ...extra });
+  for (const [v, n] of SPEEDS) {
+    const tree = renderTree(oneTrack([q('E4', { tremolo: v }), q('D5', { tremolo: v }),
+      e8('G4', { tremolo: v }), e8('B4', { tremolo: v }), { type: 'rest', duration: 'quarter' }]));
+    const ts = tremolos(tree);
+    eq(ts.length, 4, v);
+    ts.forEach((t, i) => {
+      eq(t.centres.length, n, `${v} #${i}`);
+      nearly(mean(t.centres), stemMid(tree, t.x), `${v} #${i}`);
+    });
+  }
+});
+test('[T1] voice-2 whole note: strokes hang below and keep their count', () => {
+  const sc = (v) => {
+    const s = oneTrack([]);
+    s.tracks[0].measures = [{ voices: [{ beats: [whole(['D5'])] }, { beats: [whole(['E4'], { tremolo: v })] }] }];
+    return s;
+  };
+  const plain = tremolos(renderTree(sc(true)))[0];
+  ok(mean(plain.centres) > posY(renderTree(sc(true)), 0), 'below the E4 notehead');
+  for (const [v, n] of SPEEDS) {
+    const [t] = tremolos(renderTree(sc(v)));
+    eq(t.cls, `tremolo tremolo-${v}`);
+    eq(t.centres.length, n, v);
+    nearly(mean(t.centres), mean(plain.centres), v);
+  }
+});
+test('[T2] true, numbers and other values draw 3 strokes with no speed class', () => {
+  [true, 1, 2, 8, 16, 32, 'x', '64th', 'eighth', [], {}, ' 8th '].forEach((v) => {
+    const ts = tremolos(renderTree(pinBoth([pinNote('quarter', { tremolo: v })])));
+    const want = v === ' 8th ' ? ['tremolo tremolo-8th', 'tab-tremolo tab-tremolo-8th'] : ['tremolo', 'tab-tremolo'];
+    deepEq(ts.map((t) => t.cls), want, JSON.stringify(v));
+    if (v !== ' 8th ') ts.forEach((t) => eq(t.centres.length, 3, JSON.stringify(v)));
+  });
+  [false, 0, '', null].forEach((v) => eq(tremolos(renderTree(pinBoth([pinNote('quarter', { tremolo: v })]))).length, 0, JSON.stringify(v)));
 });
 
 // ---------- report ----------

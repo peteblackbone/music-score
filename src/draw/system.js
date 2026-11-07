@@ -23,6 +23,7 @@ import { drawTabRhythm } from './tabRhythm.js';
 import { drawMeasureNumber } from './decor.js';
 import { renderNotationArpeggio, renderTabArpeggio } from './arpeggio.js';
 import { beatArpeggio } from '../directions.js';
+import { tremoloOf } from '../noteEffects.js';
 import { glyphBox } from '../glyphMetrics.js';
 import { noteheadForDuration } from '../glyphs.js';
 
@@ -211,7 +212,7 @@ function drawVoice(g, measure, elements, beamGroups, tupletGroups, track, notati
     if (!layoutEl.rendered || layoutEl.rendered.isRest) return;
     const marks = layoutEl.el.type === 'note' ? normalizeArticulations(layoutEl.el.articulations) : [];
     if (marks.length) renderArticulations(g, layoutEl.rendered, marks, notationBaselineY, theme, layoutEl.voice);
-    if (layoutEl.el.tremolo) renderTremolo(g, layoutEl.rendered, theme, { below: voice === 2 });
+    if (layoutEl.el.tremolo) renderTremolo(g, layoutEl.rendered, theme, { below: voice === 2, speed: tremoloOf(layoutEl.el.tremolo) });
     if (voice === 2) return;
     if (layoutEl.el.vibrato) renderVibrato(g, layoutEl.rendered, layoutEl.width, theme);
     const arp = beatArpeggio(layoutEl.el);
