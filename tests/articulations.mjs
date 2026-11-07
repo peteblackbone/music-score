@@ -461,10 +461,12 @@ test('[PIN-1.5][flipped T] tremolo "8th" / "16th" draw 1 / 2 strokes with a spee
     eq(groups(tree, 'tremolo').length, 0, `no plain tremolo group for ${v}`);
   });
 });
-// flip-later (W): commit W gives 'wide' its own look
-test('[PIN-1.5][flip-later W] vibrato "wide" renders byte-equal to vibrato true', () => {
+// flipped by commit W (was: vibrato "wide" renders byte-equal to vibrato true)
+test('[PIN-1.5][flipped W] vibrato "wide" draws the wide wave on notation and TAB', () => {
   const base = render(pinBoth([pinNote('quarter', { vibrato: true })]));
-  ok(render(pinBoth([pinNote('quarter', { vibrato: 'wide' })])) === base, 'wide differs');
+  const wide = render(pinBoth([pinNote('quarter', { vibrato: 'wide' })]));
+  ok(wide !== base, 'wide equals normal');
+  ok(wide.includes('class="vibrato vibrato-wide"') && wide.includes('class="tab-vibrato tab-vibrato-wide"'), 'wide classes');
 });
 // flip-later (F): commit F gives fermata 'short' / 'long' / 'normal' a glyph
 test('[PIN-1.5][flip-later F] fermata "short" / "long" / "normal" draw no g.fermata', () => {
@@ -625,6 +627,94 @@ test('[T2] true, numbers and other values draw 3 strokes with no speed class', (
     if (v !== ' 8th ') ts.forEach((t) => eq(t.centres.length, 3, JSON.stringify(v)));
   });
   [false, 0, '', null].forEach((v) => eq(tremolos(renderTree(pinBoth([pinNote('quarter', { tremolo: v })]))).length, 0, JSON.stringify(v)));
+});
+
+// ---------- 1.5 wide vibrato (W1-W4) ----------
+const glyphBoxTrillBottom = -0.063; // glyphMetrics ornamentTrill bBoxSW y
+// Each vibrato group's wave: { cls, x1, y (centre line), top / bottom (control points), amp, step (Q segment), width }.
+const waves = (tree) => all(tree).filter((x) => x.n.tag === 'g' && /(^| )(tab-)?vibrato( |$)/.test(x.n.getAttribute('class') || ''))
+  .map((x) => {
+    const p = x.n.children[0];
+    const v = p.getAttribute('d').match(/-?[\d.]+(e-?\d+)?/g).map(Number);
+    const ys = v.filter((_, i) => i % 2 === 1);
+    const y = v[1];
+    return { cls: x.n.getAttribute('class'), x1: v[0], y, top: Math.min(...ys), bottom: Math.max(...ys),
+      amp: Math.max(...ys) - y, step: v[4] - v[0], width: num(p, 'stroke-width') };
+  });
+test('[W1] wide wave: amplitude, wavelength, stroke and lift on notation and TAB; classes', () => {
+  const [n, tn] = waves(renderTree(pinBoth([pinNote('quarter', { vibrato: true })])));
+  const [w, tw] = waves(renderTree(pinBoth([pinNote('quarter', { vibrato: ' WIDE ' })])));
+  deepEq([n.cls, tn.cls, w.cls, tw.cls], ['vibrato', 'tab-vibrato', 'vibrato vibrato-wide', 'tab-vibrato tab-vibrato-wide']);
+  eq(n.width, 1.2); eq(n.amp, 0.2 * SP); eq(n.step, 0.35 * SP);
+  eq(w.width, 1.6); eq(w.amp, 0.35 * SP); eq(w.step, 0.5 * SP);
+  eq(near(w.y - w.top, 0.35 * SP), true, 'control point above');
+  eq(w.y, n.y - 0.15 * SP, 'notation lift'); eq(w.x1, n.x1, 'same start');
+  eq(tn.width, 1.1); eq(tn.amp, 0.18 * SP); eq(tn.step, 0.3 * SP);
+  eq(tw.width, 1.5); eq(tw.amp, 0.32 * SP); eq(tw.step, 0.43 * SP);
+  eq(tw.y, tn.y - 0.14 * SP, 'TAB lift'); eq(tw.x1, tn.x1, 'same TAB start');
+});
+test('[W3] notation: pick stroke, T, trill, strum and fermata stay >= 0.7 sp above a wide wave', () => {
+  const nq = (pitch, extra = {}, noteExtra = {}) => ({ type: 'note', duration: 'quarter', notes: [{ pitch, ...noteExtra }], ...extra });
+  const chordQ = (extra) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }, { pitch: 'G4' }, { pitch: 'B4' }], ...extra });
+  const sc = (kind) => oneTrack([nq('E4', { vibrato: kind, pickStroke: 'down' }), nq('D5', { vibrato: kind }, { tap: true }),
+    nq('G4', { vibrato: kind }, { trill: true }), chordQ({ vibrato: kind, strum: 'down' }),
+    nq('A4', { vibrato: kind, fermata: true }), nq('C5', { vibrato: kind, pickStroke: 'up' }, { slap: true })]);
+  const bottoms = (tree) => all(tree).filter((x) => x.n.tag === 'g').flatMap((x) => {
+    const cls = x.n.getAttribute('class') || '';
+    const t = x.n.children[0];
+    if (/^(pick-stroke|fermata)/.test(cls)) return [{ cls, x: num(t, 'x'), bottom: num(t, 'y') }];
+    if (cls === 'tap' || cls === 'slap') return [{ cls, x: num(t, 'x'), bottom: num(t, 'y') + 0.25 * num(t, 'font-size') }];
+    if (cls === 'trill') return [{ cls, x: num(t, 'x'), bottom: num(t, 'y') - glyphBoxTrillBottom * SP }];
+    if (/^strum/.test(cls)) {
+      const ys = x.n.children.flatMap((c) => (c.getAttribute('d') || c.getAttribute('points') || '').match(/-?[\d.]+/g).map(Number).filter((_, i) => i % 2 === 1));
+      return [{ cls, x: Number(x.n.children[0].getAttribute('d').match(/-?[\d.]+/g)[0]), bottom: Math.max(...ys) }];
+    }
+    return [];
+  });
+  for (const kind of [true, 'wide']) {
+    const tree = renderTree(sc(kind));
+    const ws = waves(tree);
+    eq(ws.length, 6, `${kind} waves`);
+    const bs = bottoms(tree);
+    deepEq(bs.map((b) => b.cls).sort(), ['fermata', 'pick-stroke pick-stroke-down', 'pick-stroke pick-stroke-up', 'slap', 'strum strum-down', 'tap', 'trill'].sort(), `${kind} marks`);
+    bs.forEach((b) => {
+      const w = ws.find((v) => near(v.x1 - 0.5 * SP, b.x));
+      ok(w, `${kind} ${b.cls}: wave at x ${b.x}`);
+      ok(b.bottom <= w.top - 0.7 * SP + EPS, `${kind} ${b.cls}: bottom ${b.bottom} vs wave top ${w.top}`);
+    });
+  }
+});
+test('[W3] TAB: tap T, trill and strum clear a wide wave; with a tremolo the wave stays above it', () => {
+  const tb = (extra, noteExtra = {}) => ({ type: 'note', duration: 'quarter', ...extra, notes: [{ string: 2, fret: 3, ...noteExtra }] });
+  const tree = renderTree(pinBoth([tb({ vibrato: 'wide' }, { tap: true }), tb({ vibrato: 'wide' }, { trill: 5 }),
+    { type: 'note', duration: 'quarter', vibrato: 'wide', strum: 'up', notes: [{ string: 1, fret: 0 }, { string: 2, fret: 1 }] },
+    tb({ vibrato: 'wide', tremolo: '16th' })]));
+  const tabWaves = waves(tree).filter((w) => w.cls.startsWith('tab-'));
+  eq(tabWaves.length, 4);
+  const tabG = all(tree).find((x) => x.n.tag === 'g' && /staff-tab/.test(x.n.getAttribute('class') || '')).n;
+  const inTab = all(tabG);
+  const tap = inTab.find((x) => x.n.tag === 'g' && x.n.getAttribute('class') === 'tap').n.children[0];
+  ok(num(tap, 'y') + 0.25 * num(tap, 'font-size') <= tabWaves[0].top + EPS, 'T above the wave');
+  const tr = inTab.find((x) => x.n.tag === 'g' && x.n.getAttribute('class') === 'trill').n.children[0];
+  ok(num(tr, 'y') - glyphBoxTrillBottom * SP <= tabWaves[1].top + EPS, 'trill above the wave');
+  const strum = inTab.find((x) => x.n.tag === 'g' && /^strum/.test(x.n.getAttribute('class') || '')).n;
+  const sys = strum.children.flatMap((c) => (c.getAttribute('d') || c.getAttribute('points') || '').match(/-?[\d.]+/g).map(Number).filter((_, i) => i % 2 === 1));
+  ok(Math.max(...sys) <= tabWaves[2].top + EPS, 'strum above the wave');
+  const trem = inTab.find((x) => x.n.tag === 'g' && /tab-tremolo/.test(x.n.getAttribute('class') || '')).n;
+  const tremTop = Math.min(...trem.children.flatMap((l) => [num(l, 'y1'), num(l, 'y2')]));
+  ok(tabWaves[3].bottom < tremTop, `wave bottom ${tabWaves[3].bottom} above tremolo top ${tremTop}`);
+});
+test('[W4] voice 2: vibrato "wide" draws nothing on notation or TAB', () => {
+  const mk = (v2) => {
+    const s = pinBoth([]);
+    s.tracks[0].measures = [{ voices: [{ beats: [pinNote('whole')] },
+      { beats: [{ type: 'note', duration: 'whole', ...v2, notes: [{ string: 4, fret: 2 }] }] }] }];
+    return s;
+  };
+  const a = render(mk({}));
+  const b = render(mk({ vibrato: 'wide' }));
+  ok(!/vibrato/.test(b), 'no vibrato group');
+  ok(a === b, 'differs from unmarked');
 });
 
 // ---------- report ----------

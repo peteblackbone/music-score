@@ -26,6 +26,22 @@ const ARTIC_GLYPHS = {
 // measured glyphMetrics.js heights).
 const ARTIC_HALF_HEIGHT_SP = { staccato: 0.17, staccatissimo: 0.59, tenuto: 0.08, accent: 0.37, marcato: 0.5 };
 
+// Vibrato wave per kind (noteEffects.js vibratoOf): amplitude and wavelength
+// in sp, stroke width in px. A wide wave also sits VIB_WIDE_LIFT_SP higher.
+const VIB = {
+  normal: { amp: 0.2, wave: 0.7, stroke: 1.2 },
+  wide: { amp: 0.35, wave: 1.0, stroke: 1.6 },
+};
+const VIB_WIDE_LIFT_SP = 0.15;
+
+/**
+ * How far (sp) above a vibrato beat's top a mark above it must stay
+ * (beatClearTop): 0.7 sp above the wave's top control point for either kind.
+ */
+export function vibratoClearSp(kind) {
+  return kind === 'wide' ? 2.3 : 2;
+}
+
 /**
  * Vertical offsets (in stroke gaps) of `n` tremolo strokes, centred on 0:
  * n = 3 gives -1, 0, 1; n = 2 gives -0.5, 0.5; n = 1 gives 0.
@@ -90,16 +106,21 @@ export function renderTremolo(g, info, theme, { below = false, speed = true } = 
  * wobbled with the fretting hand. `info` is the object
  * `renderNotationElement`/`renderBeams` returned for this note, same as
  * `renderTremolo`, so it lands on the note's *final* stem geometry.
+ * `kind` (noteEffects.js vibratoOf): 'wide' draws a taller, longer, heavier
+ * wave (class `vibrato vibrato-wide`) lifted VIB_WIDE_LIFT_SP; true the
+ * normal one.
  */
-export function renderVibrato(g, info, width, theme) {
-  const gEl = group({ class: 'vibrato' });
+export function renderVibrato(g, info, width, theme, kind = true) {
+  const wide = kind === 'wide';
+  const v = wide ? VIB.wide : VIB.normal;
+  const gEl = group({ class: wide ? 'vibrato vibrato-wide' : 'vibrato' });
   const color = theme.noteColor;
   const spacing = theme.staffLineSpacing;
-  const y = elementTop(info) - spacing * 1.1;
+  const y = elementTop(info) - spacing * 1.1 - (wide ? VIB_WIDE_LIFT_SP * spacing : 0);
   const x1 = info.x + 0.5 * spacing;
   const x2 = x1 + Math.max(1.4 * spacing, Math.min(3.4 * spacing, (width ?? 2.8 * spacing) - 0.8 * spacing));
-  gEl.appendChild(path(wavyPathD(x1, x2, y, 0.2 * spacing, 0.7 * spacing), {
-    fill: 'none', stroke: color, 'stroke-width': 1.2, 'stroke-linecap': 'round',
+  gEl.appendChild(path(wavyPathD(x1, x2, y, v.amp * spacing, v.wave * spacing), {
+    fill: 'none', stroke: color, 'stroke-width': v.stroke, 'stroke-linecap': 'round',
   }));
   g.appendChild(gEl);
 }
