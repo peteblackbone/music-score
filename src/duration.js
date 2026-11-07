@@ -10,6 +10,9 @@ export function isBeamable(duration) {
   return ['8th', '16th', '32nd', '64th'].includes(duration);
 }
 
+/** A rest that takes time but draws nothing and takes no room (`hidden: true`). */
+export const isHiddenRest = (b) => b.type === 'rest' && !!b.hidden;
+
 /** Number of beam lines (flags) for a given duration: 8th=1, 16th=2, 32nd=3, 64th=4 */
 export function beamCount(duration) {
   return { '8th': 1, '16th': 2, '32nd': 3, '64th': 4 }[duration] || 0;

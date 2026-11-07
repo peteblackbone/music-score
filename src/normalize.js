@@ -49,11 +49,18 @@
  * Chord diagrams (see chordShapes.js): `track.showChordDiagrams` defaults
  * to whether the track shows TAB (`showTablature`), else is read as a
  * boolean; `score.chordShapes` and `beat.chordDiagram` pass through.
+ *
+ * Two voices: `measure.voices: [{ beats }, { beats }]` replaces `beats`
+ * (voice 1 = `beats`, the raw `voices` key is dropped). Voice 2 is
+ * normalized like voice 1 and kept as `voice2Beats` only when it has a
+ * beat that is not a hidden rest (`{ type: 'rest', hidden: true }`); such a
+ * measure is a two-voice measure for layout and drawing.
  */
 import { pitchFromFret, transposeOctaves } from './pitch.js';
 import { harmonicKind } from './harmonics.js';
 import { withDirections, trillOf, withNoteSlides } from './directions.js';
 import { mergeNavigation } from './navigation.js';
+import { isHiddenRest } from './duration.js';
 
 const sameTime = (a, b) => a.beats === b.beats && a.beatType === b.beatType;
 
@@ -87,6 +94,33 @@ export function normalizeScore(score) {
     const source = track.measures || [];
     const measures = [];
     let fromFret = false;
+    // One voice's beats, normalized against the current key (`curKey`); sets `fromFret`.
+    const normBeats = (beats) => beats.map((b) => withDirections({
+      dots: 0, // keeps `dots` the first key
+      ...b,
+      dots: clampDots(b.dots),
+      notes: (b.notes || []).map((n) => {
+        let out;
+        // Fill in `pitch` from string+fret when the author only supplied tab data.
+        if (n.pitch == null && n.string != null && n.fret != null) {
+          const openPitch = tuning[stringCount - n.string];
+          if (!openPitch) {
+            out = n;
+          } else {
+            const sounding = pitchFromFret(openPitch, n.fret, curKey);
+            fromFret = true;
+            out = { ...n, pitch: transposeOctaves(sounding, 1), soundingPitch: sounding, fromFret: true };
+          }
+        } else if (n.pitch != null && track.writtenOctaveUp) {
+          out = { ...n, pitch: transposeOctaves(n.pitch, 1), soundingPitch: n.pitch };
+        } else {
+          out = n.pitch != null ? { ...n, soundingPitch: n.pitch } : n;
+        }
+        // Canonical harmonic kind (`harmonicFret` passes through untouched).
+        const x = n.harmonic ? { ...out, harmonic: harmonicKind(n.harmonic) } : out;
+        return withNoteSlides(n.trill !== undefined ? { ...x, trill: trillOf(n.trill) } : x);
+      }),
+    }));
     for (let mi = 0; mi < measureCount; mi++) {
       const padded = !source[mi];
       const measure = source[mi] || { beats: [] };
@@ -97,8 +131,17 @@ export function normalizeScore(score) {
       const isLast = mi === measureCount - 1;
       const endDefault = isLast ? 'final' : 'single';
       const repeatStart = measure.barline === 'repeatStart';
+      // Two voices (`voices: [{ beats }, { beats }]`, voice 1 first) replace `beats`; a non-array or
+      // empty `voices` falls back to `beats`; entries after the second are ignored.
+      const voices = Array.isArray(measure.voices) && measure.voices.length ? measure.voices : null;
+      let base = measure;
+      if (voices) { base = { ...measure }; delete base.voices; }
+      const beats = normBeats(voices ? (voices[0]?.beats || []) : (measure.beats || []));
+      const v2 = voices && Array.isArray(voices[1]?.beats) ? normBeats(voices[1].beats) : null;
+      // A voice 2 of only hidden rests leaves the measure single-voice.
+      const twoVoice = !!v2 && v2.some((b) => !isHiddenRest(b));
       measures.push({
-        ...measure,
+        ...base,
         padded,
         timeSignature: curTime,
         keySignature: curKey,
@@ -107,32 +150,8 @@ export function normalizeScore(score) {
         timeChanged: mi > 0 && !sameTime(curTime, prevTime),
         repeatStart,
         barline: repeatStart ? endDefault : (measure.barline || endDefault),
-        beats: (measure.beats || []).map((b) => withDirections({
-          dots: 0, // keeps `dots` the first key
-          ...b,
-          dots: clampDots(b.dots),
-          notes: (b.notes || []).map((n) => {
-            let out;
-            // Fill in `pitch` from string+fret when the author only supplied tab data.
-            if (n.pitch == null && n.string != null && n.fret != null) {
-              const openPitch = tuning[stringCount - n.string];
-              if (!openPitch) {
-                out = n;
-              } else {
-                const sounding = pitchFromFret(openPitch, n.fret, curKey);
-                fromFret = true;
-                out = { ...n, pitch: transposeOctaves(sounding, 1), soundingPitch: sounding, fromFret: true };
-              }
-            } else if (n.pitch != null && track.writtenOctaveUp) {
-              out = { ...n, pitch: transposeOctaves(n.pitch, 1), soundingPitch: n.pitch };
-            } else {
-              out = n.pitch != null ? { ...n, soundingPitch: n.pitch } : n;
-            }
-            // Canonical harmonic kind (`harmonicFret` passes through untouched).
-            const x = n.harmonic ? { ...out, harmonic: harmonicKind(n.harmonic) } : out;
-            return withNoteSlides(n.trill !== undefined ? { ...x, trill: trillOf(n.trill) } : x);
-          }),
-        })),
+        beats,
+        ...(twoVoice ? { voice2Beats: v2 } : {}),
       });
     }
     const out = {

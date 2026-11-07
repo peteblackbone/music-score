@@ -2179,6 +2179,62 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- two-voice measures (1.4.0): normalize ----------
+{
+  const { deepStrictEqual } = await import('node:assert');
+  const { isHiddenRest } = await imp('src/duration.js');
+  const q = (pitch) => ({ type: 'note', duration: 'quarter', notes: [{ pitch }] });
+  const hid = (duration = 'half') => ({ type: 'rest', duration, hidden: true });
+  const norm1 = (m, track = {}) => normalizeScore({ tracks: [{ ...track, measures: [m] }] }).tracks[0];
+  const m0 = (m, track) => norm1(m, track).measures[0];
+  const v1 = [q('C5'), q('D5'), q('E5'), q('F5')];
+  const v2 = [{ type: 'note', duration: 'whole', notes: [{ pitch: 'C4' }] }];
+
+  test('isHiddenRest: only rests with a truthy hidden flag', () => {
+    eq([hid(), { type: 'rest', duration: 'half' }, { type: 'note', duration: 'half', hidden: true, notes: [] }, { type: 'rest', hidden: 1 }].map(isHiddenRest),
+      [true, false, false, true]);
+  });
+  test('normalize voices: one entry is the same measure as `beats` (deep-equal, same SVG)', () => {
+    deepStrictEqual(m0({ voices: [{ beats: v1 }] }), m0({ beats: v1 }));
+    eq(serialize(renderTree({ tracks: [{ measures: [{ voices: [{ beats: v1 }] }] }] })), serialize(renderTree({ tracks: [{ measures: [{ beats: v1 }] }] })));
+  });
+  test('normalize voices: non-array or empty `voices` falls back to `beats` (key kept, no voice2Beats)', () => {
+    [{}, [], 'x', null].forEach((voices) => {
+      const m = m0({ voices, beats: v1 });
+      eq(m.beats.map((b) => b.notes[0].pitch), ['C5', 'D5', 'E5', 'F5']);
+      eq('voice2Beats' in m, false);
+      eq(m.voices, voices);
+    });
+  });
+  test('normalize voices: two entries -> beats + voice2Beats, raw voices dropped; entries after the second ignored', () => {
+    const m = m0({ voices: [{ beats: v1 }, { beats: v2 }, { beats: [q('A4')] }], beats: [q('G4')] });
+    eq(m.beats.map((b) => b.notes[0].pitch), ['C5', 'D5', 'E5', 'F5']);
+    eq(m.voice2Beats.map((b) => b.notes[0].pitch), ['C4']);
+    eq('voices' in m, false);
+    eq(Object.keys(m).at(-1), 'voice2Beats');
+    eq(Object.keys(m0({ voices: [{ beats: v1 }, { beats: v2 }] })).slice(-2), ['beats', 'voice2Beats']);
+  });
+  test('normalize voices: voice 2 missing, empty or only hidden rests -> single-voice measure', () => {
+    [[{ beats: v1 }, {}], [{ beats: v1 }, { beats: [] }], [{ beats: v1 }, { beats: [hid(), hid()] }], [{ beats: v1 }, null]].forEach((voices) => {
+      eq('voice2Beats' in m0({ voices }), false);
+    });
+    eq(m0({ voices: [{ beats: v1 }, { beats: [hid(), q('C4')] }] }).voice2Beats.length, 2);
+  });
+  test('normalize voices: voice 2 is normalized like voice 1 (fret -> written pitch in the key, octave clef, dots clamped)', () => {
+    const t = norm1({ keySignature: -1, voices: [{ beats: [q('C5')] }, { beats: [{ type: 'note', duration: 'quarter', dots: '9', notes: [{ string: 3, fret: 3 }] }] }] });
+    const b = t.measures[0].voice2Beats[0];
+    eq([b.dots, b.notes[0].pitch, b.notes[0].soundingPitch, b.notes[0].fromFret], [4, 'Bb4', 'Bb3', true]);
+    eq(t.octaveClef, true);
+    eq(m0({ voices: [{ beats: [q('C5')] }, { beats: [{ type: 'rest', duration: 'quarter', dots: -2 }] }] }).voice2Beats[0].dots, 0);
+  });
+  test('normalize voices: input is not mutated', () => {
+    const input = { tracks: [{ measures: [{ voices: [{ beats: v1 }, { beats: [{ type: 'note', duration: 'whole', notes: [{ string: 5, fret: 3 }] }] }] }] }] };
+    const before = JSON.stringify(input);
+    normalizeScore(input);
+    eq(JSON.stringify(input), before);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
