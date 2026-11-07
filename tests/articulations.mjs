@@ -468,10 +468,10 @@ test('[PIN-1.5][flipped W] vibrato "wide" draws the wide wave on notation and TA
   ok(wide !== base, 'wide equals normal');
   ok(wide.includes('class="vibrato vibrato-wide"') && wide.includes('class="tab-vibrato tab-vibrato-wide"'), 'wide classes');
 });
-// flip-later (F): commit F gives fermata 'short' / 'long' / 'normal' a glyph
-test('[PIN-1.5][flip-later F] fermata "short" / "long" / "normal" draw no g.fermata', () => {
-  ['short', 'long', 'normal'].forEach((v) =>
-    eq(groups(renderTree(oneTrack([q('E4', { fermata: v })])), 'fermata').length, 0, `fermata ${v}`));
+// flipped by commit F (was: fermata "short" / "long" / "normal" draw no g.fermata)
+test('[PIN-1.5][flipped F] fermata "short" / "long" / "normal" each draw one fermata', () => {
+  [['short', 'fermata fermata-short'], ['long', 'fermata fermata-long'], ['normal', 'fermata']].forEach(([v, cls]) =>
+    eq(groups(renderTree(oneTrack([q('E4', { fermata: v })])), cls).length, 1, `fermata ${v}`));
 });
 
 // ---------- 1.5 marcato / staccatissimo (A1-A3) ----------
@@ -715,6 +715,47 @@ test('[W4] voice 2: vibrato "wide" draws nothing on notation or TAB', () => {
   const b = render(mk({ vibrato: 'wide' }));
   ok(!/vibrato/.test(b), 'no vibrato group');
   ok(a === b, 'differs from unmarked');
+});
+
+// ---------- 1.5 fermata kinds (F1-F2) ----------
+const fermatas = (tree) => all(tree).filter((x) => x.n.tag === 'g' && /^fermata( |$)/.test(x.n.getAttribute('class') || ''))
+  .map((x) => ({ cls: x.n.getAttribute('class'), code: cp(x.n.children[0]), x: num(x.n.children[0], 'x'), y: num(x.n.children[0], 'y') }));
+test('[F1] codepoint and class per kind; explicit "normal" is byte-equal to true', () => {
+  [[true, 'fermata', 'E4C0'], [' Normal', 'fermata', 'E4C0'], ['short', 'fermata fermata-short', 'E4C4'],
+    ['LONG', 'fermata fermata-long', 'E4C6']].forEach(([v, cls, code]) => {
+    const fs = fermatas(renderTree(oneTrack([q('E4', { fermata: v }), q('G4')])));
+    deepEq(fs.map((f) => [f.cls, f.code]), [[cls, code]], JSON.stringify(v));
+  });
+  ok(render(oneTrack([q('E4', { fermata: 'normal' })])) === render(oneTrack([q('E4', { fermata: true })])), 'normal differs from true');
+});
+test('[F1] short / long sit where the normal one does: over a chord symbol, under a slur, on a rest', () => {
+  const scores = [
+    (v) => oneTrack([q('E4', { fermata: v, chord: 'Am' }), q('G4')]),
+    (v) => oneTrack([q('E4', { slurStart: true }), q('B4', { fermata: v }), q('B4', { slurEnd: true }), q('E4')]),
+    (v) => oneTrack([{ type: 'rest', duration: 'quarter', fermata: v }, q('E4')]),
+    (v) => oneTrack([q('C6', { fermata: v, articulations: ['marcato'] })]),
+  ];
+  scores.forEach((mk, i) => {
+    const [n] = fermatas(renderTree(mk(true)));
+    for (const v of ['short', 'long']) {
+      const [f] = fermatas(renderTree(mk(v)));
+      ok(f, `score ${i} ${v}: drawn`);
+      eq(f.y, n.y, `score ${i} ${v}: bottom`); eq(f.x, n.x, `score ${i} ${v}: x`);
+    }
+  });
+});
+test('[F2] "true", 1, false, null, garbage draw nothing; graces and voice 2 draw nothing', () => {
+  const base = render(oneTrack([q('E4'), q('G4')]));
+  ['true', 1, false, null, 'x', 'wide', 0, [], {}].forEach((v) =>
+    ok(render(oneTrack([q('E4', { fermata: v }), q('G4')])) === base, `fermata ${JSON.stringify(v)}`));
+  const plain = oneTrack([{ type: 'grace', notes: [{ pitch: 'E4' }] }, q('B4')]);
+  ['short', 'long', 'normal'].forEach((v) => ok(render(oneTrack([{ type: 'grace', fermata: v, notes: [{ pitch: 'E4' }] }, q('B4')])) === render(plain), `grace ${v}`));
+  const two = (extra) => {
+    const s = oneTrack([]);
+    s.tracks[0].measures = [{ voices: [{ beats: [whole(['D5'])] }, { beats: [whole(['E4'], extra)] }] }];
+    return s;
+  };
+  ['short', 'long', 'normal', true].forEach((v) => ok(render(two({ fermata: v })) === render(two({})), `voice 2 ${v}`));
 });
 
 // ---------- report ----------

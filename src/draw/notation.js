@@ -435,15 +435,24 @@ export function beamShape(x1, y1, x2, y2, thickness, extendSign, color) {
   return path(d, { fill: color, stroke: 'none' });
 }
 
+const FERMATA_GLYPHS = { normal: Glyph.fermataAbove, short: Glyph.fermataShortAbove, long: Glyph.fermataLongAbove };
+
+/** Glyph of a fermata kind (noteEffects.js fermataOf): 'normal' | 'short' | 'long'. */
+export function fermataGlyph(kind) {
+  return FERMATA_GLYPHS[kind];
+}
+
 /**
  * Draw a fermata above a beat, centred on `x` with its bottom edge at
  * `bottomY` (already resolved by the caller to clear everything else
- * drawn above that beat).
+ * drawn above that beat). `kind` 'short' / 'long' draws the short / long
+ * fermata in `<g class="fermata fermata-<kind>">`; 'normal' the usual one
+ * in `<g class="fermata">`.
  */
-export function renderFermata(g, x, bottomY, theme) {
-  const gEl = group({ class: 'fermata' });
-  // fermataAbove's origin already sits on its bottom edge.
-  gEl.appendChild(glyphText(x, bottomY, Glyph.fermataAbove, theme.fontFamily, smuflFontSizePx(theme), {
+export function renderFermata(g, x, bottomY, theme, kind = 'normal') {
+  const gEl = group({ class: kind === 'normal' ? 'fermata' : `fermata fermata-${kind}` });
+  // Each fermata glyph's origin already sits on its bottom edge.
+  gEl.appendChild(glyphText(x, bottomY, fermataGlyph(kind), theme.fontFamily, smuflFontSizePx(theme), {
     fill: theme.noteColor, 'text-anchor': 'middle',
   }));
   g.appendChild(gEl);

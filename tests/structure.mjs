@@ -152,7 +152,7 @@ export async function summary() {
     else console.log(`PASS structure: ${name}`);
   };
   report('barrel exports exactly the 8 pass functions', await barrelProblems());
-  report('notation.js exports the pre-1.5 names', await notationExportProblems());
+  report('notation.js exports the pre-1.5 names plus fermataGlyph', await notationExportProblems(['fermataGlyph']));
   for (const [name, fn] of Object.entries(checks)) report(name, fn(files));
   return fail;
 }

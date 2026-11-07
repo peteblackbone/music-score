@@ -6,16 +6,17 @@
  * collectBeats) and `info.directionTopY` (pass 5).
  */
 import {
-  renderFermata, curveBow, renderChordSymbol, renderDynamic, chordSymbolFontSize, dynamicFontSizePx,
+  renderFermata, fermataGlyph, curveBow, renderChordSymbol, renderDynamic, chordSymbolFontSize, dynamicFontSizePx,
 } from '../notation.js';
 import { inkBounds, TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../../layout/ink.js';
 import { estimateTextWidth } from '../../textMetrics.js';
 import { glyphBox, glyphStringBox } from '../../glyphMetrics.js';
-import { Glyph, dynamicGlyph } from '../../glyphs.js';
+import { dynamicGlyph } from '../../glyphs.js';
 import { resolveShape } from '../../chordShapes.js';
 import { renderChordDiagram, chordDiagramMetrics, NAME_GAP_SP } from '../chordDiagram.js';
 import { breakEndX, breakStartX, tabTopY } from './common.js';
 import { collectBeats, findSlurs, beatClearTop } from './notationBeats.js';
+import { fermataOf } from '../../noteEffects.js';
 
 // Chord symbols: one baseline per system staff, at least CHORD_MIN_BASELINE_SP
 // above the top line and with the (estimated) text bottom CHORD_CLEARANCE_SP
@@ -179,8 +180,9 @@ function slurAboveLimits(beats, systems, theme) {
 }
 
 /**
- * Fermata: `fermata: true` on a note or rest beat draws a fermata above
- * it (notation staff only; ignored on grace notes). It's the outermost
+ * Fermata: `fermata: true | 'normal' | 'short' | 'long'` (fermataOf) on a
+ * note or rest beat draws that fermata above it (notation staff only;
+ * voice 1 only; ignored on grace notes). It's the outermost
  * mark of its beat, so its bottom edge is set clear of everything else
  * that can sit above the note: the staff itself, the note's stem/
  * noteheads/articulations, a vibrato or whole-note tremolo, a tuplet
@@ -195,13 +197,14 @@ export function renderFermatas(score, trackRuns, theme, systems) {
   score.tracks.forEach((track) => {
     if (!track.showStandardNotation) return;
     const beats = collectBeats(trackRuns, track, theme);
-    if (!beats.some((item) => item.el.fermata === true)) return;
+    if (!beats.some((item) => fermataOf(item.el.fermata))) return;
     slurAboveLimits(beats, systems, theme);
 
-    const halfFermata = (glyphBox(Glyph.fermataAbove).width / 2) * sp;
     beats.forEach((item) => {
       const { el, info } = item;
-      if (el.fermata !== true || !info || info.isGrace) return;
+      const kind = fermataOf(el.fermata);
+      if (!kind || !info || info.isGrace) return;
+      const halfFermata = (glyphBox(fermataGlyph(kind)).width / 2) * sp;
       const bottomY = Math.min(
         beatClearTop(item, sp),
         info.directionTopY != null ? info.directionTopY - FERMATA_DIRECTION_GAP_SP * sp : Infinity,
@@ -209,7 +212,7 @@ export function renderFermatas(score, trackRuns, theme, systems) {
           .filter((b) => b.x1 < item.x + halfFermata && b.x2 > item.x - halfFermata)
           .map((b) => b.top - FERMATA_CHORD_GAP_SP * sp),
       );
-      renderFermata(item.g, item.x, bottomY, theme);
+      renderFermata(item.g, item.x, bottomY, theme, kind);
     });
   });
 }
