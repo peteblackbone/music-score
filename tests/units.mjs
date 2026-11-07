@@ -2034,6 +2034,151 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- pre-1.4 characterization (C0): pins taken from the code before two-voice measures ----------
+{
+  const { createHash } = await import('node:crypto');
+  const { cases } = await import('./cases.mjs');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
+  const { flattenRuns } = await imp('src/draw/passes/common.js');
+  const theme = resolveTheme();
+  const sha = (s) => createHash('sha256').update(s).digest('hex');
+
+  // Model guard: normalizeScore and computeLayout output of every snapshot case, recorded once from
+  // the pre-1.4 code (tests/fixtures/pre-1.4-model-hashes.json). Never re-record.
+  const model = JSON.parse(fs.readFileSync(path.join(root0, 'tests/fixtures/pre-1.4-model-hashes.json'), 'utf8'));
+  test('pre-1.4 model hashes: fixture covers exactly the 52 snapshot cases', () => {
+    eq(cases.length, 52);
+    eq(Object.keys(model), cases.map((c) => c.id));
+  });
+  test('pre-1.4 model hashes: normalizeScore and computeLayout JSON are unchanged for every snapshot case', () => {
+    const bad = [];
+    for (const c of cases) {
+      const norm = normalizeScore(JSON.parse(JSON.stringify(c.score)));
+      const nh = sha(JSON.stringify(norm));
+      const lh = sha(JSON.stringify(computeLayout(norm, resolveTheme(c.options?.theme), c.width)));
+      if (nh !== model[c.id].model) bad.push(`${c.id} normalize`);
+      if (lh !== model[c.id].layout) bad.push(`${c.id} layout`);
+    }
+    eq(bad, []);
+  });
+  test('no snapshot SVG contains "voice-2"', () => {
+    const dir = path.join(root0, 'tests/snapshots');
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.svg'));
+    eq(files.length, 52);
+    eq(files.filter((f) => fs.readFileSync(path.join(dir, f), 'utf8').includes('voice-2')), []);
+  });
+
+  // resolveMeasureAccidentals
+  const pn = (pitch, x = {}) => ({ pitch, ...x });
+  const nb = (pitches, duration = 'quarter') => ({ type: 'note', duration, notes: pitches.map((p) => (typeof p === 'string' ? pn(p) : p)) });
+  const accOf = (key, beats) => resolveMeasureAccidentals({ measures: [{ keySignature: key, beats }] }, 0);
+  const names = (key, beats) => accOf(key, beats).map((r) => r.names.join('|'));
+  const restate = (key, beats) => accOf(key, beats).map((r) => r.restate.join('|'));
+  test('resolveMeasureAccidentals: accidental carries, cancelling natural on the same step+octave, other octave is fresh', () => {
+    eq(accOf(0, [nb(['F#4']), nb(['F4']), nb(['F4']), nb(['F#5'])]), [
+      { names: ['sharp'], restate: ['sharp'] }, { names: ['natural'], restate: ['natural'] },
+      { names: [null], restate: [null] }, { names: ['sharp'], restate: ['sharp'] }]);
+  });
+  test('resolveMeasureAccidentals: tieEnd draws nothing, changes nothing, restates its key-relative accidental', () => {
+    eq(accOf(0, [nb(['F#4']), nb([pn('F#4', { tieEnd: true })]), nb([pn('Bb4', { tieEnd: true })]), nb(['Bb4'])]), [
+      { names: ['sharp'], restate: ['sharp'] }, { names: [null], restate: ['sharp'] },
+      { names: [null], restate: ['flat'] }, { names: ['flat'], restate: ['flat'] }]);
+  });
+  test('resolveMeasureAccidentals: explicit accidental is always drawn and becomes the active alteration', () => {
+    eq(names(0, [nb([pn('C4', { accidental: 'natural' })]), nb([pn('C4', { accidental: 'natural' })]), nb(['C4'])]), ['natural', 'natural', '']);
+  });
+  test('resolveMeasureAccidentals: grace and main notes carry into each other in score order', () => {
+    eq(names(0, [{ type: 'grace', duration: '16th', notes: [pn('G#4')] }, nb(['G#4']), nb(['G4']), { type: 'grace', duration: '16th', notes: [pn('G4')] }, nb(['G4'])]),
+      ['sharp', '', 'natural', '', '']);
+  });
+  test('resolveMeasureAccidentals: key -2 versus +3 and rests / chords', () => {
+    eq(names(-2, [nb(['Bb4']), nb(['B4']), nb(['Eb4']), nb(['E4']), nb(['A4']), nb(['Ab4'])]), ['', 'natural', '', 'natural', '', 'flat']);
+    eq(names(3, [nb(['F#4']), nb(['F4']), nb(['C#5']), nb(['G#4']), nb(['D4']), nb(['G4'])]), ['', 'natural', '', '', '', 'natural']);
+    eq(restate(0, [{ type: 'rest', duration: 'quarter' }, nb(['C4', 'C#4'])]), ['', '|sharp']);
+  });
+
+  // layoutChord accidental dx (px at the default 10 px staff space)
+  const cbase = { headGlyph: String.fromCodePoint(0xE0A4), duration: 'quarter' };
+  const accDx = (c) => c.accidentals.map((a) => +a.dx.toFixed(3));
+  test('layoutChord: accidental dx for a 5-accidental cluster (seconds) and a spread chord', () => {
+    const cl = layoutChord([{}, {}, {}, {}, {}], [0, 1, 2, 3, 4], true, Array(5).fill('sharp'), cbase, theme);
+    eq(accDx(cl), [-29.36, -51.36, -62.36, -40.36, -18.36]);
+    eq(cl.heads.map((h) => +h.dx.toFixed(3)), [0, 11.8, 0, 11.8, 0]);
+    eq([+cl.leftExt.toFixed(3), +cl.rightExt.toFixed(3)], [62.36, 17.7]);
+    const sp = layoutChord([{}, {}, {}, {}, {}], [0, 2, 4, 6, 8], true, ['sharp', 'flat', 'natural', 'sharp', 'flat'], cbase, theme);
+    eq(accDx(sp), [-18.36, -39.44, -48.12, -29.36, -17.44]);
+  });
+  test('layoutChord: stem-down chord with a second keeps its accidental left of the displaced head', () => {
+    const c = layoutChord([{}, {}, {}], [3, 4, 8], false, [null, 'sharp', null], cbase, theme);
+    eq(accDx(c), [-30.16]);
+    eq(c.heads.map((h) => +h.dx.toFixed(3)), [-11.8, 0, 0]);
+    eq(+c.stemDx.toFixed(3), -5.9);
+  });
+  test('layoutChord: a ghost note pushes accidentals left of its parenthesis', () => {
+    const c = layoutChord([{ ghost: true }, {}], [2, 5], true, ['flat', 'sharp'], cbase, theme);
+    eq(accDx(c), [-35.74, -25.66]);
+    eq([+c.leftExt.toFixed(3), +c.rightExt.toFixed(3)], [35.74, 13.2]);
+  });
+
+  // stems, element index and x per onset, via computeLayout
+  const lay = (measures) => computeLayout(normalizeScore({ tracks: [{ name: 'T', showStandardNotation: true, measures }] }), theme, 900);
+  const rows = (m) => m.elements.map((e) => [e.index, +e.x.toFixed(2), e.t ? `${e.t.n}/${e.t.d}` : null, e.chord ? e.chord.stemUp : null]);
+  test('computeLayout stems: beam groups, single notes above / below the middle line, whole note', () => {
+    const l = lay([
+      { beats: [nb(['A4'], '8th'), nb(['C5'], '8th'), nb(['E5'], '8th'), nb(['G5'], '8th'), nb(['C4'], '8th'), nb(['E4'], '8th'), nb(['F4'], '8th'), nb(['F5'], '8th')] },
+      { beats: [nb(['C4']), nb(['B4']), nb(['C6']), nb(['D4', 'F5'])] },
+      { beats: [nb(['G4'], 'whole')] },
+      { beats: [nb(['C5'], 'half'), nb(['C4'], 'half')] },
+    ]);
+    eq(l.systems.length, 1);
+    const ms = l.systems[0].tracks[0].measures;
+    eq(ms[0].beamGroups, [[0, 1], [2, 3], [4, 5], [6, 7]]);
+    eq(ms[0].elements.map((e) => e.chord.stemUp), [false, false, false, false, true, true, false, false]);
+    eq(ms[1].elements.map((e) => e.chord.stemUp), [true, false, false, true]);
+    eq(ms[2].elements.map((e) => e.chord.stemUp), [true]);
+    eq(ms[3].elements.map((e) => e.chord.stemUp), [false, true]);
+  });
+  test('computeLayout: element index equals beat index and x follows onsets (rests, graces, chords, second measure)', () => {
+    const l = lay([
+      { beats: [nb(['C4']), { type: 'rest', duration: 'quarter' }, { type: 'grace', duration: '16th', notes: [pn('D5')] }, nb(['E4', 'G4']), nb(['C5'])] },
+      { beats: [nb(['G4'], 'whole')] },
+    ]);
+    const ms = l.systems[0].tracks[0].measures;
+    eq(rows(ms[0]), [[0, 133.9, '0/1', true], [1, 168.9, '1/4', null], [2, 186, null, null], [3, 203.9, '1/2', true], [4, 238.9, '3/4', false]]);
+    eq(rows(ms[1]), [[0, 289.84, '0/1', true]]);
+    eq(ms.map((m) => [m.x, m.contentX, m.endX]), [[115.5, 115.5, 268.9], [268.9, 268.9, 354.84]]);
+  });
+
+  // flattenRuns order on a 2-system fake
+  test("flattenRuns: visits only the track's runs, system by system, measure by measure, element by element", () => {
+    const els = (p, n) => Array.from({ length: n }, (_, i) => ({ id: `${p}${i}` }));
+    const runs = [
+      { track: 'A', measures: [{ elements: els('s1m1e', 2) }, { elements: els('s1m2e', 1) }] },
+      { track: 'B', measures: [{ elements: els('bs1m1e', 1) }] },
+      { track: 'A', measures: [{ elements: [{ id: 'grace' }, { id: 'main' }] }, { elements: [] }, { elements: els('s2m3e', 1) }] },
+    ];
+    const seen = [];
+    flattenRuns(runs, 'A', (le, run) => seen.push([le.id, runs.indexOf(run)]));
+    eq(seen, [['s1m1e0', 0], ['s1m1e1', 0], ['s1m2e0', 0], ['grace', 2], ['main', 2], ['s2m3e0', 2]]);
+  });
+
+  // groupBeams / tupletGroups: leading rest and grace before a beamed pair
+  test('groupBeams / tupletGroups: a leading 8th rest and a grace before 8ths pair', () => {
+    const r8 = { type: 'rest', duration: '8th' };
+    const g16 = { type: 'grace', duration: '16th', notes: [pn('D4')] };
+    const e8 = nb(['E4'], '8th');
+    const qn = nb(['E4']);
+    const bs = [r8, g16, e8, e8, qn, qn, qn];
+    eq(groupBeams(bs, T44), [[2], [3]]);
+    eq(tupletGroups(bs, T44), []);
+    const t3 = { ...e8, tuplet: { actual: 3, normal: 2 } };
+    const bt = [r8, g16, t3, t3, t3, qn, qn, qn];
+    eq(groupBeams(bt, T44), [[2, 3], [4]]);
+    eq(tupletGroups(bt, T44), [{ indices: [2, 3, 4], count: 3 }]);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
