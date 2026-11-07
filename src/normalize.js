@@ -136,7 +136,7 @@ export function normalizeScore(score) {
       const voices = Array.isArray(measure.voices) && measure.voices.length ? measure.voices : null;
       let base = measure;
       if (voices) { base = { ...measure }; delete base.voices; }
-      const beats = normBeats(voices ? (voices[0]?.beats || []) : (measure.beats || []));
+      const beats = normBeats(voices ? (Array.isArray(voices[0]?.beats) ? voices[0].beats : []) : (measure.beats || []));
       const v2 = voices && Array.isArray(voices[1]?.beats) ? normBeats(voices[1].beats) : null;
       // A voice 2 of only hidden rests leaves the measure single-voice.
       const twoVoice = !!v2 && v2.some((b) => !isHiddenRest(b));

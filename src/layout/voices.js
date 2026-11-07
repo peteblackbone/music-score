@@ -33,7 +33,7 @@ import { key } from '../rational.js';
 
 const REST_CLEAR_POS = 1;          // rest ink -> other voice's notehead (staff positions; 0.5 sp)
 const REST_MAX_STEPS = 20;         // bound on the whole-space moves of one rest
-const REST_LEDGER_OVERHANG_SP = 0.3;
+export const REST_LEDGER_OVERHANG_SP = 0.3; // ledger reach past a raised rest; also used by draw/notation.js
 const VARIANTS = [
   { chord: 'chord', left: 'left', own: 'ownLeft' },
   { chord: 'chordFirst', left: 'leftFirst', own: 'ownLeftFirst' },

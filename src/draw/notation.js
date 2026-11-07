@@ -17,10 +17,10 @@ import {
 } from '../layout/chord.js';
 import { stemUpFor } from '../layout/timeline.js';
 import { glyphBox } from '../glyphMetrics.js';
+import { REST_LEDGER_OVERHANG_SP } from '../layout/voices.js';
 
 const STEM_LENGTH_SPACES = 3.5;
 const REST_POSITION = { whole: 6, half: 4, quarter: 4, '8th': 4, '16th': 4, '32nd': 4, '64th': 4 };
-const REST_LEDGER_OVERHANG_SP = 0.3;
 
 // Articulations stack outward from the notehead in this fixed order,
 // regardless of the order the author listed them in.
