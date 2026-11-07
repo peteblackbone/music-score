@@ -2509,6 +2509,77 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const s1 = serialize(full([vm([nb(['C5'], 'quarter', { dynamic: 'f', chord: 'C' }), ...quarters('C5').slice(1)], [nb(['E4'], 'whole')])]));
     eq([s1.includes('class="dynamic"'), s1.includes('chord-symbol')], [true, true]);
   });
+
+  // ---- verification gaps (AC audit) ----
+  test('voices[0].beats not an array is treated as empty voice 1, never throws (voice 2 kept)', () => {
+    [{ beats: 'x' }, { beats: {} }, {}, null].forEach((first) => {
+      const m = m0({ voices: [first, { beats: v2 }] });
+      eq([m.beats, m.voice2Beats.length], [[], 1]);
+      m0({ voices: [first] });
+      eq(m0({ voices: [first] }).beats, []);
+    });
+    full([{ voices: [{ beats: 'x' }, { beats: v2 }] }, { voices: [{ beats: 5 }] }]);
+  });
+  test('voices: every single-voice spelling renders byte-identical to `beats` (non-array, empty, 1 entry, hidden-only/empty/missing voice 2)', () => {
+    const ref = serialize(full([{ beats: v1 }, { beats: v1 }]));
+    const hw = [rs('whole', { hidden: true })];
+    [{}, [], 'x', null, 7].forEach((voices) => eq(serialize(full([{ voices, beats: v1 }, { beats: v1 }])) === ref, true, `voices=${JSON.stringify(voices)}`));
+    [[{ beats: v1 }], [{ beats: v1 }, {}], [{ beats: v1 }, { beats: [] }], [{ beats: v1 }, { beats: hw }], [{ beats: v1 }, { beats: [rs('half', { hidden: true }), rs('half', { hidden: true })] }]]
+      .forEach((voices, i) => eq(serialize(full([{ voices }, { voices }])) === ref, true, `case ${i}`));
+    // hidden-only voice 2 on a TAB track too
+    const fr = [{ type: 'note', duration: 'whole', notes: [{ string: 2, fret: 3 }] }];
+    eq(serialize(full([{ voices: [{ beats: fr }, { beats: hw }] }], { showTablature: true })) === serialize(full([{ beats: fr }], { showTablature: true })), true, 'TAB');
+  });
+  test('voices: entries after the second change nothing (byte-identical to two entries)', () => {
+    const two = [{ beats: v1 }, { beats: v2 }];
+    eq(serialize(full([{ voices: [...two, { beats: [q('A4'), q('B4')] }, 'junk'] }])) === serialize(full([{ voices: two }])), true);
+  });
+  test('voices: rendering is deterministic and leaves the input untouched', () => {
+    const score = { tracks: [{ showStandardNotation: true, showTablature: true, measures: [vm([nb([{ string: 2, fret: 5, hammerPull: true }], 'half'), rs('half'), nb(['C5'])], [rs('half', { hidden: true }), nb([{ string: 4, fret: 2 }], 'half', { tuplet: 3 })])] }] };
+    const before = JSON.stringify(score);
+    const a = serialize(renderTree(score, 600)); const b = serialize(renderTree(score, 600));
+    eq([a === b, JSON.stringify(score) === before], [true, true]);
+  });
+  test('beat marks on a voice-2 beat draw nothing: output is byte-identical to the same beat without them', () => {
+    const marks = { pickStroke: 'down', strum: 'up', arpeggio: true, letRing: true, palmMute: true, rake: 'down', whammy: true, vibrato: true, fermata: true, dynamic: 'ff', chord: 'Am', tap: true, slap: true, pop: true, trill: true };
+    const mk = (extra, track) => serialize(full([vm([nb([{ string: 3, fret: 2 }, { string: 4, fret: 2 }]), nb([{ string: 3, fret: 3 }]), nb([{ string: 3, fret: 4 }], 'half')],
+      [nb([{ string: 5, fret: 2 }, { string: 6, fret: 2 }], 'quarter', extra), rs(), nb([{ string: 5, fret: 3 }], 'half', extra)])], track));
+    [{ showTablature: true }, { showStandardNotation: false, showTablature: true }, {}].forEach((track, i) => eq(mk(marks, track) === mk({}, track), true, `track ${i}`));
+    // a mark that is honoured on voice 1 would differ, so the comparison is not vacuous
+    const one = serialize(full([vm([nb([{ string: 3, fret: 2 }], 'quarter', { pickStroke: 'down' }), rs('half'), rs()], [nb([{ string: 5, fret: 2 }], 'whole')])], { showTablature: true }));
+    const none = serialize(full([vm([nb([{ string: 3, fret: 2 }]), rs('half'), rs()], [nb([{ string: 5, fret: 2 }], 'whole')])], { showTablature: true }));
+    eq(one === none, false);
+  });
+  test('ties and links do not cross voices', () => {
+    // voice 1 tie-start with its match only in voice 2 of the next measure: no tie
+    const svg = full([vm([nb([{ pitch: 'C5', tieStart: true }], 'whole')], [nb(['E4'], 'whole')]), vm([nb(['G4'], 'whole')], [nb([{ pitch: 'C5', tieEnd: true }], 'whole')])]);
+    eq(curves(svg, 'tie').length, 0);
+    // voice 2 slur-start, slur-end only on voice 1: no slur
+    const sv = full([vm([nb(['C5'], 'half'), nb(['D5'], 'half', { slurEnd: true })], [nb(['E4'], 'half', { slurStart: true }), nb(['F4'], 'half')])]);
+    eq(curves(sv, 'slur').length, 0);
+    // hammer-on in voice 1 with only voice 2 fretting later on that string: no H/P arc
+    const fr = (string, fret, x = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string, fret, ...x }] });
+    const hp = full([vm([fr(2, 5, { hammerPull: true }), rs(), rs('half')], [rs(), fr(2, 7), rs('half')])], { showTablature: true });
+    eq(nodes(hp, (nd) => nd.tag === 'g' && /^hammer-pull /.test(nd.getAttribute('class') || '')).length, 0);
+  });
+  test('two-voice layout: tracks share onset columns; a voice-2 onset in one track opens a column for the others', () => {
+    const sc = normalizeScore({ tracks: [
+      { showStandardNotation: true, measures: [vm([nb(['C5'], 'half'), nb(['C5'], 'half')], [nb(['E4']), nb(['E4']), nb(['E4']), nb(['E4'])])] },
+      { showStandardNotation: true, measures: [{ beats: [nb(['C4'], 'half'), nb(['C4'], 'half')] }] },
+    ] });
+    const [a, b] = computeLayout(sc, th, 900).systems[0].tracks.map((t) => t.measures[0]);
+    eq([b.elements[0].x === a.elements[0].x, b.elements[1].x === a.elements[1].x], [true, true]);
+    eq(a.elements[1].x - a.elements[0].x > a.elements2[1].x - a.elements2[0].x, true, 'half note spans two voice-2 gaps');
+    eq(buildColumn(0, sc, th).onsets.length, 4);
+  });
+  test('hand-computed: a second clash moves voice 2 right by exactly stem-right minus stem-left of one notehead', () => {
+    const m = col([nb(['A4']), rs(), rs('half')], [nb(['G4']), rs(), rs('half')]);
+    const hw = m.elements[0].chord.headWidth;
+    // voice 1 stems up (stem on the head's right edge), voice 2 down (left edge): the heads sit one head width apart
+    eq(near(m.elements2[0].x - m.elements[0].x, (stemDxSp(NH, true) - stemDxSp(NH, false)) * S), true);
+    eq(near(m.elements2[0].x - m.elements[0].x, hw), true, 'one head width');
+    eq(near(hw, glyphBox(NH).width * S), true);
+  });
 }
 
 // ---------- report ----------
