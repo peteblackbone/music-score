@@ -10,8 +10,9 @@
 import { renderCurve, renderNoteSlide } from '../notation.js';
 import { parsePitch, midiNumber } from '../../pitch.js';
 import { slideMarks } from '../../directions.js';
-import { flattenRuns, hasVoice2, breakEndX, breakStartX } from './common.js';
+import { flattenRuns, breakEndX, breakStartX } from './common.js';
 import { collectBeats, findSlurs } from './notationBeats.js';
+import { trackHasTwoVoices, voiceOf } from '../../twoVoice.js';
 
 const TIE_END_GAP_SP = 0.25;     // tie end beyond the notehead edge, and off its centre line
 const GRACE_SLUR_CLEARANCE_SP = 0.6;
@@ -62,7 +63,7 @@ function tieSides(info, voice) {
 export function renderTiesAndSlurs(score, trackRuns, theme, systems) {
   score.tracks.forEach((track) => {
     if (!track.showStandardNotation) return;
-    (hasVoice2(trackRuns, track) ? [1, 2] : [1]).forEach((voice) => renderVoiceCurves(track, trackRuns, theme, systems, voice));
+    (trackHasTwoVoices(trackRuns, track) ? [1, 2] : [1]).forEach((voice) => renderVoiceCurves(track, trackRuns, theme, systems, voice));
   });
 }
 
@@ -74,14 +75,14 @@ function renderVoiceCurves(track, trackRuns, theme, systems, voice) {
   flattenRuns(trackRuns, track, (layoutEl, run) => {
     const info = layoutEl.rendered;
     if (!info || info.isRest || info.isGrace) return;
-    const sides = tieSides(info, layoutEl.voice);
+    const sides = tieSides(info, voiceOf(layoutEl));
     const notes = layoutEl.el.notes || [];
     info.noteheads.forEach((h, i) => {
       const n = notes[i] || {};
       flat.push({
         sysIdx: run.sysIdx, g: run.notationG, x: h.x, halfWidth: h.halfWidth ?? 0.59 * s, y: h.y,
         midi: n.pitch != null ? midiNumber(parsePitch(n.pitch)) : null,
-        tieStart: !!n.tieStart, tieEnd: !!n.tieEnd, above: sides.get(h), start: voice !== 2 || layoutEl.voice === 2,
+        tieStart: !!n.tieStart, tieEnd: !!n.tieEnd, above: sides.get(h), start: voice !== 2 || voiceOf(layoutEl) === 2,
       });
     });
   }, voice);
@@ -146,7 +147,7 @@ function renderNoteSlides(track, trackRuns, theme, systems, voice) {
     if (!slideIn && !slideOut) return;
     const { bi, k } = notes[ni];
     const { le, run, measure } = beats[bi];
-    if (voice === 2 && le.voice !== 2) return;
+    if (voice === 2 && voiceOf(le) !== 2) return;
     const h = le.rendered && !le.rendered.isRest ? le.rendered.noteheads?.[k] : null;
     if (!h) return;
     const prev = beats[bi - 1]?.run === run ? beats[bi - 1] : null;
@@ -183,12 +184,12 @@ export function renderGraceSlurs(score, trackRuns, theme) {
   const c = GRACE_SLUR_CLEARANCE_SP * s;
   score.tracks.forEach((track) => {
     if (!track.showStandardNotation) return;
-    (hasVoice2(trackRuns, track) ? [1, 2] : [1]).forEach((voice) => {
+    (trackHasTwoVoices(trackRuns, track) ? [1, 2] : [1]).forEach((voice) => {
       const flat = [];
       flattenRuns(trackRuns, track, (layoutEl, run) => {
         const info = layoutEl.rendered;
         if (!info) return;
-        flat.push({ sysIdx: run.sysIdx, g: run.notationG, x: layoutEl.x, info, start: voice !== 2 || layoutEl.voice === 2 });
+        flat.push({ sysIdx: run.sysIdx, g: run.notationG, x: layoutEl.x, info, start: voice !== 2 || voiceOf(layoutEl) === 2 });
       }, voice);
       renderStreamGraceSlurs(flat, c, theme);
     });

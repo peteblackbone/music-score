@@ -27,6 +27,7 @@ import { beatArpeggio } from '../directions.js';
 import { tremoloOf, vibratoOf } from '../noteEffects.js';
 import { glyphBox } from '../glyphMetrics.js';
 import { noteheadForDuration } from '../glyphs.js';
+import { isTwoVoiceMeasure, voiceOf } from '../twoVoice.js';
 
 // Top staff line -> lowest allowed tuplet bracket line. The end ticks hang 0.5 sp below the
 // line and the number is centred on it, so 1 sp keeps both at least 0.5 sp clear of the staff.
@@ -178,7 +179,7 @@ function drawNotationMeasure(g, measure, track, notationBaselineY, theme) {
     renderWholeMeasureRest(g, measure.wholeRest.x, notationBaselineY, theme);
     return;
   }
-  const two = !!measure.elements2;
+  const two = isTwoVoiceMeasure(measure);
   drawVoice(g, measure, measure.elements, measure.beamGroups, measure.tupletGroups, track, notationBaselineY, theme, two ? 1 : 0);
   if (two) {
     const g2 = group({ class: 'voice-2' });
@@ -213,7 +214,7 @@ function drawVoice(g, measure, elements, beamGroups, tupletGroups, track, notati
   elements.forEach((layoutEl) => {
     if (!layoutEl.rendered || layoutEl.rendered.isRest) return;
     const marks = layoutEl.el.type === 'note' ? normalizeArticulations(layoutEl.el.articulations) : [];
-    if (marks.length) renderArticulations(g, layoutEl.rendered, marks, notationBaselineY, theme, layoutEl.voice);
+    if (marks.length) renderArticulations(g, layoutEl.rendered, marks, notationBaselineY, theme, voiceOf(layoutEl));
     if (layoutEl.el.tremolo) renderTremolo(g, layoutEl.rendered, theme, { below: voice === 2, speed: tremoloOf(layoutEl.el.tremolo) });
     if (voice === 2) return;
     if (layoutEl.el.vibrato) renderVibrato(g, layoutEl.rendered, layoutEl.width, theme, vibratoOf(layoutEl.el.vibrato));
@@ -276,6 +277,7 @@ function drawTabMeasure(g, measure, track, tabBaselineY, theme) {
     const arp = beatArpeggio(layoutEl.el);
     if (arp) renderTabArpeggio(g, { ...layoutEl, tabBaselineY }, track.tuning.length, arp, theme);
   });
+  // plain data access: only two-voice measures have `elements2` (twoVoice.js)
   (measure.elements2 || []).forEach((layoutEl) => {
     layoutEl.tabRendered = renderTabElement(g, { ...layoutEl, el: layoutEl.tabEl, x: layoutEl.x - layoutEl.dx, tabBaselineY }, track.tuning.length, theme);
     const top = layoutEl.tabRendered?.fretTopY ?? Infinity;

@@ -17,14 +17,10 @@ const BREAK_GAP_SP = 0.5;        // split arc -> last barline / system header
 export function flattenRuns(trackRuns, track, visit, voice = 1) {
   trackRuns.filter((r) => r.track === track).forEach((run) => {
     run.measures.forEach((measure) => {
+      // plain data access (common.js imports nothing): only two-voice measures have `elements2` (twoVoice.js)
       (voice === 2 ? (measure.elements2 || measure.elements) : measure.elements).forEach((layoutEl) => visit(layoutEl, run, measure));
     });
   });
-}
-
-/** Whether any measure of `track` has two voices (else passes skip their voice-2 walk). */
-export function hasVoice2(trackRuns, track) {
-  return trackRuns.some((r) => r.track === track && r.measures.some((m) => m.elements2));
 }
 
 /** y of the top line of a run's TAB staff with `stringCount` strings. */

@@ -18,6 +18,7 @@ import {
 import { stemUpFor } from '../layout/timeline.js';
 import { glyphBox } from '../glyphMetrics.js';
 import { REST_LEDGER_OVERHANG_SP } from '../layout/voices.js';
+import { voiceOf } from '../twoVoice.js';
 export { normalizeArticulations, renderArticulations, renderTremolo, renderVibrato, elementTop, elementBottom } from './noteMarks.js';
 
 const STEM_LENGTH_SPACES = 3.5;
@@ -221,7 +222,7 @@ function renderGraceNote(g, layoutEl, track, theme) {
   const minPos = Math.min(...positions);
   const maxPos = Math.max(...positions);
   // Two-voice measures: voice 1's graces stem up, voice 2's down.
-  const stemUp = layoutEl.voice ? layoutEl.voice === 1 : stemUpFor(positions);
+  const stemUp = voiceOf(layoutEl) ? voiceOf(layoutEl) === 1 : stemUpFor(positions);
 
   const noteheads = [];
   notes.forEach((note, i) => {

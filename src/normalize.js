@@ -72,7 +72,7 @@ import { harmonicKind } from './harmonics.js';
 import { withDirections, trillOf, withNoteSlides } from './directions.js';
 import { withHandBeat, withHandNote } from './hands.js';
 import { mergeNavigation } from './navigation.js';
-import { isHiddenRest } from './duration.js';
+import { isTwoVoiceBeats } from './twoVoice.js';
 
 const sameTime = (a, b) => a.beats === b.beats && a.beatType === b.beatType;
 
@@ -151,7 +151,7 @@ export function normalizeScore(score) {
       const beats = normBeats(voices ? (Array.isArray(voices[0]?.beats) ? voices[0].beats : []) : (measure.beats || []));
       const v2 = voices && Array.isArray(voices[1]?.beats) ? normBeats(voices[1].beats) : null;
       // A voice 2 of only hidden rests leaves the measure single-voice.
-      const twoVoice = !!v2 && v2.some((b) => !isHiddenRest(b));
+      const twoVoice = isTwoVoiceBeats(v2);
       measures.push({
         ...base,
         padded,

@@ -3913,6 +3913,43 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.8.0: the shared two-voice predicate (src/twoVoice.js) ----------
+{
+  const tv = await imp('src/twoVoice.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const th = resolveTheme();
+  const hr = { type: 'rest', duration: 'half', hidden: true };
+  const q = (p) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: p }] });
+  test('twoVoice: isTwoVoiceBeats truth table (only a non-hidden beat counts)', () => {
+    eq([undefined, null, 'x', {}, [], [hr], [hr, hr], [hr, q('C4')], [{ type: 'rest', duration: 'whole' }], [{ type: 'grace', notes: [] }]].map(tv.isTwoVoiceBeats),
+      [false, false, false, false, false, false, false, true, true, true]);
+  });
+  test('twoVoice: isTwoVoiceMeasure / voiceOf / tabMarkBeat truth tables', () => {
+    eq([undefined, null, {}, { beats: [] }, { voice2Beats: [] }, { elements2: [] }, { elements: [], elements2: null }].map(tv.isTwoVoiceMeasure),
+      [false, false, false, false, true, true, false]);
+    eq([{}, { voice: undefined }, { voice: 1 }, { voice: 2 }].map(tv.voiceOf), [0, 0, 1, 2]);
+    const el = { id: 'own' }; const other = { id: 'v2' };
+    eq([tv.tabMarkBeat({ el }, 'pick'), tv.tabMarkBeat({ el, tabMarks: {} }, 'pick'), tv.tabMarkBeat({ el, tabMarks: { pick: other } }, 'pick'), tv.tabMarkBeat({ el, tabMarks: { pick: other } }, 'tap')],
+      [el, el, other, el]);
+  });
+  test('twoVoice: normalize keeps voice2Beats exactly when isTwoVoiceBeats; layout adds elements2 exactly then; trackHasTwoVoices per track', () => {
+    const variants = [[q('C4')], [hr], [hr, hr], [], [hr, q('D4')]];
+    const sc = normalizeScore({ tracks: [
+      { measures: variants.map((v2) => ({ voices: [{ beats: [q('C5'), q('C5'), q('C5'), q('C5')] }, { beats: v2 }] })) },
+      { measures: variants.map(() => ({ beats: [q('E4')] })) },
+    ] });
+    eq(sc.tracks[0].measures.map(tv.isTwoVoiceMeasure), variants.map(tv.isTwoVoiceBeats));
+    eq(sc.tracks[0].measures.map((m) => 'voice2Beats' in m), [true, false, false, false, true]);
+    const lay = computeLayout(sc, th, 3000);
+    const lm = lay.systems.flatMap((s) => s.tracks[0].measures);
+    eq(lm.map(tv.isTwoVoiceMeasure), [true, false, false, false, true]);
+    eq(lm.map((m) => 'elements2' in m), [true, false, false, false, true]);
+    const runs = lay.systems.flatMap((s) => s.tracks.map((t, ti) => ({ track: sc.tracks[ti], measures: t.measures })));
+    eq([tv.trackHasTwoVoices(runs, sc.tracks[0]), tv.trackHasTwoVoices(runs, sc.tracks[1])], [true, false]);
+    eq(lm[0].elements.map(tv.voiceOf).concat(lm[0].elements2.map(tv.voiceOf), lm[1].elements.map(tv.voiceOf)), [1, 1, 1, 1, 2, 0, 0, 0, 0]);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

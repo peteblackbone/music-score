@@ -33,6 +33,7 @@ import {
   REPEAT_START_WIDTH_SP,
 } from './systems.js';
 import { navigationLayout } from './navigation.js';
+import { isTwoVoiceMeasure } from '../twoVoice.js';
 
 /** Closing barline type of track `track`'s measure `mi` within a system. */
 function closingBarline(track, mi, nextOpening) {
@@ -164,7 +165,7 @@ export function computeLayout(score, theme, containerWidth) {
         const tev = p.col.tracks[ti];
         const elements = placeElements(measure.beats, tev.events, p, li, pad, graceW);
         let voice2 = null;
-        if (tev.events2) {
+        if (isTwoVoiceMeasure(measure)) {
           voice2 = { elements2: placeElements(measure.voice2Beats, tev.events2, p, li, pad, graceW) };
           tagVoice(elements, tev.events, 1);
           tagVoice(voice2.elements2, tev.events2, 2);

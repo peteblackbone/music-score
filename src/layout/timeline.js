@@ -42,6 +42,7 @@ import { fretLabel, fretLabelWidth } from '../textMetrics.js';
 import { layoutHeadGlyph } from '../harmonics.js';
 import { tabRhythmExtents } from './tabRhythm.js';
 import { beatArpeggio } from '../directions.js';
+import { isTwoVoiceMeasure } from '../twoVoice.js';
 
 const COLLISION_PAD_SP = 0.3;
 const TAIL_IDEAL_REDUCTION_SP = 0.5;
@@ -127,7 +128,7 @@ function anchorGraces(pending, anchor) {
  */
 function trackEvents(track, mi, theme) {
   const measure = track.measures[mi];
-  if (!measure.voice2Beats) {
+  if (!isTwoVoiceMeasure(measure)) {
     const accs = track.showStandardNotation ? resolveMeasureAccidentals(track, mi) : null;
     return voiceEvents(track, measure, measure.beats, accs, null, theme, { tabBand: true, arpeggio: true, fingers: true });
   }

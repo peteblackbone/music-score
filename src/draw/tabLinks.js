@@ -12,6 +12,7 @@ import { fretLabel, fretLabelWidth } from '../textMetrics.js';
 import { isNaturalHarmonic, decoratesFretLabel } from '../harmonics.js';
 import { linkTarget, slideMarks, bendOf } from '../directions.js';
 import { tabFretKnockoutHalf } from '../layout/tabRhythm.js';
+import { trackHasTwoVoices, isTwoVoiceMeasure, voiceOf } from '../twoVoice.js';
 
 const SLIDE_STUB_SP = 2;         // outgoing slide stroke across a system break (horizontal length)
 const SLIDE_LABEL_CLEAR_SP = 0.2; // slide end -> edge of a wide (harmonic) fret-label knock-out
@@ -74,15 +75,14 @@ const SLIDE_MARK_MIN_SP = 0.4;   // ...and skipped when clamping leaves less tha
  * measures), for the pass's per-beat marks.
  */
 export function renderTabLinks(track, trackRuns, systems, theme, helpers) {
-  const runs = trackRuns.filter((r) => r.track === track);
   const flat = collectTabNotes(track, trackRuns, theme, helpers.flattenRuns, 1);
-  if (!runs.some((r) => r.measures.some((m) => m.elements2))) {
+  if (!trackHasTwoVoices(trackRuns, track)) {
     drawTabLinks(flat, [], () => true, systems, theme, helpers);
     return flat;
   }
   const flat2 = collectTabNotes(track, trackRuns, theme, helpers.flattenRuns, 2);
   drawTabLinks(flat, flat2.filter((c) => c.voice === 2), () => true, systems, theme, helpers);
-  drawTabLinks(flat2, flat.filter((c) => c.measure.elements2), (item) => item.voice === 2, systems, theme, helpers);
+  drawTabLinks(flat2, flat.filter((c) => isTwoVoiceMeasure(c.measure)), (item) => item.voice === 2, systems, theme, helpers);
   return flat;
 }
 
@@ -115,7 +115,7 @@ function collectTabNotes(track, trackRuns, theme, flattenRuns, voice) {
         naturalHarmonic: isNaturalHarmonic(n), slideInset,
         grace: elDef.type === 'grace', slideIn: n.slideIn, slideOut: n.slideOut, measure,
         knock: knockOf(n, x, y),
-        ...(layoutEl.voice ? { voice: layoutEl.voice } : {}),
+        ...(voiceOf(layoutEl) ? { voice: voiceOf(layoutEl) } : {}),
       });
     });
   }, voice);
