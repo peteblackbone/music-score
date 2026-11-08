@@ -3193,7 +3193,7 @@ test('tab-rhythm', 'AC10: tabRhythm forced true vs false on every TAB staff of e
       ok(translateY(s.g) >= translateY(o.g) - EPS, `${name}@${width}: a TAB staff never moves up when rhythm is added`);
       if (translateY(s.g) !== translateY(o.g)) moved++;
       // beat text below the TAB staff (1.6.0) clears the rhythm band, so it moves with it
-      const strip = (stv) => stv.g.children.filter((c) => cls(c) !== 'tab-rhythm' && cls(c) !== 'beat-text beat-text-below');
+      const strip = (stv) => stv.g.children.filter((c) => !/^tab-rhythm( |$)/.test(cls(c)) && cls(c) !== 'beat-text beat-text-below'); // 1.8: voice 2's row is 'tab-rhythm voice-2'
       const a = strip(s); const b = strip(o);
       ok(a.length === b.length, `${name}@${width} sys${s.si}: child count`);
       if (sameX) { ok(a.map(serialize).join('') === b.map(serialize).join(''), `${name}@${width} sys${s.si}: TAB group differs outside the band`); strict++; }

@@ -19,7 +19,7 @@ import {
   renderWholeMeasureRest, elementBottom, tupletBracket,
 } from './notation.js';
 import { drawTabStaffLines, drawTabClef, renderTabElement } from './tab.js';
-import { drawTabRhythm } from './tabRhythm.js';
+import { drawTabRhythm, tabRow2TopY } from './tabRhythm.js';
 import { drawMeasureNumber } from './decor.js';
 import { renderNotationArpeggio, renderTabArpeggio } from './arpeggio.js';
 import { renderLeftFingering } from './handMarks.js';
@@ -89,7 +89,10 @@ function drawStaff(g, system, sysIdx, staff, theme) {
   else g.appendChild(drawTabStaffLines(system.startX, system.staffEndX, lineBottom, track.tuning.length, theme));
 
   drawSystemHeader(g, system, measures[0], staff, theme);
-  measures.forEach((measure) => drawMeasure(g, measure, staff, theme));
+  // Voice 2's TAB rhythm row: one stem top for every two-voice measure of this staff in this system.
+  const twoVoice = kind === 'tab' && track.tabRhythm ? measures.filter(isTwoVoiceMeasure) : [];
+  const row2Y = twoVoice.length ? tabRow2TopY(twoVoice, track.tuning.length, lineBottom, theme) : null;
+  measures.forEach((measure) => drawMeasure(g, measure, staff, theme, row2Y));
   if (system.courtesy) {
     drawSignatureChange(g, system.courtesy, system.tracks[staff.ti].courtesy, staff, theme, 'courtesy');
   }
@@ -142,8 +145,8 @@ function tabTimeBaseline(staff, theme) {
   return staff.lineBottom / 2 + 2 * theme.staffLineSpacing;
 }
 
-/** One measure of one staff: opening repeat, mid-system change, content, closing barline. */
-function drawMeasure(g, measure, staff, theme) {
+/** One measure of one staff: opening repeat, mid-system change, content, closing barline (`row2Y`: drawTabMeasure). */
+function drawMeasure(g, measure, staff, theme, row2Y) {
   const { track, kind, lineBottom } = staff;
   if (measure.startBarline) {
     g.appendChild(drawStaffBarline(measure.startBarline.x, barlineStaff(staff, theme), measure.startBarline.type, theme));
@@ -151,7 +154,7 @@ function drawMeasure(g, measure, staff, theme) {
   if (measure.midSig) drawSignatureChange(g, measure.midSig, measure.midSig, staff, theme, null);
 
   if (kind === 'notation') drawNotationMeasure(g, measure, track, lineBottom, theme);
-  else drawTabMeasure(g, measure, track, lineBottom, theme);
+  else drawTabMeasure(g, measure, track, lineBottom, theme, row2Y);
 
   if (measure.barline !== 'none') {
     g.appendChild(drawStaffBarline(measure.endX, barlineStaff(staff, theme), measure.barline, theme));
@@ -269,9 +272,10 @@ function drawTupletBrackets(g, tupletGroups, elements, notationBaselineY, theme,
  * of rest knock-outs. Records each element's fret / marks tops on
  * `layoutEl.tabRendered` for the score-wide passes (undefined for rests).
  * Voice 2's frets (`tabEl`, at the column x: TAB has no clash shift) follow;
- * their top also counts for the voice-1 element at the same onset.
+ * their top also counts for the voice-1 element at the same onset. `row2Y`:
+ * voice 2's rhythm row (draw/tabRhythm.js tabRow2TopY), two-voice measures only.
  */
-function drawTabMeasure(g, measure, track, tabBaselineY, theme) {
+function drawTabMeasure(g, measure, track, tabBaselineY, theme, row2Y) {
   measure.elements.forEach((layoutEl) => {
     layoutEl.tabRendered = renderTabElement(g, { ...layoutEl, tabBaselineY }, track.tuning.length, theme);
     const arp = beatArpeggio(layoutEl.el);
@@ -285,5 +289,5 @@ function drawTabMeasure(g, measure, track, tabBaselineY, theme) {
     if (!v1 || top === Infinity) return;
     v1.tabRendered = { fretTopY: Math.min(v1.tabRendered?.fretTopY ?? Infinity, top), marksTopY: v1.tabRendered?.marksTopY ?? Infinity };
   });
-  if (track.tabRhythm) drawTabRhythm(g, measure, track.tuning.length, tabBaselineY, theme);
+  if (track.tabRhythm) drawTabRhythm(g, measure, track.tuning.length, tabBaselineY, theme, row2Y);
 }

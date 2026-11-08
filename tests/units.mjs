@@ -2437,7 +2437,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const headY = w.ms[0].elements2[0].rendered.noteheads[0].y;
     eq([tr.length, tr.every((l) => +l.getAttribute('y1') > headY + S / 2 && +l.getAttribute('y2') > headY + S / 2)], [3, true]);
   });
-  test('two-voice drawing: TAB shows voice 2\'s frets at the column x, voice 1 wins a shared string; rhythm band voice 1 only', () => {
+  test('two-voice drawing: TAB shows voice 2\'s frets at the column x, voice 1 wins a shared string; rhythm band one row per voice (1.8)', () => {
     const fr = (string, fret, duration = 'quarter') => ({ type: 'note', duration, notes: [{ string, fret }] });
     const m = vm([fr(2, 5, 'half'), fr(1, 3, 'half')], [fr(2, 7), fr(4, 9), fr(5, 2), fr(5, 4)]);
     const { ms, staff } = draw2([m], { showTablature: true });
@@ -2447,6 +2447,9 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const tab = draw2([m], { showStandardNotation: false, showTablature: true });
     const band = nodes(tab.staff('tab'), (nd, cls) => nd.tag === 'line' && cls.includes('tab-rhythm'));
     eq(band.map((l) => +(+l.getAttribute('x1')).toFixed(2)), tab.ms[0].elements.map((e) => +e.x.toFixed(2)));
+    // 1.8: voice 2's row follows in <g class="tab-rhythm voice-2">, stems at the column x (x - dx)
+    const band2 = nodes(tab.staff('tab'), (nd, cls) => nd.tag === 'line' && cls.includes('tab-rhythm voice-2'));
+    eq(band2.map((l) => +(+l.getAttribute('x1')).toFixed(2)), tab.ms[0].elements2.map((e) => +(e.x - e.dx).toFixed(2)));
   });
 
   // two-voice passes (full render): ties, slurs, grace slurs, TAB links per voice
@@ -3909,9 +3912,9 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   test('pre-1.8 tab rhythm: a single-voice measure on a track that also has a two-voice measure serializes exactly', () => {
     eq(serialize(groups(render(tabOnly([single, two])))[0]), SINGLE_ON_TWO_VOICE_TRACK);
   });
-  test('pre-1.8 tab rhythm: row 1 of a two-voice measure without rests serializes exactly (voice 1 only, one group)', () => {
+  test('pre-1.8 tab rhythm: row 1 of a two-voice measure without rests serializes exactly (1.8 adds voice 2\'s row as a second group)', () => {
     const gs = groups(render(tabOnly([two])));
-    eq(gs.length, 1);
+    eq(gs.length, 2);
     eq(serialize(gs[0]), ROW1_NO_RESTS);
   });
 }
@@ -4095,6 +4098,88 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(dx(nb(['G4']), nb(['G4', 'F4'])) >= plain, true, 'voice-2 second below the unison');
     eq(dx(nb(['G4', 'A4']), nb(['G4'])) > plain, true, 'voice-1 second (displaced head)');
     eq(dx(nb(['G4']), nb(['G4', 'A4'])) > 0, true, 'crossing');
+  });
+}
+
+// ---------- 1.8.0: two-voice TAB rhythm rows (R2) and band-row rests (R3) ----------
+{
+  const TR = await imp('src/layout/tabRhythm.js');
+  const { tabRow2TopY } = await imp('src/draw/tabRhythm.js');
+  const { inkBounds } = await imp('src/layout/ink.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const LB = 5 * th.tabStaffLineSpacing; const T1 = TR.tabStemTopY(LB, th);
+  const fr = (string, fret, duration = 'quarter', x = {}) => ({ type: 'note', duration, notes: [{ string, fret }], ...x });
+  const rs = (duration = 'quarter', x = {}) => ({ type: 'rest', duration, ...x });
+  const vm = (b1, b2) => ({ voices: [{ beats: b1 }, { beats: b2 }] });
+  const q4 = (st) => [fr(st, 1), fr(st, 2), fr(st, 3), fr(st, 4)];
+  const tabScore = (measures) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures }] });
+  const nodes = (g, pred) => [...walk(g)].filter(({ nd, cls }) => pred(nd, cls)).map(({ nd }) => nd);
+  const near = (a, b, e = 1e-9) => Math.abs(a - b) < e;
+  const row = (svg, v2) => nodes(svg, (nd) => nd.tag === 'g' && nd.getAttribute('class') === (v2 ? 'tab-rhythm voice-2' : 'tab-rhythm'));
+  const stemTops = (gs) => [...new Set(gs.flatMap((g) => nodes(g, (nd) => nd.tag === 'line').map((l) => +l.getAttribute('y1'))))];
+  test('R2: voice 2\'s stems hang from T2 = T1 + (max(2.5, D1) + 1.5) sp; by default LB + 5 sp', () => {
+    eq(T1, LB + S);
+    const svg = renderTree(tabScore([vm(q4(1), q4(5))]));
+    eq([stemTops(row(svg, false)), stemTops(row(svg, true))], [[T1], [LB + 5 * S]]);
+  });
+  test('R2: a deeper voice-1 band (beamed 64ths, 4 sp) pushes T2 down for its own system only', () => {
+    const deep = vm([...Array(16)].map(() => fr(1, 1, '64th')).concat([fr(1, 2, 'half', { dots: 1 })]), q4(5));
+    const svg = renderTree(tabScore([deep, vm(q4(1), q4(5))]), 330);
+    const systems = nodes(svg, (nd) => nd.tag === 'g' && /^system /.test(nd.getAttribute('class') || ''));
+    eq(systems.length, 2);
+    eq(systems.map((sys) => stemTops(row(sys, true))), [[T1 + (4 + 1.5) * S], [LB + 5 * S]]);
+  });
+  test('R2: the probe depth is the ink voice 1\'s row actually draws (flag tails, tuplet brackets)', () => {
+    const t3 = (f) => fr(1, f, '16th', { tuplet: 3 });
+    for (const b1 of [[fr(1, 1, '32nd'), rs('32nd'), rs('16th'), rs('8th'), rs('half', { dots: 1 })], [t3(1), rs('16th', { tuplet: 3 }), t3(2), rs('8th'), rs('half', { dots: 1 })]]) {
+      const sc = normalizeScore(tabScore([vm(b1, q4(5))]));
+      const m = computeLayout(sc, th, 900).systems[0].tracks[0].measures[0];
+      const svg = renderTree(tabScore([vm(b1, q4(5))]));
+      const d1 = (inkBounds(row(svg, false)[0], th).bottom - T1) / S;
+      eq(d1 > 2.5, true, 'deeper than the minimum');
+      eq(near(tabRow2TopY([m], 6, LB, th), T1 + (d1 + 1.5) * S), true);
+      eq(stemTops(row(svg, true)).map((y) => +y.toFixed(6)), [+(T1 + (d1 + 1.5) * S).toFixed(6)]);
+    }
+  });
+  test('R3: band-row rest glyphs at tabFlagScale, heights 2.24 / 1.28 / 2.04 / 2.78 / 3.54 sp, centred 1.25 sp below T but top >= T', () => {
+    const hs = ['quarter', '8th', '16th', '32nd', '64th'].map((d) => { const { box } = TR.tabBandRest(d, th); return box.top - box.bottom; });
+    eq(hs.map((h, i) => near(h, [2.24, 1.28, 2.04, 2.78, 3.54][i], 0.006)), [true, true, true, true, true]);
+    ['whole', 'half', 'quarter', '8th', '16th', '32nd', '64th'].forEach((d) => {
+      const { box } = TR.tabBandRest(d, th);
+      const y = TR.tabBandRestY(100, box, S);
+      const top = y - box.top * S; const centre = y - ((box.top + box.bottom) / 2) * S;
+      eq([top >= 100 - 1e-9, near(centre, 100 + 1.25 * S) || near(top, 100)], [true, true], d);
+    });
+  });
+  test('R3: whole / half rests in a row use the leger-line glyphs E4F4 / E4F5', () => {
+    eq([TR.tabBandRest('whole', th).glyph, TR.tabBandRest('half', th).glyph].map((g) => g.codePointAt(0).toString(16)), ['e4f4', 'e4f5']);
+    const svg = renderTree(tabScore([vm([fr(1, 1, 'half'), fr(1, 2, 'half')], [rs('half'), fr(5, 2, 'half')])]));
+    const rest = nodes(row(svg, true)[0], (nd) => nd.tag === 'text')[0];
+    eq([rest.textContent.codePointAt(0).toString(16), +rest.getAttribute('font-size')], ['e4f5', 40 * th.tabFlagScale]);
+  });
+  test('R3: unmerged rests sit in their own row without a knock-out; dots on the row\'s dot line', () => {
+    const svg = renderTree(tabScore([vm([rs('quarter', { dots: 1 }), fr(1, 1, '8th'), fr(1, 2, 'half')], [fr(5, 1), fr(5, 2), rs('half')])]));
+    const r1 = nodes(row(svg, false)[0], (nd) => nd.tag === 'g' && nd.getAttribute('class') === 'tab-rest')[0];
+    const r2 = nodes(row(svg, true)[0], (nd) => nd.tag === 'g' && nd.getAttribute('class') === 'tab-rest')[0];
+    eq([r1.children.map((c) => c.tag), r2.children.map((c) => c.tag)], [['text', 'circle'], ['text']]);
+    const { box } = TR.tabBandRest('quarter', th);
+    eq([+r1.children[0].getAttribute('y'), +r1.children[1].getAttribute('cy')], [TR.tabBandRestY(T1, box, S), T1 + TR.TAB_DOT_ROW_SP * S]);
+    eq(near(+r1.children[1].getAttribute('cx') - +r1.children[0].getAttribute('x'), (box.width / 2 + 0.5) * S), true, 'first dot');
+  });
+  test('R3: a whole-measure rest is centred in its row (unless merged); tabRhythmExtents rowRest uses the band box', () => {
+    const sc = normalizeScore(tabScore([vm([rs('whole')], q4(5))]));
+    const m = computeLayout(sc, th, 900).systems[0].tracks[0].measures[0];
+    const svg = renderTree(tabScore([vm([rs('whole')], q4(5))]));
+    const t = nodes(row(svg, false)[0], (nd) => nd.tag === 'text')[0];
+    eq([+(+t.getAttribute('x')).toFixed(2), t.textContent.codePointAt(0).toString(16)], [+((m.contentX + m.endX) / 2).toFixed(2), 'e4f4']);
+    const half = (d) => TR.tabRhythmExtents(rs(d), false, th, true).left;
+    eq(near(half('quarter'), glyphBox('restQuarter').width * th.tabFlagScale / 2 * S), true);
+    eq(near(half('whole'), glyphBox('restWholeLegerLine').width * th.tabFlagScale / 2 * S), true);
+    eq(near(TR.tabRhythmExtents(rs('8th', { dots: 1 }), false, th, true).right, (glyphBox('rest8th').width * th.tabFlagScale / 2 + 0.5 + 0.17) * S), true);
+    eq(TR.tabRhythmExtents(rs('8th'), false, th), TR.tabRhythmExtents(rs('8th'), false, th, false), 'default unchanged');
   });
 }
 
