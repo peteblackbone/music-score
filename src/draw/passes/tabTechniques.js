@@ -6,12 +6,11 @@
  * `run.hpBoxes` (hammer-on/pull-off ink) for passes 4 and 5.
  */
 import {
-  techniqueLabelSize, renderTapMark, renderWhammyDip, whammyDipGeometry,
+  techniqueLabelSize, renderTapMark, tapMarkHalf, renderWhammyDip, whammyDipGeometry,
 } from '../tab.js';
 import { renderTabLinks } from '../tabLinks.js';
 import { TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../../layout/ink.js';
-import { estimateTextWidth } from '../../textMetrics.js';
-import { beatTapMark, beatWhammy, beatTrill, trillTabFret, TAP_MARK_LETTERS } from '../../directions.js';
+import { beatTapMark, beatWhammy, beatTrill, trillTabFret } from '../../directions.js';
 import { trillEndX, trillRunEndX, trillGeometry, trillRuns, renderTrill } from '../trill.js';
 import { planWhammyLines, renderWhammyLine } from '../whammy.js';
 import { flattenRuns, tabTopY, inkTopInSpan, breakEndX, breakStartX } from './common.js';
@@ -52,8 +51,9 @@ const WHAMMY_FRET_HALF_SP = 1; // horizontal reach assumed for another beat's fr
  *   and its tab tremolo / vibrato, raised above any hammer-on/pull-off
  *   letter it would come within TAP_HP_CLEAR_SP of, and above a trill; a
  *   slapped / popped note (`note.slap` / `note.pop`) gets an "S" / "P" the
- *   same way, in the same slot (one letter per beat, priority T > S > P;
- *   `beatTapMark`);
+ *   same way, in the same slot, and a left-hand tapped note
+ *   (`note.leftHandTap`) the left-hand tapping glyph (one mark per beat,
+ *   priority T > left-hand tap > S > P; `beatTapMark`);
  * - `whammy` draws a dip ("V" plus "-1/2") above the TAB staff, its width
  *   limited like a bend's, stacked above the beat's frets, marks, "T" / "S" /
  *   "P", trill and any bend under it;
@@ -108,7 +108,7 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
           trillTop - TAP_TRILL_CLEAR_SP * s - TEXT_DESCENT_EM * size);
         // Raise the T above any H/P letter its box comes within TAP_HP_CLEAR_SP of (lowest letter first, so a raise
         // that reaches a higher letter clears that one too).
-        const half = estimateTextWidth(TAP_MARK_LETTERS[mark], size, { bold: true }) / 2;
+        const half = tapMarkHalf(mark, theme);
         const pad = TAP_HP_CLEAR_SP * s;
         run.hpBoxes.filter((b) => b.letter && b.letter.x1 < x + half + pad && b.letter.x2 > x - half - pad)
           .map((b) => b.letter).sort((a, b) => b.top - a.top)

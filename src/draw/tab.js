@@ -10,6 +10,9 @@ import { whammyLabel, TAP_MARK_LETTERS, bendOf } from '../directions.js';
 import { tabFretKnockoutHalf } from '../layout/tabRhythm.js';
 import { tremoloOf, tremoloStrokes, vibratoOf } from '../noteEffects.js';
 import { strokeOffsets } from './noteMarks.js';
+import { glyphBox } from '../glyphMetrics.js';
+import { Glyph } from '../glyphs.js';
+import { smuflFontSizePx } from '../theme.js';
 
 /** Draw the tab staff lines for `stringCount` strings, baseline = bottom (highest-numbered) string. */
 export function drawTabStaffLines(x, endX, baselineY, stringCount, theme) {
@@ -322,16 +325,49 @@ export function renderTechniqueLabel(g, x1, x2, labelY, label, cls, color, theme
   g.appendChild(gEl);
 }
 
+/** Half the width (px) of the tap mark of `kind` (renderTapMark): its estimated bold letter, or the left-hand tap glyph. */
+export function tapMarkHalf(kind, theme) {
+  if (kind === 'leftHandTap') return (glyphBox(Glyph.guitarLeftHandTapping).width / 2) * theme.staffLineSpacing;
+  return estimateTextWidth(TAP_MARK_LETTERS[kind], techniqueLabelSize(theme), { bold: true }) / 2;
+}
+
+/**
+ * Ink box `{ x1, x2, top, bottom, text: true }` of the tap mark of `kind`
+ * renderTapMark draws at `x` / `baselineY`: estimated text extents of a
+ * letter; the left-hand tap glyph's box, its ink bottom where a letter's
+ * descent would end.
+ */
+export function tapMarkBox(x, baselineY, theme, kind) {
+  const size = techniqueLabelSize(theme);
+  const half = tapMarkHalf(kind, theme);
+  const bottom = baselineY + TEXT_DESCENT_EM * size;
+  if (kind === 'leftHandTap') {
+    const gb = glyphBox(Glyph.guitarLeftHandTapping);
+    return { x1: x - half, x2: x + half, top: bottom - (gb.top - gb.bottom) * theme.staffLineSpacing, bottom, text: true };
+  }
+  return { x1: x - half, x2: x + half, top: baselineY - TEXT_ASCENT_EM * size, bottom, text: true };
+}
+
 /**
  * Draw a tap mark: a bold upright letter ("T" for `kind` 'tap', "S" 'slap',
  * "P" 'pop'; directions.js TAP_MARK_LETTERS) at the technique-label size,
  * centred on `x`, baseline `baselineY` (resolved by the caller), in
- * `<g class="tap">` (class = `kind`). Used above the TAB staff
+ * `<g class="tap">` (class = `kind`); for 'leftHandTap' the SMuFL left-hand
+ * tapping glyph instead, centred, its ink bottom at the letter's descent
+ * (tapMarkBox), in `<g class="left-hand-tap">`. Used above the TAB staff
  * (renderTabArticulations) and above the notation staff
  * (renderPlayingDirections). Returns its ink box
  * `{ x1, x2, top, bottom, text: true }` (estimated text extents).
  */
 export function renderTapMark(g, x, baselineY, color, theme, kind = 'tap') {
+  if (kind === 'leftHandTap') {
+    const gb = glyphBox(Glyph.guitarLeftHandTapping);
+    const box = tapMarkBox(x, baselineY, theme, kind);
+    const sp = theme.staffLineSpacing;
+    g.appendChild(group({ class: 'left-hand-tap' }, [glyphText(x - (gb.left + gb.width / 2) * sp, box.bottom + gb.bottom * sp,
+      Glyph.guitarLeftHandTapping, theme.fontFamily, smuflFontSizePx(theme), { fill: color })]));
+    return box;
+  }
   const size = techniqueLabelSize(theme);
   const letter = TAP_MARK_LETTERS[kind];
   const gEl = group({ class: kind });

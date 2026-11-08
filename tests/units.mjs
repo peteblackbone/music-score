@@ -3521,6 +3521,98 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.7.0 notation stack: ornament, right-hand letters, left-hand tap, golpe (playingDirections.js) ----------
+{
+  const { tapMarkHalf, techniqueLabelSize } = await imp('src/draw/tab.js');
+  const { estimateTextWidth } = await imp('src/textMetrics.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const byClass = (root, cls) => walk(root).filter((n) => (n.getAttribute('class') || '').split(' ').includes(cls));
+  const nq = (notes, extra = {}) => ({ type: 'note', duration: 'quarter', notes, ...extra });
+  const y = (n) => Number(n.getAttribute('y'));
+
+  test('stack: tapMarkHalf keeps the estimated letter half for T / S / P and uses the glyph box for the left-hand tap', () => {
+    const theme = resolveTheme({});
+    ['tap', 'slap', 'pop'].forEach((k) => eq(tapMarkHalf(k, theme), estimateTextWidth({ tap: 'T', slap: 'S', pop: 'P' }[k], techniqueLabelSize(theme), { bold: true }) / 2));
+    eq(tapMarkHalf('leftHandTap', theme), (1.63 / 2) * theme.staffLineSpacing);
+  });
+
+  test('stack: one beat with turn, p i m, T, golpe and a down pick stacks them bottom up, each at least 0.4 sp above the last', () => {
+    const svg = render({ tracks: [{ measures: [{ beats: [
+      nq([{ pitch: 'E3', rightFinger: 'p' }, { pitch: 'E4', rightFinger: 'm', ornament: 'turn', tap: true }, { pitch: 'B3', rightFinger: 'I' }], { golpe: 'thumb', pickStroke: 'down' }),
+      nq([{ pitch: 'E4' }]), nq([{ pitch: 'E4' }]), nq([{ pitch: 'E4' }]),
+    ] }] }] });
+    const orn = byClass(svg, 'ornament-turn')[0].children[0];
+    eq(byClass(svg, 'ornament')[0] === byClass(svg, 'ornament-turn')[0], true);
+    const rh = byClass(svg, 'fingering-right')[0].children;
+    eq(rh.map((t) => t.textContent), ['p', 'i', 'm'], 'lowest note first (drawn bottom up)');
+    eq(rh.map((t) => t.getAttribute('font-style')), ['italic', 'italic', 'italic']);
+    eq(y(rh[0]) > y(rh[1]) && y(rh[1]) > y(rh[2]), true);
+    const tap = byClass(svg, 'tap')[0].children[0];
+    const golpe = byClass(svg, 'golpe-thumb')[0].children[0];
+    const pick = byClass(svg, 'pick-stroke-down')[0].children[0];
+    // Each mark's bottom vs the previous mark's top (estimated boxes, px; sp = 10).
+    const ornTop = y(orn) - 0.89 * 10;
+    eq(y(rh[0]) + 0.25 * 11 <= ornTop - 4 + 1e-9, true, 'letters 0.4 sp above the turn');
+    const rhTop = y(rh[2]) - 0.8 * 11;
+    eq(y(tap) + 0.25 * techniqueLabelSize(resolveTheme({})) <= rhTop - 4 + 1e-9, true, 'T 0.4 sp above the letters');
+    const tapTop = y(tap) - 0.8 * techniqueLabelSize(resolveTheme({}));
+    eq(y(golpe) - 0.02 * 10 <= tapTop - 4 + 1e-9, true, 'golpe 0.4 sp above the T');
+    eq(y(pick) <= y(golpe) - 1.14 * 10 - 4 + 1e-9, true, 'pick 0.4 sp above the golpe');
+  });
+
+  test('stack: the left-hand tap glyph takes the T slot (tap > LH > slap > pop) on notation and TAB; trill beats an ornament', () => {
+    const svg = render({ tracks: [{ showTablature: true, measures: [{ beats: [
+      nq([{ pitch: 'E4', string: 4, fret: 2, leftHandTap: true }]),
+      nq([{ pitch: 'E4', string: 4, fret: 2, leftHandTap: true, slap: true }]),
+      nq([{ pitch: 'E4', string: 4, fret: 2, leftHandTap: true, tap: true }]),
+      nq([{ pitch: 'E4', string: 4, fret: 2, trill: true, ornament: 'turn' }]),
+    ] }] }] });
+    eq(byClass(svg, 'left-hand-tap').length, 4, 'two beats x notation + TAB');
+    eq(byClass(svg, 'left-hand-tap').map((g) => g.children[0].textContent.codePointAt(0).toString(16)), ['e840', 'e840', 'e840', 'e840']);
+    eq(byClass(svg, 'slap').length, 0);
+    eq(byClass(svg, 'tap').length, 2);
+    eq(byClass(svg, 'ornament').length, 0);
+    eq(byClass(svg, 'trill').length, 2);
+  });
+
+  test('stack: right-hand letters - notation only on a notation + TAB track; on a tab-only track under the pick stroke', () => {
+    const both = render({ tracks: [{ showTablature: true, measures: [{ beats: [nq([{ pitch: 'E4', string: 4, fret: 2, rightFinger: 'a' }], { pickStroke: 'up' })] }] }] });
+    eq(byClass(both, 'fingering-right').length, 1);
+    eq(byClass(byClass(both, 'staff-tab')[0], 'fingering-right').length, 0);
+    const tabOnly = render({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: [
+      nq([{ string: 4, fret: 2, rightFinger: 'a' }, { string: 6, fret: 0, rightFinger: 'p' }], { pickStroke: 'up' }),
+      nq([{ string: 1, fret: 2, rightFinger: 'c' }]),
+    ] }] }] });
+    const rh = byClass(tabOnly, 'fingering-right');
+    eq(rh.map((g) => g.children.map((t) => t.textContent)), [['p', 'a'], ['c']]);
+    const pick = byClass(tabOnly, 'pick-stroke-up')[0].children[0];
+    eq(y(pick) <= y(rh[0].children[1]) - 0.8 * 11 - 4 + 1e-9, true, 'pick 0.4 sp above the letters');
+    eq(y(rh[1].children[0]) + 0.25 * 11 <= -10 + 1e-9, true, 'letters at least 1 sp above the TAB top line');
+  });
+
+  test('stack: ornaments, letters and golpe are not drawn on graces, rests or voice 2; directionTopY reaches the golpe', () => {
+    const svg = render({ tracks: [{ measures: [
+      { beats: [
+        { type: 'grace', duration: '16th', notes: [{ pitch: 'D4', ornament: 'turn', rightFinger: 'p' }], golpe: true },
+        { type: 'rest', duration: 'quarter', golpe: true, notes: [{ pitch: 'E4', ornament: 'turn' }] },
+        nq([{ pitch: 'E4' }], { golpe: true, fermata: true }), nq([{ pitch: 'E4' }]), nq([{ pitch: 'E4' }]),
+      ] },
+      { voices: [{ beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'E5' }] }] },
+        { beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'G4', ornament: 'turn', rightFinger: 'p' }], golpe: true }] }] },
+    ] }] });
+    eq([byClass(svg, 'ornament').length, byClass(svg, 'fingering-right').length, byClass(svg, 'golpe').length], [0, 0, 1]);
+    const golpe = byClass(svg, 'golpe')[0].children[0];
+    const fermata = byClass(svg, 'fermata')[0];
+    eq(y(fermata.children[0]) < y(golpe) - 1.14 * 10, true, 'fermata above the golpe');
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

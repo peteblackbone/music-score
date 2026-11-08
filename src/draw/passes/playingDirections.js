@@ -1,16 +1,17 @@
 /**
  * draw/passes/playingDirections.js — pass 5 (draw/passes.js): pick strokes,
- * strum arrows and notation tap "T" above the beat, clear of the slurs
- * drawn above it.
+ * strum arrows, right-hand letters and the notation trill / ornament, tap
+ * "T" and golpe above the beat, clear of the slurs drawn above it.
  * Slur clearance and beam groups come from notationBeats.js.
  * Above a TAB staff reads `run.tabInkBoxes`, `run.hpBoxes` (pass 3) and
  * `run.labelBoxes` (pass 4); writes `info.directionTopY` for pass 7.
  */
 import { renderPickStroke } from '../notation.js';
-import { renderTapMark, techniqueLabelSize } from '../tab.js';
-import { TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../../layout/ink.js';
-import { estimateTextWidth } from '../../textMetrics.js';
-import { beatTapMark, beatPickStroke, beatTrill, beatStrum, TAP_MARK_LETTERS } from '../../directions.js';
+import { renderTapMark, tapMarkHalf, tapMarkBox, techniqueLabelSize } from '../tab.js';
+import { renderOrnament, ornamentHalf, renderRightFingering, rightFingeringHalf, renderGolpe, golpeHalf } from '../handMarks.js';
+import { TEXT_DESCENT_EM } from '../../layout/ink.js';
+import { beatTapMark, beatPickStroke, beatTrill, beatStrum } from '../../directions.js';
+import { beatOrnament, beatGolpe, rightFingerStack } from '../../hands.js';
 import { glyphBox } from '../../glyphMetrics.js';
 import { pickStrokeGlyph, Glyph } from '../../glyphs.js';
 import { trillEndX, trillRunEndX, trillRuns, renderTrill } from '../trill.js';
@@ -18,11 +19,11 @@ import { renderStrum, renderTabStrums, STRUM_HALF_SP } from '../strum.js';
 import { flattenRuns, tabTopY, inkTopInSpan, breakEndX } from './common.js';
 import { collectBeats, beatClearTop, slurAboveCurves, slurClearTop, slurClearSpan, beamGroupsOf } from './notationBeats.js';
 
-// Playing directions above the notation staff: trill, tap "T" then pick stroke / strum, this far apart.
+// Playing directions above the notation staff: trill / ornament, right-hand letters, tap "T", golpe, then pick stroke / strum, this far apart.
 const DIRECTION_STACK_GAP_SP = 0.4;
 // A trill's bottom stays this far below the next rendered note's top.
 const TRILL_NEXT_CLEAR_SP = 1;
-// Pick strokes on a tab-only track: bottom at least this far above the TAB top line, and above the ink under it.
+// Pick strokes (and right-hand letters) on a tab-only track: bottom at least this far above the TAB top line, and above the ink under it.
 const PICK_TAB_STAFF_CLEAR_SP = 1;
 const PICK_TAB_CLEAR_SP = 0.4;
 
@@ -31,9 +32,12 @@ const PICK_TAB_CLEAR_SP = 0.4;
  * after the technique labels and before chord symbols (which then clear
  * them through the staff's ink) and fermatas:
  *
- * - notation staff: a trill ("tr" and a wavy line, `note.trill`; draw/trill.js),
- *   then a tap "T" (`note.tap`; or "S" / "P" for `note.slap` /
- *   `note.pop`, one letter per beat, `beatTapMark`) then the pick stroke
+ * - notation staff: a trill ("tr" and a wavy line, `note.trill`; draw/trill.js)
+ *   or else an ornament (`note.ornament`; hands.js, draw/handMarks.js),
+ *   then the right-hand letters (`note.rightFinger`, lowest note's at the
+ *   bottom), then a tap "T" (`note.tap`; or the left-hand tap glyph, "S" or
+ *   "P" for `note.leftHandTap` / `note.slap` / `note.pop`, one mark per
+ *   beat, `beatTapMark`), then a golpe (`golpe`), then the pick stroke
  *   (`pickStroke` 'down' | 'up'), stacked DIRECTION_STACK_GAP_SP apart
  *   upward, clear of the staff, stem, articulations, vibrato / tremolo and
  *   tuplet bracket, and 0.5 sp above a slur's outer edge (slurClearTop)
@@ -50,10 +54,12 @@ const PICK_TAB_CLEAR_SP = 0.4;
  *   takes the pick stroke's place on a track without a TAB staff; runs of
  *   strummed beats on a system (graces allowed; trillRuns) share the
  *   highest bottom of their own.
- * - tab-only track: the pick stroke above the TAB staff, at least
+ * - tab-only track: the right-hand letters, then the pick stroke
+ *   DIRECTION_STACK_GAP_SP above them, above the TAB staff, at least
  *   PICK_TAB_STAFF_CLEAR_SP above its top line and PICK_TAB_CLEAR_SP above
- *   the beat's frets / marks and any bend, "T", dip, technique label or
- *   hammer-on/pull-off ink under it.
+ *   the beat's frets / marks and any bend, "T", golpe, dip, technique label
+ *   or hammer-on/pull-off ink under it. A track with a notation staff shows
+ *   right-hand letters there only.
  * - TAB staff (notation + TAB and tab-only tracks): strum arrows
  *   (renderTabStrums, draw/strum.js), in the pick stroke's slot; a strum
  *   replaces a beat's pick stroke (beatPickStroke).
@@ -67,9 +73,10 @@ export function renderPlayingDirections(score, trackRuns, theme, systems) {
       beats.forEach((item) => {
         item.tapMark = beatTapMark(item.el); item.pick = beatPickStroke(item.el); item.trill = beatTrill(item.el);
         item.strum = track.showTablature ? null : beatStrum(item.el);
+        item.ornament = beatOrnament(item.el); item.rightLetters = rightFingerStack(item.el); item.golpe = beatGolpe(item.el);
       });
       const marked = beats.filter((item) => item.info && !item.info.isRest && !item.info.isGrace
-        && (item.tapMark || item.pick || item.trill || item.strum));
+        && (item.tapMark || item.pick || item.trill || item.strum || item.ornament || item.rightLetters || item.golpe));
       if (!marked.length) return;
       slurAboveCurves(beats, systems, theme);
       const tapSize = techniqueLabelSize(theme);
@@ -90,33 +97,36 @@ export function renderPlayingDirections(score, trackRuns, theme, systems) {
           nextNote ? nextNote.topY - TRILL_NEXT_CLEAR_SP * sp : Infinity,
         );
       });
-      // Each beat's own stack: trill, then T / S / P on the ink under it, then the pick stroke's own baseline.
+      // Each beat's own stack, bottom up, each layer on the ink under it and the gap above the layer below:
+      // trill / ornament, right-hand letters, T / LH tap / S / P, golpe, then the pick stroke's or strum's own bottom.
+      const gap = DIRECTION_STACK_GAP_SP * sp;
       marked.forEach((item) => {
+        let above = Infinity;
+        const clear = (half) => Math.min(beatClearTop(item, sp, slurClearTop(item, half, sp)), above);
         if (item.trill) {
           const bottomY = Math.min(...runs.get(item).map((m) => m.trillBottomY));
           item.trillTop = renderTrill(item.g, item.x, bottomY, item.trillEndX, theme.noteColor, theme, null).top;
+          above = item.trillTop - gap;
+        } else if (item.ornament) {
+          item.ornamentTop = renderOrnament(item.g, item.x, clear(ornamentHalf(item.ornament, theme)), item.ornament, theme.noteColor, theme).top;
+          above = item.ornamentTop - gap;
+        }
+        if (item.rightLetters) {
+          const half = rightFingeringHalf(item.rightLetters, theme);
+          item.rightTop = renderRightFingering(item.g, item.x, clear(half), item.rightLetters, theme.noteColor, theme).top;
+          above = Math.min(above, item.rightTop - gap);
         }
         if (item.tapMark) {
-          const tapHalf = estimateTextWidth(TAP_MARK_LETTERS[item.tapMark], tapSize, { bold: true }) / 2;
-          item.tapBaselineY = Math.min(beatClearTop(item, sp, slurClearTop(item, tapHalf, sp)),
-            item.trill ? item.trillTop - DIRECTION_STACK_GAP_SP * sp : Infinity) - TEXT_DESCENT_EM * tapSize;
-          item.tapTop = item.tapBaselineY - TEXT_ASCENT_EM * tapSize;
+          item.tapBaselineY = clear(tapMarkHalf(item.tapMark, theme)) - TEXT_DESCENT_EM * tapSize;
+          item.tapTop = tapMarkBox(item.x, item.tapBaselineY, theme, item.tapMark).top;
+          above = Math.min(above, item.tapTop - gap);
         }
-        if (item.pick) {
-          const pickHalf = (glyphBox(pickStrokeGlyph(item.pick)).width / 2) * sp;
-          item.pickBottomY = Math.min(
-            beatClearTop(item, sp, slurClearTop(item, pickHalf, sp)),
-            item.tapMark ? item.tapTop - DIRECTION_STACK_GAP_SP * sp : Infinity,
-            item.trill ? item.trillTop - DIRECTION_STACK_GAP_SP * sp : Infinity,
-          );
+        if (item.golpe) {
+          item.golpeTop = renderGolpe(item.g, item.x, clear(golpeHalf(theme)), item.golpe, theme.noteColor, theme).top;
+          above = Math.min(above, item.golpeTop - gap);
         }
-        if (item.strum) {
-          item.strumBottomY = Math.min(
-            beatClearTop(item, sp, slurClearTop(item, STRUM_HALF_SP * sp, sp)),
-            item.tapMark ? item.tapTop - DIRECTION_STACK_GAP_SP * sp : Infinity,
-            item.trill ? item.trillTop - DIRECTION_STACK_GAP_SP * sp : Infinity,
-          );
-        }
+        if (item.pick) item.pickBottomY = clear((glyphBox(pickStrokeGlyph(item.pick)).width / 2) * sp);
+        if (item.strum) item.strumBottomY = clear(STRUM_HALF_SP * sp);
       });
       // Strum arrows of one run share the highest of their bottoms.
       const strumRuns = trillRuns(beats, (b) => !!b.strum && marked.includes(b), (b) => b.sysIdx, (b) => !!b.info?.isGrace);
@@ -128,8 +138,10 @@ export function renderPlayingDirections(score, trackRuns, theme, systems) {
         if (key && item.pick) shared.set(key, Math.min(shared.get(key) ?? Infinity, item.pickBottomY));
       });
       marked.forEach((item) => {
-        let top = item.trill ? item.trillTop : undefined;
+        let top = item.trill ? item.trillTop : item.ornamentTop;
+        if (item.rightLetters) top = item.rightTop;
         if (item.tapMark) top = renderTapMark(item.g, item.x, item.tapBaselineY, theme.noteColor, theme, item.tapMark).top;
+        if (item.golpe) top = item.golpeTop;
         if (item.pick) {
           const key = groups.get(item.layoutEl);
           top = renderPickStroke(item.g, item.x, key ? shared.get(key) : item.pickBottomY, item.pick, theme.noteColor, theme);
@@ -146,18 +158,22 @@ export function renderPlayingDirections(score, trackRuns, theme, systems) {
     const stringCount = track.tuning.length;
     flattenRuns(trackRuns, track, (layoutEl, run) => {
       const kind = beatPickStroke(layoutEl.el);
-      if (!kind) return;
+      const letters = rightFingerStack(layoutEl.el);
+      if (!kind && !letters) return;
       const x = layoutEl.x;
-      const half = (glyphBox(pickStrokeGlyph(kind)).width / 2) * sp;
-      const inkTop = inkTopInSpan(x - half, x + half, {
-        fretTopY: layoutEl.tabRendered?.fretTopY ?? Infinity,
-        marksTopY: layoutEl.tabRendered?.marksTopY ?? Infinity,
-        boxLists: [run.tabInkBoxes || [], run.labelBoxes || [], run.hpBoxes || []],
-      });
-      const bottomY = Math.min(
+      // Lowest bottom for a mark `half` wide each side: clear of the TAB top line and the ink under it.
+      const floor = (half) => Math.min(
         tabTopY(run, stringCount, theme) - PICK_TAB_STAFF_CLEAR_SP * sp,
-        inkTop - PICK_TAB_CLEAR_SP * sp,
+        inkTopInSpan(x - half, x + half, {
+          fretTopY: layoutEl.tabRendered?.fretTopY ?? Infinity,
+          marksTopY: layoutEl.tabRendered?.marksTopY ?? Infinity,
+          boxLists: [run.tabInkBoxes || [], run.labelBoxes || [], run.hpBoxes || []],
+        }) - PICK_TAB_CLEAR_SP * sp,
       );
+      const rightTop = letters
+        ? renderRightFingering(run.tabG, x, floor(rightFingeringHalf(letters, theme)), letters, theme.tabFretColor, theme).top : Infinity;
+      if (!kind) return;
+      const bottomY = Math.min(floor((glyphBox(pickStrokeGlyph(kind)).width / 2) * sp), rightTop - DIRECTION_STACK_GAP_SP * sp);
       renderPickStroke(run.tabG, x, bottomY, kind, theme.tabFretColor, theme);
     });
   });
