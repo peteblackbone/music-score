@@ -2719,6 +2719,99 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.6 score text: canonicalizers and tuning helpers (src/scoreText.js) ----------
+{
+  const ST = await imp('src/scoreText.js');
+  const GARBAGE = [undefined, null, false, true, 0, 1, '', '  ', '\n\t', [], ['x'], {}];
+  test('scoreText: canonicalText trims and collapses whitespace; garbage -> null; idempotent', () => {
+    eq(['  a  b ', 'a\n\tb', 'Verse', ' x '].map(ST.canonicalText), ['a b', 'a b', 'Verse', 'x']);
+    GARBAGE.forEach((g) => eq(ST.canonicalText(g), null, JSON.stringify(g)));
+    ['  a  b ', 'a\n\tb', '<b>&'].forEach((v) => eq(ST.canonicalText(ST.canonicalText(v)), ST.canonicalText(v)));
+  });
+  test('scoreText: canonicalSection string / object forms, letter 1-3 code points', () => {
+    eq(ST.canonicalSection(' Verse  1 '), { letter: null, text: 'Verse 1' });
+    eq(ST.canonicalSection({ letter: ' A ', text: ' Intro ' }), { letter: 'A', text: 'Intro' });
+    eq(ST.canonicalSection({ letter: 'B' }), { letter: 'B', text: null });
+    eq(ST.canonicalSection({ letter: 'A12' }), { letter: 'A12', text: null });
+    eq(ST.canonicalSection({ letter: 'ABCD', text: 'Solo' }), { letter: null, text: 'Solo' });
+    eq(ST.canonicalSection({ letter: '\u{1D11E}\u{1D11E}\u{1D11E}' }), { letter: '\u{1D11E}\u{1D11E}\u{1D11E}', text: null }, 'code points, not UTF-16 units');
+    eq(ST.canonicalSection({ letter: 7, text: 'x' }), { letter: null, text: 'x' });
+    [...GARBAGE, { letter: 'ABCD' }, { letter: ' ', text: ' ' }, { text: 5 }].forEach((g) => eq(ST.canonicalSection(g), null, JSON.stringify(g)));
+    [' Verse ', { letter: ' A ', text: ' Intro ' }, { letter: 'B' }, { letter: 'ABCD', text: 'Solo' }]
+      .forEach((v) => { const c = ST.canonicalSection(v); eq(ST.canonicalSection(c), c, JSON.stringify(v)); });
+  });
+  test('scoreText: canonicalRepeatCount 2-99, numeric strings; garbage -> null; idempotent', () => {
+    eq([2, 3, 99, '3', ' 12 ', '007'].map(ST.canonicalRepeatCount), [2, 3, 99, 3, 12, 7]);
+    [...GARBAGE, 100, -3, 2.5, NaN, Infinity, '1', '100', '3x', 'x3', '-3', '2.0'].forEach((g) => eq(ST.canonicalRepeatCount(g), null, String(g)));
+    [2, '3', 99].forEach((v) => eq(ST.canonicalRepeatCount(ST.canonicalRepeatCount(v)), ST.canonicalRepeatCount(v)));
+  });
+  test('scoreText: canonicalBeatText string / object, below only when true; idempotent', () => {
+    eq(ST.canonicalBeatText(' rit. '), { text: 'rit.', below: false });
+    eq(ST.canonicalBeatText({ text: 'let ring', below: true }), { text: 'let ring', below: true });
+    eq(ST.canonicalBeatText({ text: 'x', below: 'yes' }), { text: 'x', below: false });
+    [...GARBAGE, { below: true }, { text: '  ', below: true }].forEach((g) => eq(ST.canonicalBeatText(g), null, JSON.stringify(g)));
+    [' rit. ', { text: 'a  b', below: true }].forEach((v) => { const c = ST.canonicalBeatText(v); eq(ST.canonicalBeatText(c), c); });
+  });
+  test('scoreText: canonicalCapo 1-30, numeric strings; garbage -> null', () => {
+    eq([1, 2, 30, '2', ' 5 '].map(ST.canonicalCapo), [1, 2, 30, 2, 5]);
+    [...GARBAGE.filter((g) => g !== 1), 31, -1, 1.5, '0', '31', 'II'].forEach((g) => eq(ST.canonicalCapo(g), null, String(g)));
+  });
+  test('scoreText: canonicalLines splits, trims, drops empty, at most 8; idempotent through join', () => {
+    eq(ST.canonicalLines(' a \r\n\n  b  c \n'), ['a', 'b c']);
+    eq(ST.canonicalLines(Array.from({ length: 12 }, (_, i) => `L${i}`).join('\n')), Array.from({ length: 8 }, (_, i) => `L${i}`));
+    eq(ST.canonicalLines('a\nb\nc', 2), ['a', 'b']);
+    [...GARBAGE, '\n \n'].forEach((g) => eq(ST.canonicalLines(g), null, JSON.stringify(g)));
+    [' a \r\n\n  b  c \n', 'x', Array(20).fill('y').join('\n')].forEach((v) => { const r = ST.canonicalLines(v); eq(ST.canonicalLines(r.join('\n')), r); });
+  });
+  test('scoreText: circledDigit 1-10 -> U+2460-U+2469, above -> (n)', () => {
+    eq(ST.circledDigit(1), '①'); eq(ST.circledDigit(6), '⑥'); eq(ST.circledDigit(10), '⑩');
+    eq(ST.circledDigit(11), '(11)'); eq(ST.circledDigit(12), '(12)');
+  });
+  test('scoreText: referenceTuning matrix (4, 5, 6, 6 bass clef, 7, 8; none for 3 and 9)', () => {
+    eq(ST.referenceTuning(4), ['E1', 'A1', 'D2', 'G2']);
+    eq(ST.referenceTuning(5), ['B0', 'E1', 'A1', 'D2', 'G2']);
+    eq(ST.referenceTuning(6, 'treble'), ['E2', 'A2', 'D3', 'G3', 'B3', 'E4']);
+    eq(ST.referenceTuning(6, 'bass'), ['B0', 'E1', 'A1', 'D2', 'G2', 'C3']);
+    eq(ST.referenceTuning(7), ['B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4']);
+    eq(ST.referenceTuning(8), ['F#1', 'B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4']);
+    eq(ST.referenceTuning(3), null); eq(ST.referenceTuning(9), null); eq(ST.referenceTuning(4, 'bass'), ['E1', 'A1', 'D2', 'G2']);
+  });
+  test('scoreText: tuningChartEntries lists differing strings, highest number first, as written without octave', () => {
+    eq(ST.tuningChartEntries({ tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'] }), ['⑥ = D']);
+    eq(ST.tuningChartEntries({ tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'] }), []);
+    eq(ST.tuningChartEntries({ tuning: ['Eb2', 'Ab2', 'Db3', 'Gb3', 'Bb3', 'Eb4'] }).join(' '), '⑥ = Eb ⑤ = Ab ④ = Db ③ = Gb ② = Bb ① = Eb');
+    eq(ST.tuningChartEntries({ tuning: ['Fb2', 'A2', 'D3', 'G3', 'B3', 'E4'] }), [], 'enharmonic equal -> no entry');
+    eq(ST.tuningChartEntries({ tuning: ['d1', 'A1', 'D2', 'G2'] }), ['④ = D']);
+    eq(ST.tuningChartEntries({ tuning: ['B0', 'E1', 'A1', 'D2', 'G2', 'C3'], clef: 'bass' }), []);
+    eq(ST.tuningChartEntries({ tuning: ['A1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'] }), ['⑦ = A']);
+    eq(ST.tuningChartEntries({ tuning: ['F#1', 'B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'D4'] }), ['① = D']);
+    eq(ST.tuningChartEntries({ tuning: ['C1', 'F1', 'B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'] }).length, 9, '9 strings: every string listed');
+    eq(ST.tuningChartEntries({ tuning: ['C1', 'F1', 'B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4', 'A4', 'D5'] })[0], '(11) = C');
+    eq(ST.tuningChartEntries({ tuning: ['X2', null, 7, 'A2x', {}, 'Cb4'] }), ['① = Cb'], 'unparsable skipped, never throws');
+    [undefined, null, {}, { tuning: 'E2' }, { tuning: null }].forEach((t) => eq(ST.tuningChartEntries(t), []));
+  });
+  test('scoreText: capoTuningRows (capo strings, opt-in chart, names only with > 1 visible track, staff-less skipped)', () => {
+    const g = (x) => ({ showStandardNotation: true, showTablature: false, tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'], ...x });
+    eq(ST.capoTuningRows({ tracks: [g({ capo: '2' })] }), [{ name: null, capo: 'Capo fret 2', entries: [] }]);
+    eq(ST.capoTuningRows({ tracks: [g({ capo: 2, tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'] })] }), [{ name: null, capo: 'Capo fret 2', entries: [] }], 'chart is opt-in');
+    eq(ST.capoTuningRows({ showTuningChart: 'yes', tracks: [g({ tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'] })] }), []);
+    eq(ST.capoTuningRows({ showTuningChart: true, tracks: [g({ tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'] })] }), [{ name: null, capo: null, entries: ['⑥ = D'] }]);
+    const two = { showTuningChart: true, tracks: [
+      g({ name: ' Gt. ', capo: 3 }),
+      g({ label: 'B', showStandardNotation: false, showTablature: true, tuning: ['D1', 'A1', 'D2', 'G2'] }),
+      g({ showStandardNotation: false, capo: 5 }),
+      g({ capo: 4 }),
+    ] };
+    eq(ST.capoTuningRows(two), [
+      { name: 'Gt.', capo: 'Capo fret 3', entries: [] },
+      { name: 'B', capo: null, entries: ['④ = D'] },
+      { name: 'Track 4', capo: 'Capo fret 4', entries: [] },
+    ]);
+    eq(ST.capoTuningRows({ tracks: [g({ capo: 0 }), g({ capo: 31 })] }), []);
+    eq(ST.capoTuningRows({}), []);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
