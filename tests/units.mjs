@@ -2812,6 +2812,137 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.6 score text: sections and repeat counts (navigation merge, layout, drawing) ----------
+{
+  const { mergeNavigation } = await imp('src/navigation.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const LN = await imp('src/layout/navigation.js');
+  const { renderNavigation } = await imp('src/draw/navigation.js');
+  const { inkBounds, TEXT_DESCENT_EM } = await imp('src/layout/ink.js');
+  const { estimateTextWidth } = await imp('src/textMetrics.js');
+  const { group: svgGroup } = await imp('src/draw/svgUtil.js');
+  const thm = resolveTheme({});
+  const s = thm.staffLineSpacing;
+  const ok = (c, m) => { if (!c) throw new Error(m); };
+  const near = (a, b, m) => { if (Math.abs(a - b) > 1e-9) throw new Error(`${m}: expected ${b}, got ${a}`); };
+  const bar = (extra = {}) => ({ beats: [nq, nq, nq, nq], ...extra });
+  const lay = (measures, width = 900, more = []) => computeLayout(normalizeScore({ tracks: [{ measures }, ...more] }), thm, width);
+  const kids = (n) => n.children || [];
+  const find = (n, pred, out = []) => { if (pred(n)) out.push(n); kids(n).forEach((c) => find(c, pred, out)); return out; };
+  const cls = (n) => (n.getAttribute ? n.getAttribute('class') : null) || '';
+  const attr = (n, a) => Number(n.getAttribute(a));
+
+  test('[S2,R2] mergeNavigation: section / repeatCount keys only when present; lowest track index wins', () => {
+    eq(Object.keys(mergeNavigation([{ measures: [{ section: '  ', repeatCount: 1, barline: 'repeatEnd' }] }], 1)[0]), ['ending', 'segno', 'coda', 'jump']);
+    const nav = mergeNavigation([
+      { measures: [{}, { section: { letter: 'ABCD' } }, { repeatCount: 'x' }] },
+      { measures: [{ section: 'Verse' }, { section: { letter: 'B', text: ' Solo ' } }, { repeatCount: '4', barline: 'repeatEnd' }] },
+      { measures: [{ section: 'Chorus' }, null, { repeatCount: 5 }] },
+    ], 3);
+    eq(nav[0], { ending: null, segno: false, coda: false, jump: null, section: { letter: null, text: 'Verse' } });
+    eq(nav[1].section, { letter: 'B', text: 'Solo' });
+    eq(nav[2].repeatCount, 4);
+  });
+  test('[R2] mergeNavigation: repeatCount needs a repeatEnd barline on some track of that measure', () => {
+    eq(Object.keys(mergeNavigation([{ measures: [{ repeatCount: 3 }] }], 1)[0]), ['ending', 'segno', 'coda', 'jump']);
+    eq(mergeNavigation([{ measures: [{ repeatCount: 3 }] }, { measures: [{ barline: 'repeatEnd' }] }], 1)[0].repeatCount, 3);
+    eq(normalizeScore({ tracks: [{ measures: [bar({ repeatCount: 3, barline: 'repeatStart' })] }] }).navigation[0].repeatCount, undefined);
+    eq(normalizeScore({ tracks: [{ measures: [bar({ repeatCount: 3, barline: 'repeatEnd' })] }] }).navigation[0].repeatCount, 3);
+  });
+  test('[S3] section x = segno x (system start and later measures); push right 0.5 s after the previous section', () => {
+    const L = lay([bar({ section: { letter: 'A', text: 'Intro' }, segno: true }), bar({ section: 'Verse', segno: true }), bar({ section: 'A very long section name that runs on' }), bar({ section: 'B' })], 900);
+    const marks = L.systems[0].marks;
+    const segnos = marks.filter((m) => m.kind === 'segno');
+    const secs = marks.filter((m) => m.kind === 'section');
+    eq(secs.map((m) => [m.mi, m.letter, m.text]), [[0, 'A', 'Intro'], [1, null, 'Verse'], [2, null, 'A very long section name that runs on'], [3, null, 'B']]);
+    near(secs[0].x, segnos[0].x, 'system start'); near(secs[1].x, segnos[1].x, 'measure 2');
+    near(secs[0].x, LN.measureStartX(L.systems[0], 0, thm), 'measureStartX');
+    const m3 = L.systems[0].tracks[0].measures[3];
+    const right2 = secs[2].x + LN.sectionParts(secs[2], thm).width;
+    ok(right2 + 0.5 * s > m3.x + 0.3 * s, 'fixture: the long section reaches into measure 4');
+    near(secs[3].x, right2 + 0.5 * s, 'pushed right');
+  });
+  test('[S4] sectionParts: boxed letter + tail, or boxed text', () => {
+    const p = LN.sectionParts({ letter: 'A', text: 'Intro' }, thm);
+    const size = 1.3 * s;
+    eq([p.boxed, p.tail], ['A', 'Intro']);
+    near(p.boxW, estimateTextWidth('A', size, { bold: true }) + 0.6 * s, 'boxW');
+    near(p.tailDx, p.boxW + 0.5 * s, 'tailDx');
+    near(p.width, p.tailDx + estimateTextWidth('Intro', size, { bold: true }), 'width');
+    const q = LN.sectionParts({ letter: null, text: 'Verse' }, thm);
+    eq([q.boxed, q.tail], ['Verse', null]); near(q.width, q.boxW, 'no tail');
+  });
+  test('[R3] repeatCount mark: x{N} at endX; a jump in the same measure ends 0.5 s before the x3', () => {
+    const L = lay([bar(), bar({ repeatCount: '3', barline: 'repeatEnd', jump: 'D.S. al Coda' }), bar({ jump: 'Fine' })], 900);
+    const ms = L.systems[0].tracks[0].measures;
+    const marks = L.systems[0].marks;
+    const rc = marks.find((m) => m.kind === 'repeatCount');
+    const jumps = marks.filter((m) => m.kind === 'jump');
+    eq([rc.mi, rc.text], [1, 'x3']);
+    near(rc.xEnd, ms[1].endX, 'x3 right edge');
+    near(jumps[0].xEnd, ms[1].endX - estimateTextWidth('x3', 1.1 * s) - 0.5 * s, 'jump shifted');
+    near(jumps[1].xEnd, ms[2].endX, 'other jump unchanged');
+  });
+  test('[S6,R4] section on a system-start measure and x3 on a system-end measure stay on their systems', () => {
+    const plain = lay(Array.from({ length: 12 }, () => bar()), 400);
+    const startMi = plain.systems[1].measureIndices[0];
+    const endMi = startMi - 1;
+    const L = lay(Array.from({ length: 12 }, (_, i) => bar(i === startMi ? { section: 'B' } : i === endMi ? { repeatCount: 2, barline: 'repeatEnd' } : {})), 400);
+    eq(L.systems[0].marks.map((m) => [m.kind, m.mi]), [['repeatCount', endMi]]);
+    eq(L.systems[1].marks.map((m) => [m.kind, m.mi]), [['section', startMi]]);
+    near(L.systems[0].marks[0].xEnd, L.systems[0].tracks[0].measures.at(-1).endX, 'x3 at the system end');
+    near(L.systems[1].marks[0].x, LN.measureStartX(L.systems[1], 0, thm), 'section at the system start');
+  });
+  test('[S4,S5,R3] drawing: classes, x3 on the marks baseline, section tier above voltas and marks, rect counted as ink', () => {
+    const L = lay([bar({ section: { letter: 'A', text: 'Intro' }, segno: true, ending: 1, repeatCount: 3, barline: 'repeatEnd', jump: 'D.S.' }), bar({ section: 'Verse' })], 900);
+    const g = svgGroup({});
+    const navG = renderNavigation(g, L.systems[0], thm);
+    const secG = find(navG, (n) => cls(n) === 'section');
+    eq(secG.length, 2);
+    eq(kids(secG[0]).map((n) => `${n.tag || n.tagName}.${cls(n)}`), ['rect.', 'text.section-letter', 'text.section-text']);
+    eq(kids(secG[1]).map((n) => `${n.tag || n.tagName}.${cls(n)}`), ['rect.', 'text.section-text']);
+    eq(kids(secG[0])[1].textContent, 'A'); eq(kids(secG[0])[2].textContent, 'Intro');
+    const r = kids(secG[0])[0];
+    eq([r.getAttribute('fill'), attr(r, 'stroke-width')], ['none', 0.12 * s]);
+    const segno = find(navG, (n) => cls(n) === 'segno')[0];
+    const x3 = find(navG, (n) => cls(n) === 'repeat-count')[0];
+    eq([x3.textContent, x3.getAttribute('text-anchor'), attr(x3, 'font-size')], ['x3', 'end', 1.1 * s]);
+    eq(x3.getAttribute('y'), segno.getAttribute('y'), 'same baseline as the segno');
+    const jumpText = find(navG, (n) => cls(n) === 'jump')[0];
+    eq(kids(jumpText)[0].getAttribute('y'), segno.getAttribute('y'), 'jump on the same baseline');
+    const secBase = attr(kids(secG[0])[1], 'y');
+    ok(secBase <= -2.5 * s, `section baseline ${secBase}`);
+    eq(attr(kids(secG[1])[1], 'y'), secBase, 'one baseline per system');
+    const boxBottom = attr(r, 'y') + attr(r, 'height');
+    const voltaG = find(navG, (n) => cls(n).startsWith('volta '))[0];
+    ok(boxBottom + 0.06 * s <= inkBounds(voltaG, thm).top - 0.75 * s + 1e-9, 'box clears the volta by 0.75 s');
+    ok(boxBottom + 0.06 * s <= inkBounds(segno, thm).top - 0.75 * s + 1e-9, 'box clears the segno by 0.75 s');
+    near(inkBounds(secG[0], thm).top, attr(r, 'y'), 'rect counted by inkBounds');
+  });
+  test('[S5] a section alone sits at the 2.5 s minimum; tempo still clears it (drawn after, outermost)', () => {
+    const L = lay([bar({ section: 'Verse' }), bar()], 900);
+    const g = svgGroup({});
+    const navG = renderNavigation(g, L.systems[0], thm);
+    const t = find(navG, (n) => cls(n) === 'section-text')[0];
+    near(attr(t, 'y'), -2.5 * s, 'minimum baseline');
+    const box = makeContainer();
+    new MusicScoreRenderer(box, { tempoText: 'q = 120', tracks: [{ measures: [bar({ section: 'Verse' }), bar()] }] }, { width: 900 }).render();
+    const svg = box.children[0];
+    const tempo = find(svg, (n) => cls(n) === 'tempo')[0];
+    const sec = find(svg, (n) => cls(n) === 'section')[0];
+    ok(tempo && sec, 'tempo and section drawn');
+    ok(inkBounds(tempo, thm).bottom <= inkBounds(sec, thm).top + 1e-9, 'tempo above the section');
+  });
+  test('[S5] text after the box uses the same baseline; descent = pad + half stroke', () => {
+    const L = lay([bar({ section: { letter: 'A', text: 'Intro' } })], 900);
+    const navG = renderNavigation(svgGroup({}), L.systems[0], thm);
+    const [r, a, b] = kids(find(navG, (n) => cls(n) === 'section')[0]);
+    eq(a.getAttribute('y'), b.getAttribute('y'));
+    near(attr(r, 'y') + attr(r, 'height'), attr(a, 'y') + 0.3 * s, 'box bottom = baseline + pad');
+    near(attr(b, 'x') - attr(r, 'x'), attr(r, 'width') + 0.5 * s, 'tail 0.5 s after the box');
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

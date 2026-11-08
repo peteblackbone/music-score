@@ -15,11 +15,17 @@
  *
  * Per system: `{ voltas: [VoltaPart], marks: [Mark] }` where
  * VoltaPart = `{ sysIdx, startMi, endMi, x1, x2, label | null, leftHook, rightHook, closed }`,
- * Mark = `{ kind: 'segno' | 'coda', mi, x }` (glyph left edge) or
- * `{ kind: 'jump', mi, text, jumpKind, xEnd }` (text right edge).
+ * Mark = `{ kind: 'segno' | 'coda', mi, x }` (glyph left edge),
+ * `{ kind: 'jump', mi, text, jumpKind, xEnd }` (text right edge),
+ * `{ kind: 'repeatCount', mi, text: 'x3', xEnd }` (text right edge, at the
+ * repeat-end measure's endX; a jump in the same measure ends
+ * REPEAT_COUNT_GAP_SP before it) or `{ kind: 'section', mi, letter, text, x }`
+ * (box left edge where a segno goes, pushed right to stay SECTION_GAP_SP
+ * after the previous section of the system; drawn in its own tier).
  */
 import { endingKey, endingLabel, jumpKind } from '../navigation.js';
 import { glyphBox } from '../glyphMetrics.js';
+import { estimateTextWidth } from '../textMetrics.js';
 
 export const VOLTA_END_INSET_SP = 0.5;        // closing barline -> bracket end
 export const VOLTA_SYSTEM_START_GAP_SP = 0.5; // contentStartX -> bracket start on a system's first measure
@@ -27,6 +33,30 @@ export const VOLTA_MIN_LENGTH_SP = 1.5;
 export const MARK_GLYPH_SCALE = 0.75;         // segno / coda size relative to the music font
 export const MARK_BARLINE_GAP_SP = 0.3;       // opening barline -> segno / coda
 export const MARK_GAP_SP = 0.5;               // segno -> coda in the same measure
+export const SECTION_SIZE_SP = 1.3;           // section letter / text (bold)
+export const SECTION_PAD_SP = 0.3;            // box border -> boxed text
+export const SECTION_STROKE_SP = 0.12;
+export const SECTION_TEXT_GAP_SP = 0.5;       // box -> text after it
+export const SECTION_GAP_SP = 0.5;            // previous section's right edge -> next section
+export const REPEAT_COUNT_SIZE_SP = 1.1;
+export const REPEAT_COUNT_GAP_SP = 0.5;       // jump text -> "x3" in the same measure
+
+/**
+ * Horizontal parts of a section marker `{ letter, text }`: the boxed text
+ * (the letter, else the text), the text after the box (only with a
+ * letter), the box width, the tail's offset from the box's left edge and
+ * the total width. Shared by layout and drawing.
+ */
+export function sectionParts(section, theme) {
+  const s = theme.staffLineSpacing;
+  const size = SECTION_SIZE_SP * s;
+  const boxed = section.letter ?? section.text;
+  const tail = section.letter ? section.text : null;
+  const boxW = estimateTextWidth(boxed, size, { bold: true }) + 2 * SECTION_PAD_SP * s;
+  const tailDx = boxW + SECTION_TEXT_GAP_SP * s;
+  const width = tail ? tailDx + estimateTextWidth(tail, size, { bold: true }) : boxW;
+  return { boxed, tail, boxW, tailDx, width };
+}
 
 /** Left x of a system's measure `li` for brackets and marks (after the header / opening repeat on li 0). */
 export function measureStartX(system, li, theme) {
@@ -92,6 +122,7 @@ export function navigationLayout(systems, score, theme) {
   }
 
   const segnoW = glyphBox('segno').width * s * MARK_GLYPH_SCALE;
+  const lastSectionRight = systems.map(() => -Infinity);
   (score.navigation || []).forEach((col, mi) => {
     const at = where.get(mi);
     if (!col || !at) return;
@@ -101,7 +132,17 @@ export function navigationLayout(systems, score, theme) {
     const marks = out[at.sysIdx].marks;
     if (col.segno) marks.push({ kind: 'segno', mi, x });
     if (col.coda) marks.push({ kind: 'coda', mi, x: col.segno ? x + segnoW + MARK_GAP_SP * s : x });
-    if (col.jump) marks.push({ kind: 'jump', mi, text: col.jump, jumpKind: jumpKind(col.jump), xEnd: m.endX });
+    const countText = col.repeatCount ? `x${col.repeatCount}` : null;
+    const jumpEnd = countText
+      ? m.endX - estimateTextWidth(countText, REPEAT_COUNT_SIZE_SP * s) - REPEAT_COUNT_GAP_SP * s
+      : m.endX;
+    if (col.jump) marks.push({ kind: 'jump', mi, text: col.jump, jumpKind: jumpKind(col.jump), xEnd: jumpEnd });
+    if (countText) marks.push({ kind: 'repeatCount', mi, text: countText, xEnd: m.endX });
+    if (col.section) {
+      const sx = Math.max(x, lastSectionRight[at.sysIdx] + SECTION_GAP_SP * s);
+      marks.push({ kind: 'section', mi, letter: col.section.letter, text: col.section.text, x: sx });
+      lastSectionRight[at.sysIdx] = sx + sectionParts(col.section, theme).width;
+    }
   });
   return out;
 }
