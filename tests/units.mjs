@@ -3613,6 +3613,47 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.7.0 golpe on the TAB staff (tabTechniques.js) ----------
+{
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const byClass = (root, cls) => walk(root).filter((n) => (n.getAttribute('class') || '').split(' ').includes(cls));
+  const t = (fret, extra = {}, note = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string: 2, fret, ...note }], ...extra });
+  const y = (n) => Number(n.getAttribute('y'));
+
+  test('TAB golpe: above the beat\'s T (0.4 sp clear), else on the T baseline; classes per kind; none on rests', () => {
+    const svg = render({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: [
+      t(2, { golpe: 'thumb' }, { tap: true }), t(2, { golpe: 'finger' }), t(2), { type: 'rest', duration: 'quarter', golpe: true },
+    ] }] }] });
+    const g = byClass(svg, 'golpe');
+    eq(g.map((n) => n.getAttribute('class')), ['golpe golpe-thumb', 'golpe golpe-finger']);
+    const tap = byClass(svg, 'tap')[0].children[0];
+    // golpe glyph origin = ink bottom + bBoxSW.y * sp (sp = 10, bBoxSW.y = -0.02)
+    const bottom = (n) => y(n.children[0]) + 0.02 * 10;
+    eq(Math.abs(bottom(g[0]) - (y(tap) - 0.8 * Number(tap.getAttribute('font-size')) - 4)) < 1e-6, true, 'first golpe 0.4 sp above the T top');
+    eq(Math.abs(bottom(g[1]) - y(tap)) < 1e-6, true, 'a golpe alone sits on the T baseline of a T-less beat (same fret height)');
+    eq(g.every((n) => n.children[0].textContent.codePointAt(0) === 0xE842), true);
+  });
+
+  test('TAB golpe: drawn in the TAB group of a notation + TAB track as well, and a whammy dip stacks above it', () => {
+    const svg = render({ tracks: [{ showTablature: true, measures: [{ beats: [
+      { type: 'note', duration: 'quarter', notes: [{ pitch: 'E4', string: 4, fret: 2 }], golpe: true, whammy: true },
+      { type: 'note', duration: 'quarter', notes: [{ pitch: 'E4', string: 4, fret: 2 }] },
+    ] }] }] });
+    const tab = byClass(svg, 'staff-tab')[0];
+    eq(byClass(tab, 'golpe').length, 1);
+    eq(byClass(byClass(svg, 'staff-notation')[0], 'golpe').length, 1);
+    const golpeTop = y(byClass(tab, 'golpe')[0].children[0]) - 1.14 * 10;
+    const dipPath = byClass(tab, 'whammy').flatMap((n) => walk(n)).find((n) => n.tag === 'path');
+    const dipYs = dipPath.getAttribute('d').match(/-?\d+(\.\d+)?/g).map(Number).filter((_, i) => i % 2 === 1);
+    eq(Math.max(...dipYs) < golpeTop, true, 'dip above the golpe');
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
