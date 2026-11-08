@@ -797,6 +797,28 @@ test('[F2] "true", 1, false, null, garbage draw nothing; graces and voice 2 draw
   ['short', 'long', 'normal', true].forEach((v) => ok(render(two({ fermata: v })) === render(two({})), `voice 2 ${v}`));
 });
 
+// ---------- 1.5 regressions: step-out cap and vibrato clearance ----------
+const { spawnSync } = await import('node:child_process');
+const { vibratoClearSp } = await imp('src/draw/noteMarks.js');
+test('[A2] a nonsensical theme (staffLineSpacing -10) still renders staccato + marcato on a whole note (no hang)', () => {
+  const code = `
+    import { register } from 'node:module';
+    register(${JSON.stringify(pathToFileURL(path.join(root0, 'tests/hooks.mjs')).href)});
+    const { makeContainer, serialize } = await import(${JSON.stringify(pathToFileURL(path.join(root0, 'tests/dom-shim.mjs')).href)});
+    const { MusicScoreRenderer } = await import(${JSON.stringify(pathToFileURL(path.join(root0, 'src/MusicScoreRenderer.js')).href)});
+    const score = ${JSON.stringify(oneTrack([whole(['E4'], { articulations: ['staccato', 'marcato'] })]))};
+    const box = makeContainer();
+    new MusicScoreRenderer(box, score, { width: 900, theme: { staffLineSpacing: -10 } }).render();
+    console.log('DONE ' + serialize(box.children[0]).length);`;
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8', timeout: 20000 });
+  ok(!r.error, `did not finish: ${r.error && r.error.message}`);
+  ok(r.status === 0 && /^DONE \d+/m.test(r.stdout), `status ${r.status}: ${r.stderr}`);
+});
+test('[W3] vibratoClearSp: exactly 2 sp for a normal wave, 2.3 sp for a wide one', () => {
+  ok(vibratoClearSp(true) === 2, `normal ${vibratoClearSp(true)}`);
+  ok(vibratoClearSp('wide') === 2.3, `wide ${vibratoClearSp('wide')}`);
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
