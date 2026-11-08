@@ -6,8 +6,8 @@
  *   renderer.render();
  *
  * render() = resolve theme (constructor) → normalize → layout → draw every
- * staff at a local origin → score-wide passes → navigation (voltas, segno /
- * coda / jumps) → tempo → measure ink → place staves → mount.
+ * staff at a local origin → score-wide passes → beat text → navigation (voltas,
+ * segno / coda / jumps / x3, sections) → tempo → measure ink → place staves → mount.
  */
 import { ensureBravuraFont } from './font.js';
 import { resolveTheme } from './theme.js';
@@ -20,6 +20,7 @@ import { drawScoreHeader } from './draw/header.js';
 import { drawSystem } from './draw/system.js';
 import { drawTempo, drawSystemDecor, tempoTextWidth } from './draw/decor.js';
 import { renderNavigation } from './draw/navigation.js';
+import { renderBeatText } from './draw/beatText.js';
 import {
   renderTiesAndSlurs, renderGraceSlurs, renderTabArticulations, renderTechniqueLabelRuns, renderChordSymbolsAndDynamics,
   renderFermatas, renderPlayingDirections,
@@ -91,8 +92,10 @@ export class MusicScoreRenderer {
     renderChordSymbolsAndDynamics(score, trackRuns, theme, layout.systems);
     // Fermatas last so they can clear slurs, tuplets and chord symbols.
     renderFermatas(score, trackRuns, theme, layout.systems);
+    // Beat text above / below the music, clear of all of the above (outside the pass barrel).
+    renderBeatText(trackRuns, theme);
 
-    // --- Volta brackets and navigation marks above each system's top staff (clear of all of the above) ---
+    // --- Volta brackets, navigation marks and sections above each system's top staff (clear of all of the above) ---
     const navGroups = drawn.map((d, sysIdx) => renderNavigation(d.staves[0]?.g ?? null, layout.systems[sysIdx], theme));
 
     // --- Tempo mark above system 1, at the time signature's x, clear of the first measure and of navigation under it ---

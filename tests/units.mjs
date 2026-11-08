@@ -2943,6 +2943,99 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.6 score text: beat text (src/draw/beatText.js) ----------
+{
+  const { inkBounds, TEXT_ASCENT_EM, TEXT_DESCENT_EM } = await imp('src/layout/ink.js');
+  const { estimateTextWidth } = await imp('src/textMetrics.js');
+  const thm = resolveTheme({});
+  const s = thm.staffLineSpacing;
+  const ok = (c, m) => { if (!c) throw new Error(m); };
+  const near = (a, b, m) => { if (Math.abs(a - b) > 1e-9) throw new Error(`${m}: expected ${b}, got ${a}`); };
+  const kids = (n) => n.children || [];
+  const find = (n, pred, out = []) => { if (pred(n)) out.push(n); kids(n).forEach((c) => find(c, pred, out)); return out; };
+  const cls = (n) => (n.getAttribute ? n.getAttribute('class') : null) || '';
+  const num = (n, a) => Number(n.getAttribute(a));
+  const render = (score, width = 900) => { const box = makeContainer(); new MusicScoreRenderer(box, score, { width }).render(); return box.children[0]; };
+  const staves = (svg) => find(svg, (n) => cls(n).startsWith('staff staff-'));
+  const beatTexts = (n) => find(n, (x) => cls(x).startsWith('beat-text'));
+  // Ink of `g` under a text's width, without the text itself and anything drawn after it.
+  const inkBefore = (g, node, below) => {
+    const all = kids(g);
+    const clone = { tag: 'g', children: all.slice(0, all.indexOf(node)) };
+    const w = estimateTextWidth(node.textContent, num(node, 'font-size'));
+    return inkBounds(clone, thm, { xMin: num(node, 'x'), xMax: num(node, 'x') + w, overlap: true })[below ? 'bottom' : 'top'];
+  };
+  const tabTrack = (measures, x = {}) => ({ showStandardNotation: false, showTablature: true, measures, ...x });
+  const tq = (string, fret, extra = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string, fret }], ...extra });
+
+  test('[B1,B3] above: italic 1.2 s, class beat-text, at the beat x, >= 1.5 s above the top line and 0.5 s clear of ink under it', () => {
+    const svg = render({ tracks: [{ measures: [{ beats: [{ ...nq, text: ' rit. ' }, { ...nq, notes: [{ pitch: 'A5' }], text: 'molto' }, nq, nq] }] }] });
+    const [g] = staves(svg);
+    const t = beatTexts(svg);
+    eq(t.map((n) => [n.textContent, cls(n), n.getAttribute('font-style'), num(n, 'font-size')]),
+      [['rit.', 'beat-text', 'italic', 1.2 * s], ['molto', 'beat-text', 'italic', 1.2 * s]]);
+    ok(t.every((n) => kids(g).includes(n)), 'appended to the notation staff group');
+    near(num(t[0], 'y'), -1.5 * s, 'low note: minimum height');
+    const top = inkBefore(g, t[1], false);
+    ok(num(t[1], 'y') < -1.5 * s, 'high note pushes the text up');
+    near(num(t[1], 'y'), top - 0.5 * s - TEXT_DESCENT_EM * 1.2 * s, 'clears the ink by 0.5 s');
+  });
+  test('[B2] grace notes and voice 2 are ignored', () => {
+    const svg = render({ tracks: [{ measures: [{ voices: [
+      { beats: [{ ...grace, text: 'grace' }, { ...nq, text: 'v1' }, nq, nq, nq] },
+      { beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'C4' }], text: 'v2' }] },
+    ] }] }] });
+    eq(beatTexts(svg).map((n) => n.textContent), ['v1']);
+  });
+  test('[B3] a later text clears an earlier overlapping one (left to right)', () => {
+    const e8 = { type: 'note', duration: '8th', notes: [{ pitch: 'E4' }] };
+    const svg = render({ tracks: [{ measures: [{ beats: [{ ...e8, text: 'first long text' }, { ...e8, text: 'second' }, nq, nq, nq] }] }] });
+    const [a, b] = beatTexts(svg);
+    ok(num(b, 'x') < num(a, 'x') + estimateTextWidth(a.textContent, 1.2 * s), 'fixture: the texts overlap horizontally');
+    near(num(b, 'y'), num(a, 'y') - TEXT_ASCENT_EM * 1.2 * s - 0.5 * s - TEXT_DESCENT_EM * 1.2 * s, 'stacked 0.5 s above');
+  });
+  test('[B4] below: on the bottom staff (TAB of notation + TAB), 0.5 s below its ink, class beat-text beat-text-below', () => {
+    const svg = render({ tracks: [{ showTablature: true, measures: [{ beats: [tq(6, 0, { text: { text: 'let go', below: true } }), tq(1, 0, { text: 'up' }), tq(3, 2), tq(3, 2)] }] }] });
+    const [notationG, tabG] = staves(svg);
+    const [up] = beatTexts(notationG);
+    const [down] = beatTexts(tabG);
+    eq([up.textContent, cls(up), down.textContent, cls(down)], ['up', 'beat-text', 'let go', 'beat-text beat-text-below']);
+    near(num(down, 'y'), inkBefore(tabG, down, true) + 0.5 * s + TEXT_ASCENT_EM * 1.2 * s, 'below the TAB ink');
+    eq(beatTexts(tabG).length, 1);
+  });
+  test('[B3] TAB-only: above the TAB top line (>= 1.5 s), below under the bottom line', () => {
+    const svg = render({ tracks: [tabTrack([{ beats: [tq(3, 0, { text: 'hi' }), tq(3, 0, { text: { text: 'lo', below: true } }), tq(3, 0), tq(3, 0)] }])] });
+    const [tabG] = staves(svg);
+    const [hi, lo] = beatTexts(tabG);
+    const lines = find(tabG, (n) => (n.tag || n.tagName) === 'line' && num(n, 'y1') === num(n, 'y2') && num(n, 'x2') - num(n, 'x1') > 100);
+    const topLine = Math.min(...lines.map((n) => num(n, 'y1')));
+    const bottomLine = Math.max(...lines.map((n) => num(n, 'y1')));
+    ok(num(hi, 'y') <= topLine - 1.5 * s + 1e-9, `above ${num(hi, 'y')} vs top line ${topLine}`);
+    ok(num(lo, 'y') - TEXT_ASCENT_EM * 1.2 * s >= bottomLine + 0.5 * s - 1e-9, 'below clears the bottom line');
+  });
+  test('[B5] order outward: fermata < beat text < voltas / navigation marks; hidden-rest text at its x', () => {
+    const svg = render({ tracks: [{ measures: [{ ending: 1, segno: true, beats: [{ ...nq, fermata: true, chord: 'Am', text: 'hold' }, nq, nq, { type: 'rest', duration: 'quarter', hidden: true, text: 'cue' }] }] }] });
+    const [g] = staves(svg);
+    const hold = beatTexts(g)[0];
+    const ferm = find(g, (n) => cls(n) === 'fermata')[0];
+    const chord = find(g, (n) => cls(n).includes('chord-symbol'))[0];
+    ok(inkBounds(ferm, thm).top >= num(hold, 'y') + TEXT_DESCENT_EM * 1.2 * s + 0.5 * s - 1e-9, 'beat text above the fermata');
+    if (chord) ok(inkBounds(chord, thm).top > num(hold, 'y'), 'beat text above the chord symbol');
+    const ch = kids(g);
+    const nav = find(g, (n) => cls(n) === 'navigation')[0];
+    ok(ch.indexOf(ferm) >= 0 && ch.indexOf(ferm) < ch.indexOf(hold), 'fermata drawn before');
+    ok(ch.indexOf(hold) < ch.indexOf(nav), 'navigation drawn after');
+    const volta = find(nav, (n) => cls(n).startsWith('volta '))[0];
+    ok(inkBounds(volta, thm).bottom <= num(hold, 'y') - TEXT_ASCENT_EM * 1.2 * s - 0.5 * s + 1e-9, 'volta hooks clear the beat text');
+    eq(beatTexts(g).map((n) => n.textContent), ['hold', 'cue']);
+  });
+  test('[B5] MusicScoreRenderer.js source order renderFermatas( < renderBeatText( < renderNavigation( < drawTempo(', () => {
+    const src = fs.readFileSync(path.join(root0, 'src/MusicScoreRenderer.js'), 'utf8');
+    const a = src.indexOf('renderFermatas('), b = src.indexOf('renderBeatText('), c = src.indexOf('renderNavigation('), d = src.indexOf('drawTempo(');
+    ok(a >= 0 && b > a && c > b && d > c, `order ${a} ${b} ${c} ${d}`);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
