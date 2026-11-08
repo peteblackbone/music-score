@@ -110,6 +110,12 @@ export const GLYPH_BOX = {
   segno: { bBoxNE: [2.2, 3.0], bBoxSW: [0, -0.1] },
   coda: { bBoxNE: [3.8, 3.62], bBoxSW: [0, -0.62] }, // measured from Bravura.woff2 ink (canvas measureText)
   ornamentTrill: { bBoxNE: [2.125, 1.563], bBoxSW: [0, -0.063] }, // measured the same way
+  ornamentTurn: { bBoxNE: [1.88, 0.89], bBoxSW: [0, -0.02] }, // measured the same way, padded slightly
+  ornamentTurnInverted: { bBoxNE: [1.87, 0.89], bBoxSW: [-0.01, -0.02] },
+  ornamentShortTrill: { bBoxNE: [2.94, 1.0], bBoxSW: [0, -0.02] },
+  ornamentMordent: { bBoxNE: [2.95, 1.29], bBoxSW: [0, -0.31] },
+  guitarLeftHandTapping: { bBoxNE: [1.63, 1.38], bBoxSW: [0, -0.24] },
+  guitarGolpe: { bBoxNE: [1.12, 1.14], bBoxSW: [0, -0.02] },
 };
 
 const BY_CHAR = new Map();

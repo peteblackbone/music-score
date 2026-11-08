@@ -3373,6 +3373,92 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+/// ---------- 1.7.0 hand marks: canonicalizers and beat readers (hands.js) ----------
+{
+  const hands = await imp('src/hands.js');
+  const { beatTapMark } = await imp('src/directions.js');
+  const { ornamentOf, fingerOf, rightFingerOf, golpeOf, pickScrapeOf, barreOf, romanNumeral, barreLabel } = hands;
+  const GARBAGE = [undefined, null, 0, '', {}, [], 'trill', 5, -1, 1.5, 'pi', 25, 'II', { half: true }, false, NaN, '  '];
+  // Each canonicalizer: [raw, canonical] pairs, garbage -> null (unless listed), idempotent, never throws.
+  const table = (name, fn, pairs) => test(`hands: ${name} canonicalizes, rejects garbage, is idempotent`, () => {
+    pairs.forEach(([raw, want]) => {
+      eq(fn(raw), want, `${name}(${JSON.stringify(raw)})`);
+      eq(fn(fn(raw)), want, `${name} idempotent on ${JSON.stringify(raw)}`);
+    });
+    GARBAGE.filter((g) => !pairs.some(([raw]) => Object.is(raw, g))).forEach((g) => eq(fn(g), null, `${name}(${JSON.stringify(g)})`));
+    ['toString', 'constructor', '__proto__', Symbol('x'), () => 1].forEach((g) => eq(fn(g), null, `${name}(${String(g)})`));
+  });
+  table('ornamentOf', ornamentOf, [
+    ['turn', 'turn'], [' TURN ', 'turn'], ['Inverted-Turn', 'invertedTurn'], ['turn_inverted', 'invertedTurn'], ['invertedTurn', 'invertedTurn'],
+    [' short trill ', 'upperMordent'], ['upper mordent', 'upperMordent'], ['invertedMordent', 'upperMordent'], ['upperMordent', 'upperMordent'],
+    ['mordent', 'lowerMordent'], ['Lower-Mordent', 'lowerMordent'], ['lowerMordent', 'lowerMordent'],
+  ]);
+  table('fingerOf', fingerOf, [[0, 0], [1, 1], [4, 4], [' 3 ', 3], ['0', 0], ['T', 'T'], [' t ', 'T']]);
+  test('hands: fingerOf rejects 5, -1, 1.5, "12", "TT", true', () => [5, -1, 1.5, '12', 'TT', true, '1.0'].forEach((g) => eq(fingerOf(g), null, String(g))));
+  table('rightFingerOf', rightFingerOf, [['p', 'p'], [' I ', 'i'], ['M', 'm'], ['a', 'a'], ['C', 'c']]);
+  test('hands: rightFingerOf rejects "x", "pi", true', () => ['x', 'pi', true, 'pp'].forEach((g) => eq(rightFingerOf(g), null, String(g))));
+  table('golpeOf', golpeOf, [[true, true], ['thumb', 'thumb'], [' Finger ', 'finger']]);
+  table('pickScrapeOf', pickScrapeOf, [[true, true], ['down', 'down'], [' UP ', 'up']]);
+  table('barreOf', barreOf, [
+    [1, { fret: 1, half: false }], [5, { fret: 5, half: false }], [24, { fret: 24, half: false }], [' 7 ', { fret: 7, half: false }],
+    [{ fret: 2 }, { fret: 2, half: false }], [{ fret: '5', half: true }, { fret: 5, half: true }], [{ fret: 5, half: 'yes' }, { fret: 5, half: false }],
+  ]);
+  test('hands: barreOf rejects out-of-range and non-integer frets', () => [0, 25, 1.5, '1.5', { fret: 0 }, { fret: 25 }, { fret: 'II' }, true, 'C II']
+    .forEach((g) => eq(barreOf(g), null, JSON.stringify(g))));
+  test('hands: romanNumeral 1-24 and barreLabel', () => {
+    eq(Array.from({ length: 24 }, (_, i) => romanNumeral(i + 1)).join(' '),
+      'I II III IV V VI VII VIII IX X XI XII XIII XIV XV XVI XVII XVIII XIX XX XXI XXII XXIII XXIV');
+    eq([barreLabel({ fret: 2, half: false }), barreLabel({ fret: 5, half: true }), barreLabel(barreOf(24))], ['C II', '½C V', 'C XXIV']);
+  });
+  const beat = (notes, extra = {}) => ({ type: 'note', duration: 'quarter', notes, ...extra });
+  test('hands: beatOrnament - first valid ornament; a trill wins; graces and rests carry none', () => {
+    eq(hands.beatOrnament(beat([{ pitch: 'E4', ornament: 'bogus' }, { pitch: 'G4', ornament: 'mordent' }])), 'lowerMordent');
+    eq(hands.beatOrnament(beat([{ pitch: 'E4', ornament: 'turn' }, { pitch: 'G4', trill: true }])), null);
+    eq(hands.beatOrnament({ type: 'grace', duration: '16th', notes: [{ pitch: 'E4', ornament: 'turn' }] }), null);
+    eq(hands.beatOrnament({ type: 'rest', duration: 'quarter', ornament: 'turn' }), null);
+    eq(hands.beatOrnament(beat([{ pitch: 'E4' }])), null);
+  });
+  test('hands: beat readers for golpe, pick scrape and barre skip rests and graces', () => {
+    eq([hands.beatGolpe(beat([{ pitch: 'E4' }], { golpe: 'thumb' })), hands.beatGolpe({ type: 'rest', duration: 'quarter', golpe: true })], ['thumb', null]);
+    eq([hands.beatPickScrape(beat([{ pitch: 'E4' }], { pickScrape: 'up' })), hands.beatPickScrape({ type: 'grace', notes: [{ pitch: 'E4' }], pickScrape: true })], ['up', null]);
+    eq([hands.beatBarre(beat([{ pitch: 'E4' }], { barre: { fret: 5, half: true } })), hands.beatBarre({ type: 'rest', duration: 'quarter', barre: 2 })],
+      [{ fret: 5, half: true }, null]);
+  });
+  test('hands: beatTapMark priority tap > leftHandTap > slap > pop; a tapped harmonic gets no LH mark', () => {
+    eq(beatTapMark(beat([{ pitch: 'E4', leftHandTap: true }, { pitch: 'G4', tap: true }])), 'tap');
+    eq(beatTapMark(beat([{ pitch: 'E4', slap: true }, { pitch: 'G4', leftHandTap: 1 }])), 'leftHandTap');
+    eq(beatTapMark(beat([{ pitch: 'E4', leftHandTap: true, harmonic: 'tapped' }])), null);
+    eq(beatTapMark(beat([{ pitch: 'E4', leftHandTap: true, harmonic: 'tapped' }, { pitch: 'G4', pop: true }])), 'pop');
+    eq(beatTapMark({ type: 'rest', duration: 'quarter', notes: [{ pitch: 'E4', leftHandTap: true }] }), null);
+  });
+  test('hands: rightFingerStack - lowest note first by pitch, else by string (higher number lower); null when none', () => {
+    eq(hands.rightFingerStack(beat([{ pitch: 'E5', rightFinger: 'a' }, { pitch: 'E3', rightFinger: 'P' }, { pitch: 'B4', rightFinger: 'm' }, { pitch: 'G4' }])), ['p', 'm', 'a']);
+    eq(hands.rightFingerStack(beat([{ string: 1, fret: 0, rightFinger: 'i' }, { string: 5, fret: 0, rightFinger: 'p' }])), ['p', 'i']);
+    eq(hands.rightFingerStack(beat([{ pitch: 'E4', rightFinger: 'x' }])), null);
+    eq(hands.rightFingerStack({ type: 'grace', notes: [{ pitch: 'E4', rightFinger: 'p' }] }), null);
+  });
+  test('hands: normalizeScore keeps beat / note keys when no hand field is present; withHand* return their input', () => {
+    const raw = { tracks: [{ measures: [{ beats: [beat([{ pitch: 'E4', leftHandTap: true }], { letRing: true })] }] }] };
+    const b = normalizeScore(raw).tracks[0].measures[0].beats[0];
+    eq(Object.keys(b), ['dots', 'type', 'duration', 'notes', 'letRing']);
+    eq(Object.keys(b.notes[0]), ['pitch', 'leftHandTap', 'soundingPitch']);
+    const n = { pitch: 'E4', leftHandTap: true };
+    eq(hands.withHandNote(n) === n, true);
+    const bb = { type: 'note', letRing: true };
+    eq(hands.withHandBeat(bb) === bb, true);
+  });
+  test('hands: normalizeScore canonicalizes present hand fields (null when not understood)', () => {
+    const raw = { tracks: [{ measures: [{ beats: [
+      beat([{ pitch: 'E4', ornament: ' Short-Trill ', finger: '2', rightFinger: 'I' }], { golpe: 'THUMB', pickScrape: 'Down', barre: '5' }),
+      beat([{ pitch: 'E4', ornament: 'trill', finger: 9, rightFinger: 'q' }], { golpe: 'x', pickScrape: 1, barre: { half: true } }),
+    ] }] }] };
+    const [a, b] = normalizeScore(raw).tracks[0].measures[0].beats;
+    eq([a.golpe, a.pickScrape, a.barre, a.notes[0].ornament, a.notes[0].finger, a.notes[0].rightFinger],
+      ['thumb', 'down', { fret: 5, half: false }, 'upperMordent', 2, 'i']);
+    eq([b.golpe, b.pickScrape, b.barre, b.notes[0].ornament, b.notes[0].finger, b.notes[0].rightFinger], [null, null, null, null, null, null]);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
