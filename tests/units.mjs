@@ -2812,6 +2812,42 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(ST.capoTuningRows({ tracks: [g({ capo: 0 }), g({ capo: 31 })] }), []);
     eq(ST.capoTuningRows({}), []);
   });
+  test('scoreText: [C3] every reference tuning is "standard" (no entries); one raised string gives exactly that string', () => {
+    const refs = [
+      [['E1', 'A1', 'D2', 'G2'], undefined], [['B0', 'E1', 'A1', 'D2', 'G2'], undefined],
+      [['E2', 'A2', 'D3', 'G3', 'B3', 'E4'], undefined], [['B0', 'E1', 'A1', 'D2', 'G2', 'C3'], 'bass'],
+      [['B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'], undefined], [['F#1', 'B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'], undefined],
+    ];
+    for (const [ref, clef] of refs) {
+      const n = ref.length;
+      eq(ST.tuningChartEntries({ tuning: ref, clef }), [], `${n} strings${clef ? ' ' + clef : ''}: standard`);
+      for (let i = 0; i < n; i++) {
+        const t = ref.slice();
+        t[i] = 'C#5'; // never equal to any reference string
+        eq(ST.tuningChartEntries({ tuning: t, clef }), [`${ST.circledDigit(n - i)} = C#`], `${n} strings, index ${i}`);
+      }
+    }
+    // the bass-clef reference is only used for 6 strings with a bass clef; otherwise the guitar 6 applies
+    eq(ST.tuningChartEntries({ tuning: ['B0', 'E1', 'A1', 'D2', 'G2', 'C3'] }).length, 6, '6-string bass tuning without a bass clef differs from the guitar reference');
+    eq(ST.tuningChartEntries({ tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'], clef: 'bass' }).length, 6, 'guitar tuning under a bass clef differs from the bass reference');
+    eq(ST.tuningChartEntries({ tuning: ['E1', 'A1', 'D2', 'G2'], clef: 'bass' }), [], '4-string bass is the same with or without a clef');
+    eq(ST.tuningChartEntries({ tuning: ['C1', 'F1', 'B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'] }),
+      ['⑨ = C', '⑧ = F', '⑦ = B', '⑥ = E', '⑤ = A', '④ = D', '③ = G', '② = B', '① = E'], '9 strings: all, highest number first');
+  });
+  test('scoreText: [C2] unparsable entries are skipped without throwing, parsable neighbours keep their string numbers', () => {
+    const ok = (c, m) => { if (!c) throw new Error(m); };
+    const bad = [undefined, null, 5, {}, [], '', 'H2', 'E', '2', 'E#', 'Ex', 'x2'];
+    bad.forEach((b) => {
+      let r;
+      try { r = ST.tuningChartEntries({ tuning: ['D2', b, 'D3', 'G3', 'B3', 'E4'] }); } catch (e) { throw new Error(`threw for ${JSON.stringify(b)}: ${e.message}`); }
+      ok(Array.isArray(r) && r[0] === '⑥ = D', `${JSON.stringify(b)}: ${r}`);
+      ok(!r.some((x) => x.startsWith('⑤')), `${JSON.stringify(b)}: string 5 skipped`);
+    });
+  });
+  test('scoreText: [C5] tuningLabel is independent of the chart and capo', () => {
+    const rows = ST.capoTuningRows({ tuningLabel: 'Drop D', showTuningChart: true, tracks: [{ showStandardNotation: true, tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'] }] });
+    eq(rows, []);
+  });
 }
 
 // ---------- 1.6 score text: sections and repeat counts (navigation merge, layout, drawing) ----------
@@ -2943,6 +2979,27 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     near(attr(r, 'y') + attr(r, 'height'), attr(a, 'y') + 0.3 * s, 'box bottom = baseline + pad');
     near(attr(b, 'x') - attr(r, 'x'), attr(r, 'width') + 0.5 * s, 'tail 0.5 s after the box');
   });
+  test('[R1,R2] repeatCount outside 2-99 (1, 100, 0, 2.5) is dropped even on a repeatEnd; 2 and 99 kept; layout has no mark', () => {
+    [1, 100, 0, 2.5, -2, 'x', null].forEach((v) => {
+      const col = mergeNavigation([{ measures: [{ repeatCount: v, barline: 'repeatEnd' }] }], 1)[0];
+      eq(Object.keys(col), ['ending', 'segno', 'coda', 'jump'], String(v));
+      eq(lay([bar({ repeatCount: v, barline: 'repeatEnd' })]).systems[0].marks.length, 0, `${v}: no mark`);
+    });
+    [2, 99].forEach((v) => eq(mergeNavigation([{ measures: [{ repeatCount: v, barline: 'repeatEnd' }] }], 1)[0].repeatCount, v));
+  });
+  test('[S2,R2] several tracks: section and x3 drawn once per system on the top track only; lowest track wins', () => {
+    const t2 = { measures: [bar({ section: 'Other', repeatCount: 5, barline: 'repeatEnd' })] };
+    const box = makeContainer();
+    new MusicScoreRenderer(box, { tracks: [{ measures: [bar({ section: 'Verse', repeatCount: 3 })] }, t2] }, { width: 900 }).render();
+    const svg = box.children[0];
+    const staves = find(svg, (n) => cls(n).startsWith('staff staff-'));
+    eq(staves.length, 2);
+    eq(find(svg, (n) => cls(n) === 'section').length, 1, 'one section');
+    eq(find(svg, (n) => cls(n) === 'repeat-count').length, 1, 'one x3');
+    eq(find(staves[0], (n) => cls(n) === 'section-text').map((n) => n.textContent), ['Verse'], 'lowest track text, top staff');
+    eq(find(staves[0], (n) => cls(n) === 'repeat-count').map((n) => n.textContent), ['x3'], 'lowest track count, top staff');
+    eq(find(staves[1], (n) => cls(n) === 'section' || cls(n) === 'repeat-count').length, 0, 'nothing on the lower staff');
+  });
 }
 
 // ---------- 1.6 score text: beat text (src/draw/beatText.js) ----------
@@ -3030,6 +3087,17 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const volta = find(nav, (n) => cls(n).startsWith('volta '))[0];
     ok(inkBounds(volta, thm).bottom <= num(hold, 'y') - TEXT_ASCENT_EM * 1.2 * s - 0.5 * s + 1e-9, 'volta hooks clear the beat text');
     eq(beatTexts(g).map((n) => n.textContent), ['hold', 'cue']);
+  });
+  test('[B2,B4] notation-only track: below text sits under the notation staff; rests and text on non-first measures are drawn; invalid text ignored', () => {
+    const svg = render({ tracks: [{ measures: [
+      { beats: [{ ...nq, text: { text: 'down', below: true } }, { type: 'rest', duration: 'quarter', text: 'r' }, { ...nq, text: { text: 'no', below: 'true' } }, { ...nq, text: { below: true } }] },
+      { beats: [{ ...nq, text: 7 }, { ...nq, text: '  ' }, { ...nq, text: ' later ' }, nq] },
+    ] }] });
+    const [g] = staves(svg);
+    const t = beatTexts(g);
+    eq(t.map((n) => [n.textContent, cls(n)]), [['down', 'beat-text beat-text-below'], ['r', 'beat-text'], ['no', 'beat-text'], ['later', 'beat-text']]);
+    const down = t[0];
+    near(num(down, 'y'), inkBefore(g, down, true) + 0.5 * s + TEXT_ASCENT_EM * 1.2 * s, 'below clears the notation ink by 0.5 s');
   });
   test('[B5] MusicScoreRenderer.js source order renderFermatas( < renderBeatText( < renderNavigation( < drawTempo(', () => {
     const src = fs.readFileSync(path.join(root0, 'src/MusicScoreRenderer.js'), 'utf8');

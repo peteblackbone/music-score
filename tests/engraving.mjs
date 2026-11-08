@@ -5688,7 +5688,8 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
 
   test('scoreText', 'G4: every pre-1.6 case with all new fields set to garbage renders byte-identical to its snapshot', () => {
     const pre = cases.filter((c) => !/^char-score-text-/.test(c.id));
-    ok(pre.length === 57, `${pre.length} pre-1.6 cases`);
+    const snaps = fs.readdirSync(path.join(root0, 'tests/snapshots')).filter((f) => f.endsWith('.svg') && !/^char-score-text-/.test(f));
+    ok(pre.length > 0 && pre.length === snaps.length, `${pre.length} pre-1.6 cases vs ${snaps.length} pre-1.6 snapshots`);
     const GARB = [null, '', '  ', {}, 0, { below: true }, { letter: 'ABCD' }];
     for (const c of pre) {
       const sc = clone(c.score);
