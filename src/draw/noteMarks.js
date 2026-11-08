@@ -29,6 +29,7 @@ const ARTIC_HALF_HEIGHT_SP = { staccato: 0.17, staccatissimo: 0.59, tenuto: 0.08
 // marks taller than a staff space's room (marcato, staccatissimo) can come
 // closer, and they then move out one more space.
 const ARTIC_MIN_GAP_SP = 0.1;
+const ARTIC_MAX_STEPS = 4;
 
 // Vibrato wave per kind (noteEffects.js vibratoOf): amplitude and wavelength
 // in sp, stroke width in px. A wide wave also sits VIB_WIDE_LIFT_SP higher.
@@ -37,13 +38,18 @@ const VIB = {
   wide: { amp: 0.35, wave: 1.0, stroke: 1.6 },
 };
 const VIB_WIDE_LIFT_SP = 0.15;
+const VIB_OFFSET_SP = 1.1;       // wave centre above the beat's top (renderVibrato)
+const VIB_MARK_CLEAR_SP = 0.7;   // marks above stay this far over the wave's top control point
 
 /**
  * How far (sp) above a vibrato beat's top a mark above it must stay
- * (beatClearTop): 0.7 sp above the wave's top control point for either kind.
+ * (beatClearTop): VIB_MARK_CLEAR_SP above the wave's top control point
+ * (2 sp for a normal wave, 2.3 for a wide one; the sums are exact).
  */
 export function vibratoClearSp(kind) {
-  return kind === 'wide' ? 2.3 : 2;
+  return kind === 'wide'
+    ? VIB_OFFSET_SP + VIB.wide.amp + VIB_WIDE_LIFT_SP + VIB_MARK_CLEAR_SP
+    : VIB_OFFSET_SP + VIB.normal.amp + VIB_MARK_CLEAR_SP;
 }
 
 /**
@@ -120,7 +126,7 @@ export function renderVibrato(g, info, width, theme, kind = true) {
   const gEl = group({ class: wide ? 'vibrato vibrato-wide' : 'vibrato' });
   const color = theme.noteColor;
   const spacing = theme.staffLineSpacing;
-  const y = elementTop(info) - spacing * 1.1 - (wide ? VIB_WIDE_LIFT_SP * spacing : 0);
+  const y = elementTop(info) - spacing * VIB_OFFSET_SP - (wide ? VIB_WIDE_LIFT_SP * spacing : 0);
   const x1 = info.x + 0.5 * spacing;
   const x2 = x1 + Math.max(1.4 * spacing, Math.min(3.4 * spacing, (width ?? 2.8 * spacing) - 0.8 * spacing));
   gEl.appendChild(path(wavyPathD(x1, x2, y, v.amp * spacing, v.wave * spacing), {
@@ -222,7 +228,8 @@ export function renderArticulations(g, info, marks, baselineY, theme, voice) {
   marks.forEach((name) => {
     const half = ARTIC_HALF_HEIGHT_SP[name] * spacing;
     let centerY = baselineY + staffPositionToY(pos, spacing);
-    while (dir * (innerY - (centerY + dir * half)) < ARTIC_MIN_GAP_SP * spacing) {
+    // At most ARTIC_MAX_STEPS spaces out (one or two suffice); the cap keeps a nonsensical theme (negative spacing) from looping forever.
+    for (let step = 0; step < ARTIC_MAX_STEPS && dir * (innerY - (centerY + dir * half)) < ARTIC_MIN_GAP_SP * spacing; step++) {
       pos += dir * 2;
       centerY = baselineY + staffPositionToY(pos, spacing);
     }
