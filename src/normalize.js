@@ -43,8 +43,14 @@
  *
  * Navigation (see navigation.js): `score.navigation[mi]` = `{ ending, segno,
  * coda, jump }` merged over all tracks per measure column (canonical forms;
- * an author field named `navigation` is overwritten). Track measures keep
- * their raw fields.
+ * an author field named `navigation` is overwritten), plus `section` /
+ * `repeatCount` only when a measure of that column sets them. Track measures
+ * keep their raw fields.
+ *
+ * Score text (see scoreText.js): the header / footer fields (`subtitle`,
+ * `artist`, `album`, `words`, `music`, `instructions`, `copyright`,
+ * `showTuningChart`), `track.capo` and `beat.text` pass through untouched;
+ * they are canonicalized when drawing.
  *
  * Chord diagrams (see chordShapes.js): `track.showChordDiagrams` defaults
  * to whether the track shows TAB (`showTablature`), else is read as a

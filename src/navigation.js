@@ -1,7 +1,8 @@
 /**
  * navigation.js — canonical forms of the measure-level navigation fields
- * (volta endings, segno, coda, jump texts) and their score-wide merge.
- * Pure functions, imports nothing.
+ * (volta endings, segno, coda, jump texts) and their score-wide merge,
+ * which also carries the column-wide score text fields (section markers,
+ * repeat counts; canonicalized by scoreText.js). Pure functions.
  *
  * Measure fields (column-level: the union over all tracks, the lowest
  * track index wins on a conflicting `ending` / `jump`):
@@ -14,7 +15,10 @@
  * - `jump`: 'D.C.', 'D.C. al Fine', 'D.C. al Coda', 'D.S.', 'D.S. al Fine',
  *   'D.S. al Coda', 'To Coda', 'Fine' (matched case-insensitively, whitespace
  *   collapsed); any other non-empty string is kept as plain text.
+ * - `section`, `repeatCount` (scoreText.js): merged only when present, so
+ *   columns without them keep exactly the four keys above.
  */
+import { canonicalSection, canonicalRepeatCount } from './scoreText.js';
 
 export const JUMP_TEXTS = ['D.C.', 'D.C. al Fine', 'D.C. al Coda', 'D.S.', 'D.S. al Fine', 'D.S. al Coda', 'To Coda', 'Fine'];
 
@@ -91,14 +95,19 @@ export function jumpKind(text) {
 
 /**
  * Merge the navigation fields of all tracks per measure column:
- * `[{ ending, segno, coda, jump }]` of length `measureCount`. `ending` and
- * `jump` come from the lowest track index with a valid value; `segno` /
- * `coda` are true when any track sets them. Missing / null measures add nothing.
+ * `[{ ending, segno, coda, jump, section?, repeatCount? }]` of length
+ * `measureCount`. `ending`, `jump`, `section` and `repeatCount` come from
+ * the lowest track index with a valid value; `segno` / `coda` are true when
+ * any track sets them. `section` is added only when set, `repeatCount` only
+ * when set and some track's measure ends in a repeatEnd barline (the raw
+ * `barline === 'repeatEnd'` check equals the normalized one: normalize only
+ * rewrites repeatStart). Missing / null measures add nothing.
  */
 export function mergeNavigation(rawTracks, measureCount) {
   const out = [];
   for (let mi = 0; mi < measureCount; mi++) {
     let ending = null; let jump = null; let segno = false; let coda = false;
+    let section = null; let repeatCount = null; let repeatEnd = false;
     for (const track of rawTracks || []) {
       const m = track?.measures?.[mi];
       if (!m || typeof m !== 'object') continue;
@@ -106,8 +115,14 @@ export function mergeNavigation(rawTracks, measureCount) {
       if (!jump) jump = canonicalJump(m.jump);
       if (m.segno === true) segno = true;
       if (m.coda === true) coda = true;
+      if (!section) section = canonicalSection(m.section);
+      if (repeatCount == null) repeatCount = canonicalRepeatCount(m.repeatCount);
+      if (m.barline === 'repeatEnd') repeatEnd = true;
     }
-    out.push({ ending, segno, coda, jump });
+    const col = { ending, segno, coda, jump };
+    if (section) col.section = section;
+    if (repeatCount != null && repeatEnd) col.repeatCount = repeatCount;
+    out.push(col);
   }
   return out;
 }

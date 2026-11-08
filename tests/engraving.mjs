@@ -5,7 +5,7 @@
 // Areas (assertion counts are printed per area at the end):
 //   align, justify, signatures, measure-numbers, barlines, repeats, vertical, numbers,
 //   scaling, octave, beaming, accidentals, ties, tab-clef, a11y, theme, robustness, header, collisions, harmonics, directions, tab-rhythm, navigation, chordDiagrams, techniques11, strumArpeggio,
-//   legatoSlides, graceAccidentals, releaseCap, noteEffects
+//   legatoSlides, graceAccidentals, releaseCap, noteEffects, scoreText
 //
 // Most geometric checks read the rendered SVG tree (class names + transforms); a few read the
 // layout model (computeLayout) for facts that are not observable in the SVG (onset times,
@@ -456,7 +456,14 @@ test('vertical', 'gaps between staves >= minimums; staves never overlap (ink-fre
     }
     const last = flat[flat.length - 1];
     const il = inkBounds(last.g, theme);
-    near(num(svg, 'height'), last.y + Math.max(il.bottom, last.localBottom) + 3 * s, 0.02, `${name}@${width}: height = last ink + 3 sp`);
+    // With a copyright footer (1.6.0) the height is measured from its last baseline instead.
+    const copyright = all(svg).filter(({ n }) => cls(n) === 'copyright').map(({ n }) => n);
+    if (copyright.length) {
+      near(num(svg, 'height'), num(copyright[copyright.length - 1], 'y') + 3 * s, 0.02, `${name}@${width}: height = last copyright baseline + 3 sp`);
+      near(num(copyright[0], 'y'), last.y + Math.max(il.bottom, last.localBottom) + 2 * s, 0.02, `${name}@${width}: copyright 2 sp below the last ink`);
+    } else {
+      near(num(svg, 'height'), last.y + Math.max(il.bottom, last.localBottom) + 3 * s, 0.02, `${name}@${width}: height = last ink + 3 sp`);
+    }
     ok(num(svg, 'height') >= last.bottom + 3 * s - EPS, `${name}@${width}: height below last staff + 3 sp`);
     ok(svg.getAttribute('viewBox') === `0 0 ${svg.getAttribute('width')} ${svg.getAttribute('height')}`, 'viewBox matches size');
   }
@@ -3185,7 +3192,8 @@ test('tab-rhythm', 'AC10: tabRhythm forced true vs false on every TAB staff of e
       ok(s.n === o.n, 'string count');
       ok(translateY(s.g) >= translateY(o.g) - EPS, `${name}@${width}: a TAB staff never moves up when rhythm is added`);
       if (translateY(s.g) !== translateY(o.g)) moved++;
-      const strip = (stv) => stv.g.children.filter((c) => cls(c) !== 'tab-rhythm');
+      // beat text below the TAB staff (1.6.0) clears the rhythm band, so it moves with it
+      const strip = (stv) => stv.g.children.filter((c) => cls(c) !== 'tab-rhythm' && cls(c) !== 'beat-text beat-text-below');
       const a = strip(s); const b = strip(o);
       ok(a.length === b.length, `${name}@${width} sys${s.si}: child count`);
       if (sameX) { ok(a.map(serialize).join('') === b.map(serialize).join(''), `${name}@${width} sys${s.si}: TAB group differs outside the band`); strict++; }
@@ -3577,7 +3585,7 @@ test('navigation', 'AC12: classes navigation, volta, volta-number, volta-open, v
   NAV_FIX.forEach((c) => all(renderTree(c.score, c.width, c.options || {})).forEach(({ n }) => cls(n).split(' ').forEach((k) => seen.add(k))));
   ['navigation', 'volta', 'volta-number', 'volta-open', 'volta-closed', 'segno', 'coda', 'jump', 'to-coda', 'fine'].forEach((k) => ok(seen.has(k), `class ${k}`));
   for (const [name, score, options] of SCORES) {
-    if (/^char-(navigation|chord-diagrams)/.test(name)) continue; // newer fixtures using navigation on purpose
+    if (/^char-(navigation|chord-diagrams|score-text)/.test(name)) continue; // newer fixtures using navigation on purpose
     ok(!all(renderTree(score, 900, options)).some(({ n }) => /navigation|volta|segno|coda|jump/.test(cls(n))), `${name}: navigation output without navigation fields`);
   }
 });
@@ -5657,6 +5665,143 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
     ok(tabOnly.length === 1, 'one TAB-only staff on system 1');
     tabOnly.forEach((g) => ok(groupsOf(g, /^(articulations|fermata)/).length === 0, 'no marks on the TAB-only staff'));
     ok(groupsOf(tree, /^tab-vibrato tab-vibrato-wide$/).length > 0, 'wide TAB vibrato drawn');
+  });
+}
+
+// ======================= scoreText (1.6.0 fixtures score-text / score-text-break / score-text-tab-only) =======================
+{
+  const fs = await import('node:fs');
+  const { cases } = await import('./cases.mjs');
+  const ST = characterizationCases.filter((c) => /^score-text/.test(c.name));
+  const fx = (name) => ST.find((c) => c.name === name);
+  const s = 10;
+  const groupsOf = (tree, re) => all(tree).filter(({ n }) => re.test(cls(n))).map(({ n }) => n);
+
+  test('scoreText', 'fixtures exist and render deterministically without bad numbers at several widths', () => {
+    ok(ST.map((c) => c.name).join() === 'score-text,score-text-break,score-text-tab-only', 'fixture names');
+    for (const f of ST) for (const w of [f.width, 600, 1400]) {
+      const out = serialize(renderTree(f.score, w, f.options || {}));
+      ok(!/NaN|Infinity|undefined/.test(out), `${f.name}@${w}: bad number`);
+      ok(out === serialize(renderTree(f.score, w, f.options || {})), `${f.name}@${w}: two renders differ`);
+    }
+  });
+
+  test('scoreText', 'G4: every pre-1.6 case with all new fields set to garbage renders byte-identical to its snapshot', () => {
+    const pre = cases.filter((c) => !/^char-score-text-/.test(c.id));
+    const snaps = fs.readdirSync(path.join(root0, 'tests/snapshots')).filter((f) => f.endsWith('.svg') && !/^char-score-text-/.test(f));
+    ok(pre.length > 0 && pre.length === snaps.length, `${pre.length} pre-1.6 cases vs ${snaps.length} pre-1.6 snapshots`);
+    const GARB = [null, '', '  ', {}, 0, { below: true }, { letter: 'ABCD' }];
+    for (const c of pre) {
+      const sc = clone(c.score);
+      Object.assign(sc, { subtitle: '  ', artist: null, album: {}, words: '', music: 0, instructions: '\n \n', copyright: ' ', showTuningChart: 'yes' });
+      let k = 0;
+      sc.tracks.forEach((t, ti) => {
+        t.capo = ti % 2 ? 31 : 0;
+        (t.measures || []).forEach((m, mi) => {
+          if (!m) return;
+          m.section = mi % 2 ? { letter: 'ABCD' } : '  ';
+          m.repeatCount = mi % 2 ? 1 : 100;
+          const vs = Array.isArray(m.voices) ? m.voices.map((v) => v?.beats || []) : [m.beats || []];
+          vs.forEach((beats) => beats.forEach((b) => { if (b) b.text = GARB[k++ % GARB.length]; }));
+        });
+      });
+      const want = fs.readFileSync(path.join(root0, 'tests/snapshots', `${c.id}.svg`), 'utf8').replace(/\r\n/g, '\n');
+      const box = makeContainer();
+      new MusicScoreRenderer(box, sc, { width: c.width, ...(c.options || {}) }).render();
+      ok(serialize(box.children[0]) === want, `${c.id}: differs with garbage fields`);
+      normalizeScore(clone(sc)).navigation.forEach((col, mi) => ok(Object.keys(col).join() === 'ending,segno,coda,jump', `${c.id} m${mi}: navigation keys`));
+    }
+  });
+
+  test('scoreText', 'G3: text with markup is escaped text content in header, sections, beat text and copyright', () => {
+    const t = '<b>&amp;</b> & "q"';
+    const svg = renderTree({ subtitle: t, instructions: t, copyright: t, words: t, tracks: [{ measures: [{ section: { letter: '<a>', text: t }, beats: [q('E4', { beat: { text: t } }), q('E4'), q('E4'), q('E4')] }] }] });
+    const out = serialize(svg);
+    ok(!/<b>|<a>/.test(out), 'no markup injected');
+    ok(out.includes('&lt;b&gt;&amp;amp;&lt;/b&gt; &amp;'), 'escaped');
+    groupsOf(svg, /^(subtitle|instructions|copyright|words|section-letter|section-text|beat-text)$/).forEach((n) => ok(n.children.length === 0, `${cls(n)} has no child elements`));
+  });
+
+  test('scoreText', 'S/R/B5: score-text order outward: beat text < x3 / marks < sections < tempo; header rows and footer present', () => {
+    const f = fx('score-text');
+    const svg = renderTree(f.score, f.width);
+    ['title', 'subtitle', 'artist', 'album', 'tuning', 'composer', 'words', 'music', 'instructions', 'tuning-chart', 'copyright']
+      .forEach((c) => ok(groupsOf(svg, new RegExp(`^${c}$`)).length > 0, `class ${c}`));
+    ok(groupsOf(svg, /^words-music$/).length === 0, 'words != music');
+    const chart = groupsOf(svg, /^tuning-chart$/).map((g) => g.children.map((n) => n.textContent).join(' | '));
+    ok(chart.join(' / ') === 'Gt.: Capo fret 2 | ⑥ = D / Bass: ④ = D', `tuning chart ${chart}`);
+    const texts = groupsOf(svg, /^beat-text/).map((n) => n.textContent);
+    ok(texts.join() === 'dolce,hold,rit.,softly,let go,mute', `beat texts ${texts}`);
+    const top = staffGroups(systemsOf(svg)[0])[0];
+    const hold = groupsOf(top, /^beat-text$/).find((n) => n.textContent === 'hold');
+    const ferm = groupsOf(top, /^fermata$/)[0];
+    const chord = groupsOf(top, /^chord-symbol$/)[0];
+    ok(inkBounds(ferm, resolveTheme()).top >= num(hold, 'y') + 0.25 * 12 + 0.5 * s - EPS, 'hold above the fermata');
+    ok(inkBounds(chord, resolveTheme()).top > num(hold, 'y'), 'hold above the chord symbol');
+    const x3 = groupsOf(top, /^repeat-count$/)[0];
+    ok(x3 && x3.textContent === 'x3', 'x3 drawn');
+    const secs = groupsOf(top, /^section$/);
+    ok(secs.length === 3, `${secs.length} sections`);
+    const secTop = Math.min(...secs.map((g) => inkBounds(g, resolveTheme()).top));
+    const tempo = groupsOf(top, /^tempo$/)[0];
+    ok(inkBounds(tempo, resolveTheme()).bottom <= secTop + EPS, 'tempo above the sections');
+    ok(secs.every((g) => g.children[0].tag === 'rect'), 'boxed');
+    ok(secs.map((g) => g.children.slice(1).map((n) => `${cls(n)}:${n.textContent}`).join(' ')).join(' / ')
+      === 'section-letter:A section-text:Intro / section-text:Verse / section-letter:B', 'section texts');
+    const foot = groupsOf(svg, /^copyright$/);
+    ok(foot.map((n) => n.textContent).join(' / ') === '(c) 2026 Example Music / All rights reserved', 'copyright lines');
+    const staves = all(svg).filter(({ n }) => /^staff staff-/.test(cls(n))).map(({ n }) => n);
+    const lastInk = Math.max(...staves.map((g) => translateY(g) + Math.max(inkBounds(g, resolveTheme()).bottom, staffInfo(g).localBottom)));
+    near(num(foot[0], 'y'), lastInk + 2 * s, 0.02, 'copyright 2 sp below the last ink');
+    near(num(foot[1], 'y') - num(foot[0], 'y'), 1.4 * s, 0.02, 'copyright step');
+  });
+
+  test('scoreText', 'S6/R4: break fixture: section + volta + segno at a system start, x3 + D.S. al Coda at a system end', () => {
+    const f = fx('score-text-break');
+    const L = layoutOf(f.score, f.width);
+    const sysOf = (mi) => L.systems.findIndex((sy) => sy.measureIndices.includes(mi));
+    ok(L.systems[sysOf(1)].measureIndices.at(-1) === 1 && L.systems[sysOf(2)].measureIndices[0] === 2, 'm2 ends a system, m3 starts the next');
+    const end = L.systems[sysOf(1)];
+    const x3 = end.marks.find((m) => m.kind === 'repeatCount');
+    const jump = end.marks.find((m) => m.kind === 'jump');
+    near(x3.xEnd, end.tracks[0].measures.at(-1).endX, 1e-9, 'x3 at the system end');
+    near(jump.xEnd, x3.xEnd - estimateTextWidth('x3', 1.1 * s) - 0.5 * s, 1e-9, 'jump left of x3');
+    const svg = renderTree(f.score, f.width);
+    const g1 = staffGroups(systemsOf(svg)[sysOf(2)])[0];
+    const sec = groupsOf(g1, /^section$/)[0];
+    const volta = groupsOf(g1, /^volta /)[0];
+    const segno = groupsOf(g1, /^segno$/)[0];
+    ok(sec && volta && segno, 'section, volta and segno on the second system');
+    near(num(sec.children[0], 'x'), num(segno, 'x'), 0.02, 'section left edge = segno x');
+    const boxBottom = num(sec.children[0], 'y') + num(sec.children[0], 'height') + 0.06 * s;
+    ok(boxBottom <= inkBounds(segno, resolveTheme()).top - 0.75 * s + EPS, 'section above the segno');
+    ok(inkBounds(segno, resolveTheme()).bottom <= inkBounds(volta, resolveTheme()).top + EPS, 'segno above the volta');
+    const g0 = staffGroups(systemsOf(svg)[sysOf(1)])[0];
+    const x3n = groupsOf(g0, /^repeat-count$/)[0];
+    const jn = groupsOf(g0, /^jump/)[0].children.at(-1);
+    ok(x3n.getAttribute('y') === jn.getAttribute('y'), 'x3 and jump on one baseline');
+    ok(groupsOf(svg, /^words-music$/).map((n) => n.textContent).join() === 'Words & Music by Jane Doe', 'Words & Music');
+  });
+
+  test('scoreText', 'C/B: TAB-only 7-string: capo + low-A chart, section, beat text above the TAB top line and below its stems', () => {
+    const f = fx('score-text-tab-only');
+    const svg = renderTree(f.score, f.width);
+    const chart = groupsOf(svg, /^tuning-chart$/).map((g) => g.children.map((n) => n.textContent).join(' | '));
+    ok(chart.join() === 'Capo fret 1 | ⑦ = A', `chart ${chart}`);
+    const g = staffGroups(systemsOf(svg)[0])[0];
+    const info = staffInfo(g);
+    const above = groupsOf(g, /^beat-text$/);
+    const below = groupsOf(g, /^beat-text beat-text-below$/);
+    ok(above.length === 2 && below.length === 2, 'two above, two below');
+    above.forEach((n) => ok(num(n, 'y') <= info.localTop - 1.5 * s + EPS, `${n.textContent} >= 1.5 sp above the top line`));
+    const stems = all(g).filter(({ n }) => n.tag === 'line' && n.getAttribute('x1') === n.getAttribute('x2') && num(n, 'y1') >= info.localBottom).map(({ n }) => n);
+    below.forEach((n) => {
+      const x = num(n, 'x');
+      const under = stems.filter((l) => Math.abs(num(l, 'x1') - x) < 0.02);
+      ok(under.length === 1, `${n.textContent}: a stem at its x`);
+      ok(num(n, 'y') - 0.8 * 12 >= num(under[0], 'y2') + 0.5 * s - EPS, `${n.textContent} clears its stem by 0.5 sp`);
+    });
+    ok(groupsOf(g, /^section$/).length === 1, 'section');
   });
 }
 

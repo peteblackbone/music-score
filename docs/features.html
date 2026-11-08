@@ -72,6 +72,7 @@
   <a href="#layout">Line breaks &amp; justification</a>
   <a href="#barlines">Barlines &amp; repeats</a>
   <a href="#navigation">Endings &amp; navigation</a>
+  <a href="#score-text">Score text</a>
   <a href="#rhythm">Rhythm &amp; beaming</a>
   <a href="#pitch">Pitch &amp; accidentals</a>
   <a href="#curves">Ties &amp; slurs</a>
@@ -116,7 +117,7 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 <div class="demo" data-demo="systems" data-width="680"></div>
 
 <h2 id="page">Page header</h2>
-<p><code>title</code> is centred, <code>composer</code> is right-aligned, <code>tuningLabel</code> sits at the left under the title, and <code>tempoText</code> sits above the first system at the time signature.</p>
+<p><code>title</code> is centred, <code>composer</code> is right-aligned, <code>tuningLabel</code> sits at the left under the title, and <code>tempoText</code> sits above the first system at the time signature. Subtitle, artist, album, words, music, instructions and copyright are also available; see <a href="#score-text">Score text</a>.</p>
 <div class="demo" data-demo="header" data-width="600"></div>
 
 <h2 id="layout">Line breaks and justification</h2>
@@ -146,10 +147,31 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <li>Consecutive measures with the same ending share one bracket. A different ending, a measure without one, or a repeat start begins a new one.</li>
   <li>A bracket gets a closing hook when its last measure ends with an end repeat; otherwise it stays open.</li>
   <li>A bracket that crosses a line break continues on the next system without a number.</li>
-  <li>Brackets sit above chord symbols, chord diagrams and fermatas, and the signs and jump texts sit above the brackets. The tempo stays on top.</li>
+  <li>Brackets sit above chord symbols, chord diagrams and fermatas, and the signs and jump texts sit above the brackets. Section markers sit in a row above those, and the tempo stays on top.</li>
   <li>Nothing is played or unrolled: the marks are drawn as written.</li>
 </ul>
 <div class="demo" data-demo="navigation" data-width="620"></div>
+
+<h2 id="score-text">Score text, sections and repeat counts</h2>
+<p>Text fields for the header, plus marks players read: section markers, <code>x3</code> repeat counts, and free text on a beat.</p>
+<table>
+  <tr><th>Field</th><th>Drawn as</th></tr>
+  <tr><td><code>subtitle</code>, <code>artist</code>, <code>album</code></td><td>Centred header lines under the title, each in a smaller text</td></tr>
+  <tr><td><code>words</code>, <code>music</code></td><td>"Words by" at the left and "Music by" at the right; one "Words &amp; Music by" line when they are the same name</td></tr>
+  <tr><td><code>instructions</code>, <code>copyright</code></td><td>Italic lines under the credits, and centred lines at the foot of the score. Split at line breaks, up to 8 lines each</td></tr>
+  <tr><td><code>capo</code> (track)</td><td>"Capo fret N" in the header for that track. Display only: the music is not transposed</td></tr>
+  <tr><td><code>showTuningChart: true</code> (score)</td><td>Lists the strings tuned differently from the usual tuning, such as "⑥ = D", in the header</td></tr>
+  <tr><td><code>section</code> (measure)</td><td><code>'Verse'</code> or <code>{ letter, text }</code>: a boxed letter with the text after it, or boxed text, above the staff</td></tr>
+  <tr><td><code>repeatCount</code> (measure)</td><td><code>x3</code> at the end of a measure with an end repeat; 2 to 99</td></tr>
+  <tr><td><code>text</code> (beat)</td><td>Italic text above the staff, or below it with <code>{ text, below: true }</code>. Note and rest beats in voice 1</td></tr>
+</table>
+<ul class="points">
+  <li>A score that uses none of these fields looks as it did before.</li>
+  <li>Lines do not wrap. Beat text takes no horizontal room, and a section marker only moves right to keep a gap from the previous one on its system.</li>
+  <li>A section sits at the start of its measure, or where a segno would go. A repeat count needs an end repeat in its measure.</li>
+  <li>The capo is only written, not applied: the music is not transposed. A chart lists nothing for standard tuning.</li>
+</ul>
+<div class="demo" data-demo="scoreText" data-width="680"></div>
 
 <h2 id="rhythm">Rhythm and beaming</h2>
 <p>Durations from whole to 64th, dots, rests and tuplets. Eighths and shorter beam within each beat; compound meters such as 6/8 and 12/8 beam by dotted beat. An empty measure draws a centred whole-measure rest.</p>
@@ -575,6 +597,20 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
         measures: [
           { beats: [t('quarter', 3, 2), t('8th', 3, 4), t('8th', 2, 3), t('half', 2, 5)] },
           { beats: [t('quarter', 1, 3), t('quarter', 1, 2), t('half', 2, 3)] },
+        ],
+      }],
+    },
+    scoreText: {
+      title: 'Score text', subtitle: 'Live at the Hall', artist: 'The Example Band', album: 'First Album',
+      composer: 'J. Composer', tuningLabel: 'Drop D', words: 'A. Lyricist', music: 'B. Composer',
+      instructions: 'Play with a light touch\nLet the open strings ring', copyright: '(c) 2026 Example Music',
+      showTuningChart: true,
+      tracks: [{
+        name: 'Gt.', showTablature: true, capo: 2, tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'],
+        measures: [
+          { section: { letter: 'A', text: 'Intro' }, barline: 'repeatStart', beats: [t('quarter', 6, 0, {}, { text: 'dolce' }), t('quarter', 4, 2), t('quarter', 3, 2, {}, { text: { text: 'softly', below: true } }), t('quarter', 2, 3)] },
+          { repeatCount: 3, barline: 'repeatEnd', beats: [t('quarter', 1, 2), t('quarter', 2, 3), t('quarter', 3, 2), t('quarter', 1, 5, {}, { chord: 'D', fermata: true, text: 'hold' })] },
+          { section: 'Verse', beats: [t('half', 4, 0), t('half', 6, 0)] },
         ],
       }],
     },

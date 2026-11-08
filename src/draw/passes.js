@@ -50,6 +50,9 @@
  *   written by 5, read by 7
  * - pass 6 measures the notation staff's ink, so it must follow the passes
  *   that draw there (1, 2 and 5).
+ *
+ * Beat text (draw/beatText.js renderBeatText) runs after pass 7 and before
+ * navigation; it is not a pass of this barrel and is not re-exported here.
  */
 export { flattenRuns } from './passes/common.js';
 export { renderTiesAndSlurs, renderGraceSlurs } from './passes/curves.js';

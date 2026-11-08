@@ -14,7 +14,7 @@ const INSTRUMENT_PAD_SP = 1.5;
 const SYSTEM_PAD_SP = 2.5;
 const SYSTEM_OVER_INSTRUMENT_SP = 2; // system gap >= largest neighbouring instrument gap + this
 const FIRST_SYSTEM_CLEARANCE_SP = 2; // header baseline -> system 1's top ink
-const BOTTOM_MARGIN_SP = 3;
+export const BOTTOM_MARGIN_SP = 3;  // last ink (or copyright baseline, draw/header.js) -> bottom edge
 
 /**
  * @param {Array<Array<{ ti: number, kind: 'notation'|'tab', lineBottom: number, ink: { top: number, bottom: number } }>>} systems
@@ -24,8 +24,9 @@ const BOTTOM_MARGIN_SP = 3;
  * @param {number} startY - y below which system 1's ink may start (header
  *   baseline + clearance is applied here when `hasHeader`).
  * @param {boolean} hasHeader
- * @returns {{ staffY: number[][], height: number }} top-line y of each staff
- *   (same nesting as `systems`) and the total height.
+ * @returns {{ staffY: number[][], height: number, contentBottom: number }} top-line
+ *   y of each staff (same nesting as `systems`), the total height and the
+ *   last staff's bottom ink y (where the copyright footer starts from).
  */
 export function placeStaves(systems, theme, startY, hasHeader) {
   const s = theme.staffLineSpacing;
@@ -67,5 +68,5 @@ export function placeStaves(systems, theme, startY, hasHeader) {
     });
     staffY.push(ys);
   });
-  return { staffY, height: lastBottomInk + BOTTOM_MARGIN_SP * s };
+  return { staffY, height: lastBottomInk + BOTTOM_MARGIN_SP * s, contentBottom: lastBottomInk };
 }

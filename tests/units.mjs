@@ -2037,9 +2037,10 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
 // ---------- pre-1.4 characterization (C0): pins taken from the code before two-voice measures ----------
 {
   const { createHash } = await import('node:crypto');
-  // the 52 pre-1.4 cases (the 1.4.0 two-voice fixtures char-voices-* and the 1.5.0 char-note-effects-* came later)
+  // the 52 pre-1.4 cases (the 1.4.0 two-voice fixtures char-voices-*, the 1.5.0 char-note-effects-* and the 1.6.0
+  // char-score-text-* came later)
   const isVoices = (id) => id.startsWith('char-voices-');
-  const isPost14 = (id) => /^char-(voices|note-effects)-/.test(id);
+  const isPost14 = (id) => /^char-(voices|note-effects|score-text)-/.test(id);
   const cases = (await import('./cases.mjs')).cases.filter((c) => !isPost14(c.id));
   const { computeLayout } = await imp('src/layout/index.js');
   const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
@@ -2629,6 +2630,635 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
       eq([a.bottom, b.top, a.top, a.width], [0, 0, -b.bottom, b.width], k);
     }
     eq(glyphBox('fermataShortAbove').top > 1 && glyphBox('fermataLongAbove').top > 1, true);
+  });
+}
+
+// ---------- pre-1.6 characterization: pins taken from the code before score text & structure ----------
+{
+  const { resolveTheme } = await imp('src/theme.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { renderNavigation } = await imp('src/draw/navigation.js');
+  const { drawScoreHeader } = await imp('src/draw/header.js');
+  const { group: svgGroup } = await imp('src/draw/svgUtil.js');
+  // the 57 pre-1.6 cases (the 1.6.0 char-score-text-* fixtures use the new fields on purpose)
+  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-score-text-/.test(c.id));
+  const thm = resolveTheme({});
+  const s = thm.staffLineSpacing;
+  const ok = (c, m) => { if (!c) throw new Error(m); };
+  const bar = (extra = {}) => ({ beats: [nq, nq, nq, nq], ...extra });
+  const lay = (measures, width) => computeLayout(normalizeScore({ tracks: [{ measures }] }), thm, width);
+
+  test('pre-1.6: renderNavigation returns null and appends nothing for every system of a multi-system plain layout', () => {
+    const L = lay(Array.from({ length: 12 }, () => bar()), 400);
+    ok(L.systems.length > 1, 'multi-system');
+    L.systems.forEach((sys, i) => {
+      const g = svgGroup({});
+      eq(renderNavigation(g, sys, thm), null, `system ${i}`);
+      eq(g.children.length, 0, `system ${i} appended nothing`);
+    });
+  });
+  test('pre-1.6: only system 1 has a segno -> system 0 returns null and appends nothing; system 1 draws', () => {
+    const plain = lay(Array.from({ length: 12 }, () => bar()), 400);
+    const startMi = plain.systems[1].measureIndices[0];
+    const L = lay(Array.from({ length: 12 }, (_, i) => bar(i === startMi ? { segno: true } : {})), 400);
+    const g0 = svgGroup({});
+    eq(renderNavigation(g0, L.systems[0], thm), null);
+    eq(g0.children.length, 0);
+    eq(L.systems[0].marks, []);
+    eq(L.systems[1].marks.map((m) => m.kind), ['segno']);
+    const g1 = svgGroup({});
+    ok(renderNavigation(g1, L.systems[1], thm) != null, 'system 1 draws a navigation group');
+    eq(g1.children.length, 1);
+  });
+  test('pre-1.6: all 57 cases keep navigation columns at exactly [ending, segno, coda, jump]; mark kinds within segno/coda/jump', () => {
+    eq(allCases.length, 57);
+    for (const c of allCases) {
+      const score = normalizeScore(JSON.parse(JSON.stringify(c.score)));
+      score.navigation.forEach((col, mi) => eq(Object.keys(col), ['ending', 'segno', 'coda', 'jump'], `${c.id} measure ${mi}`));
+      const L = computeLayout(score, resolveTheme(c.options?.theme ?? {}), c.width);
+      for (const sys of L.systems) for (const m of sys.marks) ok(['segno', 'coda', 'jump'].includes(m.kind), `${c.id} mark kind ${m.kind}`);
+    }
+  });
+
+  const FONT = '&quot;Times New Roman&quot;, Georgia, serif';
+  const hdr = (sc) => { const svg = svgGroup({}); const r = drawScoreHeader(svg, sc, thm, 10, 900); return { r, out: svg.children.map(serialize) }; };
+  const titleXml = `<text x="450" y="28" class="title" font-family="${FONT}" font-size="24" text-anchor="middle" fill="#1a1a1a">T</text>`;
+  const tuningXml = (y) => `<text x="30" y="${y}" class="tuning" font-family="${FONT}" font-size="13" font-style="italic" fill="#1a1a1a">Drop D</text>`;
+  const composerXml = (y) => `<text x="870" y="${y}" class="composer" font-family="${FONT}" font-size="13" text-anchor="end" fill="#1a1a1a">C</text>`;
+  const wrap = (...rows) => [`<g class="score-header">\n${rows.map((r) => `  ${r}\n`).join('')}</g>\n`];
+  test('pre-1.6: drawScoreHeader title only -> returns top + 0.75 * 2.4 s, exact group', () => {
+    const h = hdr({ title: 'T' });
+    eq(h.r, 10 + 0.75 * 2.4 * s);
+    eq(h.r, 28);
+    eq(h.out, wrap(titleXml));
+  });
+  test('pre-1.6: drawScoreHeader title + composer + tuningLabel -> + 2.5 s, exact group (tuning, then composer)', () => {
+    const h = hdr({ title: 'T', composer: 'C', tuningLabel: 'Drop D' });
+    eq(h.r, 28 + 2.5 * s);
+    eq(h.out, wrap(titleXml, tuningXml(53), composerXml(53)));
+  });
+  test('pre-1.6: drawScoreHeader tuningLabel only -> top + 0.75 * 1.3 s, exact group', () => {
+    const h = hdr({ tuningLabel: 'Drop D' });
+    eq(h.r, 10 + 0.75 * 1.3 * s);
+    eq(h.r, 19.75);
+    eq(h.out, wrap(tuningXml(19.75)));
+  });
+  test('pre-1.6: drawScoreHeader composer only -> top + 0.75 * 1.3 s, exact group', () => {
+    const h = hdr({ composer: 'C' });
+    eq(h.r, 19.75);
+    eq(h.out, wrap(composerXml(19.75)));
+  });
+  test('pre-1.6: drawScoreHeader with no title/composer/tuningLabel returns null and appends nothing', () => {
+    const h = hdr({});
+    eq(h.r, null);
+    eq(h.out, []);
+  });
+
+  test('pre-1.6: MusicScoreRenderer.js source order renderFermatas( < renderNavigation( < drawTempo(', () => {
+    const src = fs.readFileSync(path.join(root0, 'src/MusicScoreRenderer.js'), 'utf8');
+    const a = src.indexOf('renderFermatas('), b = src.indexOf('renderNavigation('), c = src.indexOf('drawTempo(');
+    ok(a >= 0 && b > a && c > b, `order ${a} ${b} ${c}`);
+  });
+}
+
+// ---------- 1.6 score text: canonicalizers and tuning helpers (src/scoreText.js) ----------
+{
+  const ST = await imp('src/scoreText.js');
+  const GARBAGE = [undefined, null, false, true, 0, 1, '', '  ', '\n\t', [], ['x'], {}];
+  test('scoreText: canonicalText trims and collapses whitespace; garbage -> null; idempotent', () => {
+    eq(['  a  b ', 'a\n\tb', 'Verse', ' x '].map(ST.canonicalText), ['a b', 'a b', 'Verse', 'x']);
+    GARBAGE.forEach((g) => eq(ST.canonicalText(g), null, JSON.stringify(g)));
+    ['  a  b ', 'a\n\tb', '<b>&'].forEach((v) => eq(ST.canonicalText(ST.canonicalText(v)), ST.canonicalText(v)));
+  });
+  test('scoreText: canonicalSection string / object forms, letter 1-3 code points', () => {
+    eq(ST.canonicalSection(' Verse  1 '), { letter: null, text: 'Verse 1' });
+    eq(ST.canonicalSection({ letter: ' A ', text: ' Intro ' }), { letter: 'A', text: 'Intro' });
+    eq(ST.canonicalSection({ letter: 'B' }), { letter: 'B', text: null });
+    eq(ST.canonicalSection({ letter: 'A12' }), { letter: 'A12', text: null });
+    eq(ST.canonicalSection({ letter: 'ABCD', text: 'Solo' }), { letter: null, text: 'Solo' });
+    eq(ST.canonicalSection({ letter: '\u{1D11E}\u{1D11E}\u{1D11E}' }), { letter: '\u{1D11E}\u{1D11E}\u{1D11E}', text: null }, 'code points, not UTF-16 units');
+    eq(ST.canonicalSection({ letter: 7, text: 'x' }), { letter: null, text: 'x' });
+    [...GARBAGE, { letter: 'ABCD' }, { letter: ' ', text: ' ' }, { text: 5 }].forEach((g) => eq(ST.canonicalSection(g), null, JSON.stringify(g)));
+    [' Verse ', { letter: ' A ', text: ' Intro ' }, { letter: 'B' }, { letter: 'ABCD', text: 'Solo' }]
+      .forEach((v) => { const c = ST.canonicalSection(v); eq(ST.canonicalSection(c), c, JSON.stringify(v)); });
+  });
+  test('scoreText: canonicalRepeatCount 2-99, numeric strings; garbage -> null; idempotent', () => {
+    eq([2, 3, 99, '3', ' 12 ', '007'].map(ST.canonicalRepeatCount), [2, 3, 99, 3, 12, 7]);
+    [...GARBAGE, 100, -3, 2.5, NaN, Infinity, '1', '100', '3x', 'x3', '-3', '2.0'].forEach((g) => eq(ST.canonicalRepeatCount(g), null, String(g)));
+    [2, '3', 99].forEach((v) => eq(ST.canonicalRepeatCount(ST.canonicalRepeatCount(v)), ST.canonicalRepeatCount(v)));
+  });
+  test('scoreText: canonicalBeatText string / object, below only when true; idempotent', () => {
+    eq(ST.canonicalBeatText(' rit. '), { text: 'rit.', below: false });
+    eq(ST.canonicalBeatText({ text: 'let ring', below: true }), { text: 'let ring', below: true });
+    eq(ST.canonicalBeatText({ text: 'x', below: 'yes' }), { text: 'x', below: false });
+    [...GARBAGE, { below: true }, { text: '  ', below: true }].forEach((g) => eq(ST.canonicalBeatText(g), null, JSON.stringify(g)));
+    [' rit. ', { text: 'a  b', below: true }].forEach((v) => { const c = ST.canonicalBeatText(v); eq(ST.canonicalBeatText(c), c); });
+  });
+  test('scoreText: canonicalCapo 1-30, numeric strings; garbage -> null', () => {
+    eq([1, 2, 30, '2', ' 5 '].map(ST.canonicalCapo), [1, 2, 30, 2, 5]);
+    [...GARBAGE.filter((g) => g !== 1), 31, -1, 1.5, '0', '31', 'II'].forEach((g) => eq(ST.canonicalCapo(g), null, String(g)));
+  });
+  test('scoreText: canonicalLines splits, trims, drops empty, at most 8; idempotent through join', () => {
+    eq(ST.canonicalLines(' a \r\n\n  b  c \n'), ['a', 'b c']);
+    eq(ST.canonicalLines(Array.from({ length: 12 }, (_, i) => `L${i}`).join('\n')), Array.from({ length: 8 }, (_, i) => `L${i}`));
+    eq(ST.canonicalLines('a\nb\nc', 2), ['a', 'b']);
+    [...GARBAGE, '\n \n'].forEach((g) => eq(ST.canonicalLines(g), null, JSON.stringify(g)));
+    [' a \r\n\n  b  c \n', 'x', Array(20).fill('y').join('\n')].forEach((v) => { const r = ST.canonicalLines(v); eq(ST.canonicalLines(r.join('\n')), r); });
+  });
+  test('scoreText: circledDigit 1-10 -> U+2460-U+2469, above -> (n)', () => {
+    eq(ST.circledDigit(1), '①'); eq(ST.circledDigit(6), '⑥'); eq(ST.circledDigit(10), '⑩');
+    eq(ST.circledDigit(11), '(11)'); eq(ST.circledDigit(12), '(12)');
+  });
+  test('scoreText: referenceTuning matrix (4, 5, 6, 6 bass clef, 7, 8; none for 3 and 9)', () => {
+    eq(ST.referenceTuning(4), ['E1', 'A1', 'D2', 'G2']);
+    eq(ST.referenceTuning(5), ['B0', 'E1', 'A1', 'D2', 'G2']);
+    eq(ST.referenceTuning(6, 'treble'), ['E2', 'A2', 'D3', 'G3', 'B3', 'E4']);
+    eq(ST.referenceTuning(6, 'bass'), ['B0', 'E1', 'A1', 'D2', 'G2', 'C3']);
+    eq(ST.referenceTuning(7), ['B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4']);
+    eq(ST.referenceTuning(8), ['F#1', 'B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4']);
+    eq(ST.referenceTuning(3), null); eq(ST.referenceTuning(9), null); eq(ST.referenceTuning(4, 'bass'), ['E1', 'A1', 'D2', 'G2']);
+  });
+  test('scoreText: tuningChartEntries lists differing strings, highest number first, as written without octave', () => {
+    eq(ST.tuningChartEntries({ tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'] }), ['⑥ = D']);
+    eq(ST.tuningChartEntries({ tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'] }), []);
+    eq(ST.tuningChartEntries({ tuning: ['Eb2', 'Ab2', 'Db3', 'Gb3', 'Bb3', 'Eb4'] }).join(' '), '⑥ = Eb ⑤ = Ab ④ = Db ③ = Gb ② = Bb ① = Eb');
+    eq(ST.tuningChartEntries({ tuning: ['Fb2', 'A2', 'D3', 'G3', 'B3', 'E4'] }), [], 'enharmonic equal -> no entry');
+    eq(ST.tuningChartEntries({ tuning: ['d1', 'A1', 'D2', 'G2'] }), ['④ = D']);
+    eq(ST.tuningChartEntries({ tuning: ['B0', 'E1', 'A1', 'D2', 'G2', 'C3'], clef: 'bass' }), []);
+    eq(ST.tuningChartEntries({ tuning: ['A1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'] }), ['⑦ = A']);
+    eq(ST.tuningChartEntries({ tuning: ['F#1', 'B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'D4'] }), ['① = D']);
+    eq(ST.tuningChartEntries({ tuning: ['C1', 'F1', 'B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'] }).length, 9, '9 strings: every string listed');
+    eq(ST.tuningChartEntries({ tuning: ['C1', 'F1', 'B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4', 'A4', 'D5'] })[0], '(11) = C');
+    eq(ST.tuningChartEntries({ tuning: ['X2', null, 7, 'A2x', {}, 'Cb4'] }), ['① = Cb'], 'unparsable skipped, never throws');
+    [undefined, null, {}, { tuning: 'E2' }, { tuning: null }].forEach((t) => eq(ST.tuningChartEntries(t), []));
+  });
+  test('scoreText: capoTuningRows (capo strings, opt-in chart, names only with > 1 visible track, staff-less skipped)', () => {
+    const g = (x) => ({ showStandardNotation: true, showTablature: false, tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'], ...x });
+    eq(ST.capoTuningRows({ tracks: [g({ capo: '2' })] }), [{ name: null, capo: 'Capo fret 2', entries: [] }]);
+    eq(ST.capoTuningRows({ tracks: [g({ capo: 2, tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'] })] }), [{ name: null, capo: 'Capo fret 2', entries: [] }], 'chart is opt-in');
+    eq(ST.capoTuningRows({ showTuningChart: 'yes', tracks: [g({ tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'] })] }), []);
+    eq(ST.capoTuningRows({ showTuningChart: true, tracks: [g({ tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'] })] }), [{ name: null, capo: null, entries: ['⑥ = D'] }]);
+    const two = { showTuningChart: true, tracks: [
+      g({ name: ' Gt. ', capo: 3 }),
+      g({ label: 'B', showStandardNotation: false, showTablature: true, tuning: ['D1', 'A1', 'D2', 'G2'] }),
+      g({ showStandardNotation: false, capo: 5 }),
+      g({ capo: 4 }),
+    ] };
+    eq(ST.capoTuningRows(two), [
+      { name: 'Gt.', capo: 'Capo fret 3', entries: [] },
+      { name: 'B', capo: null, entries: ['④ = D'] },
+      { name: 'Track 4', capo: 'Capo fret 4', entries: [] },
+    ]);
+    eq(ST.capoTuningRows({ tracks: [g({ capo: 0 }), g({ capo: 31 })] }), []);
+    eq(ST.capoTuningRows({}), []);
+  });
+  test('scoreText: [C3] every reference tuning is "standard" (no entries); one raised string gives exactly that string', () => {
+    const refs = [
+      [['E1', 'A1', 'D2', 'G2'], undefined], [['B0', 'E1', 'A1', 'D2', 'G2'], undefined],
+      [['E2', 'A2', 'D3', 'G3', 'B3', 'E4'], undefined], [['B0', 'E1', 'A1', 'D2', 'G2', 'C3'], 'bass'],
+      [['B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'], undefined], [['F#1', 'B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'], undefined],
+    ];
+    for (const [ref, clef] of refs) {
+      const n = ref.length;
+      eq(ST.tuningChartEntries({ tuning: ref, clef }), [], `${n} strings${clef ? ' ' + clef : ''}: standard`);
+      for (let i = 0; i < n; i++) {
+        const t = ref.slice();
+        t[i] = 'C#5'; // never equal to any reference string
+        eq(ST.tuningChartEntries({ tuning: t, clef }), [`${ST.circledDigit(n - i)} = C#`], `${n} strings, index ${i}`);
+      }
+    }
+    // the bass-clef reference is only used for 6 strings with a bass clef; otherwise the guitar 6 applies
+    eq(ST.tuningChartEntries({ tuning: ['B0', 'E1', 'A1', 'D2', 'G2', 'C3'] }).length, 6, '6-string bass tuning without a bass clef differs from the guitar reference');
+    eq(ST.tuningChartEntries({ tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'], clef: 'bass' }).length, 6, 'guitar tuning under a bass clef differs from the bass reference');
+    eq(ST.tuningChartEntries({ tuning: ['E1', 'A1', 'D2', 'G2'], clef: 'bass' }), [], '4-string bass is the same with or without a clef');
+    eq(ST.tuningChartEntries({ tuning: ['C1', 'F1', 'B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'] }),
+      ['⑨ = C', '⑧ = F', '⑦ = B', '⑥ = E', '⑤ = A', '④ = D', '③ = G', '② = B', '① = E'], '9 strings: all, highest number first');
+  });
+  test('scoreText: [C2] unparsable entries are skipped without throwing, parsable neighbours keep their string numbers', () => {
+    const ok = (c, m) => { if (!c) throw new Error(m); };
+    const bad = [undefined, null, 5, {}, [], '', 'H2', 'E', '2', 'E#', 'Ex', 'x2'];
+    bad.forEach((b) => {
+      let r;
+      try { r = ST.tuningChartEntries({ tuning: ['D2', b, 'D3', 'G3', 'B3', 'E4'] }); } catch (e) { throw new Error(`threw for ${JSON.stringify(b)}: ${e.message}`); }
+      ok(Array.isArray(r) && r[0] === '⑥ = D', `${JSON.stringify(b)}: ${r}`);
+      ok(!r.some((x) => x.startsWith('⑤')), `${JSON.stringify(b)}: string 5 skipped`);
+    });
+  });
+  test('scoreText: [C5] tuningLabel is independent of the chart and capo', () => {
+    const rows = ST.capoTuningRows({ tuningLabel: 'Drop D', showTuningChart: true, tracks: [{ showStandardNotation: true, tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'] }] });
+    eq(rows, []);
+  });
+}
+
+// ---------- 1.6 score text: sections and repeat counts (navigation merge, layout, drawing) ----------
+{
+  const { mergeNavigation } = await imp('src/navigation.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const LN = await imp('src/layout/navigation.js');
+  const { renderNavigation } = await imp('src/draw/navigation.js');
+  const { inkBounds, TEXT_DESCENT_EM } = await imp('src/layout/ink.js');
+  const { estimateTextWidth } = await imp('src/textMetrics.js');
+  const { group: svgGroup } = await imp('src/draw/svgUtil.js');
+  const thm = resolveTheme({});
+  const s = thm.staffLineSpacing;
+  const ok = (c, m) => { if (!c) throw new Error(m); };
+  const near = (a, b, m) => { if (Math.abs(a - b) > 1e-9) throw new Error(`${m}: expected ${b}, got ${a}`); };
+  const bar = (extra = {}) => ({ beats: [nq, nq, nq, nq], ...extra });
+  const lay = (measures, width = 900, more = []) => computeLayout(normalizeScore({ tracks: [{ measures }, ...more] }), thm, width);
+  const kids = (n) => n.children || [];
+  const find = (n, pred, out = []) => { if (pred(n)) out.push(n); kids(n).forEach((c) => find(c, pred, out)); return out; };
+  const cls = (n) => (n.getAttribute ? n.getAttribute('class') : null) || '';
+  const attr = (n, a) => Number(n.getAttribute(a));
+
+  test('[S2,R2] mergeNavigation: section / repeatCount keys only when present; lowest track index wins', () => {
+    eq(Object.keys(mergeNavigation([{ measures: [{ section: '  ', repeatCount: 1, barline: 'repeatEnd' }] }], 1)[0]), ['ending', 'segno', 'coda', 'jump']);
+    const nav = mergeNavigation([
+      { measures: [{}, { section: { letter: 'ABCD' } }, { repeatCount: 'x' }] },
+      { measures: [{ section: 'Verse' }, { section: { letter: 'B', text: ' Solo ' } }, { repeatCount: '4', barline: 'repeatEnd' }] },
+      { measures: [{ section: 'Chorus' }, null, { repeatCount: 5 }] },
+    ], 3);
+    eq(nav[0], { ending: null, segno: false, coda: false, jump: null, section: { letter: null, text: 'Verse' } });
+    eq(nav[1].section, { letter: 'B', text: 'Solo' });
+    eq(nav[2].repeatCount, 4);
+  });
+  test('[R2] mergeNavigation: repeatCount needs a repeatEnd barline on some track of that measure', () => {
+    eq(Object.keys(mergeNavigation([{ measures: [{ repeatCount: 3 }] }], 1)[0]), ['ending', 'segno', 'coda', 'jump']);
+    eq(mergeNavigation([{ measures: [{ repeatCount: 3 }] }, { measures: [{ barline: 'repeatEnd' }] }], 1)[0].repeatCount, 3);
+    eq(normalizeScore({ tracks: [{ measures: [bar({ repeatCount: 3, barline: 'repeatStart' })] }] }).navigation[0].repeatCount, undefined);
+    eq(normalizeScore({ tracks: [{ measures: [bar({ repeatCount: 3, barline: 'repeatEnd' })] }] }).navigation[0].repeatCount, 3);
+  });
+  test('[S3] section x = segno x (system start and later measures); push right 0.5 s after the previous section', () => {
+    const L = lay([bar({ section: { letter: 'A', text: 'Intro' }, segno: true }), bar({ section: 'Verse', segno: true }), bar({ section: 'A very long section name that runs on' }), bar({ section: 'B' })], 900);
+    const marks = L.systems[0].marks;
+    const segnos = marks.filter((m) => m.kind === 'segno');
+    const secs = marks.filter((m) => m.kind === 'section');
+    eq(secs.map((m) => [m.mi, m.letter, m.text]), [[0, 'A', 'Intro'], [1, null, 'Verse'], [2, null, 'A very long section name that runs on'], [3, null, 'B']]);
+    near(secs[0].x, segnos[0].x, 'system start'); near(secs[1].x, segnos[1].x, 'measure 2');
+    near(secs[0].x, LN.measureStartX(L.systems[0], 0, thm), 'measureStartX');
+    const m3 = L.systems[0].tracks[0].measures[3];
+    const right2 = secs[2].x + LN.sectionParts(secs[2], thm).width;
+    ok(right2 + 0.5 * s > m3.x + 0.3 * s, 'fixture: the long section reaches into measure 4');
+    near(secs[3].x, right2 + 0.5 * s, 'pushed right');
+  });
+  test('[S4] sectionParts: boxed letter + tail, or boxed text', () => {
+    const p = LN.sectionParts({ letter: 'A', text: 'Intro' }, thm);
+    const size = 1.3 * s;
+    eq([p.boxed, p.tail], ['A', 'Intro']);
+    near(p.boxW, estimateTextWidth('A', size, { bold: true }) + 0.6 * s, 'boxW');
+    near(p.tailDx, p.boxW + 0.5 * s, 'tailDx');
+    near(p.width, p.tailDx + estimateTextWidth('Intro', size, { bold: true }), 'width');
+    const q = LN.sectionParts({ letter: null, text: 'Verse' }, thm);
+    eq([q.boxed, q.tail], ['Verse', null]); near(q.width, q.boxW, 'no tail');
+  });
+  test('[R3] repeatCount mark: x{N} at endX; a jump in the same measure ends 0.5 s before the x3', () => {
+    const L = lay([bar(), bar({ repeatCount: '3', barline: 'repeatEnd', jump: 'D.S. al Coda' }), bar({ jump: 'Fine' })], 900);
+    const ms = L.systems[0].tracks[0].measures;
+    const marks = L.systems[0].marks;
+    const rc = marks.find((m) => m.kind === 'repeatCount');
+    const jumps = marks.filter((m) => m.kind === 'jump');
+    eq([rc.mi, rc.text], [1, 'x3']);
+    near(rc.xEnd, ms[1].endX, 'x3 right edge');
+    near(jumps[0].xEnd, ms[1].endX - estimateTextWidth('x3', 1.1 * s) - 0.5 * s, 'jump shifted');
+    near(jumps[1].xEnd, ms[2].endX, 'other jump unchanged');
+  });
+  test('[S6,R4] section on a system-start measure and x3 on a system-end measure stay on their systems', () => {
+    const plain = lay(Array.from({ length: 12 }, () => bar()), 400);
+    const startMi = plain.systems[1].measureIndices[0];
+    const endMi = startMi - 1;
+    const L = lay(Array.from({ length: 12 }, (_, i) => bar(i === startMi ? { section: 'B' } : i === endMi ? { repeatCount: 2, barline: 'repeatEnd' } : {})), 400);
+    eq(L.systems[0].marks.map((m) => [m.kind, m.mi]), [['repeatCount', endMi]]);
+    eq(L.systems[1].marks.map((m) => [m.kind, m.mi]), [['section', startMi]]);
+    near(L.systems[0].marks[0].xEnd, L.systems[0].tracks[0].measures.at(-1).endX, 'x3 at the system end');
+    near(L.systems[1].marks[0].x, LN.measureStartX(L.systems[1], 0, thm), 'section at the system start');
+  });
+  test('[S4,S5,R3] drawing: classes, x3 on the marks baseline, section tier above voltas and marks, rect counted as ink', () => {
+    const L = lay([bar({ section: { letter: 'A', text: 'Intro' }, segno: true, ending: 1, repeatCount: 3, barline: 'repeatEnd', jump: 'D.S.' }), bar({ section: 'Verse' })], 900);
+    const g = svgGroup({});
+    const navG = renderNavigation(g, L.systems[0], thm);
+    const secG = find(navG, (n) => cls(n) === 'section');
+    eq(secG.length, 2);
+    eq(kids(secG[0]).map((n) => `${n.tag || n.tagName}.${cls(n)}`), ['rect.', 'text.section-letter', 'text.section-text']);
+    eq(kids(secG[1]).map((n) => `${n.tag || n.tagName}.${cls(n)}`), ['rect.', 'text.section-text']);
+    eq(kids(secG[0])[1].textContent, 'A'); eq(kids(secG[0])[2].textContent, 'Intro');
+    const r = kids(secG[0])[0];
+    eq([r.getAttribute('fill'), attr(r, 'stroke-width')], ['none', 0.12 * s]);
+    const segno = find(navG, (n) => cls(n) === 'segno')[0];
+    const x3 = find(navG, (n) => cls(n) === 'repeat-count')[0];
+    eq([x3.textContent, x3.getAttribute('text-anchor'), attr(x3, 'font-size')], ['x3', 'end', 1.1 * s]);
+    eq(x3.getAttribute('y'), segno.getAttribute('y'), 'same baseline as the segno');
+    const jumpText = find(navG, (n) => cls(n) === 'jump')[0];
+    eq(kids(jumpText)[0].getAttribute('y'), segno.getAttribute('y'), 'jump on the same baseline');
+    const secBase = attr(kids(secG[0])[1], 'y');
+    ok(secBase <= -2.5 * s, `section baseline ${secBase}`);
+    eq(attr(kids(secG[1])[1], 'y'), secBase, 'one baseline per system');
+    const boxBottom = attr(r, 'y') + attr(r, 'height');
+    const voltaG = find(navG, (n) => cls(n).startsWith('volta '))[0];
+    ok(boxBottom + 0.06 * s <= inkBounds(voltaG, thm).top - 0.75 * s + 1e-9, 'box clears the volta by 0.75 s');
+    ok(boxBottom + 0.06 * s <= inkBounds(segno, thm).top - 0.75 * s + 1e-9, 'box clears the segno by 0.75 s');
+    near(inkBounds(secG[0], thm).top, attr(r, 'y'), 'rect counted by inkBounds');
+  });
+  test('[S5] a section alone sits at the 2.5 s minimum; tempo still clears it (drawn after, outermost)', () => {
+    const L = lay([bar({ section: 'Verse' }), bar()], 900);
+    const g = svgGroup({});
+    const navG = renderNavigation(g, L.systems[0], thm);
+    const t = find(navG, (n) => cls(n) === 'section-text')[0];
+    near(attr(t, 'y'), -2.5 * s, 'minimum baseline');
+    const box = makeContainer();
+    new MusicScoreRenderer(box, { tempoText: 'q = 120', tracks: [{ measures: [bar({ section: 'Verse' }), bar()] }] }, { width: 900 }).render();
+    const svg = box.children[0];
+    const tempo = find(svg, (n) => cls(n) === 'tempo')[0];
+    const sec = find(svg, (n) => cls(n) === 'section')[0];
+    ok(tempo && sec, 'tempo and section drawn');
+    ok(inkBounds(tempo, thm).bottom <= inkBounds(sec, thm).top + 1e-9, 'tempo above the section');
+  });
+  test('[S5] text after the box uses the same baseline; descent = pad + half stroke', () => {
+    const L = lay([bar({ section: { letter: 'A', text: 'Intro' } })], 900);
+    const navG = renderNavigation(svgGroup({}), L.systems[0], thm);
+    const [r, a, b] = kids(find(navG, (n) => cls(n) === 'section')[0]);
+    eq(a.getAttribute('y'), b.getAttribute('y'));
+    near(attr(r, 'y') + attr(r, 'height'), attr(a, 'y') + 0.3 * s, 'box bottom = baseline + pad');
+    near(attr(b, 'x') - attr(r, 'x'), attr(r, 'width') + 0.5 * s, 'tail 0.5 s after the box');
+  });
+  test('[R1,R2] repeatCount outside 2-99 (1, 100, 0, 2.5) is dropped even on a repeatEnd; 2 and 99 kept; layout has no mark', () => {
+    [1, 100, 0, 2.5, -2, 'x', null].forEach((v) => {
+      const col = mergeNavigation([{ measures: [{ repeatCount: v, barline: 'repeatEnd' }] }], 1)[0];
+      eq(Object.keys(col), ['ending', 'segno', 'coda', 'jump'], String(v));
+      eq(lay([bar({ repeatCount: v, barline: 'repeatEnd' })]).systems[0].marks.length, 0, `${v}: no mark`);
+    });
+    [2, 99].forEach((v) => eq(mergeNavigation([{ measures: [{ repeatCount: v, barline: 'repeatEnd' }] }], 1)[0].repeatCount, v));
+  });
+  test('[S2,R2] several tracks: section and x3 drawn once per system on the top track only; lowest track wins', () => {
+    const t2 = { measures: [bar({ section: 'Other', repeatCount: 5, barline: 'repeatEnd' })] };
+    const box = makeContainer();
+    new MusicScoreRenderer(box, { tracks: [{ measures: [bar({ section: 'Verse', repeatCount: 3 })] }, t2] }, { width: 900 }).render();
+    const svg = box.children[0];
+    const staves = find(svg, (n) => cls(n).startsWith('staff staff-'));
+    eq(staves.length, 2);
+    eq(find(svg, (n) => cls(n) === 'section').length, 1, 'one section');
+    eq(find(svg, (n) => cls(n) === 'repeat-count').length, 1, 'one x3');
+    eq(find(staves[0], (n) => cls(n) === 'section-text').map((n) => n.textContent), ['Verse'], 'lowest track text, top staff');
+    eq(find(staves[0], (n) => cls(n) === 'repeat-count').map((n) => n.textContent), ['x3'], 'lowest track count, top staff');
+    eq(find(staves[1], (n) => cls(n) === 'section' || cls(n) === 'repeat-count').length, 0, 'nothing on the lower staff');
+  });
+}
+
+// ---------- 1.6 score text: beat text (src/draw/beatText.js) ----------
+{
+  const { inkBounds, TEXT_ASCENT_EM, TEXT_DESCENT_EM } = await imp('src/layout/ink.js');
+  const { estimateTextWidth } = await imp('src/textMetrics.js');
+  const thm = resolveTheme({});
+  const s = thm.staffLineSpacing;
+  const ok = (c, m) => { if (!c) throw new Error(m); };
+  const near = (a, b, m) => { if (Math.abs(a - b) > 1e-9) throw new Error(`${m}: expected ${b}, got ${a}`); };
+  const kids = (n) => n.children || [];
+  const find = (n, pred, out = []) => { if (pred(n)) out.push(n); kids(n).forEach((c) => find(c, pred, out)); return out; };
+  const cls = (n) => (n.getAttribute ? n.getAttribute('class') : null) || '';
+  const num = (n, a) => Number(n.getAttribute(a));
+  const render = (score, width = 900) => { const box = makeContainer(); new MusicScoreRenderer(box, score, { width }).render(); return box.children[0]; };
+  const staves = (svg) => find(svg, (n) => cls(n).startsWith('staff staff-'));
+  const beatTexts = (n) => find(n, (x) => cls(x).startsWith('beat-text'));
+  // Ink of `g` under a text's width, without the text itself and anything drawn after it.
+  const inkBefore = (g, node, below) => {
+    const all = kids(g);
+    const clone = { tag: 'g', children: all.slice(0, all.indexOf(node)) };
+    const w = estimateTextWidth(node.textContent, num(node, 'font-size'));
+    return inkBounds(clone, thm, { xMin: num(node, 'x'), xMax: num(node, 'x') + w, overlap: true })[below ? 'bottom' : 'top'];
+  };
+  const tabTrack = (measures, x = {}) => ({ showStandardNotation: false, showTablature: true, measures, ...x });
+  const tq = (string, fret, extra = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string, fret }], ...extra });
+
+  test('[B1,B3] above: italic 1.2 s, class beat-text, at the beat x, >= 1.5 s above the top line and 0.5 s clear of ink under it', () => {
+    const svg = render({ tracks: [{ measures: [{ beats: [{ ...nq, text: ' rit. ' }, { ...nq, notes: [{ pitch: 'A5' }], text: 'molto' }, nq, nq] }] }] });
+    const [g] = staves(svg);
+    const t = beatTexts(svg);
+    eq(t.map((n) => [n.textContent, cls(n), n.getAttribute('font-style'), num(n, 'font-size')]),
+      [['rit.', 'beat-text', 'italic', 1.2 * s], ['molto', 'beat-text', 'italic', 1.2 * s]]);
+    ok(t.every((n) => kids(g).includes(n)), 'appended to the notation staff group');
+    near(num(t[0], 'y'), -1.5 * s, 'low note: minimum height');
+    const top = inkBefore(g, t[1], false);
+    ok(num(t[1], 'y') < -1.5 * s, 'high note pushes the text up');
+    near(num(t[1], 'y'), top - 0.5 * s - TEXT_DESCENT_EM * 1.2 * s, 'clears the ink by 0.5 s');
+  });
+  test('[B2] grace notes and voice 2 are ignored', () => {
+    const svg = render({ tracks: [{ measures: [{ voices: [
+      { beats: [{ ...grace, text: 'grace' }, { ...nq, text: 'v1' }, nq, nq, nq] },
+      { beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'C4' }], text: 'v2' }] },
+    ] }] }] });
+    eq(beatTexts(svg).map((n) => n.textContent), ['v1']);
+  });
+  test('[B3] a later text clears an earlier overlapping one (left to right)', () => {
+    const e8 = { type: 'note', duration: '8th', notes: [{ pitch: 'E4' }] };
+    const svg = render({ tracks: [{ measures: [{ beats: [{ ...e8, text: 'first long text' }, { ...e8, text: 'second' }, nq, nq, nq] }] }] });
+    const [a, b] = beatTexts(svg);
+    ok(num(b, 'x') < num(a, 'x') + estimateTextWidth(a.textContent, 1.2 * s), 'fixture: the texts overlap horizontally');
+    near(num(b, 'y'), num(a, 'y') - TEXT_ASCENT_EM * 1.2 * s - 0.5 * s - TEXT_DESCENT_EM * 1.2 * s, 'stacked 0.5 s above');
+  });
+  test('[B4] below: on the bottom staff (TAB of notation + TAB), 0.5 s below its ink, class beat-text beat-text-below', () => {
+    const svg = render({ tracks: [{ showTablature: true, measures: [{ beats: [tq(6, 0, { text: { text: 'let go', below: true } }), tq(1, 0, { text: 'up' }), tq(3, 2), tq(3, 2)] }] }] });
+    const [notationG, tabG] = staves(svg);
+    const [up] = beatTexts(notationG);
+    const [down] = beatTexts(tabG);
+    eq([up.textContent, cls(up), down.textContent, cls(down)], ['up', 'beat-text', 'let go', 'beat-text beat-text-below']);
+    near(num(down, 'y'), inkBefore(tabG, down, true) + 0.5 * s + TEXT_ASCENT_EM * 1.2 * s, 'below the TAB ink');
+    eq(beatTexts(tabG).length, 1);
+  });
+  test('[B3] TAB-only: above the TAB top line (>= 1.5 s), below under the bottom line', () => {
+    const svg = render({ tracks: [tabTrack([{ beats: [tq(3, 0, { text: 'hi' }), tq(3, 0, { text: { text: 'lo', below: true } }), tq(3, 0), tq(3, 0)] }])] });
+    const [tabG] = staves(svg);
+    const [hi, lo] = beatTexts(tabG);
+    const lines = find(tabG, (n) => (n.tag || n.tagName) === 'line' && num(n, 'y1') === num(n, 'y2') && num(n, 'x2') - num(n, 'x1') > 100);
+    const topLine = Math.min(...lines.map((n) => num(n, 'y1')));
+    const bottomLine = Math.max(...lines.map((n) => num(n, 'y1')));
+    ok(num(hi, 'y') <= topLine - 1.5 * s + 1e-9, `above ${num(hi, 'y')} vs top line ${topLine}`);
+    ok(num(lo, 'y') - TEXT_ASCENT_EM * 1.2 * s >= bottomLine + 0.5 * s - 1e-9, 'below clears the bottom line');
+  });
+  test('[B5] order outward: fermata < beat text < voltas / navigation marks; hidden-rest text at its x', () => {
+    const svg = render({ tracks: [{ measures: [{ ending: 1, segno: true, beats: [{ ...nq, fermata: true, chord: 'Am', text: 'hold' }, nq, nq, { type: 'rest', duration: 'quarter', hidden: true, text: 'cue' }] }] }] });
+    const [g] = staves(svg);
+    const hold = beatTexts(g)[0];
+    const ferm = find(g, (n) => cls(n) === 'fermata')[0];
+    const chord = find(g, (n) => cls(n).includes('chord-symbol'))[0];
+    ok(inkBounds(ferm, thm).top >= num(hold, 'y') + TEXT_DESCENT_EM * 1.2 * s + 0.5 * s - 1e-9, 'beat text above the fermata');
+    if (chord) ok(inkBounds(chord, thm).top > num(hold, 'y'), 'beat text above the chord symbol');
+    const ch = kids(g);
+    const nav = find(g, (n) => cls(n) === 'navigation')[0];
+    ok(ch.indexOf(ferm) >= 0 && ch.indexOf(ferm) < ch.indexOf(hold), 'fermata drawn before');
+    ok(ch.indexOf(hold) < ch.indexOf(nav), 'navigation drawn after');
+    const volta = find(nav, (n) => cls(n).startsWith('volta '))[0];
+    ok(inkBounds(volta, thm).bottom <= num(hold, 'y') - TEXT_ASCENT_EM * 1.2 * s - 0.5 * s + 1e-9, 'volta hooks clear the beat text');
+    eq(beatTexts(g).map((n) => n.textContent), ['hold', 'cue']);
+  });
+  test('[B2,B4] notation-only track: below text sits under the notation staff; rests and text on non-first measures are drawn; invalid text ignored', () => {
+    const svg = render({ tracks: [{ measures: [
+      { beats: [{ ...nq, text: { text: 'down', below: true } }, { type: 'rest', duration: 'quarter', text: 'r' }, { ...nq, text: { text: 'no', below: 'true' } }, { ...nq, text: { below: true } }] },
+      { beats: [{ ...nq, text: 7 }, { ...nq, text: '  ' }, { ...nq, text: ' later ' }, nq] },
+    ] }] });
+    const [g] = staves(svg);
+    const t = beatTexts(g);
+    eq(t.map((n) => [n.textContent, cls(n)]), [['down', 'beat-text beat-text-below'], ['r', 'beat-text'], ['no', 'beat-text'], ['later', 'beat-text']]);
+    const down = t[0];
+    near(num(down, 'y'), inkBefore(g, down, true) + 0.5 * s + TEXT_ASCENT_EM * 1.2 * s, 'below clears the notation ink by 0.5 s');
+  });
+  test('[B5] MusicScoreRenderer.js source order renderFermatas( < renderBeatText( < renderNavigation( < drawTempo(', () => {
+    const src = fs.readFileSync(path.join(root0, 'src/MusicScoreRenderer.js'), 'utf8');
+    const a = src.indexOf('renderFermatas('), b = src.indexOf('renderBeatText('), c = src.indexOf('renderNavigation('), d = src.indexOf('drawTempo(');
+    ok(a >= 0 && b > a && c > b && d > c, `order ${a} ${b} ${c} ${d}`);
+  });
+}
+
+// ---------- 1.6 score text: header rows and capo / tuning chart (src/draw/header.js) ----------
+{
+  const { drawScoreHeader } = await imp('src/draw/header.js');
+  const { estimateTextWidth } = await imp('src/textMetrics.js');
+  const { group: svgGroup } = await imp('src/draw/svgUtil.js');
+  const thm = resolveTheme({});
+  const s = thm.staffLineSpacing;
+  const near = (a, b, m) => { if (Math.abs(a - b) > 1e-9) throw new Error(`${m}: expected ${b}, got ${a}`); };
+  const kids = (n) => n.children || [];
+  const cls = (n) => (n.getAttribute ? n.getAttribute('class') : null) || '';
+  const num = (n, a) => Number(n.getAttribute(a));
+  const hdr = (sc) => { const svg = svgGroup({}); const r = drawScoreHeader(svg, sc, thm, 10, 900); return { r, g: kids(svg)[0], svg }; };
+  const rowsOf = (g) => kids(g).map((n) => [cls(n), n.textContent, num(n, 'y')]);
+  const g6 = (x) => ({ showStandardNotation: true, showTablature: false, tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'], ...x });
+
+  test('[H1] row order and gaps: 2.5 s after the title, 2.0 s otherwise, 1.6 s within instructions', () => {
+    const h = hdr({
+      title: 'T', subtitle: ' Sub ', artist: 'Art', album: 'Alb', composer: 'C', tuningLabel: 'Drop D',
+      words: 'W', music: 'M', instructions: 'one\n\n two ', tracks: [g6({ capo: 2 })],
+    });
+    const t0 = 10 + 0.75 * 2.4 * s;
+    const y = [t0, t0 + 2.5 * s];
+    for (let i = 0; i < 6; i++) y.push(y[y.length - 1] + 2.0 * s);
+    eq(kids(h.g).map(cls), ['title', 'subtitle', 'artist', 'album', 'tuning', 'composer', 'words', 'music', 'instructions', 'instructions', 'tuning-chart']);
+    const ys = kids(h.g).map((n) => (cls(n) === 'tuning-chart' ? num(kids(n)[0], 'y') : num(n, 'y')));
+    [y[0], y[1], y[2], y[3], y[4], y[4], y[5], y[5], y[6]].forEach((v, i) => near(ys[i], v, `row ${i}`));
+    near(ys[9], y[6] + 1.6 * s, 'second instructions line');
+    near(ys[10], y[6] + 1.6 * s + 2.0 * s, 'tuning chart after instructions');
+    near(h.r, ys[10], 'returns the last baseline');
+    eq(kids(h.g).slice(1, 4).map((n) => [n.textContent, n.getAttribute('text-anchor'), num(n, 'font-size')]),
+      [['Sub', 'middle', 1.6 * s], ['Art', 'middle', 1.4 * s], ['Alb', 'middle', 1.3 * s]]);
+    const [w, m] = kids(h.g).slice(6, 8);
+    eq([w.textContent, num(w, 'x'), w.getAttribute('font-style'), m.textContent, m.getAttribute('text-anchor'), num(m, 'x')],
+      ['Words by W', thm.marginLeftSp * s, null, 'Music by M', 'end', 900 - thm.marginRightSp * s]);
+    const ins = kids(h.g)[8];
+    eq([ins.textContent, ins.getAttribute('font-style'), num(ins, 'font-size'), num(ins, 'x')], ['one', 'italic', 1.2 * s, thm.marginLeftSp * s]);
+  });
+  test('[H1] empty rows take no space; a non-title first row starts at its cap height', () => {
+    const h = hdr({ subtitle: '  ', artist: 'A', words: '', music: null, instructions: '\n' });
+    eq(rowsOf(h.g), [['artist', 'A', 10 + 0.75 * 1.4 * s]]);
+    const k = hdr({ title: 'T', album: 'X' });
+    eq(rowsOf(k.g), [['title', 'T', 28], ['album', 'X', 28 + 2.5 * s]]);
+    eq(hdr({ subtitle: 7, artist: {}, words: [], instructions: 5, tracks: [g6({ capo: 0 })] }).r, null);
+  });
+  test('[H1] Words & Music when words equals music after canonicalization', () => {
+    const h = hdr({ words: ' Jane  Doe', music: 'Jane Doe ' });
+    eq(kids(h.g).map((n) => [cls(n), n.textContent, n.getAttribute('text-anchor')]), [['words-music', 'Words & Music by Jane Doe', 'end']]);
+    eq(rowsOf(hdr({ music: 'M' }).g).map((r) => r.slice(0, 2)), [['music', 'Music by M']]);
+    eq(rowsOf(hdr({ words: 'W' }).g).map((r) => r.slice(0, 2)), [['words', 'Words by W']]);
+  });
+  test('[H3] instructions: at most 8 lines, empty dropped, 1.6 s apart', () => {
+    const h = hdr({ instructions: ['a', '', ...Array.from({ length: 10 }, (_, i) => ` l${i} `)].join('\r\n') });
+    const lines = kids(h.g);
+    eq(lines.map((n) => n.textContent), ['a', 'l0', 'l1', 'l2', 'l3', 'l4', 'l5', 'l6']);
+    lines.forEach((n, i) => near(num(n, 'y'), 10 + 0.75 * 1.2 * s + i * 1.6 * s, `line ${i}`));
+  });
+  test('[G3] header text is escaped text content (no child elements)', () => {
+    const h = hdr({ subtitle: '<b>&', instructions: '<i>x</i>' });
+    kids(h.g).forEach((n) => eq(kids(n).length, 0));
+    eq(kids(h.g).map((n) => n.textContent), ['<b>&', '<i>x</i>']);
+    const out = serialize(h.g);
+    eq(out.includes('&lt;b&gt;&amp;') && !out.includes('<b>'), true, out);
+  });
+  test('[C1,C4] capo / tuning chart line: pieces, gaps, name prefix only with > 1 visible track, tuningLabel independent', () => {
+    const h = hdr({ showTuningChart: true, tuningLabel: 'Drop D', tracks: [g6({ capo: '2', tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'D4'] })] });
+    const [tuning, chart] = kids(h.g);
+    eq([cls(tuning), tuning.textContent], ['tuning', 'Drop D']);
+    eq(cls(chart), 'tuning-chart');
+    const p = kids(chart);
+    eq(p.map((n) => n.textContent), ['Capo fret 2', '⑥ = D', '① = D']);
+    const size = 1.2 * s;
+    near(num(p[0], 'x'), thm.marginLeftSp * s, 'left margin');
+    near(num(p[1], 'x'), num(p[0], 'x') + estimateTextWidth('Capo fret 2', size) + 1.5 * s, 'capo gap');
+    near(num(p[2], 'x'), num(p[1], 'x') + estimateTextWidth('⑥ = D', size) + 1.0 * s, 'entry gap');
+    p.forEach((n) => eq([num(n, 'font-size'), n.getAttribute('y')], [size, p[0].getAttribute('y')]));
+    const two = hdr({ showTuningChart: true, tracks: [
+      g6({ name: 'Gt.', tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'] }),
+      g6({ showStandardNotation: false, showTablature: true, tuning: ['D1', 'A1', 'D2', 'G2'] }),
+      g6({ showStandardNotation: false, capo: 4 }),
+    ] });
+    const charts = kids(two.g);
+    eq(charts.map((c) => kids(c).map((n) => n.textContent)), [['Gt.: ⑥ = D'], ['Track 2: ④ = D']]);
+    near(num(kids(charts[1])[0], 'y') - num(kids(charts[0])[0], 'y'), 1.6 * s, 'lines 1.6 s apart');
+  });
+  test('[C4] capo line shows without showTuningChart; nothing to show -> no line', () => {
+    eq(kids(hdr({ tracks: [g6({ capo: 5, tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'] })] }).g).map((c) => kids(c).map((n) => n.textContent)), [['Capo fret 5']]);
+    eq(hdr({ showTuningChart: true, tracks: [g6({})] }).r, null);
+  });
+  test('[C2] tuning chart through the renderer: notation-only track contributes; standard tuning adds nothing', () => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, { showTuningChart: true, tracks: [{ tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'], measures: [{ beats: [nq] }] }] }, { width: 900 }).render();
+    const out = serialize(box.children[0]);
+    eq(out.includes('class="tuning-chart"') && out.includes('⑥ = D'), true);
+    const box2 = makeContainer();
+    new MusicScoreRenderer(box2, { showTuningChart: true, tracks: [{ measures: [{ beats: [nq] }] }] }, { width: 900 }).render();
+    eq(serialize(box2.children[0]).includes('score-header'), false);
+  });
+}
+
+// ---------- 1.6 score text: copyright footer (drawScoreFooter, placeStaves.contentBottom) ----------
+{
+  const { drawScoreFooter } = await imp('src/draw/header.js');
+  const { placeStaves, BOTTOM_MARGIN_SP } = await imp('src/layout/vertical.js');
+  const { group: svgGroup } = await imp('src/draw/svgUtil.js');
+  const thm = resolveTheme({});
+  const s = thm.staffLineSpacing;
+  const near = (a, b, m) => { if (Math.abs(a - b) > 1e-9) throw new Error(`${m}: expected ${b}, got ${a}`); };
+  const close = (a, b, m) => { if (Math.abs(a - b) > 0.011) throw new Error(`${m}: expected ${b}, got ${a}`); }; // 2-dp output
+  const kids = (n) => n.children || [];
+  const cls = (n) => (n.getAttribute ? n.getAttribute('class') : null) || '';
+  const num = (n, a) => Number(n.getAttribute(a));
+  const render = (score) => { const box = makeContainer(); new MusicScoreRenderer(box, score, { width: 600 }).render(); return box.children[0]; };
+  const base = (x = {}) => ({ title: 'T', ...x, tracks: [{ showTablature: true, measures: Array.from({ length: 10 }, () => ({ beats: [nq, nq, nq, { ...nq, notes: [{ pitch: 'E3' }] }] })) }] });
+  const staffYs = (svg) => serialize(svg).match(/translate\(0,[^)]*\)/g);
+
+  test('[H4] placeStaves: contentBottom = last staff bottom ink; height = contentBottom + BOTTOM_MARGIN_SP', () => {
+    eq(BOTTOM_MARGIN_SP, 3);
+    const p = placeStaves([[{ ti: 0, kind: 'notation', lineBottom: 40, ink: { top: -5, bottom: 52 } }]], thm, 100, false);
+    near(p.contentBottom, 105 + 52, 'contentBottom');
+    near(p.height, p.contentBottom + 3 * s, 'height');
+  });
+  test('[H4] drawScoreFooter: centred 1.0 s lines 1.4 s apart from contentBottom + 2 s; null and nothing appended without copyright', () => {
+    const svg = svgGroup({});
+    const r = drawScoreFooter(svg, { copyright: ' (c) 2026  Someone \n\n All rights reserved ' }, thm, 500, 900);
+    const [g] = kids(svg);
+    eq(cls(g), 'score-footer');
+    eq(kids(g).map((n) => [cls(n), n.textContent, num(n, 'x'), num(n, 'font-size'), n.getAttribute('text-anchor')]),
+      [['copyright', '(c) 2026 Someone', 450, 1.0 * s, 'middle'], ['copyright', 'All rights reserved', 450, 1.0 * s, 'middle']]);
+    near(num(kids(g)[0], 'y'), 500 + 2 * s, 'first baseline'); near(num(kids(g)[1], 'y'), 500 + 2 * s + 1.4 * s, 'second');
+    near(r, 500 + 3.4 * s, 'returns the last baseline');
+    [undefined, null, '', ' \n ', 5, {}, ['x']].forEach((c) => {
+      const e = svgGroup({});
+      eq(drawScoreFooter(e, { copyright: c }, thm, 500, 900), null);
+      eq(kids(e).length, 0);
+    });
+    const many = svgGroup({});
+    drawScoreFooter(many, { copyright: Array.from({ length: 12 }, (_, i) => `c${i}`).join('\n') }, thm, 0, 900);
+    eq(kids(kids(many)[0]).length, 8, 'at most 8 lines');
+  });
+  test('[H4] renderer: copyright 2 s below the last ink, height = last baseline + 3 s, viewBox matches, staves unmoved', () => {
+    const plain = render(base());
+    const withC = render(base({ copyright: 'Line one\nLine two' }));
+    const h0 = num(plain, 'height');
+    const lastInk = h0 - 3 * s;
+    const lines = serialize(withC).match(/<text [^>]*class="copyright"[^>]*>/g);
+    eq(lines.length, 2);
+    const ys = lines.map((l) => Number(/ y="([^"]+)"/.exec(l)[1]));
+    close(ys[0], lastInk + 2 * s, 'first baseline');
+    close(ys[1] - ys[0], 1.4 * s, 'step');
+    close(num(withC, 'height'), ys[1] + 3 * s, 'height');
+    eq(withC.getAttribute('viewBox'), `0 0 600 ${withC.getAttribute('height')}`);
+    eq(staffYs(withC), staffYs(plain));
+    eq(serialize(render(base({ copyright: '  ' }))), serialize(plain), 'empty copyright: byte-identical');
   });
 }
 
