@@ -7,16 +7,17 @@
  *
  * render() = resolve theme (constructor) → normalize → layout → draw every
  * staff at a local origin → score-wide passes → beat text → navigation (voltas,
- * segno / coda / jumps / x3, sections) → tempo → measure ink → place staves → mount.
+ * segno / coda / jumps / x3, sections) → tempo → measure ink → place staves →
+ * copyright footer → mount.
  */
 import { ensureBravuraFont } from './font.js';
 import { resolveTheme } from './theme.js';
 import { normalizeScore } from './normalize.js';
 import { computeLayout } from './layout/index.js';
-import { placeStaves } from './layout/vertical.js';
+import { placeStaves, BOTTOM_MARGIN_SP } from './layout/vertical.js';
 import { inkBounds } from './layout/ink.js';
 import { el as svgEl, svgD, r2 } from './draw/svgUtil.js';
-import { drawScoreHeader } from './draw/header.js';
+import { drawScoreHeader, drawScoreFooter } from './draw/header.js';
 import { drawSystem } from './draw/system.js';
 import { drawTempo, drawSystemDecor, tempoTextWidth } from './draw/decor.js';
 import { renderNavigation } from './draw/navigation.js';
@@ -128,7 +129,9 @@ export class MusicScoreRenderer {
     // --- Joining line, brackets and instrument names (absolute coordinates) ---
     drawn.forEach((d, sysIdx) => drawSystemDecor(d.systemG, layout.systems[sysIdx], sysIdx, d.staves, score, theme));
 
-    const totalHeight = r2(placement.height);
+    // --- Copyright footer below the last system's ink; the height grows only when there is one ---
+    const footer = drawScoreFooter(svg, score, theme, placement.contentBottom, width);
+    const totalHeight = r2(footer != null ? footer + BOTTOM_MARGIN_SP * s : placement.height);
     svg.setAttribute('height', totalHeight);
     svg.setAttribute('viewBox', `0 0 ${r2(width)} ${totalHeight}`);
 

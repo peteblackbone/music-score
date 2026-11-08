@@ -1,6 +1,7 @@
 /**
- * draw/header.js — the page header above the first system (ui.md §1).
- * Rows, top to bottom:
+ * draw/header.js — the page header above the first system (ui.md §1) and
+ * the copyright footer below the last one (drawScoreFooter). Header rows,
+ * top to bottom:
  *
  * 1. `score.title`, centred on the page, the largest text (2.4 sp);
  * 2. `score.subtitle`, centred, 1.6 sp;
@@ -38,6 +39,9 @@ const BELOW_ROW_SP = 2.0;         // other rows
 const CAPO_GAP_SP = 1.5;          // "Capo fret N" -> first tuning entry
 const ENTRY_GAP_SP = 1.0;         // tuning entry -> next entry
 const CAP_HEIGHT = 0.75;          // first baseline sits this many font sizes below the top margin
+const COPYRIGHT_SIZE_SP = 1.0;
+const COPYRIGHT_BELOW_INK_SP = 2.0; // last system's lowest ink -> first copyright baseline
+const COPYRIGHT_STEP_SP = 1.4;
 
 /**
  * Append the score header (if any of its rows has text) to `svg`; `top` is
@@ -119,4 +123,27 @@ function drawTuningLine(headerG, row, x0, y, theme) {
     x += estimateTextWidth(str, size) + (i === 0 && row.capo ? CAPO_GAP_SP : ENTRY_GAP_SP) * s;
   });
   headerG.appendChild(g);
+}
+
+/**
+ * Append the copyright footer (`score.copyright`, split into lines as the
+ * instructions are) to `svg`: centred 1.0 sp lines, 1.4 sp apart, the first
+ * baseline 2 sp below `contentBottom` (the last system's lowest ink).
+ * Returns the last baseline, or null when there is no copyright.
+ */
+export function drawScoreFooter(svg, score, theme, contentBottom, width) {
+  const lines = canonicalLines(score.copyright);
+  if (!lines) return null;
+  const s = theme.staffLineSpacing;
+  const footerG = group({ class: 'score-footer' });
+  let last = null;
+  lines.forEach((line, i) => {
+    last = contentBottom + COPYRIGHT_BELOW_INK_SP * s + i * COPYRIGHT_STEP_SP * s;
+    footerG.appendChild(text(width / 2, last, line, {
+      class: 'copyright', 'font-family': theme.textFontFamily, 'font-size': COPYRIGHT_SIZE_SP * s,
+      'text-anchor': 'middle', fill: theme.noteColor,
+    }));
+  });
+  svg.appendChild(footerG);
+  return last;
 }

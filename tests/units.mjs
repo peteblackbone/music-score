@@ -3135,6 +3135,63 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.6 score text: copyright footer (drawScoreFooter, placeStaves.contentBottom) ----------
+{
+  const { drawScoreFooter } = await imp('src/draw/header.js');
+  const { placeStaves, BOTTOM_MARGIN_SP } = await imp('src/layout/vertical.js');
+  const { group: svgGroup } = await imp('src/draw/svgUtil.js');
+  const thm = resolveTheme({});
+  const s = thm.staffLineSpacing;
+  const near = (a, b, m) => { if (Math.abs(a - b) > 1e-9) throw new Error(`${m}: expected ${b}, got ${a}`); };
+  const close = (a, b, m) => { if (Math.abs(a - b) > 0.011) throw new Error(`${m}: expected ${b}, got ${a}`); }; // 2-dp output
+  const kids = (n) => n.children || [];
+  const cls = (n) => (n.getAttribute ? n.getAttribute('class') : null) || '';
+  const num = (n, a) => Number(n.getAttribute(a));
+  const render = (score) => { const box = makeContainer(); new MusicScoreRenderer(box, score, { width: 600 }).render(); return box.children[0]; };
+  const base = (x = {}) => ({ title: 'T', ...x, tracks: [{ showTablature: true, measures: Array.from({ length: 10 }, () => ({ beats: [nq, nq, nq, { ...nq, notes: [{ pitch: 'E3' }] }] })) }] });
+  const staffYs = (svg) => serialize(svg).match(/translate\(0,[^)]*\)/g);
+
+  test('[H4] placeStaves: contentBottom = last staff bottom ink; height = contentBottom + BOTTOM_MARGIN_SP', () => {
+    eq(BOTTOM_MARGIN_SP, 3);
+    const p = placeStaves([[{ ti: 0, kind: 'notation', lineBottom: 40, ink: { top: -5, bottom: 52 } }]], thm, 100, false);
+    near(p.contentBottom, 105 + 52, 'contentBottom');
+    near(p.height, p.contentBottom + 3 * s, 'height');
+  });
+  test('[H4] drawScoreFooter: centred 1.0 s lines 1.4 s apart from contentBottom + 2 s; null and nothing appended without copyright', () => {
+    const svg = svgGroup({});
+    const r = drawScoreFooter(svg, { copyright: ' (c) 2026  Someone \n\n All rights reserved ' }, thm, 500, 900);
+    const [g] = kids(svg);
+    eq(cls(g), 'score-footer');
+    eq(kids(g).map((n) => [cls(n), n.textContent, num(n, 'x'), num(n, 'font-size'), n.getAttribute('text-anchor')]),
+      [['copyright', '(c) 2026 Someone', 450, 1.0 * s, 'middle'], ['copyright', 'All rights reserved', 450, 1.0 * s, 'middle']]);
+    near(num(kids(g)[0], 'y'), 500 + 2 * s, 'first baseline'); near(num(kids(g)[1], 'y'), 500 + 2 * s + 1.4 * s, 'second');
+    near(r, 500 + 3.4 * s, 'returns the last baseline');
+    [undefined, null, '', ' \n ', 5, {}, ['x']].forEach((c) => {
+      const e = svgGroup({});
+      eq(drawScoreFooter(e, { copyright: c }, thm, 500, 900), null);
+      eq(kids(e).length, 0);
+    });
+    const many = svgGroup({});
+    drawScoreFooter(many, { copyright: Array.from({ length: 12 }, (_, i) => `c${i}`).join('\n') }, thm, 0, 900);
+    eq(kids(kids(many)[0]).length, 8, 'at most 8 lines');
+  });
+  test('[H4] renderer: copyright 2 s below the last ink, height = last baseline + 3 s, viewBox matches, staves unmoved', () => {
+    const plain = render(base());
+    const withC = render(base({ copyright: 'Line one\nLine two' }));
+    const h0 = num(plain, 'height');
+    const lastInk = h0 - 3 * s;
+    const lines = serialize(withC).match(/<text [^>]*class="copyright"[^>]*>/g);
+    eq(lines.length, 2);
+    const ys = lines.map((l) => Number(/ y="([^"]+)"/.exec(l)[1]));
+    close(ys[0], lastInk + 2 * s, 'first baseline');
+    close(ys[1] - ys[0], 1.4 * s, 'step');
+    close(num(withC, 'height'), ys[1] + 3 * s, 'height');
+    eq(withC.getAttribute('viewBox'), `0 0 600 ${withC.getAttribute('height')}`);
+    eq(staffYs(withC), staffYs(plain));
+    eq(serialize(render(base({ copyright: '  ' }))), serialize(plain), 'empty copyright: byte-identical');
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
