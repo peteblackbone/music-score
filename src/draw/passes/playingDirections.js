@@ -2,10 +2,11 @@
  * draw/passes/playingDirections.js — pass 5 (draw/passes.js): pick strokes,
  * strum arrows and notation tap "T" above the beat, clear of the slurs
  * drawn above it.
+ * Slur clearance and beam groups come from notationBeats.js.
  * Above a TAB staff reads `run.tabInkBoxes`, `run.hpBoxes` (pass 3) and
  * `run.labelBoxes` (pass 4); writes `info.directionTopY` for pass 7.
  */
-import { renderPickStroke, curveOuterPoints } from '../notation.js';
+import { renderPickStroke } from '../notation.js';
 import { renderTapMark, techniqueLabelSize } from '../tab.js';
 import { TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../../layout/ink.js';
 import { estimateTextWidth } from '../../textMetrics.js';
@@ -14,15 +15,13 @@ import { glyphBox } from '../../glyphMetrics.js';
 import { pickStrokeGlyph, Glyph } from '../../glyphs.js';
 import { trillEndX, trillRunEndX, trillRuns, renderTrill } from '../trill.js';
 import { renderStrum, renderTabStrums, STRUM_HALF_SP } from '../strum.js';
-import { flattenRuns, tabTopY, inkTopInSpan, breakEndX, breakStartX } from './common.js';
-import { collectBeats, findSlurs, beatClearTop } from './notationBeats.js';
+import { flattenRuns, tabTopY, inkTopInSpan, breakEndX } from './common.js';
+import { collectBeats, beatClearTop, slurAboveCurves, slurClearTop, slurClearSpan, beamGroupsOf } from './notationBeats.js';
 
 // Playing directions above the notation staff: trill, tap "T" then pick stroke / strum, this far apart.
 const DIRECTION_STACK_GAP_SP = 0.4;
 // A trill's bottom stays this far below the next rendered note's top.
 const TRILL_NEXT_CLEAR_SP = 1;
-// ...each this far above the slur's outer edge where it crosses the mark (not the slur's apex).
-const SLUR_DIRECTION_CLEAR_SP = 0.5;
 // Pick strokes on a tab-only track: bottom at least this far above the TAB top line, and above the ink under it.
 const PICK_TAB_STAFF_CLEAR_SP = 1;
 const PICK_TAB_CLEAR_SP = 0.4;
@@ -37,7 +36,7 @@ const PICK_TAB_CLEAR_SP = 0.4;
  *   `note.pop`, one letter per beat, `beatTapMark`) then the pick stroke
  *   (`pickStroke` 'down' | 'up'), stacked DIRECTION_STACK_GAP_SP apart
  *   upward, clear of the staff, stem, articulations, vibrato / tremolo and
- *   tuplet bracket, and SLUR_DIRECTION_CLEAR_SP above a slur's outer edge
+ *   tuplet bracket, and 0.5 sp above a slur's outer edge (slurClearTop)
  *   where it crosses the mark (its local height, not its apex). Pick
  *   strokes on the beats of one beam group share one baseline, the highest
  *   of their own; a T stays on its beat (so at least DIRECTION_STACK_GAP_SP
@@ -162,97 +161,4 @@ export function renderPlayingDirections(score, trackRuns, theme, systems) {
       renderPickStroke(run.tabG, x, bottomY, kind, theme.tabFretColor, theme);
     });
   });
-}
-
-/**
- * Outer edge (curveOuterPoints) of each slur segment drawn above a beat,
- * recorded as `slurCurves` on every beat of `beats` (from collectBeats)
- * under it, split slurs per segment — the slur geometry renderTiesAndSlurs
- * draws, for marks placed at the slur's local height (slurClearTop).
- */
-function slurAboveCurves(beats, systems, theme) {
-  beats.forEach((b) => { b.slurCurves = []; });
-  const over = (from, to, sysIdx, x1, y1, x2, y2) => {
-    const pts = curveOuterPoints(x1, y1, x2, y2, true, theme, 'slur');
-    for (let k = from; k <= to; k++) {
-      if (beats[k].sysIdx === sysIdx) beats[k].slurCurves.push(pts);
-    }
-  };
-  findSlurs(beats, { auto: theme.hammerPullSlurs !== false }).forEach(({ i, j, above, y1, y2 }) => {
-    if (!above) return;
-    const a = beats[i]; const b = beats[j];
-    if (a.sysIdx === b.sysIdx) {
-      over(i, j, a.sysIdx, a.x, y1, b.x, y2);
-    } else {
-      over(i, j, a.sysIdx, a.x, y1, breakEndX(systems, a.sysIdx, theme), y1);
-      over(i, j, b.sysIdx, breakStartX(systems, b.sysIdx, theme), y2, b.x, y2);
-    }
-  });
-}
-
-/** Point [x, y] of the cubic Bézier `pts` at parameter `t`. */
-function bezierAt(pts, t) {
-  const u = 1 - t;
-  const w = [u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t];
-  return [0, 1].map((c) => w.reduce((acc, wk, k) => acc + wk * pts[k][c], 0));
-}
-
-/**
- * Highest (min) y of a slur's outer edge `pts` over the x span (xa, xb),
- * clipped to the slur's own span; Infinity when they don't overlap. The
- * curve's x rises monotonically (control points at 0.28 / 0.72 of its
- * length), so each sampled x is found by bisection on t.
- */
-function curveTopOver(pts, xa, xb) {
-  const x1 = Math.max(xa, pts[0][0]);
-  const x2 = Math.min(xb, pts[3][0]);
-  if (x1 > x2) return Infinity;
-  const SAMPLES = 8;
-  let top = Infinity;
-  for (let k = 0; k <= SAMPLES; k++) {
-    const x = x1 + ((x2 - x1) * k) / SAMPLES;
-    let lo = 0; let hi = 1;
-    for (let n = 0; n < 40; n++) {
-      const mid = (lo + hi) / 2;
-      if (bezierAt(pts, mid)[0] < x) lo = mid; else hi = mid;
-    }
-    top = Math.min(top, bezierAt(pts, (lo + hi) / 2)[1]);
-  }
-  return top;
-}
-
-/**
- * Lowest y for the bottom of a mark centred on beat `item` and `half`
- * wide each side: SLUR_DIRECTION_CLEAR_SP above every slur in
- * `item.slurCurves` (slurAboveCurves) where it crosses the mark; Infinity
- * when no slur is drawn above the beat.
- */
-function slurClearTop(item, half, sp) {
-  return slurClearSpan(item, item.x - half, item.x + half, sp);
-}
-
-/** Like slurClearTop for a mark spanning the x range (xa, xb) instead of centred on the beat. */
-function slurClearSpan(item, xa, xb, sp) {
-  return Math.min(Infinity, ...(item.slurCurves || [])
-    .map((pts) => curveTopOver(pts, xa, xb) - SLUR_DIRECTION_CLEAR_SP * sp));
-}
-
-/**
- * Beam group of each beamed layout element of `track` (groups of 2+
- * beats, per measure): a Map layoutEl -> group key (the group's index array).
- */
-function beamGroupsOf(trackRuns, track) {
-  const out = new Map();
-  trackRuns.filter((r) => r.track === track).forEach((run) => {
-    run.measures.forEach((measure) => {
-      (measure.beamGroups || []).forEach((grp) => {
-        if (grp.length < 2) return;
-        grp.forEach((idx) => {
-          const le = measure.elements.find((e) => e.index === idx);
-          if (le) out.set(le, grp);
-        });
-      });
-    });
-  });
-  return out;
 }
