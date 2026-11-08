@@ -3036,6 +3036,105 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.6 score text: header rows and capo / tuning chart (src/draw/header.js) ----------
+{
+  const { drawScoreHeader } = await imp('src/draw/header.js');
+  const { estimateTextWidth } = await imp('src/textMetrics.js');
+  const { group: svgGroup } = await imp('src/draw/svgUtil.js');
+  const thm = resolveTheme({});
+  const s = thm.staffLineSpacing;
+  const near = (a, b, m) => { if (Math.abs(a - b) > 1e-9) throw new Error(`${m}: expected ${b}, got ${a}`); };
+  const kids = (n) => n.children || [];
+  const cls = (n) => (n.getAttribute ? n.getAttribute('class') : null) || '';
+  const num = (n, a) => Number(n.getAttribute(a));
+  const hdr = (sc) => { const svg = svgGroup({}); const r = drawScoreHeader(svg, sc, thm, 10, 900); return { r, g: kids(svg)[0], svg }; };
+  const rowsOf = (g) => kids(g).map((n) => [cls(n), n.textContent, num(n, 'y')]);
+  const g6 = (x) => ({ showStandardNotation: true, showTablature: false, tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'], ...x });
+
+  test('[H1] row order and gaps: 2.5 s after the title, 2.0 s otherwise, 1.6 s within instructions', () => {
+    const h = hdr({
+      title: 'T', subtitle: ' Sub ', artist: 'Art', album: 'Alb', composer: 'C', tuningLabel: 'Drop D',
+      words: 'W', music: 'M', instructions: 'one\n\n two ', tracks: [g6({ capo: 2 })],
+    });
+    const t0 = 10 + 0.75 * 2.4 * s;
+    const y = [t0, t0 + 2.5 * s];
+    for (let i = 0; i < 6; i++) y.push(y[y.length - 1] + 2.0 * s);
+    eq(kids(h.g).map(cls), ['title', 'subtitle', 'artist', 'album', 'tuning', 'composer', 'words', 'music', 'instructions', 'instructions', 'tuning-chart']);
+    const ys = kids(h.g).map((n) => (cls(n) === 'tuning-chart' ? num(kids(n)[0], 'y') : num(n, 'y')));
+    [y[0], y[1], y[2], y[3], y[4], y[4], y[5], y[5], y[6]].forEach((v, i) => near(ys[i], v, `row ${i}`));
+    near(ys[9], y[6] + 1.6 * s, 'second instructions line');
+    near(ys[10], y[6] + 1.6 * s + 2.0 * s, 'tuning chart after instructions');
+    near(h.r, ys[10], 'returns the last baseline');
+    eq(kids(h.g).slice(1, 4).map((n) => [n.textContent, n.getAttribute('text-anchor'), num(n, 'font-size')]),
+      [['Sub', 'middle', 1.6 * s], ['Art', 'middle', 1.4 * s], ['Alb', 'middle', 1.3 * s]]);
+    const [w, m] = kids(h.g).slice(6, 8);
+    eq([w.textContent, num(w, 'x'), w.getAttribute('font-style'), m.textContent, m.getAttribute('text-anchor'), num(m, 'x')],
+      ['Words by W', thm.marginLeftSp * s, null, 'Music by M', 'end', 900 - thm.marginRightSp * s]);
+    const ins = kids(h.g)[8];
+    eq([ins.textContent, ins.getAttribute('font-style'), num(ins, 'font-size'), num(ins, 'x')], ['one', 'italic', 1.2 * s, thm.marginLeftSp * s]);
+  });
+  test('[H1] empty rows take no space; a non-title first row starts at its cap height', () => {
+    const h = hdr({ subtitle: '  ', artist: 'A', words: '', music: null, instructions: '\n' });
+    eq(rowsOf(h.g), [['artist', 'A', 10 + 0.75 * 1.4 * s]]);
+    const k = hdr({ title: 'T', album: 'X' });
+    eq(rowsOf(k.g), [['title', 'T', 28], ['album', 'X', 28 + 2.5 * s]]);
+    eq(hdr({ subtitle: 7, artist: {}, words: [], instructions: 5, tracks: [g6({ capo: 0 })] }).r, null);
+  });
+  test('[H1] Words & Music when words equals music after canonicalization', () => {
+    const h = hdr({ words: ' Jane  Doe', music: 'Jane Doe ' });
+    eq(kids(h.g).map((n) => [cls(n), n.textContent, n.getAttribute('text-anchor')]), [['words-music', 'Words & Music by Jane Doe', 'end']]);
+    eq(rowsOf(hdr({ music: 'M' }).g).map((r) => r.slice(0, 2)), [['music', 'Music by M']]);
+    eq(rowsOf(hdr({ words: 'W' }).g).map((r) => r.slice(0, 2)), [['words', 'Words by W']]);
+  });
+  test('[H3] instructions: at most 8 lines, empty dropped, 1.6 s apart', () => {
+    const h = hdr({ instructions: ['a', '', ...Array.from({ length: 10 }, (_, i) => ` l${i} `)].join('\r\n') });
+    const lines = kids(h.g);
+    eq(lines.map((n) => n.textContent), ['a', 'l0', 'l1', 'l2', 'l3', 'l4', 'l5', 'l6']);
+    lines.forEach((n, i) => near(num(n, 'y'), 10 + 0.75 * 1.2 * s + i * 1.6 * s, `line ${i}`));
+  });
+  test('[G3] header text is escaped text content (no child elements)', () => {
+    const h = hdr({ subtitle: '<b>&', instructions: '<i>x</i>' });
+    kids(h.g).forEach((n) => eq(kids(n).length, 0));
+    eq(kids(h.g).map((n) => n.textContent), ['<b>&', '<i>x</i>']);
+    const out = serialize(h.g);
+    eq(out.includes('&lt;b&gt;&amp;') && !out.includes('<b>'), true, out);
+  });
+  test('[C1,C4] capo / tuning chart line: pieces, gaps, name prefix only with > 1 visible track, tuningLabel independent', () => {
+    const h = hdr({ showTuningChart: true, tuningLabel: 'Drop D', tracks: [g6({ capo: '2', tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'D4'] })] });
+    const [tuning, chart] = kids(h.g);
+    eq([cls(tuning), tuning.textContent], ['tuning', 'Drop D']);
+    eq(cls(chart), 'tuning-chart');
+    const p = kids(chart);
+    eq(p.map((n) => n.textContent), ['Capo fret 2', '⑥ = D', '① = D']);
+    const size = 1.2 * s;
+    near(num(p[0], 'x'), thm.marginLeftSp * s, 'left margin');
+    near(num(p[1], 'x'), num(p[0], 'x') + estimateTextWidth('Capo fret 2', size) + 1.5 * s, 'capo gap');
+    near(num(p[2], 'x'), num(p[1], 'x') + estimateTextWidth('⑥ = D', size) + 1.0 * s, 'entry gap');
+    p.forEach((n) => eq([num(n, 'font-size'), n.getAttribute('y')], [size, p[0].getAttribute('y')]));
+    const two = hdr({ showTuningChart: true, tracks: [
+      g6({ name: 'Gt.', tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'] }),
+      g6({ showStandardNotation: false, showTablature: true, tuning: ['D1', 'A1', 'D2', 'G2'] }),
+      g6({ showStandardNotation: false, capo: 4 }),
+    ] });
+    const charts = kids(two.g);
+    eq(charts.map((c) => kids(c).map((n) => n.textContent)), [['Gt.: ⑥ = D'], ['Track 2: ④ = D']]);
+    near(num(kids(charts[1])[0], 'y') - num(kids(charts[0])[0], 'y'), 1.6 * s, 'lines 1.6 s apart');
+  });
+  test('[C4] capo line shows without showTuningChart; nothing to show -> no line', () => {
+    eq(kids(hdr({ tracks: [g6({ capo: 5, tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'] })] }).g).map((c) => kids(c).map((n) => n.textContent)), [['Capo fret 5']]);
+    eq(hdr({ showTuningChart: true, tracks: [g6({})] }).r, null);
+  });
+  test('[C2] tuning chart through the renderer: notation-only track contributes; standard tuning adds nothing', () => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, { showTuningChart: true, tracks: [{ tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'], measures: [{ beats: [nq] }] }] }, { width: 900 }).render();
+    const out = serialize(box.children[0]);
+    eq(out.includes('class="tuning-chart"') && out.includes('⑥ = D'), true);
+    const box2 = makeContainer();
+    new MusicScoreRenderer(box2, { showTuningChart: true, tracks: [{ measures: [{ beats: [nq] }] }] }, { width: 900 }).render();
+    eq(serialize(box2.children[0]).includes('score-header'), false);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
