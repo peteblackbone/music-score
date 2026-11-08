@@ -3879,10 +3879,10 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     for (const [id, r] of scans) eq([id, r.r5, r.tiedFrets], [id, [], []]);
     eq([...scans].filter(([, r]) => r.band.length).map(([id, r]) => [id, r.band]), [['char-voices-tab-w900', ['1.1', '1.2', '1.3', '1.4']]]);
   });
-  test('pre-1.8 scan: normalizeScore passes a tiedFrets key through untouched and adds none otherwise', () => {
+  test('pre-1.8 scan: normalizeScore adds no tiedFrets key; 1.8 canonicalizes a present one', () => {
     const t = (extra) => normalizeScore({ tracks: [{ showTablature: true, ...extra, measures: [{ beats: [{ type: 'note', duration: 'whole', notes: [{ string: 1, fret: 3 }] }] }] }] }).tracks[0];
     eq('tiedFrets' in t({}), false);
-    eq([t({ tiedFrets: ' Parens ' }).tiedFrets, t({ tiedFrets: 'x' }).tiedFrets], [' Parens ', 'x']);
+    eq([t({ tiedFrets: ' Parens ' }).tiedFrets, t({ tiedFrets: 'x' }).tiedFrets], ['parens', null]);
   });
 
   // combineVoices JSON for unisons the 1.8 shared head must NOT merge: voice 2 keeps its clash shift of one head width.
@@ -4311,6 +4311,57 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(letters(svgOf({}, {}, {}, { rightFinger: 'm' })), [['m']]);
     eq(ofClass(svgOf({ strum: 'down' }, {}, { pickStroke: 'up' }, {}), 'pick-stroke').length, 0, 'voice 1 strum takes the pick slot');
     eq(ofClass(svgOf({}, {}, { pickStroke: 'up' }, {}), 'pick-stroke').map((p) => p.getAttribute('class')), ['pick-stroke pick-stroke-up']);
+  });
+}
+
+// ---------- 1.8.0: tied-to frets in parentheses on TAB (R6, track.tiedFrets: 'parens') ----------
+{
+  const TM = await imp('src/textMetrics.js');
+  const { tabExtents } = await imp('src/layout/timeline.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const P = { tiedParens: true };
+  const fr = (string, fret, d = 'half', n = {}, x = {}) => ({ type: 'note', duration: d, notes: [{ string, fret, ...n }], ...x });
+  const nodes = (g, pred) => [...walk(g)].filter(({ nd, cls }) => pred(nd, cls)).map(({ nd }) => nd);
+  const labels = (svg) => nodes(svg, (nd, cls) => nd.tag === 'text' && cls.some((c) => /staff-tab/.test(c)) && +nd.getAttribute('font-size') === th.tabFontSize).map((nd) => nd.textContent);
+  const tabScore = (measures, extra = {}) => ({ tracks: [{ showStandardNotation: false, showTablature: true, tabRhythm: false, tiedFrets: 'parens', ...extra, measures }] });
+  test('R6 fretLabel: (5) ~1.57 sp, (12) ~2.17, (<12>) ~3.49, (5(17)); ghost / release not wrapped twice; mute stays x', () => {
+    const w = (n) => +(TM.fretLabelWidth(TM.fretLabel({ tieEnd: true, ...n }, P), th) / S).toFixed(2);
+    eq([TM.fretLabel({ fret: 5, tieEnd: true }, P), w({ fret: 5 }), TM.fretLabel({ fret: 12, tieEnd: true }, P), w({ fret: 12 })], ['(5)', 1.57, '(12)', 2.17]);
+    eq([TM.fretLabel({ fret: 12, harmonic: 'natural', tieEnd: true }, P), w({ fret: 12, harmonic: 'natural' })], ['(<12>)', 3.49]);
+    eq(TM.fretLabel({ fret: 5, harmonic: 'artificial', harmonicFret: 17, tieEnd: true }, P), '(5(17))');
+    eq([{ fret: 5, ghost: true }, { fret: 5, bend: 'release' }, { fret: 5, mute: true }, { fret: 5, mute: true, ghost: true }].map((n) => TM.fretLabel({ ...n, tieEnd: true }, P)), ['(5)', '(5)', 'x', '(x)']);
+    eq([TM.fretLabel({ fret: 5, tieEnd: true }), TM.fretLabel({ fret: 5, tieEnd: true }, undefined), TM.fretLabel({ fret: 5 }, P)], ['5', '5', '5']);
+  });
+  test('R6 normalize / options: tiedFretsMode trims any case; tiedFretOpts only for main beats of an opted-in track', () => {
+    eq([' Parens ', 'PARENS', 'parens', 'paren', true, null, 1].map(TM.tiedFretsMode), ['parens', 'parens', 'parens', null, null, null, null]);
+    const on = { tiedFrets: 'parens' };
+    eq([TM.tiedFretOpts(on, { type: 'note' }), TM.tiedFretOpts(on, { type: 'grace' }), TM.tiedFretOpts({}, { type: 'note' }), TM.tiedFretOpts({ tiedFrets: null }, { type: 'note' })], [P, undefined, undefined, undefined]);
+    eq(Object.isFrozen(TM.tiedFretOpts(on, { type: 'note' })), true);
+  });
+  test('R6 drawing: both voices, across a system break, graces unchanged, a control track without the option', () => {
+    const tie = (s, f) => [fr(s, f, 'half', { tieStart: true }), fr(s, f, 'half', { tieEnd: true })];
+    eq(labels(renderTree(tabScore([{ beats: tie(2, 5) }]))), ['5', '(5)']);
+    eq(labels(renderTree(tabScore([{ voices: [{ beats: tie(1, 3) }, { beats: tie(4, 7) }] }]))).sort(), ['(3)', '(7)', '3', '7']);
+    const brk = renderTree(tabScore([{ beats: [fr(1, 1, 'half'), fr(2, 5, 'half', { tieStart: true })] }, { beats: [fr(2, 5, 'whole', { tieEnd: true })] }]), 140);
+    eq(labels(brk), ['1', '5', '(5)']);
+    eq(labels(renderTree(tabScore([{ beats: [{ type: 'grace', notes: [{ string: 2, fret: 5, tieEnd: true }] }, fr(2, 7, 'whole')] }]))), ['5', '7']);
+    eq(labels(renderTree(tabScore([{ beats: tie(2, 5) }], { tiedFrets: undefined }))), ['5', '5']);
+  });
+  test('R6 room: knock-out, tabExtents, slide inset use the same label', () => {
+    const svg = renderTree(tabScore([{ beats: tie2() }]));
+    function tie2() { return [fr(2, 5, 'half', { tieStart: true }), fr(2, 5, 'half', { tieEnd: true })]; }
+    const rects = nodes(svg, (nd, cls) => nd.tag === 'rect' && cls.some((c) => /staff-tab/.test(c))).map((r) => +(+r.getAttribute('width')).toFixed(2));
+    eq(rects.includes(+TM.fretLabelWidth('(5)', th).toFixed(2)), true, 'knock-out');
+    const el = { type: 'note', notes: [{ string: 2, fret: 5, tieEnd: true }] };
+    eq([tabExtents(el, th, P).left, tabExtents(el, th).left], [TM.fretLabelWidth('(5)', th) / 2, TM.fretLabelWidth('5', th) / 2]);
+    const slid = (extra) => renderTree(tabScore([{ beats: [fr(2, 3, 'half', { slide: true }), fr(2, 5, 'half', { tieEnd: true })] }], extra));
+    const endX = (s) => Math.max(...nodes(s, (nd, cls) => nd.tag === 'line' && cls.some((c) => /staff-tab/.test(c)) && nd.getAttribute('stroke-linecap') === 'round' && nd.getAttribute('y1') !== nd.getAttribute('y2')).map((l) => +l.getAttribute('x2')));
+    eq(endX(slid({})) < endX(slid({ tiedFrets: undefined })), true, 'slide stops before the wider label');
+  });
+  test('R6 opt-in: an absent or unknown tiedFrets renders byte-identical to no key (C0 unaffected)', () => {
+    const base = (extra) => serialize(renderTree(tabScore([{ beats: [fr(2, 5, 'half', { tieStart: true }), fr(2, 5, 'half', { tieEnd: true })] }], extra)));
+    eq([base({ tiedFrets: undefined }) === base({ tiedFrets: 'x' }), base({ tiedFrets: undefined }) === base({ tiedFrets: null })], [true, true]);
   });
 }
 

@@ -62,11 +62,11 @@ export function renderNotationArpeggio(g, layoutEl, kind, theme) {
  * widest fret knock-out, over the strings of its fretted notes ± 0.5 sp;
  * nothing when no note has a string and fret.
  */
-export function renderTabArpeggio(g, layoutEl, stringCount, kind, theme) {
+export function renderTabArpeggio(g, layoutEl, stringCount, kind, theme, labelOpts) {
   const ys = (layoutEl.el.notes || []).filter((n) => Number.isInteger(n.string) && n.string >= 1 && n.string <= stringCount && n.fret != null)
     .map((n) => layoutEl.tabBaselineY - (stringCount - n.string) * theme.tabStaffLineSpacing);
   if (!ys.length) return;
   const pad = ARPEGGIO_SPAN_PAD_SP * theme.staffLineSpacing;
-  const cx = arpeggioX(layoutEl.x, tabExtents(layoutEl.el, theme).left, theme);
+  const cx = arpeggioX(layoutEl.x, tabExtents(layoutEl.el, theme, labelOpts).left, theme);
   renderArpeggio(g, cx, Math.min(...ys) - pad, Math.max(...ys) + pad, kind, theme.tabFretColor, theme);
 }

@@ -59,9 +59,10 @@ export function drawTabClef(x, baselineY, stringCount, theme) {
  * string 1 = highest-pitched (top line), matching common tab convention.
  * Returns `{ fretTopY, marksTopY }` — the top of the topmost fret label's
  * knock-out and of the tab tremolo / vibrato ink (Infinity when there is
- * none) — for the score-wide passes; undefined for a rest.
+ * none) — for the score-wide passes; undefined for a rest. `labelOpts`:
+ * fretLabel's options (textMetrics.js tiedFretOpts).
  */
-export function renderTabElement(g, layoutEl, stringCount, theme) {
+export function renderTabElement(g, layoutEl, stringCount, theme, labelOpts) {
   const spacing = theme.staffLineSpacing;
   const el = layoutEl.el;
   const x = layoutEl.x;
@@ -78,7 +79,7 @@ export function renderTabElement(g, layoutEl, stringCount, theme) {
     // ghost note (played very quietly/buried, not silenced) is shown as
     // the fret number in parentheses instead — same position, just
     // wrapped (and combines with `mute` as "(x)" if somehow both are set).
-    const label = fretLabel(note);
+    const label = fretLabel(note, labelOpts);
     // White backing rect so the fret number doesn't collide with the string line.
     const w = fretLabelWidth(label, theme);
     const knockHalf = tabFretKnockoutHalf(theme);

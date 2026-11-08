@@ -38,7 +38,7 @@ import { groupBeams } from './beams.js';
 import { layoutChord, fingeringLayout, notationInnerLeft, graceAccidentalRoom, DOT_GAP_SP, DOT_STEP_SP, DOT_RADIUS_SP, ARPEGGIO_ROOM_SP } from './chord.js';
 import { resolveMeasureAccidentals, resolveVoiceAccidentals } from './accidentals.js';
 import { combineVoices, mergedRestPairs } from './voices.js';
-import { fretLabel, fretLabelWidth } from '../textMetrics.js';
+import { fretLabel, fretLabelWidth, tiedFretOpts } from '../textMetrics.js';
 import { layoutHeadGlyph } from '../harmonics.js';
 import { tabRhythmExtents } from './tabRhythm.js';
 import { beatArpeggio } from '../directions.js';
@@ -87,13 +87,13 @@ function notationExtents(el, positions, stemUp, accNames, beamed, theme) {
   return { left: chord.leftExt, right: chord.rightExt, chord };
 }
 
-/** Tab-staff extents (px) of one beat: half the widest fret-label knock-out. */
-export function tabExtents(el, theme) {
+/** Tab-staff extents (px) of one beat: half the widest fret-label knock-out (`labelOpts`: fretLabel's). */
+export function tabExtents(el, theme, labelOpts) {
   if (el.type === 'rest') return { left: 0, right: 0 };
   let half = 0;
   (el.notes || []).forEach((n) => {
     if (n.string == null || n.fret == null) return;
-    half = Math.max(half, fretLabelWidth(fretLabel(n), theme) / 2);
+    half = Math.max(half, fretLabelWidth(fretLabel(n, labelOpts), theme) / 2);
   });
   return { left: half, right: half };
 }
@@ -213,7 +213,7 @@ function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, ar
       }
     }
     if (track.showTablature) {
-      const tb = tabExtents(el, theme);
+      const tb = tabExtents(el, theme, tiedFretOpts(track, el));
       left = Math.max(left, tb.left); right = Math.max(right, tb.right);
       leftFirst = Math.max(leftFirst, tb.left);
       if (tabBeamed) {
@@ -232,7 +232,7 @@ function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, ar
     // An arpeggio line sits left of the chord's notation (and fingering) and TAB ink.
     if (arpeggio && beatArpeggio(el)) {
       const room = ARPEGGIO_ROOM_SP * theme.staffLineSpacing;
-      const tabIn = track.showTablature ? tabExtents(el, theme).left : 0;
+      const tabIn = track.showTablature ? tabExtents(el, theme, tiedFretOpts(track, el)).left : 0;
       left = Math.max(left, notationInnerLeft(el.notes, chord, theme) + room, tabIn + room);
       leftFirst = Math.max(leftFirst, notationInnerLeft(el.notes, chordFirst, theme) + room, tabIn + room);
     }

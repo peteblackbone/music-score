@@ -28,6 +28,7 @@ import { tremoloOf, vibratoOf } from '../noteEffects.js';
 import { glyphBox } from '../glyphMetrics.js';
 import { noteheadForDuration } from '../glyphs.js';
 import { isTwoVoiceMeasure, voiceOf } from '../twoVoice.js';
+import { tiedFretOpts } from '../textMetrics.js';
 
 // Top staff line -> lowest allowed tuplet bracket line. The end ticks hang 0.5 sp below the
 // line and the number is centred on it, so 1 sp keeps both at least 0.5 sp clear of the staff.
@@ -281,13 +282,15 @@ function drawTupletBrackets(g, tupletGroups, elements, notationBaselineY, theme,
  */
 function drawTabMeasure(g, measure, track, tabBaselineY, theme, row2Y) {
   measure.elements.forEach((layoutEl) => {
-    layoutEl.tabRendered = renderTabElement(g, { ...layoutEl, tabBaselineY }, track.tuning.length, theme);
+    const labelOpts = tiedFretOpts(track, layoutEl.el);
+    layoutEl.tabRendered = renderTabElement(g, { ...layoutEl, tabBaselineY }, track.tuning.length, theme, labelOpts);
     const arp = beatArpeggio(layoutEl.el);
-    if (arp) renderTabArpeggio(g, { ...layoutEl, tabBaselineY }, track.tuning.length, arp, theme);
+    if (arp) renderTabArpeggio(g, { ...layoutEl, tabBaselineY }, track.tuning.length, arp, theme, labelOpts);
   });
   // plain data access: only two-voice measures have `elements2` (twoVoice.js)
   (measure.elements2 || []).forEach((layoutEl) => {
-    layoutEl.tabRendered = renderTabElement(g, { ...layoutEl, el: layoutEl.tabEl, x: layoutEl.x - layoutEl.dx, tabBaselineY }, track.tuning.length, theme);
+    layoutEl.tabRendered = renderTabElement(g, { ...layoutEl, el: layoutEl.tabEl, x: layoutEl.x - layoutEl.dx, tabBaselineY }, track.tuning.length, theme,
+      tiedFretOpts(track, layoutEl.tabEl));
     const top = layoutEl.tabRendered?.fretTopY ?? Infinity;
     const v1 = layoutEl.t && measure.elements.find((le) => le.t && le.t.n * layoutEl.t.d === layoutEl.t.n * le.t.d);
     if (!v1 || top === Infinity) return;
