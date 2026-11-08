@@ -1,6 +1,6 @@
 # music-score
 
-Version 1.6.0 · MIT licence
+Version 1.7.0 · MIT licence
 
 A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL).
 
@@ -254,6 +254,9 @@ Beats are the rhythmic events in a measure, in order. Each beat is one note, one
 | `arpeggio` | `true`, `'up'` or `'down'` | Wavy arpeggio line left of a chord of two or more notes, on notation and TAB. `'up'` adds an arrowhead at the top, `'down'` at the bottom. Case-insensitive. Other values are ignored. Adds room left of the chord. See [Picking and playing directions](#picking-and-playing-directions). |
 | `whammy` | `true`, a string or number, or `{ type, amount }` | Whammy-bar mark on the TAB staff. `type` is `'dip'` (the default), `'dive'`, `'return'` or `'predive'`, in any case. `true`, a string and a number are dips. `amount` such as `'1/2'`, `'1'`, `'1 1/2'`, `'2'` is shown as `-amount`; a missing amount means `'1/2'`. `'return'` takes no text. Other `type` values are ignored. TAB only. See [Picking and playing directions](#picking-and-playing-directions). |
 | `rake` | truthy, `'down'` or `'up'` | Rake: a dashed "rake" label over this beat and the grace notes right before it. Both directions draw the same. See [Picking and playing directions](#picking-and-playing-directions). |
+| `golpe` | `true`, `'thumb'` or `'finger'` | Golpe sign above the tap "T" place, on notation and TAB, with or without a "T" on the beat. `'thumb'` and `'finger'` draw the same sign and add a class. Note beats only. See [Ornaments, fingering and hand marks](#ornaments-fingering-and-hand-marks). |
+| `pickScrape` | `true`, `'down'` or `'up'` | "P.S." label run (pick scrape), like let ring. Consecutive scraped beats share one label whichever direction they use. The direction is accepted but not drawn. See [Ornaments, fingering and hand marks](#ornaments-fingering-and-hand-marks). |
+| `barre` | a fret `1` to `24` (number or digit string), or `{ fret, half }` | Barre label run: `"C II"` for `barre: 2`, `"½C V"` for `{ fret: 5, half: true }`. Only `half: true` makes a half barre. Other values draw nothing. See [Ornaments, fingering and hand marks](#ornaments-fingering-and-hand-marks). |
 | `text` | string or `{ text, below }` | Free italic text above the staff, or under it with `below: true`. Voice 1 note and rest beats only: grace notes and voice 2 ignore it. See [Beat text](#beat-text). |
 
 Notes: eighth notes and shorter are beamed automatically within each beat (the beat unit set by the time signature). A `grace` beat is a small ornament with no duration. It is drawn just before the next beat and automatically slurred to it.
@@ -281,6 +284,10 @@ Each entry in a beat's `notes` array.
 | `tap` | truthy | Tap "T" above the beat, on notation and TAB (one per beat). A tapped harmonic shows only its `T.H.` label. See [Picking and playing directions](#picking-and-playing-directions). |
 | `slap`, `pop` | truthy | Bass slap "S" or pop "P" above the beat, on notation and TAB, in the same place as the tap "T". One letter per beat: tap wins over slap, and slap over pop. See [Picking and playing directions](#picking-and-playing-directions). |
 | `trill` | `true`, a fret, a pitch, or `{ fret, pitch }` | "tr" and a wavy line above the beat, on notation and TAB. A fret (whole number, 1 or more; `{ fret: 0 }` is the open string) or a pitch such as `'B3'` gives the other note; TAB then shows it as `(7)` after the "tr". `0`, `false` and invalid values draw nothing. See [Picking and playing directions](#picking-and-playing-directions). |
+| `ornament` | `'turn'`, `'invertedTurn'`, `'upperMordent'` or `'lowerMordent'` | Ornament sign centred above the beat, on notation only. Case, spaces, hyphens and underscores are ignored, and aliases are accepted (`'turnInverted'`, `'invertedMordent'` and `'shortTrill'` for the upper mordent, `'mordent'` for the lower). One per beat, from its first note with a valid value. A trill on the same beat wins. Other values draw nothing. See [Ornaments, fingering and hand marks](#ornaments-fingering-and-hand-marks). |
+| `finger` | `0` to `4`, or `'T'` (digit strings and `'t'` count) | Left-hand fingering, written left of the chord on the notation staff. `0` is drawn as a plain `0`: the open-string sign in left-hand fingering. This is not the `chordShapes` meaning, where `0` means no finger. Other values draw nothing. See [Ornaments, fingering and hand marks](#ornaments-fingering-and-hand-marks). |
+| `rightFinger` | `'p'`, `'i'`, `'m'`, `'a'` or `'c'` | Right-hand finger letter in italics, above the beat. Any case. Other values draw nothing. See [Ornaments, fingering and hand marks](#ornaments-fingering-and-hand-marks). |
+| `leftHandTap` | truthy | Left-hand tapping sign in the tap "T" place, on notation and TAB. A tapped harmonic ignores it. One letter per beat, in this order: tap, left-hand tap, slap, pop. See [Ornaments, fingering and hand marks](#ornaments-fingering-and-hand-marks). |
 
 Example: a tab-only note needs no `pitch`.
 
@@ -336,7 +343,7 @@ Example: the note is fretted at the 5th fret on string 5, and the harmonic is to
 
 ### Picking and playing directions
 
-Optional fields draw playing marks: `letRing`, `pickStroke`, `strum`, `arpeggio`, `whammy` and `rake` on a beat, and `tap`, `slap`, `pop` and `trill` on a note. None of them change the rhythm; only `arpeggio` adds room left of its chord.
+Optional fields draw playing marks: `letRing`, `pickStroke`, `strum`, `arpeggio`, `whammy` and `rake` on a beat, and `tap`, `slap`, `pop` and `trill` on a note. None of them change the rhythm; only `arpeggio` adds room left of its chord. The ornament, fingering, golpe, left-hand tap, pick scrape and barre fields are described in [Ornaments, fingering and hand marks](#ornaments-fingering-and-hand-marks).
 
 - **Let ring** (`letRing`): consecutive beats with `letRing` share one dashed "let ring" label, drawn like the P.M. line. An unmarked rest between two let-ring beats of the same system continues the run. A note or grace note without `letRing` ends it, and so does a line break. On a track with TAB, the label sits in the outermost lane, outside any P.M. or harmonic label it overlaps. On a notation-only staff it sits below the staff.
 - **Pick strokes** (`pickStroke`): `'down'` draws ⊓ and `'up'` draws ∨, one per beat. Values are case-insensitive, and other values are ignored. On a track with a notation staff, the stroke sits above the staff. It stacks above stems, articulations, slurs (just above the slur at that beat), tuplet brackets and any tap "T". Chord symbols and fermatas sit above it. Strokes on the beats of one beam group share one height. On a tab-only track, the stroke sits above the TAB staff. Pick strokes are not drawn on the TAB staff when the track also shows notation. A beat with a `strum` shows the strum arrow instead.
@@ -348,7 +355,7 @@ Optional fields draw playing marks: `letRing`, `pickStroke`, `strum`, `arpeggio`
 - **Slap and pop** (`slap`, `pop` on a note): a bold "S" or "P" once per beat, above the note on notation and above the fret on TAB, in the same place as the tap "T" and stacked the same way. One letter per beat: tap wins over slap, and slap over pop (a tapped harmonic shows `T.H.` and gives way to a slap). Rests and grace notes ignore them. Letters are drawn above the staff only.
 - **Rake** (`rake` on a beat): a dashed "rake" label over the beat and the grace notes directly before it in the same system. Write the dead-note grace notes (`mute: true`) yourself; none are generated. The label sits in a lane outside any P.M., harmonic or let-ring label it overlaps, and in the lane next to the staff when nothing else is there. Two rakes in a row stay two labels, and a rake never reaches across a line break. `'down'` and `'up'` draw the same; the direction is not shown.
 - **Trill** (`trill` on a note): the "tr" glyph and a wavy line, centred on the beat, above the notation and TAB staves. It sits above vibrato and tremolo and below a tap, slap or pop letter, a pick stroke, a dip and a fermata. On notation its bottom also stays 1 sp above the next note's top. On TAB, `(7)` after the "tr" shows the other fret. A fret is used as given. A pitch is placed at the nearest interval (up to a fourth down or a tritone up) from the note's fret: A3 at fret 5 with `trill: 'B3'` or `'B4'` shows `(7)`. A plain `true`, a pitch without a fret, or a result below fret 0 shows no `(n)`. The wave ends 0.8 sp before the next beat and never passes the last barline. It is not continued on the next system. Consecutive trilled beats on a system (a plain note or rest ends the run, grace notes do not) share one height, the highest any of them needs, and each wave then stops 0.25 sp before the next "tr". When a beat has several trilled notes, the first one decides.
-- Rests and grace notes ignore `pickStroke`, `strum`, `arpeggio`, `tap`, `slap`, `pop`, `trill`, `whammy` and `rake`. A single note ignores `arpeggio`.
+- Rests and grace notes ignore `pickStroke`, `strum`, `arpeggio`, `tap`, `slap`, `pop`, `trill`, `whammy`, `rake`, `ornament`, `finger`, `rightFinger`, `leftHandTap` and `golpe`. They draw no `pickScrape` or `barre` label either, though a rest can sit inside one of those runs (and a grace note can sit inside a `barre` run). A single note ignores `arpeggio`.
 
 ```json
 { "type": "note", "duration": "8th", "pickStroke": "down", "notes": [{ "string": 1, "fret": 5, "tap": true }] }
@@ -363,6 +370,35 @@ Optional fields draw playing marks: `letRing`, `pickStroke`, `strum`, `arpeggio`
 ```
 
 SVG classes: `tap`, `slap`, `pop` (one group per letter), `rake` (one group per run), `trill` (glyph, optional fret text and wave) and `whammy` with one of `whammy-dip`, `whammy-dive`, `whammy-hold` (a continuation on a following system) or `whammy-predive`, plus `whammy-return` on a line that rises again. Also `arpeggio` (plus `arpeggio-up` or `arpeggio-down` when it has an arrowhead) and `strum` with `strum-down` or `strum-up`, one group per mark.
+
+### Ornaments, fingering and hand marks
+
+These fields add ornaments, left- and right-hand fingering, and the marks players write for the hands: golpe, left-hand tap, pick scrape and barre. None of them change the rhythm. Left-hand fingering adds room left of its chord, as an arpeggio does, and only where a note has a finger. Scores that use none of these fields draw as before.
+
+- **Ornaments** (`ornament` on a note): one sign centred above the beat, on the notation staff. `'turn'`, `'invertedTurn'`, `'upperMordent'` and `'lowerMordent'` are the values. The aliases `'turnInverted'` (an inverted turn), `'invertedMordent'` and `'shortTrill'` (both upper mordents), and `'mordent'` (a lower mordent) also work. Case, spaces, hyphens and underscores are ignored, so `'Inverted-Turn'` is read as an inverted turn. A beat draws one ornament, from its first note with a valid value. A trill on the same beat wins.
+- **Left-hand fingering** (`finger` on a note): `1`, `2`, `3` or `4`, or `'T'` for the thumb. It is written on the notation staff, left of the chord and level with its note. Digit strings (`'2'`) and `'t'` also count. When two fingered notes sit a staff position or less apart, the second digit goes in a column further left. `0` is drawn as a plain `0`, the open-string sign in left-hand fingering. In a `chordShapes` entry, by contrast, `0` means no finger and draws nothing.
+- **Right-hand fingering** (`rightFinger` on a note): `'p'`, `'i'`, `'m'`, `'a'` or `'c'`, in italics, any case. Letters from the beat's notes stack above the beat, with the lowest note's letter nearest the staff. On a track with notation, they go on the notation staff. On a tab-only track, they go above the TAB staff, under any pick stroke.
+- **Golpe** (`golpe` on a beat): a golpe sign above the tap "T" place, on notation and TAB. It sits there whether or not the beat has a "T". `true`, `'thumb'` and `'finger'` draw the same sign. The last two also add a `golpe-thumb` or `golpe-finger` class for styling.
+- **Left-hand tap** (`leftHandTap` on a note): a left-hand tapping sign in the tap "T" place, on notation and TAB. A beat draws one of the tap marks, by priority: tap "T", then left-hand tap, then slap "S", then pop "P". A tapped harmonic ignores `leftHandTap`, as it ignores `tap`, and shows its `T.H.` label.
+- **Pick scrape** (`pickScrape` on a beat): a "P.S." label over consecutive scraped beats, drawn as a dashed run like let ring. `'down'`, `'up'` and `true` share one run, whichever direction each beat uses. The direction is kept but not drawn. A rest inside the run keeps it going. A note or grace note without `pickScrape` ends it.
+- **Barre** (`barre` on a beat): a label for the barre fret, in Roman numerals. `barre: 2` shows "C II". `barre: { fret: 5, half: true }` shows "½C V". The fret runs from 1 to 24, as a number or digit string. Consecutive beats with the same barre share one label. A rest or grace note between two beats with the same barre continues the run. A different barre or an unmarked note ends it. A system break also ends it, and the label is repeated at the start of the next system.
+
+Placement:
+
+- **Above the notation staff**, the marks stack outward from the staff, each about 0.4 sp above the one below. Below them are the existing clearances (stems, articulations, vibrato, tremolo, tuplet brackets and slurs). From the bottom up: the trill or ornament, the right-hand letters, the tap "T" (or left-hand tap, "S" or "P"), the golpe, and the pick stroke or strum.
+- **Above the TAB staff**, golpe and left-hand tap sit in the tap "T" place: the golpe above it, and the left-hand tap glyph in the letter's place. The golpe clears a trill, "T" or H / P letter in its span. Ornaments are not drawn on TAB.
+- **Technique labels** stack outward from the staff in this order: P.M., harmonic, let ring, P.S., barre, rake. Above the TAB staff they go over the TAB. On a notation-only staff they go below the staff, in the same order.
+- **Voice 2** draws none of these marks. See [Voices](#voices).
+
+```json
+{ "type": "note", "duration": "quarter", "golpe": "thumb", "notes": [{ "string": 3, "fret": 5, "ornament": "turn", "finger": 1, "rightFinger": "p" }] }
+```
+
+```json
+{ "type": "note", "duration": "quarter", "barre": { "fret": 5, "half": true }, "notes": [{ "string": 5, "fret": 5, "leftHandTap": true }] }
+```
+
+SVG classes: `ornament` with `ornament-turn`, `ornament-inverted-turn`, `ornament-upper-mordent` or `ornament-lower-mordent`; `fingering-left` (one group per beat, the left-hand digits); `fingering-right` (one group per beat, the right-hand letters); `golpe` with `golpe-thumb` or `golpe-finger`; `left-hand-tap` (the glyph, in the tap slot); `pick-scrape` with `pick-scrape-down` or `pick-scrape-up` (the direction of the run's first beat; plain `pick-scrape` for `true`), one group per run; and `barre` with `barre-half` for a half barre, one group per run.
 
 ### Hammer-ons, pull-offs, slides and bends
 
@@ -513,7 +549,7 @@ The renderer spaces and breaks the score for you. A short list of what to expect
 - **Ties and slurs** sit on the side opposite the stems. In a two-voice measure, voice 1's sit above the notes and voice 2's below (see [Voices](#voices)). Ties, slurs, hammer-ons and pull-offs that cross a line break are split into two parts.
 - **Beaming.** Eighth notes and shorter beam within each beat. Compound meters group by dotted beat, so 6/8 beams as two groups of three and 12/8 as four.
 - **Chord symbols and dynamics** each sit on one line per system: chord symbols above the staff, dynamics below it. Both are kept clear of the notes. Chord diagrams sit in one row per system staff, between the music and the chord-symbol line (see [Chord diagrams](#chord-diagrams)).
-- **Technique labels** (P.M. and harmonic labels) are placed clear of bend arrows and text, starting after a bend or moving out a lane when needed.
+- **Technique labels** (P.M., harmonic, pick scrape and barre labels) are placed clear of bend arrows and text, starting after a bend or moving out a lane when needed.
 - **Vertical spacing depends on the content.** Staves with tall notes or chords get more room. Sparse staves get less.
 - **TAB clef.** Six-string and four-string tabs use the standard TAB clef. Other string counts use the letters T, A and B.
 - **Wide measures.** A measure that cannot fit at the requested width makes the SVG wider than `options.width`. The root `<svg>` then has `data-overflow="true"`.
@@ -612,7 +648,7 @@ A measure can hold two rhythms on one staff, for example a melody over a held ba
 - **Articulations and tremolo.** Articulation marks go on the stem side: above voice 1 and below voice 2. A whole-note tremolo in voice 2 goes below the note.
 - **TAB.** The frets of both voices show in the same columns. If both voices play the same string at the same time, voice 1's fret is drawn and voice 2's is left off the TAB staff. It still shows on the notation staff. Hammer-ons, pull-offs, slides, slide-ins, slide-outs and bends link within each voice.
 - **Rhythm on TAB.** The rhythm band (stems, beams, flags, dots, tuplets and rests) shows voice 1 only. Voice 2's frets still appear, so a note that only voice 2 plays shows on the TAB staff without a stem.
-- **Beat marks are read from voice 1 only.** These marks are not drawn on a voice 2 beat: chord symbols and chord diagrams, dynamics, fermatas, pick strokes, strum arrows, arpeggios, let ring, P.M., rakes, whammy, vibrato, harmonic labels (A.H., T.H., P.H., S.H.), tap, slap, pop and trill. Put them on a voice 1 beat.
+- **Beat marks are read from voice 1 only.** These marks are not drawn on a voice 2 beat: chord symbols and chord diagrams, dynamics, fermatas, pick strokes, strum arrows, arpeggios, let ring, P.M., rakes, whammy, vibrato, harmonic labels (A.H., T.H., P.H., S.H.), tap, left-hand tap, slap, pop, trill, ornaments, right-hand letters, left-hand fingering, golpe, pick scrape and barre. Put them on a voice 1 beat.
 - **Hidden rests.** `{ "type": "rest", "duration": "half", "hidden": true }` takes its time but draws nothing and takes no room. Use one to start a voice later. A hidden rest works in any measure.
 - **When a measure has two voices.** A measure has two voices when voice 2 has at least one beat that is not a hidden rest. A voice 2 made only of hidden rests leaves the measure as a single-voice measure, with automatic stems.
 - **Other cases.** A `voices` list with one entry is the same as `beats`. An empty `voices` array, or a value that is not an array, falls back to `beats`. Entries after the second are ignored, so a measure has at most two voices. If voice 1 is empty and voice 2 has notes, voice 1 draws nothing.
@@ -662,8 +698,14 @@ Free text on a beat, such as "rit.", "mute" or "let go". It is italic and starts
 - **Slap and pop.** Drawn above the staff only.
 - **Trill.** No speed, accidental or target notehead, and the wave does not continue across a line break. The trill glyph's size is estimated from the font, like other glyphs.
 - **Pick strokes and TAB.** Pick strokes are not drawn on the TAB staff when the track also shows notation.
+- **Ornaments.** Notation staff only. Not drawn on TAB, on tab-only tracks, on grace notes, on rests or in voice 2. No accidentals on ornaments, and no slashed or upward-turn forms.
+- **Left-hand fingering.** Notation staff only, on main notes. Not drawn on TAB, on tab-only tracks, on grace notes or in voice 2. The digits are plain text, with no string-number circles. A tie arc at the start of a system can pass under a digit.
+- **Right-hand letters.** Drawn for each beat's own notes only. There are no rasgueado letter sequences across beats.
+- **Golpe and left-hand tap.** Not drawn on rests or grace notes. The golpe is one sign for all three values: `'thumb'` and `'finger'` differ only in their class.
+- **Pick scrape.** Only the "P.S." label is drawn. The direction and scrape arrows are not.
+- **Barre.** Only the label is drawn: no barre bar, string range or chord name.
 - **Strum and arpeggio.** No arpeggio line across several staves or tracks, no partial strums (on some strings only) and no rasgueado finger letters. Ties, slurs, slides and H / P arcs that end at an arpeggiated chord can cross its line. On a track with notation and TAB the strum arrows sit between the two staves. Neighbouring pick strokes are not avoided.
-- **Playing directions take no extra room.** Pick strokes, strum arrows, "T" / "S" / "P" letters, trills, whammy lines and dips get no extra horizontal space, so a dense beat can crowd. Examples: a pick stroke next to a vibrato, or a dip close to the next note.
+- **Playing directions take no extra room.** Pick strokes, strum arrows, "T" / "S" / "P" letters, left-hand taps, golpes, ornaments, right-hand letters, trills, whammy lines and dips get no extra horizontal space, so a dense beat can crowd. Left-hand fingering digits are the exception: they take room left of their chord. Examples: a pick stroke next to a vibrato, or a dip close to the next note.
 - **Slides take no room.** Slide-ins and slide-outs are shortened to fit beside their note, but add no horizontal space, so a dense beat can crowd them.
 - **Pre-bends and releases on notation.** The notation staff shows the note as written. Pre-bends and releases appear on tab only.
 - **Hammer-on slurs need `string`.** A `hammerPull` note without `string` gets no slur on the notation staff.
@@ -676,7 +718,7 @@ Free text on a beat, such as "rit.", "mute" or "let go". It is italic and starts
 - **One bracket height per system.** All volta brackets of a system sit at the height of the tallest one.
 - **Long navigation text.** A long jump text can reach left into the previous measures, and marks in adjacent narrow measures can crowd each other. A long ending label can run past the end of its bracket. Text widths are estimated, so the spacing around these marks is approximate.
 - **Voices: two at most.** A measure cannot have a third voice.
-- **Voices: beat marks on voice 2.** Chord symbols and diagrams, dynamics, fermatas, pick strokes, strums, arpeggios, let ring, P.M., rakes, whammy, vibrato, harmonic labels, tap, slap, pop and trill are drawn for voice 1 only. Voice 2 still draws its notes, articulations, tremolo, ties, slurs and slides.
+- **Voices: beat marks on voice 2.** Chord symbols and diagrams, dynamics, fermatas, pick strokes, strums, arpeggios, let ring, P.M., rakes, whammy, vibrato, harmonic labels, tap, left-hand tap, slap, pop, trill, ornaments, right-hand letters, left-hand fingering, golpe, pick scrape and barre are drawn for voice 1 only. Voice 2 still draws its notes, articulations, tremolo, ties, slurs and slides.
 - **Voices: no shared noteheads or merged rests.** A unison is drawn with voice 2's noteheads moved to the right. Rests are never merged.
 - **Voices: whole-measure rests.** A whole-measure rest is centred in the bar and does not move to clear the other voice's notes.
 - **Voices: links from a single-voice measure.** A tie, slur, hammer-on, pull-off or slide that starts in a single-voice measure and ends in voice 2 of the next measure is not drawn.
@@ -716,6 +758,20 @@ It prints `ALL PASSED` and exits with code 0 on success.
 - To run one group on its own: `node tests/units.mjs`, `node tests/engraving.mjs`, or `node tests/articulations.mjs`.
 
 ## Changelog
+
+### 1.7.0 — 2026-11-08
+
+Ornaments and hand marks. Scores that do not use these fields are unchanged. The fields were ignored before 1.7.0, so a score that already sets one of them (for example `finger` on a note) will now draw the mark.
+
+- `ornament` on a note: a turn, inverted turn, upper mordent or lower mordent above the beat, on notation. See [Ornaments, fingering and hand marks](#ornaments-fingering-and-hand-marks).
+- `finger` on a note: a left-hand fingering digit (`1` to `4`, `'T'` or `0`) left of the chord, on notation. Room is added only for a chord that has one.
+- `rightFinger` on a note: a right-hand letter (`p`, `i`, `m`, `a`, `c`) above the beat. On tab-only tracks it sits above the TAB.
+- `golpe` on a beat: a golpe sign above the tap "T" place, on notation and TAB.
+- `leftHandTap` on a note: a left-hand tapping sign in the tap "T" place, on notation and TAB. One letter per beat: tap, then left-hand tap, slap and pop.
+- `pickScrape` on a beat: a dashed "P.S." label run, like let ring.
+- `barre` on a beat: a "C II" or "½C V" label run. It repeats after a system break.
+- Technique labels stack in the order P.M., harmonic, let ring, P.S., barre, rake.
+- New SVG classes: `ornament`, `ornament-turn`, `ornament-inverted-turn`, `ornament-upper-mordent`, `ornament-lower-mordent`, `fingering-left`, `fingering-right`, `golpe`, `golpe-thumb`, `golpe-finger`, `left-hand-tap`, `pick-scrape`, `pick-scrape-down`, `pick-scrape-up`, `barre` and `barre-half`.
 
 ### 1.6.0 — 2026-11-08
 
@@ -839,6 +895,7 @@ Initial public release.
   - `normalize.js`: fills in score defaults (sticky time and key signatures, barlines, measure count, pitch from string and fret, written and sounding pitch, `tabRhythm`, padded measures).
   - `harmonics.js`: guitar harmonic kinds and the helpers that layout, drawing and labels share.
   - `directions.js`: the playing direction fields (let ring, pick strokes, strum, arpeggio, tap, slap, pop, whammy, rake, trill, slide in and out, the bend grammar) and their canonical values.
+  - `hands.js`: the hand-mark fields (ornament, left- and right-hand fingering, golpe, pick scrape, barre), their canonical values and the barre label.
   - `chordShapes.js`: chord-diagram shapes. Validates an author's shape against the track and picks the shape a beat shows.
   - `navigation.js`: the navigation fields (`ending`, `segno`, `coda`, `jump`, `section`, `repeatCount`), their canonical values and the merge across tracks.
   - `scoreText.js`: canonical forms of the score text fields (header lines, sections, repeat counts, beat text, capo) and the capo and tuning chart rows.
@@ -846,7 +903,7 @@ Initial public release.
   - `layout/`: positioning, no drawing.
     - `index.js`: `computeLayout`. Ties the layout steps together and sets element positions.
     - `timeline.js`: the shared note timeline across tracks and the horizontal spacing.
-    - `chord.js`: chord geometry (seconds, accidental columns, dots, ledger lines) and the room an arpeggio line needs.
+    - `chord.js`: chord geometry (seconds, accidental columns, dots, ledger lines), the room an arpeggio line needs and the columns of left-hand fingering digits.
     - `accidentals.js`: accidentals carried through a measure.
     - `voices.js`: the shared columns of a two-voice measure (clash shift, shared accidentals, dots, rest positions).
     - `systems.js`: system breaking, justification, headers, courtesy signatures, instrument-name indents.
@@ -860,21 +917,22 @@ Initial public release.
     - `staff.js`: staff lines, clefs, key and time signatures, barlines.
     - `notation.js`: notes, stems, beams, fermatas, tuplets, chord symbols, ties and slurs. It re-exports the beat marks from `noteMarks.js`.
     - `noteMarks.js`: articulations, tremolo and vibrato marks on a beat, and the top and bottom edges of a beat's marks.
-    - `tab.js`: tab staff, fret numbers, tab clef, hammer-ons, slides, bends, palm mutes, tap letters, whammy dips, and TAB vibrato and tremolo.
+    - `tab.js`: tab staff, fret numbers, tab clef, hammer-ons, slides, bends, palm mutes, tap letters and the left-hand tap glyph, whammy dips, and TAB vibrato and tremolo.
     - `tabLinks.js`: the per-note TAB links (hammer-ons, pull-offs, slides, slide-ins and slide-outs, bends, pre-bends and releases), drawn for each track by `passes/tabTechniques.js`.
     - `whammy.js`: whammy dive, hold, return and pre-dive lines (planning and drawing).
     - `trill.js`: the trill mark ("tr" and a wavy line).
     - `arpeggio.js`: the arpeggio line left of a chord, on notation and TAB, drawn with each chord.
     - `strum.js`: strum arrows, and their placement above the TAB staff.
+    - `handMarks.js`: the shapes of ornaments, the golpe, right-hand letters and left-hand fingering digits. The passes and `system.js` place them.
     - `tabRhythm.js`: rhythm on TAB staves (stems, beams, flags, dots, tuplets and rests), drawn per measure.
     - `chordDiagram.js`: one chord diagram (the fretboard box with its dots, barres, fingers and name).
     - `passes.js`: the score-wide passes, drawn after all systems; re-exports them from `passes/` and documents their order.
       - `passes/common.js`: helpers shared by the passes.
-      - `passes/notationBeats.js`: notation beats, slurs and the space above a beat, shared by several passes.
+      - `passes/notationBeats.js`: notation beats, slurs, beam groups and the space above a beat, shared by several passes.
       - `passes/curves.js`: ties, slurs (including hammer-on and pull-off slurs), grace-note slurs and notation slide-ins and slide-outs.
-      - `passes/tabTechniques.js`: tab techniques (tap / slap / pop letters, trills, whammy dips and lines). Hands the per-note links to `tabLinks.js`.
-      - `passes/techniqueLabels.js`: technique labels (P.M., harmonics, let ring, rake).
-      - `passes/playingDirections.js`: pick strokes, strum arrows, notation tap / slap / pop letters and trills.
+      - `passes/tabTechniques.js`: tab techniques (tap / left-hand tap / slap / pop letters, golpe, trills, whammy dips and lines). Hands the per-note links to `tabLinks.js`.
+      - `passes/techniqueLabels.js`: technique labels (P.M., harmonics, let ring, pick scrape, barre, rake).
+      - `passes/playingDirections.js`: pick strokes, strum arrows, ornaments, right-hand letters, notation tap / left-hand tap / slap / pop letters, golpe and trills.
       - `passes/chordsFermatas.js`: chord symbols and dynamics, and fermatas.
     - `header.js`: the page header rows (title, subtitle, credits, instructions, capo and tuning chart) and the copyright footer.
     - `navigation.js`: volta brackets, segno, coda, jump texts and repeat counts, and section markers above each system's top staff, drawn after the fermatas and beat text and before the tempo.
