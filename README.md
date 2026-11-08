@@ -1,6 +1,6 @@
 # music-score
 
-Version 1.4.0 · MIT licence
+Version 1.5.0 · MIT licence
 
 A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL).
 
@@ -225,12 +225,12 @@ Beats are the rhythmic events in a measure, in order. Each beat is one note, one
 | `dynamic` | string | `'p'`, `'pp'`, `'ppp'`, `'mp'`, `'mf'`, `'f'`, `'ff'`, `'fff'`, `'sfz'`, `'rfz'`, `'n'`. Other values print as plain text. Drawn below the notation staff. |
 | `chord` | string | Chord symbol drawn above the staff, e.g. `'C'` or `'F/A'`. With a chord diagram, the name is centred above the diagram. |
 | `chordDiagram` | shape object or `false` | Optional. A shape for this beat's chord diagram, used instead of the `chordShapes` entry. `false` hides the diagram and keeps the plain chord symbol. See [Chord diagrams](#chord-diagrams). |
-| `tremolo` | boolean | Tremolo-picking marks. |
-| `vibrato` | boolean | Wavy vibrato line. |
+| `tremolo` | `true`, `'8th'`, `'16th'` or `'32nd'` | Tremolo-picking marks. `true` draws three strokes. `'8th'`, `'16th'` and `'32nd'` draw one, two or three strokes, in any case, with spaces around the word ignored. Numbers (`8`, `16`, `32`) and other values draw three strokes. See [Vibrato and tremolo](#vibrato-and-tremolo). |
+| `vibrato` | `true` or `'wide'` | Wavy vibrato line. `'wide'` (in any case) draws a taller, heavier wave. Any other truthy value draws the normal wave. See [Vibrato and tremolo](#vibrato-and-tremolo). |
 | `palmMute` | boolean | Marks the beat as part of a palm-muted run. Consecutive beats share one "P.M." dashed line, drawn above the tab staff (or below a notation-only staff). |
 | `slurStart`, `slurEnd` | boolean | Mark the first and last beat of a slur. A slur that crosses a line break is split into two parts. |
-| `articulations` | array of strings | See [Articulations and fermata](#articulations-and-fermata). |
-| `fermata` | boolean | See [Articulations and fermata](#articulations-and-fermata). |
+| `articulations` | array of strings | `'staccato'`, `'staccatissimo'`, `'tenuto'`, `'accent'`, `'marcato'` (or its alias `'heavyAccent'`). See [Articulations and fermata](#articulations-and-fermata). |
+| `fermata` | `true`, `'normal'`, `'short'` or `'long'` | Fermata above the beat. `true` and `'normal'` draw the usual fermata; `'short'` and `'long'` draw the short and long forms. Other values, such as the string `'true'` or the number `1`, draw nothing. See [Articulations and fermata](#articulations-and-fermata). |
 | `letRing` | truthy | Let-ring run: consecutive beats share one dashed "let ring" label. See [Picking and playing directions](#picking-and-playing-directions). |
 | `pickStroke` | `'down'` or `'up'` | Down-bow ⊓ or up-bow ∨ above the beat. Case-insensitive. Other values are ignored. A `strum` on the same beat replaces it. |
 | `strum` | `'down'` or `'up'` | Strum arrow (↓ or ↑) above the beat: above the TAB staff when the track has one, else above the notation staff. Case-insensitive. Other values are ignored. See [Picking and playing directions](#picking-and-playing-directions). |
@@ -474,26 +474,29 @@ The left indent of each system is widened to fit its names, so the first system 
 
 ## Articulations and fermata
 
-Two optional beat fields. Both draw on the notation staff only.
+Optional beat fields for articulation and fermata marks. Articulations and fermatas draw on the notation staff only. Vibrato and tremolo are also drawn on the TAB staff (see [Vibrato and tremolo](#vibrato-and-tremolo)).
 
 ### `articulations`
 
-An array of strings on a `note` beat. Allowed values: `'staccato'`, `'accent'`, `'tenuto'`. Values are case-sensitive.
+An array of strings on a `note` beat. Allowed values: `'staccato'`, `'staccatissimo'`, `'tenuto'`, `'accent'`, and `'marcato'`, which may also be written `'heavyAccent'`. Values are case-sensitive and must match exactly, with no extra spaces.
 
 - Marks are drawn once per beat and apply to the whole chord. You do not choose a side.
 - Marks go on the side opposite the stem. A note whose stem points up gets its marks below. A note whose stem points down gets its marks above. In a two-voice measure they go on the stem side instead (see [Voices](#voices)).
 - A beamed note takes its beam group's stem direction, so the group decides the side.
 - A whole note has no stem. It gets marks below if its position is below the middle line, otherwise above.
 - In a chord, the marks attach to the outermost notehead on that side.
-- Marks stack outward from the notehead in a fixed order: staccato nearest, then tenuto, then accent. The order in your array does not matter.
-- Duplicates are ignored. Unknown values (for example `'marcato'`) and non-array values are ignored without an error.
+- Marks stack outward from the notehead in a fixed order: staccatissimo or staccato nearest, then tenuto, then marcato or accent. The order in your array does not matter.
+- Two marks in the same place compete. `staccatissimo` replaces `staccato`, and `marcato` (or `heavyAccent`) replaces `accent`. Only the stronger one is drawn. Tenuto is never replaced.
+- A taller mark (marcato, staccatissimo) that would touch the notehead, or the mark inside it, moves out one more staff space. So it can sit a little higher than a plain accent or staccato on the same note.
+- Duplicates are ignored. Unknown values (for example `'bogus'`) and non-array values are ignored without an error.
 - Ignored on rests, grace notes, and tab staves.
 
 ### `fermata`
 
-`fermata: true` on a `note` or `rest` beat draws a fermata above the beat.
+`fermata` on a `note` or `rest` beat draws a fermata above the beat.
 
-- Only the boolean `true` counts. The string `'true'` or the number `1` draws nothing.
+- `true` and `'normal'` draw the usual fermata. `'short'` and `'long'` draw the short and long forms. These values are trimmed and case-insensitive, so `' Long '` works.
+- Other values draw nothing: the string `'true'`, the number `1`, and `false`.
 - The fermata sits above everything else on that beat: the staff, stem, noteheads, articulation marks, slurs, tuplet brackets, vibrato or tremolo marks, and any chord symbol or chord diagram.
 - Ignored on grace notes and tab staves.
 
@@ -505,7 +508,14 @@ An array of strings on a `note` beat. Allowed values: `'staccato'`, `'accent'`, 
 
 E4 is below the middle line, so its stem goes up and the marks go below the notehead.
 
-The demo score in `examples/articulations-demo.js` (exported as `articulationsScore`) shows each mark, the stacking order, chords, beamed groups, whole notes, fermatas on notes, rests, chord symbols, slurs and tuplets, and how dynamics and ties sit with the marks.
+The demo score in `examples/articulations-demo.js` (exported as `articulationsScore`) shows each mark, including marcato and staccatissimo, the stacking order, chords, beamed groups, whole notes, fermatas on notes, rests, chord symbols, slurs and tuplets, and how dynamics and ties sit with the marks.
+
+### Vibrato and tremolo
+
+- **Vibrato** (`vibrato`): `true` draws the normal wavy line. `'wide'` draws a taller, longer and heavier wave, on notation and TAB. Marks above a note with a wide vibrato sit a little higher to clear it.
+- **Tremolo** (`tremolo`): `true` draws three strokes, as before. `'8th'`, `'16th'` and `'32nd'` draw one, two or three strokes, centred where the three would be. The speed is trimmed and case-insensitive. Numbers and other values draw three strokes.
+- In a two-voice measure, vibrato is drawn for voice 1 only. Tremolo is drawn for both voices (see [Voices](#voices)).
+- SVG classes: on notation, `vibrato` with `vibrato-wide` for a wide wave, and `tremolo` with `tremolo-8th`, `tremolo-16th` or `tremolo-32nd` for a speed. On TAB, `tab-vibrato` with `tab-vibrato-wide`, and `tab-tremolo` with `tab-tremolo-8th`, `tab-tremolo-16th` or `tab-tremolo-32nd`. A plain `true` tremolo has the `tremolo` class alone. Fermatas use `fermata`, with `fermata-short` or `fermata-long` for those kinds.
 
 These fields do not change the API or the theme.
 
@@ -599,6 +609,8 @@ A measure can hold two rhythms on one staff, for example a melody over a held ba
 - **Voices: grace notes.** Graces of both voices that lead into notes at the same time can collide.
 - **Voices: TAB.** A voice 2 fret on the same string as a voice 1 fret at the same time is left off the TAB staff. A voice 1 rest in the rhythm band is drawn over voice 2 frets and can hide them.
 - **Voices: dots.** Where the voices do not clash, a dot can sit close to the other voice's noteheads.
+- **Tremolo room.** A stemless (whole) note keeps the room for three strokes even with `'8th'` or `'16th'`, so a mark above it can sit a little higher than it needs to.
+- **Articulations and fermatas on tab.** They are not drawn on tab-only tracks.
 - **Not included:** playback, an editor, and import/export of other file formats.
 
 ## Running tests
@@ -625,6 +637,17 @@ It prints `ALL PASSED` and exits with code 0 on success.
 - To run one group on its own: `node tests/units.mjs`, `node tests/engraving.mjs`, or `node tests/articulations.mjs`.
 
 ## Changelog
+
+### 1.5.0 — 2026-11-08
+
+Note-effect variants. Scores that do not use these values are unchanged. Some values that were ignored, or drawn as the default, now draw what they name. See the first four items below.
+
+- `vibrato: 'wide'` draws a taller, longer, heavier wave on notation and TAB. Before 1.5.0 it drew the normal wave. Marks above a wide vibrato sit a little higher to clear it. See [Vibrato and tremolo](#vibrato-and-tremolo).
+- `tremolo: '8th'` and `'16th'` draw one and two strokes. Before 1.5.0 they drew three. `'32nd'` draws three, as `true` does. Numbers such as `8` still draw three strokes.
+- `fermata: 'short'` and `'long'` draw the short and long fermatas, and `'normal'` draws the usual one. Before 1.5.0 all three drew nothing. The string `'true'` and the number `1` still draw nothing.
+- `articulations: ['marcato']` (or `'heavyAccent'`) and `['staccatissimo']` draw their marks. Before 1.5.0 they were ignored. `staccatissimo` replaces `staccato`, and `marcato` replaces `accent`, when both are listed.
+- The articulations demo now shows a marcato.
+- New SVG classes: `vibrato-wide`, `tab-vibrato-wide`, `tremolo-8th`, `tremolo-16th`, `tremolo-32nd`, `tab-tremolo-8th`, `tab-tremolo-16th`, `tab-tremolo-32nd`, `fermata-short` and `fermata-long`.
 
 ### 1.4.0 — 2026-11-08
 
@@ -726,6 +749,7 @@ Initial public release.
   - `directions.js`: the playing direction fields (let ring, pick strokes, strum, arpeggio, tap, slap, pop, whammy, rake, trill, slide in and out, the bend grammar) and their canonical values.
   - `chordShapes.js`: chord-diagram shapes. Validates an author's shape against the track and picks the shape a beat shows.
   - `navigation.js`: the navigation fields (`ending`, `segno`, `coda`, `jump`), their canonical values and the merge across tracks.
+  - `noteEffects.js`: the canonical values of the `vibrato`, `tremolo` and `fermata` fields (for example `'wide'`, `'16th'` or `'short'`), used when drawing.
   - `layout/`: positioning, no drawing.
     - `index.js`: `computeLayout`. Ties the layout steps together and sets element positions.
     - `timeline.js`: the shared note timeline across tracks and the horizontal spacing.
@@ -741,8 +765,9 @@ Initial public release.
   - `draw/`: SVG drawing.
     - `system.js`: draws one system and its measures.
     - `staff.js`: staff lines, clefs, key and time signatures, barlines.
-    - `notation.js`: notes, stems, beams, articulations, fermatas, tuplets, chord symbols, ties and slurs.
-    - `tab.js`: tab staff, fret numbers, tab clef, hammer-ons, slides, bends, palm mutes, tap letters and whammy dips.
+    - `notation.js`: notes, stems, beams, fermatas, tuplets, chord symbols, ties and slurs. It re-exports the beat marks from `noteMarks.js`.
+    - `noteMarks.js`: articulations, tremolo and vibrato marks on a beat, and the top and bottom edges of a beat's marks.
+    - `tab.js`: tab staff, fret numbers, tab clef, hammer-ons, slides, bends, palm mutes, tap letters, whammy dips, and TAB vibrato and tremolo.
     - `tabLinks.js`: the per-note TAB links (hammer-ons, pull-offs, slides, slide-ins and slide-outs, bends, pre-bends and releases), drawn for each track by `passes/tabTechniques.js`.
     - `whammy.js`: whammy dive, hold, return and pre-dive lines (planning and drawing).
     - `trill.js`: the trill mark ("tr" and a wavy line).
