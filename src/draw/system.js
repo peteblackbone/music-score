@@ -194,8 +194,8 @@ function drawNotationMeasure(g, measure, track, notationBaselineY, theme) {
 /**
  * One voice of a measure's notation (`voice` 0 = single-voice measure, 1 | 2
  * in a two-voice measure: forced stems, marks on the stem side, voice 2's
- * tuplets below; vibrato, arpeggio lines and left-hand fingering are voice
- * 1's only).
+ * tuplets and vibrato below; arpeggio lines and left-hand fingering are
+ * voice 1's only).
  */
 function drawVoice(g, measure, elements, beamGroups, tupletGroups, track, notationBaselineY, theme, voice) {
   const rendered = {};
@@ -219,7 +219,10 @@ function drawVoice(g, measure, elements, beamGroups, tupletGroups, track, notati
     const marks = layoutEl.el.type === 'note' ? normalizeArticulations(layoutEl.el.articulations) : [];
     if (marks.length) renderArticulations(g, layoutEl.rendered, marks, notationBaselineY, theme, voiceOf(layoutEl));
     if (layoutEl.el.tremolo) renderTremolo(g, layoutEl.rendered, theme, { below: voice === 2, speed: tremoloOf(layoutEl.el.tremolo) });
-    if (voice === 2) return;
+    if (voice === 2) {
+      if (layoutEl.el.vibrato) renderVibrato(g, layoutEl.rendered, layoutEl.width, theme, vibratoOf(layoutEl.el.vibrato), { below: true, tremolo: !!layoutEl.el.tremolo });
+      return;
+    }
     if (layoutEl.el.vibrato) renderVibrato(g, layoutEl.rendered, layoutEl.width, theme, vibratoOf(layoutEl.el.vibrato));
     const arp = beatArpeggio(layoutEl.el);
     if (arp) renderNotationArpeggio(g, { ...layoutEl, baselineY: notationBaselineY }, arp, theme);
@@ -236,7 +239,7 @@ function drawVoice(g, measure, elements, beamGroups, tupletGroups, track, notati
  * spanning the first notehead's left edge to the last notehead's right
  * edge. Records the bracket height as `info.tupletY` for the fermata pass.
  * `below` (voice 2): mirrored below the group's lowest point, ticks up,
- * nothing recorded.
+ * recorded as `info.tupletBottomY` for the marks below (draw/voice2Marks.js).
  */
 function drawTupletBrackets(g, tupletGroups, elements, notationBaselineY, theme, below) {
   const s = theme.staffLineSpacing;
@@ -250,6 +253,7 @@ function drawTupletBrackets(g, tupletGroups, elements, notationBaselineY, theme,
       const bottomY = Math.max(-Infinity, ...infos.map(elementBottom));
       const y = Math.max(bottomY + s * TUPLET_CLEARANCE_SP, notationBaselineY + s * TUPLET_STAFF_CLEAR_SP);
       tupletBracket(g, x1, x2, y, count, { tickDir: -1, color: theme.noteColor, className: 'tuplet' }, theme);
+      infos.forEach((info) => { info.tupletBottomY = y; });
       return;
     }
     const clearance = s * TUPLET_CLEARANCE_SP;

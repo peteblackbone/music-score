@@ -33,6 +33,8 @@
  *   `restPos`); both events get `ev.restMerged` and voice 2's draws nothing.
  * - Extents: the column's left/right extents cover both voices; the own
  *   left extent (where graces start) is the same for both voices.
+ * - TAB columns (tabColumnMarks): voice 2's beat as drawn on TAB
+ *   (`tabEl`), and which voice supplies each TAB mark of a column.
  *
  * Events are updated in place; chord layouts are replaced by copies, never
  * mutated. All widths are px. Pure functions, no DOM.
@@ -43,6 +45,9 @@ import { glyphBox } from '../glyphMetrics.js';
 import { R, ZERO, add, cmp, key } from '../rational.js';
 import { durationR, isHiddenRest } from '../duration.js';
 import { parsePitch } from '../pitch.js';
+import { beatTrill, beatTapMark, beatPickStroke, beatStrum } from '../directions.js';
+import { beatGolpe, rightFingerStack } from '../hands.js';
+import { tremoloOf, vibratoOf } from '../noteEffects.js';
 
 const REST_CLEAR_POS = 1;          // rest ink -> other voice's notehead (staff positions; 0.5 sp)
 const REST_MAX_STEPS = 20;         // bound on the whole-space moves of one rest
@@ -51,6 +56,17 @@ const VARIANTS = [
   { chord: 'chord', left: 'left', own: 'ownLeft' },
   { chord: 'chordFirst', left: 'leftFirst', own: 'ownLeftFirst' },
 ];
+
+// TAB mark categories of a column (ui.md §3) and whether a beat has one; a strum takes voice 1's pick slot.
+const TAB_MARKS = {
+  tremolo: (b) => !!tremoloOf(b.tremolo),
+  vibrato: (b) => !!vibratoOf(b.vibrato),
+  trill: (b) => !!beatTrill(b),
+  tap: (b) => !!beatTapMark(b),
+  golpe: (b) => !!beatGolpe(b),
+  right: (b) => !!rightFingerStack(b),
+  pick: (b, v1) => !!beatPickStroke(b) || (v1 && !!beatStrum(b)),
+};
 
 const onLine = (pos) => ((pos % 2) + 2) % 2 === 0;
 const uniqueSorted = (ps) => [...new Set(ps)].sort((a, b) => a - b);
@@ -176,6 +192,53 @@ function pairColumn(e1, el1, e2, el2, s) {
     e1.right = Math.max(e1.right, a.rightExt);
     e2.right = Math.max(e2.right, shift + b.rightExt);
     e1[k.chord] = a; e2[k.chord] = b;
+  });
+}
+
+/**
+ * TAB columns of a two-voice measure's layout elements (`elements` voice
+ * 1, `elements2` voice 2), in place. Every voice-2 element gets `tabEl`,
+ * its beat as drawn on TAB: no beat-level marks, no note on a string voice
+ * 1 frets at the same onset. At a voice-2 note's onset where voice 1 plays
+ * a note, voice 1 wins each TAB mark category (TAB_MARKS) it has and a
+ * category only voice 2 has is drawn from voice 2's beat in voice 1's
+ * slot: voice 1's element gets `tabMarks` `{ [category]: beat, topString? }`
+ * when voice 2 supplies one, or when a tremolo / vibrato column has a
+ * voice-2 fret above voice 1's (`topString`: the column's top string). At
+ * an onset without a voice-1 note (nothing, or a rest) the voice-2 element
+ * is its own column (`tabOwn: true`), its `tabEl` keeping tremolo and
+ * vibrato. Strum and whammy stay voice 1's.
+ */
+export function tabColumnMarks(elements, elements2) {
+  const fretted = new Map();
+  const v1At = new Map();
+  elements.forEach((le) => {
+    if (!le.t) return;
+    const set = fretted.get(key(le.t)) || new Set();
+    (le.el.notes || []).forEach((n) => { if (n.string != null && n.fret != null) set.add(n.string); });
+    fretted.set(key(le.t), set);
+    if (!le.wholeMeasureRest && !isHiddenRest(le.el)) v1At.set(key(le.t), le);
+  });
+  const strings = (notes) => notes.filter((n) => n.string != null && n.fret != null).map((n) => n.string);
+  elements2.forEach((le) => {
+    const { type, duration, dots, tuplet } = le.el;
+    const taken = le.t && !le.wholeMeasureRest ? fretted.get(key(le.t)) : null;
+    le.tabEl = { type, duration, dots, tuplet, notes: (le.el.notes || []).filter((n) => !taken || !taken.has(n.string)) };
+    if (!le.t || le.wholeMeasureRest || type !== 'note') return;
+    const v1 = v1At.get(key(le.t));
+    if (!v1 || v1.el.type !== 'note') {
+      le.tabOwn = true;
+      if (le.el.tremolo !== undefined) le.tabEl.tremolo = le.el.tremolo;
+      if (le.el.vibrato !== undefined) le.tabEl.vibrato = le.el.vibrato;
+      return;
+    }
+    const marks = {};
+    Object.entries(TAB_MARKS).forEach(([cat, has]) => { if (!has(v1.el, true) && has(le.el, false)) marks[cat] = le.el; });
+    const s1 = strings(v1.el.notes || []); const s2 = strings(le.tabEl.notes);
+    const wavy = ['tremolo', 'vibrato'].some((cat) => TAB_MARKS[cat](marks[cat] || v1.el));
+    const higher = wavy && s2.length && Math.min(...s2) < Math.min(...s1);
+    if (!Object.keys(marks).length && !higher) return;
+    v1.tabMarks = higher ? { ...marks, topString: Math.min(...s1, ...s2) } : marks;
   });
 }
 

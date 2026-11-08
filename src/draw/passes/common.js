@@ -1,7 +1,7 @@
 /**
  * draw/passes/common.js — helpers shared by several score-wide passes
- * (draw/passes.js): walking a track's runs in score order, a run's TAB top
- * line, the topmost ink under a horizontal span, and where a split arc ends
+ * (draw/passes.js): walking a track's runs in score order (per voice, or
+ * per TAB column), a run's TAB top line, the topmost ink under a horizontal span, and where a split arc ends
  * and resumes at a system break. Reads only; draws nothing.
  */
 
@@ -19,6 +19,24 @@ export function flattenRuns(trackRuns, track, visit, voice = 1) {
     run.measures.forEach((measure) => {
       // plain data access (common.js imports nothing): only two-voice measures have `elements2` (twoVoice.js)
       (voice === 2 ? (measure.elements2 || measure.elements) : measure.elements).forEach((layoutEl) => visit(layoutEl, run, measure));
+    });
+  });
+}
+
+/**
+ * Visit the TAB columns of `track` in score order, calling `visit(layoutEl,
+ * run, measure)`: single-voice measures exactly like flattenRuns; a
+ * two-voice measure's voice-1 elements plus the voice-2 elements at onsets
+ * voice 1 plays no note at (`tabOwn`), by column x (x - dx; stable).
+ */
+export function flattenTabColumns(trackRuns, track, visit) {
+  trackRuns.filter((r) => r.track === track).forEach((run) => {
+    run.measures.forEach((measure) => {
+      const cols = measure.elements2
+        ? [...measure.elements, ...measure.elements2.filter((le) => le.tabOwn)]
+          .map((le, i) => ({ le, i })).sort((a, b) => (a.le.x - (a.le.dx || 0)) - (b.le.x - (b.le.dx || 0)) || a.i - b.i).map((c) => c.le)
+        : measure.elements;
+      cols.forEach((layoutEl) => visit(layoutEl, run, measure));
     });
   });
 }

@@ -70,6 +70,12 @@ export function rightFingeringHalf(letters, theme) {
   return Math.max(...letters.map((l) => estimateTextWidth(l, size))) / 2;
 }
 
+/** Height (px) of the right-hand `letters` stack as renderRightFingering draws it (top to `bottomY`). */
+export function rightFingeringHeight(letters, theme) {
+  const size = RIGHT_FINGER_SIZE_SP * theme.staffLineSpacing;
+  return (TEXT_DESCENT_EM + (letters.length - 1) * RIGHT_FINGER_LINE_EM + TEXT_ASCENT_EM) * size;
+}
+
 /**
  * Right-hand letters (`letters`, lowest note first; hands.js
  * rightFingerStack) stacked upward, italic, centred on `x`, the lowest

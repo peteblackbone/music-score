@@ -5,6 +5,7 @@
 import { line, group, text, glyphText, path, rect, wavyPathD, svgD } from './svgUtil.js';
 import { tabClefMetrics } from '../layout/systems.js';
 import { fretLabel, fretLabelWidth, estimateTextWidth } from '../textMetrics.js';
+import { tabMarkBeat } from '../twoVoice.js';
 import { TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../layout/ink.js';
 import { whammyLabel, TAP_MARK_LETTERS, bendOf } from '../directions.js';
 import { tabFretKnockoutHalf } from '../layout/tabRhythm.js';
@@ -96,12 +97,14 @@ export function renderTabElement(g, layoutEl, stringCount, theme) {
   // Tremolo picking / vibrato: marks hanging above the topmost fret number
   // in this beat, mirroring the ones drawn on the notation staff above.
   // When both are set, vibrato stacks above the tremolo marks so they
-  // don't overlap.
-  const trem = tremoloOf(el.tremolo);
-  const vib = vibratoOf(el.vibrato);
+  // don't overlap. In a two-voice column either may come from voice 2's
+  // beat (layoutEl.tabMarks, layout/voices.js), above both voices' frets.
+  const trem = tremoloOf(tabMarkBeat(layoutEl, 'tremolo').tremolo);
+  const vib = vibratoOf(tabMarkBeat(layoutEl, 'vibrato').vibrato);
   if (trem || vib) {
-    const usedYs = notes.filter((n) => n.string != null && n.fret != null)
-      .map((n) => layoutEl.tabBaselineY - (stringCount - n.string) * theme.tabStaffLineSpacing);
+    const topString = layoutEl.tabMarks?.topString;
+    const usedYs = [...notes.filter((n) => n.string != null && n.fret != null).map((n) => n.string), ...(topString != null ? [topString] : [])]
+      .map((string) => layoutEl.tabBaselineY - (stringCount - string) * theme.tabStaffLineSpacing);
     if (usedYs.length) {
       const baseTopY = Math.min(...usedYs) - theme.tabFontSize - 0.5 * spacing;
       if (trem) marksTopY = Math.min(marksTopY, renderTabTremolo(g, x, baseTopY, theme, trem));

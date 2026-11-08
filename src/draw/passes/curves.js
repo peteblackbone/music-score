@@ -5,9 +5,11 @@
  * notation group. Reads the rendered noteheads and stems; writes no run
  * fields. Tracks with two-voice measures get each of these per voice
  * (flattenRuns' voice streams): voice 1's ties and slurs above, voice 2's
- * below, each linking within its own voice.
+ * below, each linking within its own voice; voice 2's drawn tie and slur
+ * segments are recorded on their run (`run.curvesBelow2`, outer edges) for
+ * the marks below them (draw/voice2Marks.js).
  */
-import { renderCurve, renderNoteSlide } from '../notation.js';
+import { renderCurve, renderNoteSlide, curveOuterPoints } from '../notation.js';
 import { parsePitch, midiNumber } from '../../pitch.js';
 import { slideMarks } from '../../directions.js';
 import { flattenRuns, breakEndX, breakStartX } from './common.js';
@@ -70,6 +72,14 @@ export function renderTiesAndSlurs(score, trackRuns, theme, systems) {
 /** Ties, slurs and slide-in / slide-out lines of one voice stream of a notation track. */
 function renderVoiceCurves(track, trackRuns, theme, systems, voice) {
   const s = theme.staffLineSpacing;
+  // Draw one tie / slur segment; voice 2's outer edge goes on its run (run.curvesBelow2).
+  const curve = (g, x1, y1, x2, y2, above, kind) => {
+    renderCurve(g, x1, y1, x2, y2, above, theme, kind);
+    if (voice !== 2) return;
+    const run = trackRuns.find((r) => r.notationG === g);
+    if (!run.curvesBelow2) run.curvesBelow2 = [];
+    run.curvesBelow2.push(curveOuterPoints(x1, y1, x2, y2, false, theme, kind));
+  };
   // One flat, ordered list of noteheads: { sysIdx, g, x, halfWidth, y, midi, tieStart, tieEnd, above, start }
   const flat = [];
   flattenRuns(trackRuns, track, (layoutEl, run) => {
@@ -97,7 +107,7 @@ function renderVoiceCurves(track, trackRuns, theme, systems, voice) {
       { g: item.g, sysIdx: item.sysIdx, x: item.x + item.halfWidth + TIE_END_GAP_SP * s, y: item.y + dy },
       { g: target.g, sysIdx: target.sysIdx, x: target.x - target.halfWidth - TIE_END_GAP_SP * s, y: target.y + dy },
       systems, theme,
-      (g, x1, y1, x2, y2) => renderCurve(g, x1, y1, x2, y2, item.above, theme, 'tie'),
+      (g, x1, y1, x2, y2) => curve(g, x1, y1, x2, y2, item.above, 'tie'),
     );
   });
 
@@ -111,7 +121,7 @@ function renderVoiceCurves(track, trackRuns, theme, systems, voice) {
       { g: a.g, sysIdx: a.sysIdx, x: a.x, y: y1 },
       { g: b.g, sysIdx: b.sysIdx, x: b.x, y: y2 },
       systems, theme,
-      (g, x1, y1, x2, y2) => renderCurve(g, x1, y1, x2, y2, above, theme, 'slur'),
+      (g, x1, y1, x2, y2) => curve(g, x1, y1, x2, y2, above, 'slur'),
     );
   });
   renderNoteSlides(track, trackRuns, theme, systems, voice);

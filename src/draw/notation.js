@@ -65,9 +65,11 @@ export function renderNotationElement(g, layoutEl, measure, track, theme, opts =
   if (el.type === 'rest') {
     // A voice-2 rest merged with voice 1's (layout/voices.js) is drawn once, by voice 1.
     if (el.hidden || (layoutEl.restMerged && voiceOf(layoutEl) === 2)) return { isRest: true, hidden: true, x, noteheads: [] };
+    // Voice 2's rests also report their ink bottom, for the marks below them (draw/voice2Marks.js).
+    const bottomOf = (glyph, y) => (voiceOf(layoutEl) === 2 ? { restBottomY: y - glyphBox(glyph).bottom * spacing } : {});
     if (opts.wholeMeasureRest) {
       renderWholeMeasureRest(g, x, layoutEl.baselineY, theme, layoutEl.restPos ?? 6);
-      return { isRest: true, x, noteheads: [] };
+      return { isRest: true, x, noteheads: [], ...bottomOf(Glyph.restWhole, layoutEl.baselineY + staffPositionToY(layoutEl.restPos ?? 6, spacing)) };
     }
     // Two-voice measures place rests per voice (layout/voices.js), with a ledger line outside the staff.
     const pos = layoutEl.restPos ?? REST_POSITION[el.duration] ?? 4;
@@ -84,7 +86,7 @@ export function renderNotationElement(g, layoutEl, measure, track, theme, opts =
       const dx = (glyphBox(glyph).width / 2 + DOT_GAP_SP) * spacing;
       drawDots(g, x + dx, [dotPosition(pos)], el.dots, layoutEl.baselineY, theme);
     }
-    return { isRest: true, x, noteheads: [] };
+    return { isRest: true, x, noteheads: [], ...bottomOf(glyph, y) };
   }
 
   if (el.type === 'grace') return renderGraceNote(g, layoutEl, track, theme);
@@ -442,23 +444,27 @@ export function beamShape(x1, y1, x2, y2, thickness, extendSign, color) {
 }
 
 const FERMATA_GLYPHS = { normal: Glyph.fermataAbove, short: Glyph.fermataShortAbove, long: Glyph.fermataLongAbove };
+const FERMATA_GLYPHS_BELOW = { normal: Glyph.fermataBelow, short: Glyph.fermataShortBelow, long: Glyph.fermataLongBelow };
 
-/** Glyph of a fermata kind (noteEffects.js fermataOf): 'normal' | 'short' | 'long'. */
-export function fermataGlyph(kind) {
-  return FERMATA_GLYPHS[kind];
+/** Glyph of a fermata kind (noteEffects.js fermataOf): 'normal' | 'short' | 'long'; `below` the inverted one. */
+export function fermataGlyph(kind, below = false) {
+  return (below ? FERMATA_GLYPHS_BELOW : FERMATA_GLYPHS)[kind];
 }
 
 /**
  * Draw a fermata above a beat, centred on `x` with its bottom edge at
- * `bottomY` (already resolved by the caller to clear everything else
+ * `y` (already resolved by the caller to clear everything else
  * drawn above that beat). `kind` 'short' / 'long' draws the short / long
  * fermata in `<g class="fermata fermata-<kind>">`; 'normal' the usual one
- * in `<g class="fermata">`.
+ * in `<g class="fermata">`. `below` (voice 2): the inverted glyph with its
+ * top edge at `y`, class `fermata-below` added.
  */
-export function renderFermata(g, x, bottomY, theme, kind = 'normal') {
-  const gEl = group({ class: kind === 'normal' ? 'fermata' : `fermata fermata-${kind}` });
-  // Each fermata glyph's origin already sits on its bottom edge.
-  gEl.appendChild(glyphText(x, bottomY, fermataGlyph(kind), theme.fontFamily, smuflFontSizePx(theme), {
+export function renderFermata(g, x, y, theme, kind = 'normal', { below = false } = {}) {
+  const cls = kind === 'normal' ? 'fermata' : `fermata fermata-${kind}`;
+  const gEl = group({ class: below ? `${cls} fermata-below` : cls });
+  const glyph = fermataGlyph(kind, below);
+  // Each upright fermata glyph's origin already sits on its bottom edge; an inverted one is placed by its box top.
+  gEl.appendChild(glyphText(x, below ? y + glyphBox(glyph).top * theme.staffLineSpacing : y, glyph, theme.fontFamily, smuflFontSizePx(theme), {
     fill: theme.noteColor, 'text-anchor': 'middle',
   }));
   g.appendChild(gEl);

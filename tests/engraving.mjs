@@ -507,10 +507,10 @@ function collectNumbers(root) {
 const SCALED = { staffLineSpacing: 20, tabStaffLineSpacing: 30, tabFontSize: 24, dynamicFontSize: 30 };
 const SCALED_STROKES = { ...SCALED, stemWidth: 2.6, beamWidth: 10, staffLineWidth: 2 };
 
-function scaleDrift(theme, label) {
+function scaleDrift(theme, label, keep = () => true) {
   const mx = { x: 0, y: 0, pathX: 0, pathY: 0 };
   for (const [name, score, options] of SCORES) {
-    if (options.theme) continue; // fixtures with their own spacing are not doubled
+    if (options.theme || !keep(name)) continue; // fixtures with their own spacing are not doubled
     const na = collectNumbers(renderTree(score, 900)); const nb = collectNumbers(renderTree(score, 1800, { theme }));
     ok(na.length === nb.length, `${label} ${name}: tree shape differs when scaled (${na.length} vs ${nb.length})`);
     for (let i = 0; i < na.length; i++) {
@@ -523,9 +523,15 @@ function scaleDrift(theme, label) {
   return mx;
 }
 
+// 1.8: char-voices' voice-2 TAB tremolos (m6 / m8) became its TAB staves' topmost ink; their round caps are a fixed
+// 1.3 px stroke (draw/tab.js, not a theme width), so the ink-based staff placement below them is half that stroke
+// (0.65 px) off exact doubling. Checked on its own: y within 0.67, everything else exact.
+const TAB_TREMOLO_CAP_CASES = ['char-voices'];
 test('scaling', 'x2 scaling with every stroke width doubled too: all coordinates double exactly (drift <= 0.02)', () => {
-  const mx = scaleDrift(SCALED_STROKES, 'strokes-scaled');
+  const mx = scaleDrift(SCALED_STROKES, 'strokes-scaled', (name) => !TAB_TREMOLO_CAP_CASES.includes(name));
   for (const [k, v] of Object.entries(mx)) ok(v <= 0.02, `strokes-scaled max drift ${k} = ${v.toFixed(3)} > 0.02`);
+  const capped = scaleDrift(SCALED_STROKES, 'strokes-scaled', (name) => TAB_TREMOLO_CAP_CASES.includes(name));
+  for (const [k, v] of Object.entries(capped)) ok(v <= (k === 'y' ? 0.67 : 0.02), `strokes-scaled (fixed tremolo caps) max drift ${k} = ${v.toFixed(3)}`);
   results.push({ ok: true, name: `[scaling] info: strokes scaled, max drift x ${mx.x.toFixed(3)} y ${mx.y.toFixed(3)} path x ${mx.pathX.toFixed(3)} y ${mx.pathY.toFixed(3)} (tolerance 0.02)`, n: 0, info: true });
 });
 
@@ -5640,7 +5646,8 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
       for (const sg of all(tree).filter(({ n }) => /^staff staff-notation/.test(cls(n))).map(({ n }) => n)) {
         const sp = 10;
         const waves = groupsOf(sg, /^vibrato vibrato-wide$/).map(waveOf);
-        const marks = groupsOf(sg, /^(pick-stroke|fermata|trill$|tap$)/).map((g) => {
+        // 1.8: voice 2's inverted fermata (fermata-below) sits under the staff, not above the wave
+        const marks = groupsOf(sg, /^(pick-stroke|fermata|trill$|tap$)/).filter((g) => !/fermata-below/.test(cls(g))).map((g) => {
           const t = g.children[0];
           const y = num(t, 'y');
           const bottom = cls(g) === 'tap' ? y + 0.25 * num(t, 'font-size') : cls(g) === 'trill' ? y + 0.063 * sp : y;
@@ -5657,7 +5664,9 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
     ok(fc.includes('fermata') && fc.includes('fermata fermata-short') && fc.includes('fermata fermata-long'), `fermata classes ${fc}`);
     groupsOf(tree, /^fermata( |$)/).forEach((g) => {
       const code = cpOf(g.children[0]);
-      ok(code === { fermata: 0xE4C0, 'fermata fermata-short': 0xE4C4, 'fermata fermata-long': 0xE4C6 }[cls(g)], `${cls(g)} glyph ${code.toString(16)}`);
+      ok(code === { fermata: 0xE4C0, 'fermata fermata-short': 0xE4C4, 'fermata fermata-long': 0xE4C6,
+        // 1.8: voice 2's inverted fermatas
+        'fermata fermata-below': 0xE4C1, 'fermata fermata-short fermata-below': 0xE4C5, 'fermata fermata-long fermata-below': 0xE4C7 }[cls(g)], `${cls(g)} glyph ${code.toString(16)}`);
     });
     const codes = groupsOf(tree, /^articulations$/).flatMap((g) => g.children.map(cpOf));
     [0xE4A6, 0xE4A7, 0xE4AC, 0xE4AD].forEach((c) => ok(codes.includes(c), `glyph ${c.toString(16)} drawn`));
