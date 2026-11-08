@@ -1,6 +1,6 @@
 # music-score
 
-Version 1.5.0 · MIT licence
+Version 1.6.0 · MIT licence
 
 A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL).
 
@@ -146,9 +146,17 @@ A score is nested: score, then tracks, then measures, then beats, then notes. Fi
 | `timeSignature` | `{ beats, beatType }` | Default 4/4. Used by tracks that do not set their own. |
 | `keySignature` | integer, -7 to 7 | Default 0. Negative values are flats, positive values are sharps. |
 | `title` | string | Centred at the top of the page, in the largest text. |
+| `subtitle` | string | Centred under the title, in a smaller text. See [Page header](#page-header). |
+| `artist` | string | Centred under the subtitle, smaller again. |
+| `album` | string | Centred under the artist, smaller again. |
 | `composer` | string | Right-aligned at the top of the page, on the line under the title. |
+| `words` | string | "Words by" line at the left, under the composer line. See [Page header](#page-header). |
+| `music` | string | "Music by" line at the right, beside `words`. When it equals `words`, one "Words & Music by" line is drawn instead. |
 | `tempoText` | string | Bold text above the first system, starting at the time signature. |
 | `tuningLabel` | string | Italic text at the left of the line under the title (for example "Standard tuning"). |
+| `instructions` | string | Italic lines under the credits, one per line break (`\n`). Up to 8 lines are drawn. |
+| `copyright` | string | Centred lines at the foot of the score, under the last system, one per line break. Up to 8 lines are drawn, and the score grows to fit them. |
+| `showTuningChart` | `true` | Optional, off by default. `true` lists the strings tuned differently from the usual tuning in the header. See [Capo and tuning chart](#capo-and-tuning-chart). |
 | `chordShapes` | object | Optional. Chord-diagram shapes by chord name, e.g. `{ "C": { "frets": ["x", 3, 2, 0, 1, 0] } }`. A beat whose `chord` matches a name gets a diagram. See [Chord diagrams](#chord-diagrams). |
 
 ### Track
@@ -166,6 +174,7 @@ A score is nested: score, then tracks, then measures, then beats, then notes. Fi
 | `name` | string | Full instrument name, drawn to the left of the first system. |
 | `label` | string | Short name (abbreviation), drawn to the left of the systems after the first. See [Instrument names](#instrument-names). |
 | `writtenOctaveUp` | boolean | Default `false`. Set to `true` when the `pitch` values you give are sounding pitches and the part is written an octave higher (typical for bass and guitar). |
+| `capo` | integer, 1 to 30 | Optional. Adds "Capo fret N" to this track's line in the header. Display only: the music is not transposed. A numeric string such as `'2'` counts. See [Capo and tuning chart](#capo-and-tuning-chart). |
 
 The examples also set `instrument`. The renderer does not draw it.
 
@@ -184,6 +193,8 @@ Measure columns line up across tracks. The number of measures is the longest tra
 | `segno` | `true` | Optional. Draws a segno sign at the start of the measure. |
 | `coda` | `true` | Optional. Draws a coda sign at the start of the measure. |
 | `jump` | string | Optional. Jump text at the end of the measure: `'D.C.'`, `'D.C. al Fine'`, `'D.C. al Coda'`, `'D.S.'`, `'D.S. al Fine'`, `'D.S. al Coda'`, `'To Coda'` or `'Fine'`. Other text is drawn as written. |
+| `section` | `'Verse'` or `{ letter, text }` | Optional. A section marker above the top staff: a boxed letter with the text after the box, or boxed text alone. A letter is 1 to 3 characters. See [Repeats and navigation](#repeats-and-navigation). |
+| `repeatCount` | integer, 2 to 99 | Optional. Draws `x3` at the end of a measure with a `'repeatEnd'` barline. Without a repeat end, nothing is drawn. A numeric string such as `'3'` counts. |
 
 Barline notes:
 
@@ -193,7 +204,7 @@ Barline notes:
 
 ### Repeats and navigation
 
-Four optional measure fields draw volta brackets and navigation marks. They apply to the whole measure column: set them on any track. If two tracks set a different `ending` or `jump` for the same measure, the lowest track index wins. `segno` and `coda` are drawn when any track sets them.
+Optional measure fields draw volta brackets, navigation marks, repeat counts and section markers. They apply to the whole measure column: set them on any track. If two tracks set a different `ending`, `jump`, `section` or `repeatCount` for the same measure, the lowest track index wins. `segno` and `coda` are drawn when any track sets them. A repeat count needs a `'repeatEnd'` barline in that measure on some track.
 
 - **Endings** (`ending`): a number (`1`), a list (`[1, 2]`), or an object `{ numbers, text, open }`. Numbers are whole numbers from 1 up. Numeric strings such as `'2'` count, invalid entries are dropped, and at most 32 numbers (the lowest) are kept. The label is "1." or "1., 2.", or `text` when it is set (for example `{ numbers: [3], text: 'Last time' }`).
 - **Merging.** Consecutive measures with the same numbers and text share one bracket. A different ending, a measure without one, or a `'repeatStart'` measure starts a new bracket.
@@ -201,13 +212,19 @@ Four optional measure fields draw volta brackets and navigation marks. They appl
 - **Line breaks.** A bracket that crosses a line break is split. The part on the next system starts after the clef and key, with no number and no opening hook. Only the last part can have the closing hook.
 - **Segno and coda** (`segno: true`, `coda: true`) are drawn at the start of the measure, after the clef and key on a system's first measure. Only the boolean `true` counts.
 - **Jump texts** (`jump`) are drawn in bold italics, ending at the measure's closing barline. The standard texts are matched without regard to case or extra spaces. `'To Coda'` is followed by a small coda sign.
-- **Placement.** Everything is drawn above the top staff of each system only, whether it is a notation or a TAB staff. All brackets of a system share one height, and all marks of a system share one baseline. From the staff outward the order is: the music, pick strokes and TAB labels and bends, chord diagrams and chord symbols, fermatas, volta brackets, segno, coda and jump texts, then the tempo. The score gets taller to make room, but the horizontal spacing does not change.
+- **Section markers** (`section`): `'Verse'` draws the text in a box. `{ letter: 'A', text: 'Intro' }` boxes the letter and writes the text after the box, and `{ letter: 'B' }` draws the box alone. A letter is kept when it is 1 to 3 characters; a longer letter is dropped, so the text is boxed on its own. A marker sits above the top staff at the start of its measure, or where a segno would go. A section that starts a system is drawn on that system. A second section on the same system moves right to keep a gap after the first. Sections sit in a row of their own, above the other marks.
+- **Repeat counts** (`repeatCount`): `x3` (a whole number from 2 to 99, written with a plain letter x) is drawn at the right end of a measure with a `'repeatEnd'` barline, in the same row as the segno, coda and jump texts. Without a repeat end, nothing is drawn. In the same measure, a jump text moves left to make room for it.
+- **Placement.** Everything is drawn above the top staff of each system only, whether it is a notation or a TAB staff. All brackets of a system share one height, and all marks of a system share one baseline. From the staff outward the order is: the music, pick strokes and TAB labels and bends, chord diagrams and chord symbols, fermatas, beat text (see [Beat text](#beat-text)), volta brackets, segno, coda, jump texts and repeat counts, section markers, then the tempo. The score gets taller to make room, but the horizontal spacing does not change.
 - **Drawing only.** There is no playback, no unrolling of repeats and no check that the marks make musical sense.
-- SVG classes: `navigation` (one group per system), `volta` with `volta-closed` or `volta-open`, `volta-number`, `segno`, `coda`, and `jump` with `to-coda` or `fine`. `volta-closed` and `volta-open` describe the whole bracket, so every part of a bracket split across systems carries the same one, even the parts without a closing hook.
-- Segno, coda and jump texts in one system share one height, above all of that system's brackets, so a sign can sit higher than the bracket-free measure it belongs to would need.
+- SVG classes: `navigation` (one group per system), `volta` with `volta-closed` or `volta-open`, `volta-number`, `segno`, `coda`, and `jump` with `to-coda` or `fine`. `volta-closed` and `volta-open` describe the whole bracket, so every part of a bracket split across systems carries the same one, even the parts without a closing hook. New classes: `section` (one group per marker), `section-letter` (the boxed letter), `section-text` (boxed text, or the text after the box) and `repeat-count`.
+- Segno, coda, jump texts and repeat counts in one system share one height, above all of that system's brackets, so a sign can sit higher than the bracket-free measure it belongs to would need. Section markers share one height above that row.
 
 ```json
 { "ending": [1, 2], "barline": "repeatEnd", "jump": "D.S. al Coda", "beats": [] }
+```
+
+```json
+{ "section": { "letter": "A", "text": "Verse" }, "repeatCount": 3, "barline": "repeatEnd", "beats": [] }
 ```
 
 ### Beat
@@ -237,6 +254,7 @@ Beats are the rhythmic events in a measure, in order. Each beat is one note, one
 | `arpeggio` | `true`, `'up'` or `'down'` | Wavy arpeggio line left of a chord of two or more notes, on notation and TAB. `'up'` adds an arrowhead at the top, `'down'` at the bottom. Case-insensitive. Other values are ignored. Adds room left of the chord. See [Picking and playing directions](#picking-and-playing-directions). |
 | `whammy` | `true`, a string or number, or `{ type, amount }` | Whammy-bar mark on the TAB staff. `type` is `'dip'` (the default), `'dive'`, `'return'` or `'predive'`, in any case. `true`, a string and a number are dips. `amount` such as `'1/2'`, `'1'`, `'1 1/2'`, `'2'` is shown as `-amount`; a missing amount means `'1/2'`. `'return'` takes no text. Other `type` values are ignored. TAB only. See [Picking and playing directions](#picking-and-playing-directions). |
 | `rake` | truthy, `'down'` or `'up'` | Rake: a dashed "rake" label over this beat and the grace notes right before it. Both directions draw the same. See [Picking and playing directions](#picking-and-playing-directions). |
+| `text` | string or `{ text, below }` | Free italic text above the staff, or under it with `below: true`. Voice 1 note and rest beats only: grace notes and voice 2 ignore it. See [Beat text](#beat-text). |
 
 Notes: eighth notes and shorter are beamed automatically within each beat (the beat unit set by the time signature). A `grace` beat is a small ornament with no duration. It is drawn just before the next beat and automatically slurred to it.
 
@@ -442,6 +460,46 @@ SVG classes: `chord-diagram` (one group per diagram), `chord-diagram-grid`, `cho
 { "type": "note", "duration": "quarter", "chord": "G", "chordDiagram": { "frets": [3, 2, 0, 0, 3, 3], "fingers": [2, 1, 0, 0, 3, 4] }, "notes": [{ "string": 6, "fret": 3 }] }
 ```
 
+## Page header
+
+The page header sits above the first system. It is made of rows, top to bottom. A row with no text takes no space, so a score that sets only some of these fields has a shorter header.
+
+1. `title`, centred, in the largest text.
+2. `subtitle`, centred.
+3. `artist`, centred.
+4. `album`, centred.
+5. `tuningLabel` at the left, in italics, and `composer` at the right, on one line.
+6. Credits: "Words by ..." at the left and "Music by ..." at the right. When `words` and `music` are the same name, one line reads "Words & Music by ..." at the right.
+7. `instructions`, one line per line break, in italics at the left.
+8. Capo and tuning chart, one line per track (see [Capo and tuning chart](#capo-and-tuning-chart)).
+
+The new text fields are trimmed, and runs of spaces are collapsed to one space. Empty values are ignored. Lines do not wrap, so a long line runs past the margin.
+
+`instructions` and `copyright` are split at each line break (`\n`), and empty lines are dropped. Only the first 8 lines are drawn.
+
+`copyright` is drawn once, centred at the foot of the score, under the last system. The SVG grows to fit it. Without `copyright`, the height is the same as before.
+
+### Capo and tuning chart
+
+- **Capo** (`capo` on a track): an integer from 1 to 30. The track's line in the header reads "Capo fret 2". This is display only: the music is not transposed, and the notes and fret numbers stay as you wrote them.
+- **Tuning chart** (`showTuningChart: true` on the score, off by default): lists the strings tuned differently from the usual tuning for that number of strings. Each entry is the string number in a circle, an equals sign and the note name as written, without an octave. `⑥ = D` means the lowest string is tuned to D. Strings are numbered as on tab (1 is the highest), and the highest-numbered string is listed first. Strings above 10 are written as `(11)`, `(12)` and so on.
+- Entries that cannot be read, such as `'H2'`, are left out.
+- Standard tuning lists nothing, so with the chart on, a track in standard tuning shows only its capo line, if it has one.
+- The usual tuning for each number of strings, lowest string first:
+
+  | Strings | Usual tuning |
+  |---|---|
+  | 4 | E1 A1 D2 G2 |
+  | 5 | B0 E1 A1 D2 G2 |
+  | 6 (guitar, treble clef) | E2 A2 D3 G3 B3 E4 |
+  | 6 (bass, bass clef) | B0 E1 A1 D2 G2 C3 |
+  | 7 | B1 E2 A2 D3 G3 B3 E4 |
+  | 8 | F#1 B1 E2 A2 D3 G3 B3 E4 |
+
+  A track with any other number of strings lists every string.
+- One line per track that shows notation or tab. A track that shows neither is left out, and a track that shows only notation is included. When the score has more than one such track, each line starts with the track's name: `name`, else `label`, else "Track N" (its position in the score). For example: "Gt.: Capo fret 2   ⑥ = D".
+- The chart appears only in the header. It adds nothing to the staves. The `tuningLabel` text (for example "Drop D") is separate and is not read for the chart.
+
 ## Layout
 
 The renderer spaces and breaks the score for you. A short list of what to expect:
@@ -561,6 +619,22 @@ A measure can hold two rhythms on one staff, for example a melody over a held ba
 - **No bar-length check.** Voices are not compared with the time signature. Each voice is drawn with the beats it has, even if it is longer or shorter than the bar.
 - **SVG.** In a two-voice measure, voice 2's noteheads, accidentals, dots, ledger lines, stems, beams, grace notes, rests, articulations, tremolo and tuplets are inside a `<g class="voice-2">` group on the notation staff. Single-voice measures have no such group. TAB frets, ties and slurs are not inside it.
 
+## Beat text
+
+Free text on a beat, such as "rit.", "mute" or "let go". It is italic and starts at the beat's left edge.
+
+- **Above the staff:** `text: 'rit.'`. The text sits above the track's top staff: the notation, or the TAB when the track shows no notation.
+- **Below the staff:** `text: { text: 'mute', below: true }`. The text sits under the track's lowest staff: the TAB, or the notation when the track shows no TAB.
+- **Which beats.** Note and rest beats in voice 1 only. Grace notes and voice 2 ignore it, so put the text on the voice 1 beat instead (see [Voices](#voices)).
+- **Clearance.** The text sits clear of what is already above or below its beat: notes, stems, chord symbols and diagrams, fermatas, pick strokes and TAB marks. Text above the staff sits at least 1.5 staff spaces above its top line. If texts on one staff overlap, the later one is placed above the earlier one.
+- **Room.** Beat text takes no horizontal room and is not wrapped. A long text in a dense bar can run into the space of the next beat, and the widths are estimated, so keep it short.
+- **Order.** Beat text is drawn after the fermatas, and volta brackets and navigation marks are drawn above it.
+- SVG classes: `beat-text`, with `beat-text-below` added for text under the staff.
+
+```json
+{ "type": "note", "duration": "quarter", "text": "rit.", "notes": [{ "string": 1, "fret": 5 }] }
+```
+
 ## Known limitations
 
 - **Dots on chords with seconds.** Augmentation dots on a chord whose notes sit a second apart may not be placed cleanly.
@@ -596,7 +670,7 @@ A measure can hold two rhythms on one staff, for example a melody over a held ba
 - **Auto slurs span rests.** A hammer-on or pull-off slur runs over any rest between its first and last notes.
 - **Release arrow.** A release arrow stops 0.2 sp before the next fret number on the string above, but its fall is never shorter than 0.6 sp, so it can still meet that number in very tight spacing.
 - **Let ring has no ties.** A let-ring run is a dashed label only. There are no per-note ring-out ties.
-- **Navigation is drawn, not played.** Repeats, endings and jumps are not unrolled or checked for sense. There are no repeat counts ("x3") or rehearsal marks.
+- **Navigation is drawn, not played.** Repeats, endings, jumps and repeat counts are not unrolled or checked for sense.
 - **Coda layout.** A coda does not force a line break or leave a gap before it.
 - **Navigation on the top staff only.** Brackets and marks are drawn once per system, above the top staff. There are no brackets per instrument group.
 - **One bracket height per system.** All volta brackets of a system sit at the height of the tallest one.
@@ -611,6 +685,11 @@ A measure can hold two rhythms on one staff, for example a melody over a held ba
 - **Voices: dots.** Where the voices do not clash, a dot can sit close to the other voice's noteheads.
 - **Tremolo room.** A stemless (whole) note keeps the room for three strokes even with `'8th'` or `'16th'`, so a mark above it can sit a little higher than it needs to.
 - **Articulations and fermatas on tab.** They are not drawn on tab-only tracks.
+- **Score text: no wrapping.** Title, subtitle, artist, album, credits, instructions, copyright, beat text and section text each take one line per line break. A long line runs past the margin, so break it yourself. Instructions and copyright beyond 8 lines are not drawn, and nothing warns you.
+- **Score text: no sideways placement.** Beat text takes no horizontal room and never moves sideways; overlapping beat texts stack upward instead. Section markers move right only to keep a gap from the previous marker on the same system. Widths are estimated, so spacing is approximate.
+- **Capo is display only.** The capo line does not transpose the music, change the pitches, or move the fret numbers. Transposition is not supported.
+- **Tuning chart compares with usual tunings.** A bass-clef 6-string track that keeps the default guitar tuning lists every string, because that tuning is not its usual one. Any string count other than 4 to 8 lists every string.
+- **Header words are English.** "Words by", "Music by", "Capo fret" and "Track N" are fixed text.
 - **Not included:** playback, an editor, and import/export of other file formats.
 
 ## Running tests
@@ -637,6 +716,19 @@ It prints `ALL PASSED` and exits with code 0 on success.
 - To run one group on its own: `node tests/units.mjs`, `node tests/engraving.mjs`, or `node tests/articulations.mjs`.
 
 ## Changelog
+
+### 1.6.0 — 2026-11-08
+
+Score text and structure. Scores that do not use these fields are unchanged, and a header with only a title, composer and tuning label looks as before.
+
+- Header fields `subtitle`, `artist`, `album`, `words`, `music`, `instructions` and `copyright`. `words` and `music` share one "Words & Music by" line when they are the same name. See [Page header](#page-header).
+- `copyright` is drawn at the foot of the score, and the SVG grows to fit it.
+- `capo` on a track adds "Capo fret N" to the header. It is display only. See [Capo and tuning chart](#capo-and-tuning-chart).
+- `showTuningChart: true` lists the strings tuned differently from the usual tuning in the header, such as "⑥ = D". It is off by default.
+- `section` on a measure draws a boxed letter or text above the staff, with any text after the box. See [Repeats and navigation](#repeats-and-navigation).
+- `repeatCount` on a measure draws "x3" at a repeat end, for counts from 2 to 99.
+- `text` on a beat draws free italic text above the staff, or below it with `below: true`. Note and rest beats in voice 1 only. See [Beat text](#beat-text).
+- New SVG classes: `subtitle`, `artist`, `album`, `words`, `music`, `words-music`, `instructions`, `tuning-chart`, `copyright`, `score-footer`, `section`, `section-letter`, `section-text`, `repeat-count`, `beat-text` and `beat-text-below`.
 
 ### 1.5.0 — 2026-11-08
 
@@ -748,7 +840,8 @@ Initial public release.
   - `harmonics.js`: guitar harmonic kinds and the helpers that layout, drawing and labels share.
   - `directions.js`: the playing direction fields (let ring, pick strokes, strum, arpeggio, tap, slap, pop, whammy, rake, trill, slide in and out, the bend grammar) and their canonical values.
   - `chordShapes.js`: chord-diagram shapes. Validates an author's shape against the track and picks the shape a beat shows.
-  - `navigation.js`: the navigation fields (`ending`, `segno`, `coda`, `jump`), their canonical values and the merge across tracks.
+  - `navigation.js`: the navigation fields (`ending`, `segno`, `coda`, `jump`, `section`, `repeatCount`), their canonical values and the merge across tracks.
+  - `scoreText.js`: canonical forms of the score text fields (header lines, sections, repeat counts, beat text, capo) and the capo and tuning chart rows.
   - `noteEffects.js`: the canonical values of the `vibrato`, `tremolo` and `fermata` fields (for example `'wide'`, `'16th'` or `'short'`), used when drawing.
   - `layout/`: positioning, no drawing.
     - `index.js`: `computeLayout`. Ties the layout steps together and sets element positions.
@@ -760,7 +853,7 @@ Initial public release.
     - `beams.js`: beams and tuplet groups, including compound meters.
     - `vertical.js`: places each staff vertically from its content.
     - `ink.js`: measures the drawn extent of each staff. An opt-in overlap mode counts every mark whose width reaches into an x range.
-    - `navigation.js`: groups endings into volta brackets, splits them at line breaks and places the segno, coda and jump marks horizontally.
+    - `navigation.js`: groups endings into volta brackets, splits them at line breaks and places the segno, coda, jump and repeat-count marks and the section markers horizontally.
     - `tabRhythm.js`: geometry of the rhythm on TAB staves (stem positions and lengths, flags, dots, horizontal room).
   - `draw/`: SVG drawing.
     - `system.js`: draws one system and its measures.
@@ -783,8 +876,9 @@ Initial public release.
       - `passes/techniqueLabels.js`: technique labels (P.M., harmonics, let ring, rake).
       - `passes/playingDirections.js`: pick strokes, strum arrows, notation tap / slap / pop letters and trills.
       - `passes/chordsFermatas.js`: chord symbols and dynamics, and fermatas.
-    - `header.js`: title, composer and tuning rows.
-    - `navigation.js`: volta brackets, segno, coda and jump texts above each system's top staff, drawn after the fermatas and before the tempo.
+    - `header.js`: the page header rows (title, subtitle, credits, instructions, capo and tuning chart) and the copyright footer.
+    - `navigation.js`: volta brackets, segno, coda, jump texts and repeat counts, and section markers above each system's top staff, drawn after the fermatas and beat text and before the tempo.
+    - `beatText.js`: beat text (`beat.text`) above or below a track's staves, drawn after the fermatas and outside the `passes/` barrel.
     - `decor.js`: tempo, measure numbers, joining line, bracket and instrument names.
     - `svgUtil.js`: small SVG helpers.
   - `theme.js`: theme defaults and the pixel-key conversion.
