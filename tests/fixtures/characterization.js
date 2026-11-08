@@ -1277,6 +1277,76 @@ export const characterizationCases = [
       }],
     },
   },
+  {
+    // 1.6.0 score text: every header field (words != music, 2-line instructions and copyright, tuning chart),
+    // drop-D guitar with capo 2 (notation + TAB) over a TAB-only 4-string bass in D; sections (letter + text, text,
+    // letter only), x3 on a repeat end, beat text above and below (one beat with a chord symbol and a fermata);
+    // the grace note's and the voice-2 beat's texts are ignored.
+    name: 'score-text', width: 900,
+    score: {
+      title: 'Score Text', subtitle: 'Live at the Hall', artist: 'The Example Band', album: 'First Album',
+      composer: 'J. Composer', tuningLabel: 'Drop D', words: 'A. Lyricist', music: 'B. Composer',
+      instructions: 'Play with a light touch\nLet the open strings ring into each other',
+      copyright: '(c) 2026 Example Music\nAll rights reserved', showTuningChart: true, tempoText: 'Moderato (q = 96)',
+      tracks: [{
+        name: 'Gt.', showTablature: true, capo: 2, tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'],
+        measures: [
+          { section: { letter: 'A', text: 'Intro' }, barline: 'repeatStart',
+            beats: [tabq(6, 0, { text: 'dolce' }), tabq(4, 2), tabq(3, 2, { text: { text: 'softly', below: true } }), tabq(2, 3)] },
+          { repeatCount: 3, barline: 'repeatEnd',
+            beats: [tabq(1, 2), tabq(2, 3), tabq(3, 2), tabq(1, 5, { chord: 'D', fermata: true, text: 'hold' })] },
+          { section: 'Verse',
+            ...vm([{ ...tabgr([[2, 1]]), text: 'grace' }, tabq(2, 3), tabq(3, 2), tabd('half', 4, 0, {}, { text: { text: 'let go', below: true } })],
+              [tabd('whole', 6, 0, {}, { text: 'voice 2' })]) },
+          { section: { letter: 'B' }, beats: [tabd('whole', 6, 0, {}, { text: 'rit.' })] },
+        ],
+      }, {
+        name: 'Bass', showStandardNotation: false, showTablature: true, tuning: ['D1', 'A1', 'D2', 'G2'],
+        measures: [
+          { barline: 'repeatStart', beats: [tabd('half', 4, 0), tabd('half', 4, 0)] },
+          { barline: 'repeatEnd', beats: [tabd('half', 3, 0), tabd('half', 4, 0, {}, { text: { text: 'mute', below: true } })] },
+          { beats: [tabd('whole', 4, 0)] },
+          { beats: [tabd('whole', 4, 0)] },
+        ],
+      }],
+    },
+  },
+  {
+    // 1.6.0 score text at system breaks (600): a section, a volta and a segno on a system's first measure; x3 and
+    // "D.S. al Coda" on a system's last (repeat-end) measure; words = music.
+    name: 'score-text-break', width: 600,
+    score: {
+      title: 'Score Text Breaks', words: 'Jane Doe', music: ' Jane  Doe ', tempoText: 'Allegro',
+      tracks: [{
+        name: 'Gt.', showTablature: true,
+        measures: [
+          { section: { letter: 'A', text: 'Verse' }, beats: [3, 0, 2, 0, 3, 2, 2, 1].map((f, i) => tabe(i % 2 ? 2 : 3, f)) },
+          { repeatCount: '3', barline: 'repeatEnd', jump: 'D.S. al Coda', beats: [2, 0, 3, 1, 0, 1].map((f, i) => tabe(i % 2 ? 2 : 3, f)).concat([tabq(3, 0)]) },
+          { section: 'Chorus', ending: 1, segno: true, beats: [tabq(3, 0), tabq(3, 2), tabq(2, 0), tabq(2, 1)] },
+          { ending: 1, beats: [tabq(2, 3), tabq(1, 0), tabq(1, 2), tabq(1, 3)] },
+          { beats: [tabq(1, 5), tabq(1, 3), tabq(2, 5), tabq(2, 3)] },
+          { beats: [tabq(2, 3), tabq(1, 0), tabq(1, 2), tabq(1, 3)] },
+          { beats: [tabq(1, 5), tabq(1, 3), tabq(2, 5), tabq(2, 3)] },
+          { section: { letter: 'C' }, beats: [tabd('whole', 3, 0)] },
+        ],
+      }],
+    },
+  },
+  {
+    // 1.6.0 score text on a TAB-only 7-string (low A instead of B) with capo and tuning chart: a section and beat
+    // text above and below the TAB staff.
+    name: 'score-text-tab-only', width: 900,
+    score: {
+      title: 'Seven Strings', showTuningChart: true,
+      tracks: [{
+        showStandardNotation: false, showTablature: true, capo: '1', tuning: ['A1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'],
+        measures: [
+          { section: 'Riff', beats: [tabq(7, 0, { text: 'heavy' }), tabq(7, 3), tabq(6, 2, { text: { text: 'chug', below: true } }), tabq(6, 0)] },
+          { beats: [tabq(5, 2), tabq(4, 2, { text: 'accent' }), tabd('half', 7, 0, {}, { text: { text: 'ring', below: true } })] },
+        ],
+      }],
+    },
+  },
 ];
 
 // Copy of a score with tabRhythm: false on every track (source untouched). Today the field is ignored, so

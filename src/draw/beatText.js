@@ -23,6 +23,7 @@ import { tabTopY } from './passes/common.js';
 const BEAT_TEXT_SIZE_SP = 1.2;
 const BEAT_TEXT_CLEARANCE_SP = 0.5;   // text -> ink above / below which it sits
 const BEAT_TEXT_MIN_ABOVE_SP = 1.5;   // top line -> baseline of a text above, at least
+const BEAT_TEXT_SPAN_PAD_SP = 0.1;    // measured span beyond the text each side (a TAB stem at the beat x has stroke width and 2-dp coordinates)
 
 /** Draw every beat text of every track run (see the module header). */
 export function renderBeatText(trackRuns, theme) {
@@ -39,7 +40,8 @@ export function renderBeatText(trackRuns, theme) {
         if (le.el.type === 'grace') return;
         const t = canonicalBeatText(le.el.text);
         if (!t) return;
-        const span = { xMin: le.x, xMax: le.x + estimateTextWidth(t.text, size), overlap: true };
+        const pad = BEAT_TEXT_SPAN_PAD_SP * s;
+        const span = { xMin: le.x - pad, xMax: le.x + estimateTextWidth(t.text, size) + pad, overlap: true };
         let y;
         if (t.below) {
           const bottom = inkBounds(belowG, theme, span).bottom;

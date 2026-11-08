@@ -1,4 +1,4 @@
-// The 57 snapshot cases, shared by tests/run.js (SVG snapshots) and tests/units.mjs (pre-1.4 model hashes).
+// The 60 snapshot cases, shared by tests/run.js (SVG snapshots) and tests/units.mjs (pre-1.4 model hashes).
 import { register } from 'node:module';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
