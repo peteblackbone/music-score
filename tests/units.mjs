@@ -3654,6 +3654,58 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.7.0 pick-scrape and barre label runs (techniqueLabels.js) ----------
+{
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const byClass = (root, cls) => walk(root).filter((n) => (n.getAttribute('class') || '').split(' ').includes(cls));
+  const q = (extra = {}) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4', string: 4, fret: 2 }], ...extra });
+  const rest = (extra = {}) => ({ type: 'rest', duration: 'quarter', ...extra });
+  const grace = { type: 'grace', duration: '16th', notes: [{ pitch: 'D4', string: 4, fret: 0 }] };
+  const tabOnly = (measures) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures: measures.map((beats) => ({ beats })) }] });
+  const labels = (svg, cls) => byClass(svg, cls).map((g) => [g.getAttribute('class'), g.children[0].textContent]);
+  const labelY = (svg, cls) => byClass(svg, cls).map((g) => Number(g.children[0].getAttribute('y')));
+
+  test('labels: let-ring bridging truth table is unchanged (rests bridge, graces and notes end, values must match both sides)', () => {
+    const count = (beats) => byClass(render(tabOnly([beats])), 'let-ring').length;
+    eq(count([q({ letRing: true }), rest(), q({ letRing: true }), q()]), 1, 'rest bridges');
+    eq(count([q({ letRing: true }), grace, q({ letRing: true }), q()]), 2, 'grace ends');
+    eq(count([q({ letRing: true }), q(), q({ letRing: true }), q()]), 2, 'note ends');
+    eq(count([q({ letRing: true }), rest(), rest(), q()]), 1, 'trailing rests stay out');
+    eq(count([rest(), rest({ letRing: true }), rest(), q({ letRing: true })]), 1, 'a marked rest is part of the run');
+  });
+
+  test('labels: P.S. runs merge both directions (class from the first beat), rests bridge; an unmarked note ends', () => {
+    const svg = render(tabOnly([[q({ pickScrape: 'down' }), q({ pickScrape: ' UP ' }), rest(), q({ pickScrape: true })], [q(), q({ pickScrape: 'up' }), q(), q({ pickScrape: 'x' })]]));
+    eq(labels(svg, 'pick-scrape'), [['pick-scrape pick-scrape-down', 'P.S.'], ['pick-scrape pick-scrape-up', 'P.S.']]);
+  });
+
+  test('labels: barre runs - same fret and half continue over rests and graces; a different barre or unmarked note ends; labels C II / ½C V', () => {
+    const svg = render(tabOnly([[q({ barre: { fret: 2 } }), rest(), grace, q({ barre: '2' }), q({ barre: { fret: 5, half: true } })], [q({ barre: 5 }), q(), q({ barre: 'II' }), q({ barre: 12 })]]));
+    eq(labels(svg, 'barre'), [['barre', 'C II'], ['barre barre-half', '½C V'], ['barre', 'C V'], ['barre', 'C XII']]);
+  });
+
+  test('labels: lanes outward P.M. < harmonic < let ring < P.S. < barre < rake; below a notation-only staff', () => {
+    const all = { palmMute: true, letRing: true, pickScrape: true, barre: 3, notes: [{ pitch: 'E4', string: 4, fret: 2, harmonic: 'artificial' }] };
+    const svg = render(tabOnly([[q(all), q({ ...all, rake: true })]]));
+    const ys = ['palm-mute', 'harmonic', 'let-ring', 'pick-scrape', 'barre', 'rake'].map((c) => labelY(svg, c)[0]);
+    eq(ys.every((v, i) => i === 0 || v < ys[i - 1]), true, `lanes upward above TAB: ${ys}`);
+    const notation = render({ tracks: [{ measures: [{ beats: [q({ pickScrape: true, barre: 3 }), q({ pickScrape: true, barre: 3 }), q(), q()] }] }] });
+    const [ps, barre] = [labelY(notation, 'pick-scrape')[0], labelY(notation, 'barre')[0]];
+    eq(ps > 40 && barre > ps, true, `below the staff, barre outside P.S.: ${ps} ${barre}`);
+  });
+
+  test('labels: a barre run across a system break repeats its label on the next system', () => {
+    const svg = render(tabOnly([[q({ barre: 7 }), q({ barre: 7 }), q({ barre: 7 }), q({ barre: 7 })], [q({ barre: 7 }), q({ barre: 7 }), q(), q()]]), 300);
+    eq(byClass(svg, 'staff-tab').length, 2, 'two systems');
+    eq(labels(svg, 'barre').map((l) => l[1]), ['C VII', 'C VII']);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
