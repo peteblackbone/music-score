@@ -2037,10 +2037,10 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
 // ---------- pre-1.4 characterization (C0): pins taken from the code before two-voice measures ----------
 {
   const { createHash } = await import('node:crypto');
-  // the 52 pre-1.4 cases (the 1.4.0 two-voice fixtures char-voices-*, the 1.5.0 char-note-effects-* and the 1.6.0
-  // char-score-text-* came later)
+  // the 52 pre-1.4 cases (the 1.4.0 two-voice fixtures char-voices-*, the 1.5.0 char-note-effects-*, the 1.6.0
+  // char-score-text-* and the 1.7.0 char-ornaments-* came later)
   const isVoices = (id) => id.startsWith('char-voices-');
-  const isPost14 = (id) => /^char-(voices|note-effects|score-text)-/.test(id);
+  const isPost14 = (id) => /^char-(voices|note-effects|score-text|ornaments)-/.test(id);
   const cases = (await import('./cases.mjs')).cases.filter((c) => !isPost14(c.id));
   const { computeLayout } = await imp('src/layout/index.js');
   const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
@@ -2640,8 +2640,9 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   const { renderNavigation } = await imp('src/draw/navigation.js');
   const { drawScoreHeader } = await imp('src/draw/header.js');
   const { group: svgGroup } = await imp('src/draw/svgUtil.js');
-  // the 57 pre-1.6 cases (the 1.6.0 char-score-text-* fixtures use the new fields on purpose)
-  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-score-text-/.test(c.id));
+  // the 57 pre-1.6 cases (the 1.6.0 char-score-text-* fixtures use the new fields on purpose; the 1.7.0
+  // char-ornaments-* came later)
+  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments)-/.test(c.id));
   const thm = resolveTheme({});
   const s = thm.staffLineSpacing;
   const ok = (c, m) => { if (!c) throw new Error(m); };
@@ -3259,6 +3260,512 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(withC.getAttribute('viewBox'), `0 0 600 ${withC.getAttribute('height')}`);
     eq(staffYs(withC), staffYs(plain));
     eq(serialize(render(base({ copyright: '  ' }))), serialize(plain), 'empty copyright: byte-identical');
+  });
+}
+
+// ---------- pre-1.7 characterization: pins taken from the code before ornaments, hand marks and barre ----------
+// Exact x / y numbers (theme.staffLineSpacing 10, width 900 unless stated) of the playing-direction stack
+// (draw/passes/playingDirections.js) that 1.7.0 reorganises: slur clearance, beam-group sharing, trill and
+// strum runs, and the tab-only pick stroke. Small inline scores; the 1.7.0 rework must leave every number alone.
+{
+  const { characterizationCases } = await imp('tests/fixtures/characterization.js');
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const byClass = (root, cls) => walk(root).filter((n) => (n.getAttribute('class') || '').split(' ').includes(cls));
+  const xy = (g) => [g.children[0].getAttribute('x'), g.children[0].getAttribute('y')];
+  const pickOf = (svg) => [...byClass(svg, 'pick-stroke-down'), ...byClass(svg, 'pick-stroke-up')].map(xy);
+  const nq = (pitch, extra = {}) => ({ type: 'note', duration: 'quarter', notes: [{ pitch }], ...extra });
+  const n8 = (pitch, extra = {}) => ({ type: 'note', duration: '8th', notes: [{ pitch }], ...extra });
+  const one = (beats) => ({ tracks: [{ measures: [{ beats }] }] });
+  const nums = (d) => d.match(/-?\d+(\.\d+)?/g).map(Number);
+
+  test('pre-1.7 (a): pick stroke under the second segment of a split slur sits at y -22.48; the same beat without the slur at -10', () => {
+    const mk = (slur) => ({ tracks: [{ measures: [
+      { beats: [nq('E4'), nq('G4'), nq('B4'), nq('D5', slur ? { slurStart: true } : {})] },
+      { beats: [nq('F4', { slurEnd: slur, pickStroke: 'down' }), nq('G4'), nq('A4'), nq('B4')] },
+    ] }] });
+    const split = render(mk(true), 300);
+    eq(byClass(split, 'staff').length, 2, 'two systems');
+    eq(byClass(split, 'slur').length, 2, 'the slur is split into two segments');
+    eq(pickOf(split), [['87.74', '-22.48']]);
+    const plain = render(mk(false), 300);
+    eq(byClass(plain, 'slur').length, 0);
+    eq(pickOf(plain), [['87.74', '-10']]);
+  });
+
+  test('pre-1.7 (b): picks of a beam group with a high and a low note share one y; a T on either note stays under the shared line', () => {
+    const rest = [n8('E4'), n8('E4'), nq('E4'), nq('E4')];
+    const lowPick = (extra = {}) => n8('C4', { pickStroke: 'down', ...extra });
+    const highPick = (extra = {}) => n8('A5', { pickStroke: 'up', ...extra });
+    const tapped = (b) => ({ ...b, notes: [{ ...b.notes[0], tap: true }] });
+    eq(pickOf(render(one([lowPick(), highPick(), ...rest]))), [['115.74', '-20'], ['140.49', '-20']], 'shared by the high note');
+    eq(pickOf(render(one([lowPick(), n8('C4', { pickStroke: 'up' }), ...rest]))), [['115.74', '-10'], ['140.49', '-10']], 'two low picks alone');
+    const lowT = render(one([tapped(lowPick()), highPick(), ...rest]));
+    eq(pickOf(lowT), [['115.74', '-25.55'], ['140.49', '-25.55']], 'both lifted above the low note\'s T');
+    eq(byClass(lowT, 'tap').map((g) => [...xy(g), g.children[0].textContent]), [['115.74', '-12.75', 'T']]);
+    const highT = render(one([lowPick(), tapped(highPick()), ...rest]));
+    eq(pickOf(highT), [['115.74', '-35.55'], ['140.49', '-35.55']]);
+    eq(byClass(highT, 'tap').map(xy), [['140.49', '-22.75']]);
+  });
+
+  test('pre-1.7 (c): two trills with a grace between share one line y (-50.63); the first wave ends at 139.34, before the second "tr" at 165.24', () => {
+    const half = (pitch, extra = {}) => ({ type: 'note', duration: 'half', notes: [{ pitch, ...extra }] });
+    const svg = render(one([half('E4', { trill: true }), { type: 'grace', duration: '16th', notes: [{ pitch: 'D4' }] }, half('G6', { trill: true })]));
+    const trills = byClass(svg, 'trill');
+    eq(trills.map(xy), [['115.74', '-50.63'], ['165.24', '-50.63']]);
+    const wave = trills.map((g) => nums(g.children.find((c) => c.tag === 'path').getAttribute('d')));
+    eq([wave[0][0], wave[0].slice(-2)], [128.87, [139.34, -55.63]]);
+    eq([wave[1][0], wave[1].slice(-2)], [178.36, [204.73, -55.63]]);
+    eq(wave[0].slice(-2)[0] < 165.24, true, 'first wave ends before the second "tr"');
+    const lone = render(one([{ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4', trill: true }] }, nq('E4'), nq('E4'), nq('E4')]));
+    eq(byClass(lone, 'trill').map((g) => g.children[0].getAttribute('y')), ['-10.63'], 'the low trill alone');
+  });
+
+  test('pre-1.7 (d): a strum run on a notation-only track shares one bottom (-20) set by the high note; a low strum alone sits at -10', () => {
+    const arrows = (svg) => byClass(svg, 'strum').map((g) => g.children.map((c) => c.getAttribute('d')));
+    const svg = render(one([nq('E4', { strum: 'down' }), nq('A5', { strum: 'up' }), nq('E4', { strum: 'down' }), nq('E4')]));
+    eq(arrows(svg), [
+      ['M 115.74 -35 L 115.74 -24', 'M 115.74 -20 L 112.74 -25 L 118.74 -25 Z'],
+      ['M 150.74 -20 L 150.74 -31', 'M 150.74 -35 L 153.74 -30 L 147.74 -30 Z'],
+      ['M 185.74 -35 L 185.74 -24', 'M 185.74 -20 L 182.74 -25 L 188.74 -25 Z'],
+    ]);
+    const low = render(one([nq('E4', { strum: 'down' }), nq('E4'), nq('E4'), nq('E4')]));
+    eq(arrows(low), [['M 115.74 -25 L 115.74 -14', 'M 115.74 -10 L 112.74 -15 L 118.74 -15 Z']]);
+  });
+
+  test('pre-1.7 (e): tab-only pick stroke clears an H letter (-31, letter -17) and a P.M. label (-18.8, label -6); bare -11', () => {
+    const t = (fret, extra = {}, note = {}) => ({ type: 'note', duration: '16th', notes: [{ string: 1, fret, ...note }], ...extra });
+    const texts = (svg, s) => walk(svg).filter((n) => n.tag === 'text' && n.textContent === s).map((n) => n.getAttribute('y'));
+    const score = (beats) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats }] }] });
+    eq(pickOf(render(score([t(2), t(4, { pickStroke: 'down' }), t(2, { pickStroke: 'up' }), t(4)]))), [['121.19', '-11'], ['139.19', '-11']]);
+    const hp = render(score([t(2, {}, { hammerPull: true }), t(4, { pickStroke: 'down' }), t(2, { pickStroke: 'up' }), t(4)]));
+    eq(pickOf(hp), [['121.19', '-31'], ['139.19', '-11']]);
+    eq(texts(hp, 'H'), ['-17']);
+    const pmBeats = (note) => [t(2, { palmMute: true }, note), t(4, { pickStroke: 'down', palmMute: true }), t(2, { pickStroke: 'up', palmMute: true }), t(4)];
+    const pm = render(score(pmBeats({})));
+    eq(pickOf(pm), [['121.19', '-18.8'], ['139.19', '-16.27']]);
+    eq(texts(pm, 'P.M.'), ['-6']);
+    const both = render(score(pmBeats({ hammerPull: true })));
+    eq(pickOf(both), [['121.19', '-31'], ['139.19', '-16.27']]);
+    eq([texts(both, 'H'), texts(both, 'P.M.')], [['-17'], ['-6']]);
+  });
+
+  test('pre-1.7 audit: char-directions-break, char-techniques-11-break and char-strum-arpeggio-break still hit the stack paths, with these counts', () => {
+    const audit = (name) => {
+      const f = characterizationCases.find((c) => c.name === name);
+      const svg = render(f.score, f.width);
+      const trills = byClass(svg, 'trill');
+      return {
+        picks: pickOf(svg), taps: byClass(svg, 'tap').length,
+        trills: trills.length, trillWaves: trills.filter((g) => g.children.some((c) => c.tag === 'path')).length,
+        strums: byClass(svg, 'strum').length, slurs: byClass(svg, 'slur').length, staves: byClass(svg, 'staff').length,
+      };
+    };
+    eq(audit('directions-break'), { picks: [['202.48', '-40.55']], taps: 2, trills: 0, trillWaves: 0, strums: 0, slurs: 1, staves: 4 },
+      'one pick stroke stacked above its T (notation + TAB tap); no beam group, trill or strum');
+    eq(audit('techniques-11-break'), { picks: [], taps: 0, trills: 4, trillWaves: 3, strums: 0, slurs: 3, staves: 8 },
+      'four trills, three with a wave (one too short for it); no pick strokes');
+    eq(audit('strum-arpeggio-break'), { picks: [], taps: 0, trills: 0, trillWaves: 0, strums: 10, slurs: 0, staves: 6 },
+      'ten strum arrows; no pick strokes, no slurs');
+  });
+}
+
+/// ---------- 1.7.0 hand marks: canonicalizers and beat readers (hands.js) ----------
+{
+  const hands = await imp('src/hands.js');
+  const { beatTapMark } = await imp('src/directions.js');
+  const { ornamentOf, fingerOf, rightFingerOf, golpeOf, pickScrapeOf, barreOf, romanNumeral, barreLabel } = hands;
+  const GARBAGE = [undefined, null, 0, '', {}, [], 'trill', 5, -1, 1.5, 'pi', 25, 'II', { half: true }, false, NaN, '  '];
+  // Each canonicalizer: [raw, canonical] pairs, garbage -> null (unless listed), idempotent, never throws.
+  const table = (name, fn, pairs) => test(`hands: ${name} canonicalizes, rejects garbage, is idempotent`, () => {
+    pairs.forEach(([raw, want]) => {
+      eq(fn(raw), want, `${name}(${JSON.stringify(raw)})`);
+      eq(fn(fn(raw)), want, `${name} idempotent on ${JSON.stringify(raw)}`);
+    });
+    GARBAGE.filter((g) => !pairs.some(([raw]) => Object.is(raw, g))).forEach((g) => eq(fn(g), null, `${name}(${JSON.stringify(g)})`));
+    ['toString', 'constructor', '__proto__', Symbol('x'), () => 1].forEach((g) => eq(fn(g), null, `${name}(${String(g)})`));
+  });
+  table('ornamentOf', ornamentOf, [
+    ['turn', 'turn'], [' TURN ', 'turn'], ['Inverted-Turn', 'invertedTurn'], ['turn_inverted', 'invertedTurn'], ['invertedTurn', 'invertedTurn'],
+    [' short trill ', 'upperMordent'], ['upper mordent', 'upperMordent'], ['invertedMordent', 'upperMordent'], ['upperMordent', 'upperMordent'],
+    ['mordent', 'lowerMordent'], ['Lower-Mordent', 'lowerMordent'], ['lowerMordent', 'lowerMordent'],
+  ]);
+  table('fingerOf', fingerOf, [[0, 0], [1, 1], [4, 4], [' 3 ', 3], ['0', 0], ['T', 'T'], [' t ', 'T']]);
+  test('hands: fingerOf rejects 5, -1, 1.5, "12", "TT", true', () => [5, -1, 1.5, '12', 'TT', true, '1.0'].forEach((g) => eq(fingerOf(g), null, String(g))));
+  table('rightFingerOf', rightFingerOf, [['p', 'p'], [' I ', 'i'], ['M', 'm'], ['a', 'a'], ['C', 'c']]);
+  test('hands: rightFingerOf rejects "x", "pi", true', () => ['x', 'pi', true, 'pp'].forEach((g) => eq(rightFingerOf(g), null, String(g))));
+  table('golpeOf', golpeOf, [[true, true], ['thumb', 'thumb'], [' Finger ', 'finger']]);
+  table('pickScrapeOf', pickScrapeOf, [[true, true], ['down', 'down'], [' UP ', 'up']]);
+  table('barreOf', barreOf, [
+    [1, { fret: 1, half: false }], [5, { fret: 5, half: false }], [24, { fret: 24, half: false }], [' 7 ', { fret: 7, half: false }],
+    [{ fret: 2 }, { fret: 2, half: false }], [{ fret: '5', half: true }, { fret: 5, half: true }], [{ fret: 5, half: 'yes' }, { fret: 5, half: false }],
+  ]);
+  test('hands: barreOf rejects out-of-range and non-integer frets', () => [0, 25, 1.5, '1.5', { fret: 0 }, { fret: 25 }, { fret: 'II' }, true, 'C II']
+    .forEach((g) => eq(barreOf(g), null, JSON.stringify(g))));
+  test('hands: romanNumeral 1-24 and barreLabel', () => {
+    eq(Array.from({ length: 24 }, (_, i) => romanNumeral(i + 1)).join(' '),
+      'I II III IV V VI VII VIII IX X XI XII XIII XIV XV XVI XVII XVIII XIX XX XXI XXII XXIII XXIV');
+    eq([barreLabel({ fret: 2, half: false }), barreLabel({ fret: 5, half: true }), barreLabel(barreOf(24))], ['C II', '½C V', 'C XXIV']);
+  });
+  const beat = (notes, extra = {}) => ({ type: 'note', duration: 'quarter', notes, ...extra });
+  test('hands: beatOrnament - first valid ornament; a trill wins; graces and rests carry none', () => {
+    eq(hands.beatOrnament(beat([{ pitch: 'E4', ornament: 'bogus' }, { pitch: 'G4', ornament: 'mordent' }])), 'lowerMordent');
+    eq(hands.beatOrnament(beat([{ pitch: 'E4', ornament: 'turn' }, { pitch: 'G4', trill: true }])), null);
+    eq(hands.beatOrnament({ type: 'grace', duration: '16th', notes: [{ pitch: 'E4', ornament: 'turn' }] }), null);
+    eq(hands.beatOrnament({ type: 'rest', duration: 'quarter', ornament: 'turn' }), null);
+    eq(hands.beatOrnament(beat([{ pitch: 'E4' }])), null);
+  });
+  test('hands: beat readers for golpe, pick scrape and barre skip rests and graces', () => {
+    eq([hands.beatGolpe(beat([{ pitch: 'E4' }], { golpe: 'thumb' })), hands.beatGolpe({ type: 'rest', duration: 'quarter', golpe: true })], ['thumb', null]);
+    eq([hands.beatPickScrape(beat([{ pitch: 'E4' }], { pickScrape: 'up' })), hands.beatPickScrape({ type: 'grace', notes: [{ pitch: 'E4' }], pickScrape: true })], ['up', null]);
+    eq([hands.beatBarre(beat([{ pitch: 'E4' }], { barre: { fret: 5, half: true } })), hands.beatBarre({ type: 'rest', duration: 'quarter', barre: 2 })],
+      [{ fret: 5, half: true }, null]);
+  });
+  test('hands: beatTapMark priority tap > leftHandTap > slap > pop; a tapped harmonic gets no LH mark', () => {
+    eq(beatTapMark(beat([{ pitch: 'E4', leftHandTap: true }, { pitch: 'G4', tap: true }])), 'tap');
+    eq(beatTapMark(beat([{ pitch: 'E4', slap: true }, { pitch: 'G4', leftHandTap: 1 }])), 'leftHandTap');
+    eq(beatTapMark(beat([{ pitch: 'E4', leftHandTap: true, harmonic: 'tapped' }])), null);
+    eq(beatTapMark(beat([{ pitch: 'E4', leftHandTap: true, harmonic: 'tapped' }, { pitch: 'G4', pop: true }])), 'pop');
+    eq(beatTapMark({ type: 'rest', duration: 'quarter', notes: [{ pitch: 'E4', leftHandTap: true }] }), null);
+  });
+  test('hands: rightFingerStack - lowest note first by pitch, else by string (higher number lower); null when none', () => {
+    eq(hands.rightFingerStack(beat([{ pitch: 'E5', rightFinger: 'a' }, { pitch: 'E3', rightFinger: 'P' }, { pitch: 'B4', rightFinger: 'm' }, { pitch: 'G4' }])), ['p', 'm', 'a']);
+    eq(hands.rightFingerStack(beat([{ string: 1, fret: 0, rightFinger: 'i' }, { string: 5, fret: 0, rightFinger: 'p' }])), ['p', 'i']);
+    eq(hands.rightFingerStack(beat([{ pitch: 'E4', rightFinger: 'x' }])), null);
+    eq(hands.rightFingerStack({ type: 'grace', notes: [{ pitch: 'E4', rightFinger: 'p' }] }), null);
+  });
+  test('hands: normalizeScore keeps beat / note keys when no hand field is present; withHand* return their input', () => {
+    const raw = { tracks: [{ measures: [{ beats: [beat([{ pitch: 'E4', leftHandTap: true }], { letRing: true })] }] }] };
+    const b = normalizeScore(raw).tracks[0].measures[0].beats[0];
+    eq(Object.keys(b), ['dots', 'type', 'duration', 'notes', 'letRing']);
+    eq(Object.keys(b.notes[0]), ['pitch', 'leftHandTap', 'soundingPitch']);
+    const n = { pitch: 'E4', leftHandTap: true };
+    eq(hands.withHandNote(n) === n, true);
+    const bb = { type: 'note', letRing: true };
+    eq(hands.withHandBeat(bb) === bb, true);
+  });
+  test('hands: normalizeScore canonicalizes present hand fields (null when not understood)', () => {
+    const raw = { tracks: [{ measures: [{ beats: [
+      beat([{ pitch: 'E4', ornament: ' Short-Trill ', finger: '2', rightFinger: 'I' }], { golpe: 'THUMB', pickScrape: 'Down', barre: '5' }),
+      beat([{ pitch: 'E4', ornament: 'trill', finger: 9, rightFinger: 'q' }], { golpe: 'x', pickScrape: 1, barre: { half: true } }),
+    ] }] }] };
+    const [a, b] = normalizeScore(raw).tracks[0].measures[0].beats;
+    eq([a.golpe, a.pickScrape, a.barre, a.notes[0].ornament, a.notes[0].finger, a.notes[0].rightFinger],
+      ['thumb', 'down', { fret: 5, half: false }, 'upperMordent', 2, 'i']);
+    eq([b.golpe, b.pickScrape, b.barre, b.notes[0].ornament, b.notes[0].finger, b.notes[0].rightFinger], [null, null, null, null, null, null]);
+  });
+}
+
+// ---------- 1.7.0 left-hand fingering (layout/chord.js fingeringLayout, draw/handMarks.js) ----------
+{
+  const { layoutChord, fingeringLayout, notationInnerLeft, arpeggioInnerLeft } = await imp('src/layout/chord.js');
+  const { staffPosition } = await imp('src/pitch.js');
+  const { noteheadForDuration } = await imp('src/glyphs.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const theme = resolveTheme({ staffLineSpacing: 10 });
+  const chordOf = (notes, accs = notes.map(() => null)) => layoutChord(notes, notes.map((n) => staffPosition(n.pitch)), true, accs,
+    { headGlyph: noteheadForDuration('quarter'), duration: 'quarter' }, theme);
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const byClass = (root, cls) => walk(root).filter((n) => (n.getAttribute('class') || '').split(' ').includes(cls));
+
+  test('fingering: fingeringLayout is null without a chord or a fingered note; notationInnerLeft is then arpeggioInnerLeft', () => {
+    const notes = [{ pitch: 'E4' }, { pitch: 'G4', finger: 'x' }];
+    const chord = chordOf(notes);
+    eq(fingeringLayout(notes, null, theme), null);
+    eq(fingeringLayout(notes, chord, theme), null);
+    eq(notationInnerLeft(notes, chord, theme), arpeggioInnerLeft(chord));
+    eq(notationInnerLeft(notes, null, theme), 0);
+  });
+  test('fingering: a second takes two columns 9 px apart, the first 3 px left of the accidentals; left reaches past the digits', () => {
+    const notes = [{ pitch: 'G#4', finger: 4 }, { pitch: 'A4', finger: '3' }, { pitch: 'C5', finger: 't' }];
+    const chord = chordOf(notes, ['sharp', null, null]);
+    const fl = fingeringLayout(notes, chord, theme);
+    const right = -arpeggioInnerLeft(chord) - 3;
+    eq(fl.items.map((it) => [it.noteIndex, it.label, Math.round((it.dx - right) * 100) / 100]), [[2, 'T', 0], [1, '3', 0], [0, '4', -9]]);
+    eq(fl.left > arpeggioInnerLeft(chord) + 9 + 3, true, 'left covers the second column');
+    eq(notationInnerLeft(notes, chord, theme), fl.left);
+  });
+  test('fingering: digits drawn at note height in voice 1 only, left of the accidental; the onset moves only with fingers', () => {
+    const mk = (finger) => ({ tracks: [{ showTablature: true, measures: [{ beats: [
+      { type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }] },
+      { type: 'note', duration: 'quarter', notes: [{ pitch: 'F#4', string: 4, fret: 4, ...finger }] },
+      { type: 'note', duration: 'half', notes: [{ pitch: 'A4' }] },
+    ] }, { voices: [{ beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'D5', finger: 1 }] }] },
+      { beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'G4', finger: 2 }] }] }] }] }] });
+    const svg = render(mk({ finger: 2 }));
+    const groups = byClass(svg, 'fingering-left');
+    eq(groups.map((g) => g.children.map((t) => t.textContent)), [['2'], ['1']], 'one digit per fingered voice-1 note; voice 2 none');
+    eq(byClass(svg, 'staff-tab').some((s) => byClass(s, 'fingering-left').length), false, 'none on TAB');
+    const plain = render(mk({}));
+    eq(byClass(plain, 'fingering-left').length, 1);
+    const glyphXs = (svg, ch) => walk(byClass(svg, 'staff-notation')[0]).filter((n) => n.tag === 'text' && n.textContent === ch).map((n) => Number(n.getAttribute('x')));
+    const sharpX = glyphXs(svg, Glyph.accidentalSharp)[0];
+    const digit = groups[0].children[0];
+    eq(Number(digit.getAttribute('x')) <= sharpX - 3, true, 'digit right edge at least 0.3 sp left of the sharp');
+    const headY = walk(byClass(svg, 'staff-notation')[0]).filter((n) => n.tag === 'text' && n.textContent === Glyph.noteheadBlack)
+      .map((n) => [Number(n.getAttribute('x')), Number(n.getAttribute('y'))]);
+    eq(Math.abs(Number(digit.getAttribute('y')) - 11 * 0.35 - headY[1][1]) < 1e-9, true, 'centred on the F#4 head');
+    const heads = (s2) => glyphXs(s2, Glyph.noteheadBlack);
+    eq(heads(svg)[1] > heads(plain)[1], true, 'the fingered onset moves right');
+    eq(heads(svg)[0], heads(plain)[0], 'the first onset stays');
+    eq(digit.getAttribute('text-anchor'), 'end');
+    eq(digit.getAttribute('font-size'), '11');
+  });
+}
+
+// ---------- 1.7.0 notation stack: ornament, right-hand letters, left-hand tap, golpe (playingDirections.js) ----------
+{
+  const { tapMarkHalf, techniqueLabelSize } = await imp('src/draw/tab.js');
+  const { estimateTextWidth } = await imp('src/textMetrics.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const byClass = (root, cls) => walk(root).filter((n) => (n.getAttribute('class') || '').split(' ').includes(cls));
+  const nq = (notes, extra = {}) => ({ type: 'note', duration: 'quarter', notes, ...extra });
+  const y = (n) => Number(n.getAttribute('y'));
+
+  test('stack: tapMarkHalf keeps the estimated letter half for T / S / P and uses the glyph box for the left-hand tap', () => {
+    const theme = resolveTheme({});
+    ['tap', 'slap', 'pop'].forEach((k) => eq(tapMarkHalf(k, theme), estimateTextWidth({ tap: 'T', slap: 'S', pop: 'P' }[k], techniqueLabelSize(theme), { bold: true }) / 2));
+    eq(tapMarkHalf('leftHandTap', theme), (1.63 / 2) * theme.staffLineSpacing);
+  });
+
+  test('stack: one beat with turn, p i m, T, golpe and a down pick stacks them bottom up, each at least 0.4 sp above the last', () => {
+    const svg = render({ tracks: [{ measures: [{ beats: [
+      nq([{ pitch: 'E3', rightFinger: 'p' }, { pitch: 'E4', rightFinger: 'm', ornament: 'turn', tap: true }, { pitch: 'B3', rightFinger: 'I' }], { golpe: 'thumb', pickStroke: 'down' }),
+      nq([{ pitch: 'E4' }]), nq([{ pitch: 'E4' }]), nq([{ pitch: 'E4' }]),
+    ] }] }] });
+    const orn = byClass(svg, 'ornament-turn')[0].children[0];
+    eq(byClass(svg, 'ornament')[0] === byClass(svg, 'ornament-turn')[0], true);
+    const rh = byClass(svg, 'fingering-right')[0].children;
+    eq(rh.map((t) => t.textContent), ['p', 'i', 'm'], 'lowest note first (drawn bottom up)');
+    eq(rh.map((t) => t.getAttribute('font-style')), ['italic', 'italic', 'italic']);
+    eq(y(rh[0]) > y(rh[1]) && y(rh[1]) > y(rh[2]), true);
+    const tap = byClass(svg, 'tap')[0].children[0];
+    const golpe = byClass(svg, 'golpe-thumb')[0].children[0];
+    const pick = byClass(svg, 'pick-stroke-down')[0].children[0];
+    // Each mark's bottom vs the previous mark's top (estimated boxes, px; sp = 10).
+    const ornTop = y(orn) - 0.89 * 10;
+    eq(y(rh[0]) + 0.25 * 11 <= ornTop - 4 + 1e-9, true, 'letters 0.4 sp above the turn');
+    const rhTop = y(rh[2]) - 0.8 * 11;
+    eq(y(tap) + 0.25 * techniqueLabelSize(resolveTheme({})) <= rhTop - 4 + 1e-9, true, 'T 0.4 sp above the letters');
+    const tapTop = y(tap) - 0.8 * techniqueLabelSize(resolveTheme({}));
+    eq(y(golpe) - 0.02 * 10 <= tapTop - 4 + 1e-9, true, 'golpe 0.4 sp above the T');
+    eq(y(pick) <= y(golpe) - 1.14 * 10 - 4 + 1e-9, true, 'pick 0.4 sp above the golpe');
+  });
+
+  test('stack: the left-hand tap glyph takes the T slot (tap > LH > slap > pop) on notation and TAB; trill beats an ornament', () => {
+    const svg = render({ tracks: [{ showTablature: true, measures: [{ beats: [
+      nq([{ pitch: 'E4', string: 4, fret: 2, leftHandTap: true }]),
+      nq([{ pitch: 'E4', string: 4, fret: 2, leftHandTap: true, slap: true }]),
+      nq([{ pitch: 'E4', string: 4, fret: 2, leftHandTap: true, tap: true }]),
+      nq([{ pitch: 'E4', string: 4, fret: 2, trill: true, ornament: 'turn' }]),
+    ] }] }] });
+    eq(byClass(svg, 'left-hand-tap').length, 4, 'two beats x notation + TAB');
+    eq(byClass(svg, 'left-hand-tap').map((g) => g.children[0].textContent.codePointAt(0).toString(16)), ['e840', 'e840', 'e840', 'e840']);
+    eq(byClass(svg, 'slap').length, 0);
+    eq(byClass(svg, 'tap').length, 2);
+    eq(byClass(svg, 'ornament').length, 0);
+    eq(byClass(svg, 'trill').length, 2);
+  });
+
+  test('stack: right-hand letters - notation only on a notation + TAB track; on a tab-only track under the pick stroke', () => {
+    const both = render({ tracks: [{ showTablature: true, measures: [{ beats: [nq([{ pitch: 'E4', string: 4, fret: 2, rightFinger: 'a' }], { pickStroke: 'up' })] }] }] });
+    eq(byClass(both, 'fingering-right').length, 1);
+    eq(byClass(byClass(both, 'staff-tab')[0], 'fingering-right').length, 0);
+    const tabOnly = render({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: [
+      nq([{ string: 4, fret: 2, rightFinger: 'a' }, { string: 6, fret: 0, rightFinger: 'p' }], { pickStroke: 'up' }),
+      nq([{ string: 1, fret: 2, rightFinger: 'c' }]),
+    ] }] }] });
+    const rh = byClass(tabOnly, 'fingering-right');
+    eq(rh.map((g) => g.children.map((t) => t.textContent)), [['p', 'a'], ['c']]);
+    const pick = byClass(tabOnly, 'pick-stroke-up')[0].children[0];
+    eq(y(pick) <= y(rh[0].children[1]) - 0.8 * 11 - 4 + 1e-9, true, 'pick 0.4 sp above the letters');
+    eq(y(rh[1].children[0]) + 0.25 * 11 <= -10 + 1e-9, true, 'letters at least 1 sp above the TAB top line');
+  });
+
+  test('stack: ornaments, letters and golpe are not drawn on graces, rests or voice 2; directionTopY reaches the golpe', () => {
+    const svg = render({ tracks: [{ measures: [
+      { beats: [
+        { type: 'grace', duration: '16th', notes: [{ pitch: 'D4', ornament: 'turn', rightFinger: 'p' }], golpe: true },
+        { type: 'rest', duration: 'quarter', golpe: true, notes: [{ pitch: 'E4', ornament: 'turn' }] },
+        nq([{ pitch: 'E4' }], { golpe: true, fermata: true }), nq([{ pitch: 'E4' }]), nq([{ pitch: 'E4' }]),
+      ] },
+      { voices: [{ beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'E5' }] }] },
+        { beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'G4', ornament: 'turn', rightFinger: 'p' }], golpe: true }] }] },
+    ] }] });
+    eq([byClass(svg, 'ornament').length, byClass(svg, 'fingering-right').length, byClass(svg, 'golpe').length], [0, 0, 1]);
+    const golpe = byClass(svg, 'golpe')[0].children[0];
+    const fermata = byClass(svg, 'fermata')[0];
+    eq(y(fermata.children[0]) < y(golpe) - 1.14 * 10, true, 'fermata above the golpe');
+  });
+}
+
+// ---------- 1.7.0 golpe on the TAB staff (tabTechniques.js) ----------
+{
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const byClass = (root, cls) => walk(root).filter((n) => (n.getAttribute('class') || '').split(' ').includes(cls));
+  const t = (fret, extra = {}, note = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string: 2, fret, ...note }], ...extra });
+  const y = (n) => Number(n.getAttribute('y'));
+
+  test('TAB golpe: above the beat\'s T (0.4 sp clear), else on the T baseline; classes per kind; none on rests', () => {
+    const svg = render({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: [
+      t(2, { golpe: 'thumb' }, { tap: true }), t(2, { golpe: 'finger' }), t(2), { type: 'rest', duration: 'quarter', golpe: true },
+    ] }] }] });
+    const g = byClass(svg, 'golpe');
+    eq(g.map((n) => n.getAttribute('class')), ['golpe golpe-thumb', 'golpe golpe-finger']);
+    const tap = byClass(svg, 'tap')[0].children[0];
+    // golpe glyph origin = ink bottom + bBoxSW.y * sp (sp = 10, bBoxSW.y = -0.02)
+    const bottom = (n) => y(n.children[0]) + 0.02 * 10;
+    eq(Math.abs(bottom(g[0]) - (y(tap) - 0.8 * Number(tap.getAttribute('font-size')) - 4)) < 1e-6, true, 'first golpe 0.4 sp above the T top');
+    eq(Math.abs(bottom(g[1]) - y(tap)) < 1e-6, true, 'a golpe alone sits on the T baseline of a T-less beat (same fret height)');
+    eq(g.every((n) => n.children[0].textContent.codePointAt(0) === 0xE842), true);
+  });
+
+  test('TAB golpe: drawn in the TAB group of a notation + TAB track as well, and a whammy dip stacks above it', () => {
+    const svg = render({ tracks: [{ showTablature: true, measures: [{ beats: [
+      { type: 'note', duration: 'quarter', notes: [{ pitch: 'E4', string: 4, fret: 2 }], golpe: true, whammy: true },
+      { type: 'note', duration: 'quarter', notes: [{ pitch: 'E4', string: 4, fret: 2 }] },
+    ] }] }] });
+    const tab = byClass(svg, 'staff-tab')[0];
+    eq(byClass(tab, 'golpe').length, 1);
+    eq(byClass(byClass(svg, 'staff-notation')[0], 'golpe').length, 1);
+    const golpeTop = y(byClass(tab, 'golpe')[0].children[0]) - 1.14 * 10;
+    const dipPath = byClass(tab, 'whammy').flatMap((n) => walk(n)).find((n) => n.tag === 'path');
+    const dipYs = dipPath.getAttribute('d').match(/-?\d+(\.\d+)?/g).map(Number).filter((_, i) => i % 2 === 1);
+    eq(Math.max(...dipYs) < golpeTop, true, 'dip above the golpe');
+  });
+}
+
+// ---------- 1.7.0 pick-scrape and barre label runs (techniqueLabels.js) ----------
+{
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const byClass = (root, cls) => walk(root).filter((n) => (n.getAttribute('class') || '').split(' ').includes(cls));
+  const q = (extra = {}) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4', string: 4, fret: 2 }], ...extra });
+  const rest = (extra = {}) => ({ type: 'rest', duration: 'quarter', ...extra });
+  const grace = { type: 'grace', duration: '16th', notes: [{ pitch: 'D4', string: 4, fret: 0 }] };
+  const tabOnly = (measures) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures: measures.map((beats) => ({ beats })) }] });
+  const labels = (svg, cls) => byClass(svg, cls).map((g) => [g.getAttribute('class'), g.children[0].textContent]);
+  const labelY = (svg, cls) => byClass(svg, cls).map((g) => Number(g.children[0].getAttribute('y')));
+
+  test('labels: let-ring bridging truth table is unchanged (rests bridge, graces and notes end, values must match both sides)', () => {
+    const count = (beats) => byClass(render(tabOnly([beats])), 'let-ring').length;
+    eq(count([q({ letRing: true }), rest(), q({ letRing: true }), q()]), 1, 'rest bridges');
+    eq(count([q({ letRing: true }), grace, q({ letRing: true }), q()]), 2, 'grace ends');
+    eq(count([q({ letRing: true }), q(), q({ letRing: true }), q()]), 2, 'note ends');
+    eq(count([q({ letRing: true }), rest(), rest(), q()]), 1, 'trailing rests stay out');
+    eq(count([rest(), rest({ letRing: true }), rest(), q({ letRing: true })]), 1, 'a marked rest is part of the run');
+  });
+
+  test('labels: P.S. runs merge both directions (class from the first beat), rests bridge; an unmarked note ends', () => {
+    const svg = render(tabOnly([[q({ pickScrape: 'down' }), q({ pickScrape: ' UP ' }), rest(), q({ pickScrape: true })], [q(), q({ pickScrape: 'up' }), q(), q({ pickScrape: 'x' })]]));
+    eq(labels(svg, 'pick-scrape'), [['pick-scrape pick-scrape-down', 'P.S.'], ['pick-scrape pick-scrape-up', 'P.S.']]);
+  });
+
+  test('labels: barre runs - same fret and half continue over rests and graces; a different barre or unmarked note ends; labels C II / ½C V', () => {
+    const svg = render(tabOnly([[q({ barre: { fret: 2 } }), rest(), grace, q({ barre: '2' }), q({ barre: { fret: 5, half: true } })], [q({ barre: 5 }), q(), q({ barre: 'II' }), q({ barre: 12 })]]));
+    eq(labels(svg, 'barre'), [['barre', 'C II'], ['barre barre-half', '½C V'], ['barre', 'C V'], ['barre', 'C XII']]);
+  });
+
+  test('labels: lanes outward P.M. < harmonic < let ring < P.S. < barre < rake; below a notation-only staff', () => {
+    const all = { palmMute: true, letRing: true, pickScrape: true, barre: 3, notes: [{ pitch: 'E4', string: 4, fret: 2, harmonic: 'artificial' }] };
+    const svg = render(tabOnly([[q(all), q({ ...all, rake: true })]]));
+    const ys = ['palm-mute', 'harmonic', 'let-ring', 'pick-scrape', 'barre', 'rake'].map((c) => labelY(svg, c)[0]);
+    eq(ys.every((v, i) => i === 0 || v < ys[i - 1]), true, `lanes upward above TAB: ${ys}`);
+    const notation = render({ tracks: [{ measures: [{ beats: [q({ pickScrape: true, barre: 3 }), q({ pickScrape: true, barre: 3 }), q(), q()] }] }] });
+    const [ps, barre] = [labelY(notation, 'pick-scrape')[0], labelY(notation, 'barre')[0]];
+    eq(ps > 40 && barre > ps, true, `below the staff, barre outside P.S.: ${ps} ${barre}`);
+  });
+
+  test('labels: a barre run across a system break repeats its label on the next system', () => {
+    const svg = render(tabOnly([[q({ barre: 7 }), q({ barre: 7 }), q({ barre: 7 }), q({ barre: 7 })], [q({ barre: 7 }), q({ barre: 7 }), q(), q()]]), 300);
+    eq(byClass(svg, 'staff-tab').length, 2, 'two systems');
+    eq(labels(svg, 'barre').map((l) => l[1]), ['C VII', 'C VII']);
+  });
+}
+
+// ---------- 1.7.0 verification audit: gaps left by the developer's tests ----------
+{
+  const { beatTapMark } = await imp('src/directions.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const byClass = (root, cls) => walk(root).filter((n) => (n.getAttribute('class') || '').split(' ').includes(cls));
+  const q = (notes, extra = {}) => ({ type: 'note', duration: 'quarter', notes, ...extra });
+  const one = (beats) => ({ tracks: [{ showTablature: true, measures: [{ beats }] }] });
+  const y = (n) => Number(n.getAttribute('y'));
+  const fill = [q([{ pitch: 'E4' }]), q([{ pitch: 'E4' }]), q([{ pitch: 'E4' }])];
+
+  test('audit: tap-letter priority ends slap > pop', () => {
+    eq(beatTapMark(q([{ pitch: 'E4', pop: true }, { pitch: 'G4', slap: true }])), 'slap');
+    eq(beatTapMark(q([{ pitch: 'E4', pop: true }])), 'pop');
+  });
+
+  test('audit: a leftHandTap on a tapped harmonic draws no left-hand-tap glyph (notation or TAB); on a plain note it does', () => {
+    const svg = render(one([q([{ pitch: 'E4', string: 4, fret: 2, leftHandTap: true, harmonic: 'tapped' }]), q([{ pitch: 'E4', string: 4, fret: 2, leftHandTap: true }]), ...fill.slice(1)]));
+    eq(byClass(svg, 'left-hand-tap').length, 2, 'only the second beat, once on notation and once on TAB');
+  });
+
+  test('audit: a chord with several ornaments draws only one glyph, from its first valid note (turn, not the later mordent)', () => {
+    const svg = render(one([q([{ pitch: 'E4', string: 4, fret: 2, ornament: 'nope' }, { pitch: 'G4', string: 3, fret: 0, ornament: 'turn' }, { pitch: 'B4', string: 2, fret: 0, ornament: 'mordent' }]), ...fill]));
+    eq(byClass(svg, 'ornament').map((g) => g.getAttribute('class')), ['ornament ornament-turn']);
+  });
+
+  test('audit: a grace note\'s finger is not drawn, a main note\'s finger is', () => {
+    const svg = render(one([{ type: 'grace', duration: '16th', notes: [{ pitch: 'D4', string: 4, fret: 0, finger: 3 }] }, q([{ pitch: 'E4', string: 4, fret: 2, finger: 2 }]), ...fill.slice(1)]));
+    eq(byClass(svg, 'fingering-left').map((g) => g.children.map((t) => t.textContent)), [['2']]);
+  });
+
+  test('audit: unusable finger values leave the layout identical to a score without the field (room only for drawn fingers)', () => {
+    const beats = (extra) => [q([{ pitch: 'F#4', ...extra }]), q([{ pitch: 'E4', ...extra }]), ...fill.slice(1)];
+    const lay = (score) => JSON.stringify(computeLayout(normalizeScore(score), resolveTheme({}), 900).systems.flatMap((sy) => sy.tracks.flatMap((t) => t.measures.flatMap((m) => [m.x, m.width, m.endX, ...m.elements.flatMap((e) => [e.x, e.width, e.chord.leftExt])]))));
+    const mk = (extra) => ({ tracks: [{ measures: [{ beats: beats(extra) }] }] });
+    eq(lay(mk({ finger: 9 })), lay(mk({})));
+    eq(lay(mk({ finger: 'x', rightFinger: 'z', ornament: 'bogus' })), lay(mk({})));
+    eq(lay(mk({ finger: 2 })) !== lay(mk({})), true, 'a drawn finger does change the spacing');
+  });
+
+  test('audit: the beat direction top (fermata) clears an ornament, right-hand letters and the left-hand tap glyph', () => {
+    const fermataY = (note) => {
+      const svg = render({ tracks: [{ measures: [{ beats: [q([{ pitch: 'E4', ...note }], { fermata: true }), ...fill] }] }] });
+      return { svg, f: y(byClass(svg, 'fermata')[0].children[0]) };
+    };
+    const orn = fermataY({ ornament: 'turn' });
+    const o = byClass(orn.svg, 'ornament')[0].children[0];
+    eq(orn.f <= y(o) - glyphBox(String.fromCodePoint(o.textContent.codePointAt(0))).top * 10 - 4 + 1e-9, true, 'above the turn');
+    const rh = fermataY({ rightFinger: 'm' });
+    eq(rh.f <= y(byClass(rh.svg, 'fingering-right')[0].children[0]) - 0.8 * 11 - 4 + 1e-9, true, 'above the letter');
+    const lh = fermataY({ leftHandTap: true });
+    const l = byClass(lh.svg, 'left-hand-tap')[0].children[0];
+    eq(lh.f <= y(l) - glyphBox(String.fromCodePoint(l.textContent.codePointAt(0))).top * 10 - 4 + 1e-9, true, 'above the left-hand tap glyph');
   });
 }
 

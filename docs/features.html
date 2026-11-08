@@ -277,6 +277,29 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 <div class="demo" data-demo="strumArpeggio" data-width="680"></div>
 <div class="demo" data-demo="legatoSlides" data-width="680"></div>
 
+<h2 id="hand-marks">Ornaments and hand marks</h2>
+<p>Note fields for ornaments and fingering, and beat fields for the hand marks: <code>ornament</code>, <code>finger</code> and <code>rightFinger</code> on a note, <code>leftHandTap</code> on a note, <code>golpe</code>, <code>pickScrape</code> and <code>barre</code> on a beat. Scores that use none of them draw as before.</p>
+<table>
+  <tr><th>Field</th><th>Drawn as</th></tr>
+  <tr><td><code>ornament</code> (note)</td><td><code>'turn'</code>, <code>'invertedTurn'</code>, <code>'upperMordent'</code> or <code>'lowerMordent'</code> above the beat, on notation. Aliases: <code>'turnInverted'</code>, <code>'invertedMordent'</code>, <code>'shortTrill'</code>, <code>'mordent'</code>. Case and spaces are ignored</td></tr>
+  <tr><td><code>finger</code> (note)</td><td>Left-hand fingering, left of the chord on notation: <code>1</code> to <code>4</code>, <code>'T'</code>, or <code>0</code> (drawn as a plain <code>0</code>, the open-string sign)</td></tr>
+  <tr><td><code>rightFinger</code> (note)</td><td>Italic <code>'p'</code>, <code>'i'</code>, <code>'m'</code>, <code>'a'</code> or <code>'c'</code> above the beat, stacked for a chord. Above the TAB on a tab-only track</td></tr>
+  <tr><td><code>leftHandTap</code> (note)</td><td>Left-hand tapping sign in the tap "T" place, on notation and TAB</td></tr>
+  <tr><td><code>golpe</code> (beat)</td><td>Golpe sign above the tap "T" place, on notation and TAB: <code>true</code>, <code>'thumb'</code> or <code>'finger'</code></td></tr>
+  <tr><td><code>pickScrape</code> (beat)</td><td>Dashed "P.S." label over consecutive beats, like let ring: <code>true</code>, <code>'down'</code> or <code>'up'</code> (the direction is not drawn)</td></tr>
+  <tr><td><code>barre</code> (beat)</td><td>Label "C II" for <code>2</code>, or "½C V" for <code>{ fret: 5, half: true }</code>. Repeated after a system break</td></tr>
+</table>
+<ul class="points">
+  <li>An ornament sits in the trill's place, one per beat. A trill on the same beat wins.</li>
+  <li>Left-hand fingering takes room left of its chord, and only where a note has a finger. A second digit for a note a staff position from another moves a column further left.</li>
+  <li>A beat shows one tap mark: tap "T", then left-hand tap, then slap "S", then pop "P". A tapped harmonic ignores <code>leftHandTap</code>.</li>
+  <li>The golpe sits above the tap letter's place, clear of a trill or hammer-on letter on TAB. A rest has none.</li>
+  <li>Labels stack from the staff in this order: P.M., harmonic, let ring, P.S., barre, rake.</li>
+  <li>Rests and grace notes draw none of these marks. A rest may sit inside a P.S. or barre run, and a grace note inside a barre run.</li>
+  <li>Ornaments, fingering and these marks are not drawn on voice 2. Ornaments and left-hand fingering are not drawn on TAB.</li>
+</ul>
+<div class="demo" data-demo="handMarks" data-width="680"></div>
+
 <h2 id="tab-rhythm">Rhythm on tab</h2>
 <p>A tab-only track (<code>showStandardNotation: false</code>, <code>showTablature: true</code>) shows its rhythm under the TAB staff by default, as in tab books: stems, beams, flags, augmentation dots, tuplets and rests. Set <code>tabRhythm: false</code> to keep plain fret numbers. A track that also shows notation gets this only with <code>tabRhythm: true</code>.</p>
 <ul class="points">
@@ -553,6 +576,34 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
           { beats: [t('8th', 3, 5, { hammerPull: true }), t('8th', 3, 7, { hammerPull: true }), t('8th', 3, 9), t('8th', 3, 7, { hammerPull: 'p' }), t('half', 3, 5)] },
           { beats: [t('quarter', 2, 7, { slideIn: 'below' }), t('quarter', 2, 9, { slideOut: 'up' }), t('quarter', 2, 7, { slideIn: 'above' }), t('quarter', 2, 5, { slideOut: 'down' })] },
           { beats: [t('quarter', 1, 7, { bend: 'prebend full' }), t('quarter', 1, 5, { bend: 'pb 1/2 release' }), t('quarter', 1, 7, { bend: 'release' }), t('quarter', 1, 5, { bend: { type: 'release', amount: 'full' } })] },
+        ],
+      }],
+    },
+
+    handMarks: {
+      tracks: [{
+        name: 'Gt.', showStandardNotation: true, showTablature: true,
+        measures: [
+          { beats: [
+            t('quarter', 3, 5, { ornament: 'turn', finger: 1, rightFinger: 'p' }),
+            t('quarter', 3, 7, { ornament: 'invertedTurn', finger: 3, rightFinger: 'i' }),
+            t('quarter', 2, 8, { ornament: 'mordent', finger: 4, rightFinger: 'm' }, { golpe: true }),
+            t('quarter', 2, 5, { ornament: 'upperMordent', finger: 'T' }, { golpe: 'thumb' }),
+          ] },
+          { beats: [
+            t('8th', 1, 5, { leftHandTap: true }, { pickScrape: true, barre: 2 }),
+            t('8th', 1, 7, { leftHandTap: true, tap: true }, { pickScrape: true, barre: 2 }),
+            t('quarter', 1, 8, {}, { pickScrape: 'up', barre: 2 }),
+            t('quarter', 1, 5, {}, { barre: { fret: 5, half: true } }),
+          ] },
+          { beats: [
+            { type: 'note', duration: 'half', arpeggio: 'up', notes: [
+              { string: 5, fret: 3, finger: 3, rightFinger: 'a' },
+              { string: 4, fret: 2, finger: 2, rightFinger: 'm' },
+              { string: 3, fret: 0, finger: 0, rightFinger: 'i' },
+            ] },
+            t('half', 1, 3, { ornament: 'lowerMordent' }, { golpe: 'finger' }),
+          ] },
         ],
       }],
     },

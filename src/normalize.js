@@ -34,6 +34,11 @@
  * note's `slideIn` / `slideOut` are canonicalized when present ('below' |
  * 'above' | null, 'down' | 'up' | null; withNoteSlides).
  *
+ * Hand marks (see hands.js): a beat's `golpe`, `pickScrape` and `barre`
+ * and a note's `ornament`, `finger` and `rightFinger` are canonicalized
+ * when present (withHandBeat / withHandNote; null when not understood); a
+ * note's `leftHandTap` passes through (read as truthy).
+ *
  * Rhythm on TAB staves: `track.tabRhythm` (true | false | 'auto', absent =
  * 'auto') is resolved to a boolean — true only for tracks with a TAB staff
  * that either opt in (`true`) or, for 'auto' / any other value, show no
@@ -65,6 +70,7 @@
 import { pitchFromFret, transposeOctaves } from './pitch.js';
 import { harmonicKind } from './harmonics.js';
 import { withDirections, trillOf, withNoteSlides } from './directions.js';
+import { withHandBeat, withHandNote } from './hands.js';
 import { mergeNavigation } from './navigation.js';
 import { isHiddenRest } from './duration.js';
 
@@ -101,7 +107,7 @@ export function normalizeScore(score) {
     const measures = [];
     let fromFret = false;
     // One voice's beats, normalized against the current key (`curKey`); sets `fromFret`.
-    const normBeats = (beats) => beats.map((b) => withDirections({
+    const normBeats = (beats) => beats.map((b) => withHandBeat(withDirections({
       dots: 0, // keeps `dots` the first key
       ...b,
       dots: clampDots(b.dots),
@@ -124,9 +130,9 @@ export function normalizeScore(score) {
         }
         // Canonical harmonic kind (`harmonicFret` passes through untouched).
         const x = n.harmonic ? { ...out, harmonic: harmonicKind(n.harmonic) } : out;
-        return withNoteSlides(n.trill !== undefined ? { ...x, trill: trillOf(n.trill) } : x);
+        return withHandNote(withNoteSlides(n.trill !== undefined ? { ...x, trill: trillOf(n.trill) } : x));
       }),
-    }));
+    })));
     for (let mi = 0; mi < measureCount; mi++) {
       const padded = !source[mi];
       const measure = source[mi] || { beats: [] };

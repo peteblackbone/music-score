@@ -110,6 +110,14 @@ export const Glyph = {
   fermataBelow: '',
   fermataShortAbove: '',
   fermataLongAbove: '',
+  ornamentTurn: '',
+  ornamentTurnInverted: '',
+  ornamentShortTrill: '', // upper mordent
+  ornamentMordent: '', // lower mordent
+
+  // Guitar techniques
+  guitarLeftHandTapping: '',
+  guitarGolpe: '',
 
   // Bowing marks, used as pick strokes (down-bow = downstroke, up-bow "V" = upstroke)
   stringsDownBow: '',

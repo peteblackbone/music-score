@@ -4,11 +4,12 @@
  * with an arrowhead at the top ('up') or the bottom ('down') and none for
  * `true`. Drawn per element by draw/system.js, right after the chord. The
  * room it needs is reserved by the timeline (layout/timeline.js), so the
- * line sits ARPEGGIO_CLEAR_SP left of the chord's leftmost ink.
+ * line sits ARPEGGIO_CLEAR_SP left of the chord's leftmost ink (its
+ * left-hand fingering included on the notation staff).
  */
 import { group, path, wavyPathDVertical } from './svgUtil.js';
 import { arrowheadDir } from './tab.js';
-import { arpeggioInnerLeft, ARPEGGIO_CLEAR_SP, ARPEGGIO_HALF_SP } from '../layout/chord.js';
+import { notationInnerLeft, ARPEGGIO_CLEAR_SP, ARPEGGIO_HALF_SP } from '../layout/chord.js';
 import { tabExtents } from '../layout/timeline.js';
 
 const ARPEGGIO_WAVE_AMP_SP = 0.25;
@@ -45,14 +46,14 @@ function arpeggioX(x, inner, theme) {
 
 /**
  * Arpeggio of a notation chord (`layoutEl` with `rendered` and `chord`):
- * left of its accidentals / parentheses / heads / ledger lines, from the
+ * left of its fingering / accidentals / parentheses / heads / ledger lines, from the
  * highest notehead − 0.5 sp to the lowest + 0.5 sp.
  */
 export function renderNotationArpeggio(g, layoutEl, kind, theme) {
   const ys = (layoutEl.rendered?.noteheads || []).map((n) => n.y);
   if (!ys.length) return;
   const pad = ARPEGGIO_SPAN_PAD_SP * theme.staffLineSpacing;
-  const cx = arpeggioX(layoutEl.x, arpeggioInnerLeft(layoutEl.chord), theme);
+  const cx = arpeggioX(layoutEl.x, notationInnerLeft(layoutEl.el.notes, layoutEl.chord, theme), theme);
   renderArpeggio(g, cx, Math.min(...ys) - pad, Math.max(...ys) + pad, kind, theme.noteColor, theme);
 }
 

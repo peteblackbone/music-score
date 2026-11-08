@@ -9,7 +9,8 @@
  * - `note.tap` (truthy): a "T" above the beat (one per beat); a tapped
  *   harmonic already says "T.H." and gets no extra "T";
  * - `note.slap` / `note.pop` (truthy): an "S" / "P" in the tap "T" slot
- *   (priority tap > slap > pop, one letter per beat);
+ *   (priority tap > leftHandTap > slap > pop, one letter per beat; the
+ *   left-hand tap glyph for `note.leftHandTap`, see hands.js);
  * - `beat.whammy` true | amount | `{ type, amount }`, type 'dip' (default),
  *   'dive', 'return' or 'predive': a whammy-bar mark on the TAB staff, its
  *   amount shown with a leading "-" (`true` and a missing amount mean '1/2');
@@ -326,10 +327,15 @@ export function beatTaps(el) {
   return isMainNoteBeat(el) && el.notes.some((n) => n.tap && harmonicOf(n) !== 'tapped');
 }
 
-/** Mark of a beat's tap-style letter: 'tap', else 'slap', else 'pop', or null (none, rest, grace). */
+/**
+ * Mark of a beat's tap-style letter: 'tap', else 'leftHandTap' (a left-hand
+ * tapped note that isn't a tapped harmonic), else 'slap', else 'pop', or
+ * null (none, rest, grace).
+ */
 export function beatTapMark(el) {
   if (beatTaps(el)) return 'tap';
   if (!isMainNoteBeat(el)) return null;
+  if (el.notes.some((n) => n.leftHandTap && harmonicOf(n) !== 'tapped')) return 'leftHandTap';
   if (el.notes.some((n) => n.slap)) return 'slap';
   return el.notes.some((n) => n.pop) ? 'pop' : null;
 }

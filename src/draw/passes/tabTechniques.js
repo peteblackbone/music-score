@@ -1,18 +1,19 @@
 /**
  * draw/passes/tabTechniques.js — pass 3 (draw/passes.js): tab
- * hammer-on/pull-off, slide and bend (draw/tabLinks.js), tap "T" and whammy
- * dip, drawn into each run's TAB group. Reads `layoutEl.tabRendered` (fret
- * and mark tops); writes `run.tabInkBoxes` (bend, "T" and dip ink) and
+ * hammer-on/pull-off, slide and bend (draw/tabLinks.js), tap "T", golpe and
+ * whammy dip, drawn into each run's TAB group. Reads `layoutEl.tabRendered` (fret
+ * and mark tops); writes `run.tabInkBoxes` (bend, "T", golpe and dip ink) and
  * `run.hpBoxes` (hammer-on/pull-off ink) for passes 4 and 5.
  */
 import {
-  techniqueLabelSize, renderTapMark, renderWhammyDip, whammyDipGeometry,
+  techniqueLabelSize, renderTapMark, tapMarkHalf, renderWhammyDip, whammyDipGeometry,
 } from '../tab.js';
 import { renderTabLinks } from '../tabLinks.js';
 import { TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../../layout/ink.js';
-import { estimateTextWidth } from '../../textMetrics.js';
-import { beatTapMark, beatWhammy, beatTrill, trillTabFret, TAP_MARK_LETTERS } from '../../directions.js';
+import { beatTapMark, beatWhammy, beatTrill, trillTabFret } from '../../directions.js';
 import { trillEndX, trillRunEndX, trillGeometry, trillRuns, renderTrill } from '../trill.js';
+import { renderGolpe, golpeHalf } from '../handMarks.js';
+import { beatGolpe } from '../../hands.js';
 import { planWhammyLines, renderWhammyLine } from '../whammy.js';
 import { flattenRuns, tabTopY, inkTopInSpan, breakEndX, breakStartX } from './common.js';
 
@@ -52,16 +53,21 @@ const WHAMMY_FRET_HALF_SP = 1; // horizontal reach assumed for another beat's fr
  *   and its tab tremolo / vibrato, raised above any hammer-on/pull-off
  *   letter it would come within TAP_HP_CLEAR_SP of, and above a trill; a
  *   slapped / popped note (`note.slap` / `note.pop`) gets an "S" / "P" the
- *   same way, in the same slot (one letter per beat, priority T > S > P;
- *   `beatTapMark`);
+ *   same way, in the same slot, and a left-hand tapped note
+ *   (`note.leftHandTap`) the left-hand tapping glyph (one mark per beat,
+ *   priority T > left-hand tap > S > P; `beatTapMark`);
+ * - a golpe (`golpe`; draw/handMarks.js) sits on the T's baseline, at
+ *   least TAP_TRILL_CLEAR_SP above the beat's T / S / P and any trill, T or
+ *   hammer-on/pull-off ink in its span; the wider left-hand tap glyph clears
+ *   the trill / T ink in its span the same way;
  * - `whammy` draws a dip ("V" plus "-1/2") above the TAB staff, its width
  *   limited like a bend's, stacked above the beat's frets, marks, "T" / "S" /
- *   "P", trill and any bend under it;
+ *   "P", golpe, trill and any bend under it;
  * - after all beats, whammy dives, returns and pre-dives (draw/whammy.js):
  *   one line per system segment, each at one level above the frets, marks,
  *   letters, trills, bends and dips under it, 0.5 sp above the TAB top line.
  *
- * Bend, trill, tap "T" and whammy-dip ink boxes are recorded on the run
+ * Bend, trill, tap "T", golpe and whammy-dip ink boxes are recorded on the run
  * (`run.tabInkBoxes`, each tagged with its note's x as `noteX`),
  * hammer-ons/pull-offs theirs on `run.hpBoxes`, for the label and
  * directions passes.
@@ -88,7 +94,8 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
       const mark = beatTapMark(el);
       const dip = beatWhammy(el);
       const trilled = beatTrill(el);
-      if (!mark && !dip && !trilled) return;
+      const golpe = beatGolpe(el);
+      if (!mark && !dip && !trilled && !golpe) return;
       const tabTop = tabTopY(run, stringCount, theme);
       const fretTop = layoutEl.tabRendered?.fretTopY ?? Infinity;
       const marksTop = layoutEl.tabRendered?.marksTopY ?? Infinity;
@@ -102,13 +109,19 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
         });
       }
       const trillTop = trilled ? trillTops.get(beat) : Infinity;
+      const size = techniqueLabelSize(theme);
+      // The T's baseline on the beat's own ink (frets, marks, trill).
+      const tapBase = Math.min(tabTop - TAP_STAFF_CLEAR_SP * s, fretTop - TAP_FRET_CLEAR_SP * s, marksTop - TAP_MARK_CLEAR_SP * s,
+        trillTop - TAP_TRILL_CLEAR_SP * s - TEXT_DESCENT_EM * size);
       if (mark) {
-        const size = techniqueLabelSize(theme);
-        let baselineY = Math.min(tabTop - TAP_STAFF_CLEAR_SP * s, fretTop - TAP_FRET_CLEAR_SP * s, marksTop - TAP_MARK_CLEAR_SP * s,
-          trillTop - TAP_TRILL_CLEAR_SP * s - TEXT_DESCENT_EM * size);
+        let baselineY = tapBase;
         // Raise the T above any H/P letter its box comes within TAP_HP_CLEAR_SP of (lowest letter first, so a raise
         // that reaches a higher letter clears that one too).
-        const half = estimateTextWidth(TAP_MARK_LETTERS[mark], size, { bold: true }) / 2;
+        const half = tapMarkHalf(mark, theme);
+        // The wider left-hand tap glyph also clears the trill / T ink drawn so far in its span (a neighbouring trill's wave).
+        if (mark === 'leftHandTap') {
+          baselineY = Math.min(baselineY, inkTopInSpan(x - half, x + half, { boxLists: [run.tabInkBoxes] }) - TAP_TRILL_CLEAR_SP * s - TEXT_DESCENT_EM * size);
+        }
         const pad = TAP_HP_CLEAR_SP * s;
         run.hpBoxes.filter((b) => b.letter && b.letter.x1 < x + half + pad && b.letter.x2 > x - half - pad)
           .map((b) => b.letter).sort((a, b) => b.top - a.top)
@@ -118,6 +131,12 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
             }
           });
         run.tabInkBoxes.push({ ...renderTapMark(run.tabG, x, baselineY, theme.tabFretColor, theme, mark), noteX: x });
+      }
+      if (golpe) {
+        // On the T's baseline, TAP_TRILL_CLEAR_SP above the T / trill / hammer-on/pull-off ink drawn so far in its span.
+        const half = golpeHalf(theme);
+        const inkTop = inkTopInSpan(x - half, x + half, { boxLists: [run.tabInkBoxes, run.hpBoxes] });
+        run.tabInkBoxes.push({ ...renderGolpe(run.tabG, x, Math.min(tapBase, inkTop - TAP_TRILL_CLEAR_SP * s), golpe, theme.tabFretColor, theme), noteX: x });
       }
       if (dip) {
         // Width limited like a bend's: the next note in the system, never past the last barline.

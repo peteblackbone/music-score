@@ -22,6 +22,7 @@ import { drawTabStaffLines, drawTabClef, renderTabElement } from './tab.js';
 import { drawTabRhythm } from './tabRhythm.js';
 import { drawMeasureNumber } from './decor.js';
 import { renderNotationArpeggio, renderTabArpeggio } from './arpeggio.js';
+import { renderLeftFingering } from './handMarks.js';
 import { beatArpeggio } from '../directions.js';
 import { tremoloOf, vibratoOf } from '../noteEffects.js';
 import { glyphBox } from '../glyphMetrics.js';
@@ -166,7 +167,7 @@ function barlineStaff(staff, theme) {
 /**
  * Notation-staff content of one measure: notes/rests (recording each
  * element's info on `layoutEl.rendered`), beams, articulations,
- * tremolo/vibrato, arpeggio lines and tuplet brackets. Chord symbols and dynamics are
+ * tremolo/vibrato, arpeggio lines, left-hand fingering and tuplet brackets. Chord symbols and dynamics are
  * drawn later by a score-wide pass (passes/chordsFermatas.js), once everything they must
  * clear is on the staff. A two-voice measure draws voice 1 (stems up) and then
  * voice 2 (stems down, in `<g class="voice-2">`) each on its own.
@@ -189,7 +190,8 @@ function drawNotationMeasure(g, measure, track, notationBaselineY, theme) {
 /**
  * One voice of a measure's notation (`voice` 0 = single-voice measure, 1 | 2
  * in a two-voice measure: forced stems, marks on the stem side, voice 2's
- * tuplets below; vibrato and arpeggio lines are voice 1's only).
+ * tuplets below; vibrato, arpeggio lines and left-hand fingering are voice
+ * 1's only).
  */
 function drawVoice(g, measure, elements, beamGroups, tupletGroups, track, notationBaselineY, theme, voice) {
   const rendered = {};
@@ -217,6 +219,7 @@ function drawVoice(g, measure, elements, beamGroups, tupletGroups, track, notati
     if (layoutEl.el.vibrato) renderVibrato(g, layoutEl.rendered, layoutEl.width, theme, vibratoOf(layoutEl.el.vibrato));
     const arp = beatArpeggio(layoutEl.el);
     if (arp) renderNotationArpeggio(g, { ...layoutEl, baselineY: notationBaselineY }, arp, theme);
+    renderLeftFingering(g, layoutEl, theme);
   });
 
   drawTupletBrackets(g, tupletGroups, elements, notationBaselineY, theme, voice === 2);

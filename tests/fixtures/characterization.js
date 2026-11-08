@@ -1347,6 +1347,86 @@ export const characterizationCases = [
       }],
     },
   },
+  {
+    // 1.7.0 ornaments and hand marks (900). Gt. (notation + TAB): m1 turn, 'Inverted-Turn', ' short trill ', 'mordent',
+    // trill + turn on one beat (the trill wins), a turn on a grace and on a rest (not drawn); m2 two voices: left-hand
+    // fingers on a chord with a second (two columns) and a sharp, on an arpeggio 'up' chord with 'T' and 0, a finger
+    // on voice 2 (not drawn); m3 one beat with turn + p i m + T + golpe + down pick under a slur, left-hand tap,
+    // left-hand tap + slap (LH wins), tap + left-hand tap (T wins), golpe 'thumb' / 'finger' in a beamed picked pair;
+    // m4 a P.S. run (down then up, a rest bridging), barre 2 across a rest and a grace, then ½ barre 5, then an
+    // unmarked note, with let ring and P.M. overlapping. Vox (notation only): strum + golpe + p i, then P.S. and barre
+    // below the staff.
+    name: 'ornaments', width: 900,
+    score: {
+      tracks: [{
+        name: 'Gt.', showTablature: true,
+        measures: [
+          { beats: [tabgr([[3, 2, { ornament: 'turn' }]]), tabd('8th', 3, 0, { ornament: 'turn' }), tabd('8th', 2, 0, { ornament: 'Inverted-Turn' }),
+            tabd('8th', 2, 1, { ornament: ' short trill ' }), tabd('8th', 1, 0, { ornament: 'mordent' }), tabh(2, 3, { trill: true, ornament: 'turn' }),
+            { type: 'rest', duration: 'quarter', notes: [{ string: 2, fret: 1, ornament: 'turn' }] }] },
+          vm([tabc([[4, 4, { finger: 3 }], [3, 0, { finger: 0 }], [2, 1, { finger: '1' }]], {}, 'half'),
+            tabc([[5, 2, { finger: 2 }], [4, 3, { finger: 't' }], [3, 1, { finger: 1 }]], { arpeggio: 'up' }, 'half')],
+          [tabd('whole', 6, 0, { finger: 2 })]),
+          { beats: [tabc([[3, 4, { rightFinger: 'p' }], [2, 3, { rightFinger: 'i', ornament: 'turn', tap: true }], [1, 3, { rightFinger: 'm' }]],
+            { golpe: true, pickStroke: 'down', slurStart: true }),
+          tabd('8th', 2, 3, { leftHandTap: true }, { slurEnd: true }), tabd('8th', 2, 5, { leftHandTap: true, slap: true }),
+          tabh(1, 5, { leftHandTap: true, tap: true }), tabd('8th', 3, 2, {}, { golpe: 'thumb', pickStroke: 'down' }),
+          tabd('8th', 1, 5, {}, { golpe: 'finger', pickStroke: 'up' })] },
+          { beats: [tabd('8th', 4, 2, {}, { pickScrape: 'down', palmMute: true, letRing: true }), { type: 'rest', duration: '8th' },
+            tabd('8th', 4, 2, {}, { pickScrape: 'up', barre: 2, palmMute: true, letRing: true }), { type: 'rest', duration: '8th' },
+            tabgr([[3, 1]]), tabd('8th', 4, 4, {}, { barre: { fret: 2 }, letRing: true }), tabd('8th', 3, 5, {}, { barre: { fret: 5, half: true } }),
+            tabd('8th', 3, 2), tabd('8th', 3, 2)] },
+        ],
+      }, {
+        name: 'Vox',
+        measures: [
+          { beats: [pc([{ pitch: 'E4', rightFinger: 'p' }, { pitch: 'B4', rightFinger: 'i' }], { strum: 'down', golpe: true }),
+            q('C5', { pickScrape: true, barre: 3 }), q('D5', { pickScrape: true, barre: 3 }), q('E5')] },
+          { beats: [{ type: 'rest', duration: 'whole' }] },
+          { beats: [{ type: 'rest', duration: 'whole' }] },
+          { beats: [{ type: 'rest', duration: 'whole' }] },
+        ],
+      }],
+    },
+  },
+  {
+    // 1.7.0 hand marks at system breaks (600): barre 5 and P.S. runs across the m2 / m3 break (labels repeated), a
+    // turn on m2's last beat, m3's first beat fingered and tied from a sharp (accidental restated), a rake next to the
+    // barre run in m4.
+    name: 'ornaments-break', width: 600,
+    score: {
+      tracks: [{
+        name: 'Gt.', showTablature: true,
+        measures: [
+          { beats: [tabq(3, 2, { barre: 5 }), tabq(3, 2, { barre: 5 }), tabq(2, 3, { barre: 5 }), tabq(2, 3, { barre: 5, pickScrape: true })] },
+          { beats: [tabe(3, 2, { barre: 5, pickScrape: true }), tabe(3, 4, { barre: 5, pickScrape: 'down' }), tabe(2, 3, { barre: 5, pickScrape: true }),
+            tabe(2, 5, { barre: 5, pickScrape: true }), tabq(2, 3, { barre: 5, pickScrape: 'up' }), tabh(4, 4, { ornament: 'turn', tieStart: true }, { barre: 5, pickScrape: true })] },
+          { beats: [tabh(4, 4, { finger: 2, tieEnd: true }, { barre: 5, pickScrape: true }), tabq(3, 2, { barre: 5, pickScrape: true }), tabq(3, 4), tabq(2, 3)] },
+          { beats: [tabq(3, 2, { barre: 7 }), tabg(4, 0), tabg(4, 0), tabq(3, 4, { barre: 7, rake: 'down' }), tabq(2, 5, { barre: 7 }), tabq(2, 3)] },
+          { beats: [tabd('whole', 3, 0, {}, { barre: { fret: 9, half: true } })] },
+        ],
+      }],
+    },
+  },
+  {
+    // 1.7.0 hand marks on a TAB-only track (900): p i m a / c with and without pick strokes (one beside an H arc);
+    // golpe and left-hand tap with a trill and a hammer-on nearby; P.S. and barre lanes with P.M., let ring and a
+    // rake; ornament and finger fields present but not drawn.
+    name: 'ornaments-tab-only', width: 900,
+    score: {
+      tracks: [{
+        name: 'TAB', showStandardNotation: false, showTablature: true,
+        measures: [
+          { beats: [tabc([[6, 0, { rightFinger: 'p' }], [3, 2, { rightFinger: 'i' }], [2, 3, { rightFinger: 'm' }], [1, 0, { rightFinger: 'a' }]], { pickStroke: 'down' }),
+            tabh(1, 2, { rightFinger: 'c' }), tabh(1, 3, { rightFinger: 'a', hammerPull: true }, { pickStroke: 'up' }), tabh(1, 5, { rightFinger: 'i' })] },
+          { beats: [tabh(2, 5, { trill: 7 }), tabh(2, 5, { leftHandTap: true }, { golpe: true }), tabh(2, 3, { hammerPull: true }), tabh(2, 5, {}, { golpe: 'finger' })] },
+          { beats: [tabq(3, 2, { palmMute: true, letRing: true, pickScrape: 'up', barre: 2 }), tabq(3, 2, { palmMute: true, letRing: true, pickScrape: 'up', barre: 2 }),
+            tabg(3, 2), tabq(3, 4, { barre: 2, rake: 'down', letRing: true }), tabq(3, 4, { barre: { fret: 4, half: true } })] },
+          { beats: [tabh(2, 5, { ornament: 'turn', finger: 2 }), tabh(2, 7, { ornament: 'mordent', finger: 'T' }), tabd('half', 1, 0)] },
+        ],
+      }],
+    },
+  },
 ];
 
 // Copy of a score with tabRhythm: false on every track (source untouched). Today the field is ignored, so
