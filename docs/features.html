@@ -237,6 +237,7 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <tr><td><code>whammy</code></td><td>Whammy-bar mark on TAB: <code>true</code>, a string or <code>{ type: 'dip' }</code> is a V with <code>-1/2</code> above it (<code>true</code> means <code>1/2</code>); <code>{ type: 'dive', amount }</code> slopes down and is held until a <code>{ type: 'return' }</code> beat rises again, across line breaks; <code>{ type: 'predive', amount }</code> is a level lead-in before the note, then the rise</td></tr>
   <tr><td><code>rake</code></td><td>Dashed "rake" label over the beat and the dead-note grace notes just before it</td></tr>
   <tr><td><code>trill</code> (on a note)</td><td>"tr" with a wavy line on notation and TAB; <code>7</code> or <code>'B3'</code> adds <code>(7)</code> on TAB</td></tr>
+  <tr><td><code>tiedFrets: 'parens'</code> (track)</td><td>Parentheses around the fret of a tied-to note on TAB, such as <code>(5)</code>. Off by default; see the example after this table</td></tr>
   <tr><td><code>tabRhythm</code> (track)</td><td>Stems, beams, flags, dots, tuplets and rests under the TAB staff. On by default for tab-only tracks; <code>false</code> hides it, <code>true</code> adds it to a track that also shows notation. See <a href="#tab-rhythm">Rhythm on tab</a></td></tr>
 </table>
 <ul class="points">
@@ -247,6 +248,8 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <li>Pre-bends and releases are drawn on tab only.</li>
 </ul>
 <div class="demo" data-demo="techniques"></div>
+<p>With <code>tiedFrets: 'parens'</code> on the track, each tied-to note shows its fret in parentheses on TAB. The note that starts the tie is unchanged.</p>
+<div class="demo" data-demo="tiedFrets" data-width="680"></div>
 
 <h2 id="harmonics">Harmonics</h2>
 <p>Set <code>harmonic</code> on a note. Natural harmonics (<code>true</code> or <code>'natural'</code>) get a diamond notehead and a <code>&lt;12&gt;</code> fret on tab, with no label. Artificial, tapped, pinch and semi harmonics keep a normal notehead and get an <code>A.H.</code>, <code>T.H.</code>, <code>P.H.</code> or <code>S.H.</code> label above the tab. <code>harmonicFret</code> adds the touched fret, as in <code>5(17)</code>.</p>
@@ -261,7 +264,7 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 <p>Beat fields for the marks players read: <code>letRing</code> for a let-ring run, <code>pickStroke</code> for down and up picks, <code>strum</code> and <code>arpeggio</code> for strummed and spread chords, <code>tap</code>, <code>slap</code>, <code>pop</code> and <code>trill</code> on a note, and <code>whammy</code> and <code>rake</code> on a beat. None of them change the rhythm; only <code>arpeggio</code> adds room left of its chord.</p>
 <ul class="points">
   <li>Consecutive <code>letRing</code> beats share one dashed "let ring" label, and an unmarked rest between them keeps the run going. The label sits outside any P.M. or harmonic label.</li>
-  <li>Pick strokes sit above the notation staff, one per beat, and beats in one beam group share a height. On a tab-only track they sit above the TAB.</li>
+  <li>Pick strokes sit above the notation staff, one per beat, and beats in one beam group share a height. In a two-voice measure, voice 2's sit below the staff. On a tab-only track they sit above the TAB.</li>
   <li>A tapped note gets a "T" above its note or fret. A tapped harmonic shows only its <code>T.H.</code> label.</li>
   <li>A whammy dip is drawn on the TAB staff only, as a V with its amount above it. <code>true</code> means <code>1/2</code>.</li>
   <li>A whammy dive slopes down (0.8 to 2.4 sp deep, by amount) and stays held, as a level line, until a beat with <code>{ type: 'return' }</code>, where it rises again. A dip, another dive or a pre-dive ends the hold early with no rise. A hold carries over a line break, stopping 0.5 sp before the barline and resuming after the next header without text. A pre-dive is a short level lead-in before its note, then the rise. The line is lifted above any frets, marks, letters, trills and bends under it.</li>
@@ -296,7 +299,7 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <li>The golpe sits above the tap letter's place, clear of a trill or hammer-on letter on TAB. A rest has none.</li>
   <li>Labels stack from the staff in this order: P.M., harmonic, let ring, P.S., barre, rake.</li>
   <li>Rests and grace notes draw none of these marks. A rest may sit inside a P.S. or barre run, and a grace note inside a barre run.</li>
-  <li>Ornaments, fingering and these marks are not drawn on voice 2. Ornaments and left-hand fingering are not drawn on TAB.</li>
+  <li>On voice 2, ornaments, trills, right-hand letters, tap letters, golpe and pick strokes are drawn below the notation staff. Left-hand fingering and the other marks are voice 1 only. Ornaments and left-hand fingering are not drawn on TAB.</li>
 </ul>
 <div class="demo" data-demo="handMarks" data-width="680"></div>
 
@@ -308,6 +311,7 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <li>A tuplet shows its number under a single beam, or a bracket otherwise.</li>
   <li>Rests sit inside the staff. An empty measure (<code>beats: []</code>) shows a whole-measure rest.</li>
   <li>The band adds height below the TAB staff. Marks above the staff keep their place.</li>
+  <li>In a two-voice measure, voice 2 gets a second row below voice 1's, and an unmerged rest sits in its voice's row.</li>
 </ul>
 <div class="demo" data-demo="tabRhythm" data-width="680"></div>
 
@@ -315,11 +319,16 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 <p>A measure can hold two rhythms at once, as in a melody over a held bass. Give the measure <code>voices</code> instead of <code>beats</code>: the first entry is voice 1 (stems up) and the second is voice 2 (stems down). Both show on notation and on TAB.</p>
 <ul class="points">
   <li>Ties and slurs stay within their voice: voice 1 above the notes, voice 2 below. Articulations sit on the stem side.</li>
-  <li>Where the voices clash, voice 2 moves right, and accidentals are shared between them.</li>
+  <li>A unison where both voices play the same note at the same time shares one notehead. Other clashes move voice 2 right, and accidentals are shared between them.</li>
+  <li>A rest that both voices take at the same time, for the same length, is drawn once.</li>
+  <li>Voice 2 can carry vibrato, trills, ornaments, right-hand letters, tap letters, golpe, pick strokes and fermatas. On notation they sit below the staff, and a voice 2 fermata is inverted.</li>
+  <li>On TAB each voice has a rhythm row, voice 2's below voice 1's. An unmerged rest sits in its row, so it never covers the other voice's frets.</li>
   <li>A <code>{ type: 'rest', hidden: true }</code> takes time without drawing anything, which lets a voice start later.</li>
-  <li>Chord symbols, dynamics, fermatas and the other playing marks are read from voice 1 only.</li>
+  <li>Chord symbols, dynamics, left-hand fingering, strums, arpeggios and the other playing marks are read from voice 1 only.</li>
 </ul>
 <div class="demo" data-demo="voices" data-width="680"></div>
+<p>A TAB-only track shows each voice's rhythm: voice 1 on the first row under the TAB, voice 2 on a second row below it. A rest that both voices take at the same time is drawn once, in the staff.</p>
+<div class="demo" data-demo="voicesTab" data-width="680"></div>
 
 <h2 id="theme">Theming</h2>
 <p>Pass <code>options.theme</code> to override any key of <code>defaultTheme</code>: colours (<code>noteColor</code>, <code>staffLineColor</code>, <code>tabFretColor</code>, <code>background</code>), fonts, line widths and spacing. Spacing keys ending in <code>Sp</code> are in staff spaces, so <code>staffLineSpacing</code> scales the whole score. Rhythm on tab uses <code>tabStemGapSp</code>, <code>tabStemLengthSp</code>, <code>tabHalfStemLengthSp</code>, <code>tabFlagScale</code> and <code>tabFretColor</code>.</p>
@@ -675,12 +684,44 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
           ] },
           { voices: [
             { beats: [t('quarter', 1, 5, {}, { slurStart: true }), t('quarter', 1, 7), t('quarter', 1, 8), t('quarter', 1, 5, {}, { slurEnd: true })] },
-            { beats: [t('half', 6, 3), t('half', 6, 5)] },
+            { beats: [t('half', 6, 3), t('half', 6, 5, {}, { fermata: true })] },
           ] },
           { voices: [
             { beats: [t('quarter', 1, 5), t('quarter', 1, 3), t('half', 2, 5)] },
             { beats: [r('half', { hidden: true }), t('half', 6, 3)] },
           ] },
+          { voices: [
+            { beats: [t('half', 1, 5, {}, { vibrato: true }), t('half', 1, 3)] },
+            { beats: [t('half', 2, 10, { trill: true }), t('half', 6, 0)] },
+          ] },
+        ],
+      }],
+    },
+    voicesTab: {
+      tracks: [{
+        name: 'Gtr.', showStandardNotation: false, showTablature: true,
+        measures: [
+          { voices: [
+            { beats: [t('quarter', 1, 5), t('8th', 1, 7), t('8th', 1, 8), t('half', 1, 7)] },
+            { beats: [t('half', 6, 0), t('quarter', 6, 2), t('quarter', 6, 3)] },
+          ] },
+          { voices: [
+            { beats: [r('quarter'), t('quarter', 1, 7), t('half', 1, 8)] },
+            { beats: [r('quarter'), t('quarter', 6, 2), t('half', 6, 3)] },
+          ] },
+          { voices: [
+            { beats: [t('quarter', 1, 5), r('quarter'), t('half', 1, 8)] },
+            { beats: [t('half', 6, 3), t('half', 6, 5)] },
+          ] },
+        ],
+      }],
+    },
+    tiedFrets: {
+      tracks: [{
+        name: 'Gtr.', showStandardNotation: true, showTablature: true, tiedFrets: 'parens',
+        measures: [
+          { beats: [t('half', 2, 5, { tieStart: true }), t('half', 2, 5, { tieEnd: true })] },
+          { beats: [t('quarter', 1, 12, { tieStart: true }), t('quarter', 1, 12, { tieEnd: true }), t('half', 1, 10)] },
         ],
       }],
     },
