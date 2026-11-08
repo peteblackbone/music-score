@@ -8,7 +8,8 @@
  * - each onset has a left and right extent (max over all staves) from
  *   layoutChord / rest glyph boxes / fret-label widths, and, on TAB staves
  *   with rhythm (track.tabRhythm), the band's flags, dots and rests
- *   (layout/tabRhythm.js), and room for an arpeggio line left of a chord;
+ *   (layout/tabRhythm.js), and room for left-hand fingering (fingeringLayout)
+ *   and an arpeggio line left of a chord;
  * - the gap from onset i to i+1 is max(ideal, collision minimum), with
  *   ideal = max(minNoteSpacing, quarterSpacing · √(Δt / ¼)) and minimum =
  *   rightExt(i) + leftExt(i+1) + 0.3 sp; the last onset → barline gap
@@ -34,7 +35,7 @@ import { staffPosition } from '../pitch.js';
 import { noteheadForDuration, restForDuration, flagForDuration } from '../glyphs.js';
 import { glyphBox } from '../glyphMetrics.js';
 import { groupBeams } from './beams.js';
-import { layoutChord, arpeggioInnerLeft, graceAccidentalRoom, DOT_GAP_SP, DOT_STEP_SP, DOT_RADIUS_SP, ARPEGGIO_ROOM_SP } from './chord.js';
+import { layoutChord, fingeringLayout, notationInnerLeft, graceAccidentalRoom, DOT_GAP_SP, DOT_STEP_SP, DOT_RADIUS_SP, ARPEGGIO_ROOM_SP } from './chord.js';
 import { resolveMeasureAccidentals, resolveVoiceAccidentals } from './accidentals.js';
 import { combineVoices } from './voices.js';
 import { fretLabel, fretLabelWidth } from '../textMetrics.js';
@@ -128,12 +129,12 @@ function trackEvents(track, mi, theme) {
   const measure = track.measures[mi];
   if (!measure.voice2Beats) {
     const accs = track.showStandardNotation ? resolveMeasureAccidentals(track, mi) : null;
-    return voiceEvents(track, measure, measure.beats, accs, null, theme, { tabBand: true, arpeggio: true });
+    return voiceEvents(track, measure, measure.beats, accs, null, theme, { tabBand: true, arpeggio: true, fingers: true });
   }
-  // Two voices: voice 2 (`events2`) has no TAB rhythm band and no arpeggio.
+  // Two voices: voice 2 (`events2`) has no TAB rhythm band, no arpeggio and no fingering.
   const [a1, a2] = track.showStandardNotation ? resolveVoiceAccidentals(track, mi) : [null, null];
-  const r1 = voiceEvents(track, measure, measure.beats, a1, true, theme, { tabBand: true, arpeggio: true });
-  const r2 = voiceEvents(track, measure, measure.voice2Beats, a2, false, theme, { tabBand: false, arpeggio: false });
+  const r1 = voiceEvents(track, measure, measure.beats, a1, true, theme, { tabBand: true, arpeggio: true, fingers: true });
+  const r2 = voiceEvents(track, measure, measure.voice2Beats, a2, false, theme, { tabBand: false, arpeggio: false, fingers: false });
   combineVoices(r1.events, r2.events, measure, theme);
   return {
     events: r1.events, events2: r2.events, end: rmax(r1.end, r2.end), wholeMeasureRest: r1.wholeMeasureRest, empty: false,
@@ -144,10 +145,10 @@ function trackEvents(track, mi, theme) {
 /**
  * trackEvents for one voice's `beats` of `measure`: `accs` its accidentals
  * (null without notation), `forcedUp` the forced stem direction (null =
- * automatic); `tabBand` / `arpeggio` whether TAB rhythm-band extents and
- * arpeggio room count.
+ * automatic); `tabBand` / `arpeggio` / `fingers` whether TAB rhythm-band
+ * extents, arpeggio room and left-hand fingering room count.
  */
-function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, arpeggio }) {
+function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, arpeggio, fingers }) {
   const beams = groupBeams(beats, measure.timeSignature);
   const positionsOf = (el) => (el.notes || []).map((n) => (n.pitch == null ? 4 : staffPosition(n.pitch, track.clef)));
   // Final stem direction per beat: a beam group's shared direction (its overall range), else the beat's own.
@@ -216,12 +217,19 @@ function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, ar
         leftFirst = Math.max(leftFirst, rx.left);
       }
     }
-    // An arpeggio line sits left of the chord's notation and TAB ink.
+    // Left-hand fingering sits left of the chord's notation ink (layout/chord.js fingeringLayout).
+    if (fingers) {
+      const fl = fingeringLayout(el.notes || [], chord, theme);
+      if (fl) left = Math.max(left, fl.left);
+      const flFirst = fingeringLayout(el.notes || [], chordFirst, theme);
+      if (flFirst) leftFirst = Math.max(leftFirst, flFirst.left);
+    }
+    // An arpeggio line sits left of the chord's notation (and fingering) and TAB ink.
     if (arpeggio && beatArpeggio(el)) {
       const room = ARPEGGIO_ROOM_SP * theme.staffLineSpacing;
       const tabIn = track.showTablature ? tabExtents(el, theme).left : 0;
-      left = Math.max(left, arpeggioInnerLeft(chord) + room, tabIn + room);
-      leftFirst = Math.max(leftFirst, arpeggioInnerLeft(chordFirst) + room, tabIn + room);
+      left = Math.max(left, notationInnerLeft(el.notes, chord, theme) + room, tabIn + room);
+      leftFirst = Math.max(leftFirst, notationInnerLeft(el.notes, chordFirst, theme) + room, tabIn + room);
     }
     const accTotal = anchorGraces(pending, bi);
     const graceLead = pending.length ? pending.length * graceW + graceHalf + accTotal : 0;

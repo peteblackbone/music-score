@@ -27,11 +27,17 @@
  * - Mixed heads (per-note glyphs, e.g. diamonds): the widest head is the
  *   reference for the seconds offset and the stem; a narrower head shifts
  *   so its stem-side edge touches the stem (stemless chords: centred).
+ * - Left-hand fingering (`note.finger`; fingeringLayout): digit columns
+ *   right to left, the first 0.3 sp left of the chord's leftmost ink,
+ *   0.9 sp apart; digits within one staff position of each other take
+ *   separate columns. Room for it is reserved only when a note has one.
  *
  * All returned offsets are px relative to the onset x. Pure function, no DOM.
  */
 import { glyphBox, stemAnchors } from '../glyphMetrics.js';
 import { accidentalGlyph, flagForDuration, noteheadForDuration } from '../glyphs.js';
+import { estimateTextWidth } from '../textMetrics.js';
+import { fingerOf } from '../hands.js';
 
 export const DOT_GAP_SP = 0.5;            // head right edge -> first dot centre
 export const DOT_STEP_SP = 0.5;           // between successive dot centres
@@ -50,6 +56,9 @@ export const ARPEGGIO_HALF_SP = 0.3;      // half the arpeggio mark's width (its
 export const ARPEGGIO_ROOM_SP = ARPEGGIO_CLEAR_SP + 2 * ARPEGGIO_HALF_SP; // left room an arpeggio adds (1.0)
 export const GRACE_STEM_DX_SP = 0.4;      // grace stem from the head centre (not scaled)
 export const GRACE_SLASH_DX_SP = 0.5;     // grace slash half-width, either side of the stem (not scaled)
+export const FINGER_SIZE_SP = 1.1;        // left-hand fingering digit font size
+const FINGER_GAP_SP = 0.3;                // chord ink -> right edge of the first fingering column
+const FINGER_COLUMN_SP = 0.9;             // fingering column pitch (right edge to right edge)
 
 /** Stem x offset (sp) from the head centre for a head glyph, up or down. */
 export function stemDxSp(headGlyph, stemUp) {
@@ -70,6 +79,44 @@ export function stemDySp(headGlyph, stemUp) {
 /** Leftmost notation ink of a chord (accidentals, parentheses, heads, ledger lines), px left of the onset x; 0 for null. */
 export function arpeggioInnerLeft(chord) {
   return chord ? Math.max(chord.leftExt, -chord.ledgerSpan.left) : 0;
+}
+
+/**
+ * Left-hand fingering of a notation chord (`notes` with `finger`, hands.js
+ * fingerOf; `chord` from layoutChord): `{ items: [{ noteIndex, label, pos,
+ * dx }], left }`, or null when there is no chord or no note with a finger.
+ * Digits go in columns right to left, the first FINGER_GAP_SP left of the
+ * chord's ink (arpeggioInnerLeft); walking the notes from the top, each
+ * takes the first column with no digit within one staff position of it.
+ * `dx` is the digit's right edge (px from the onset x, negative), `left`
+ * how far left of the onset the digits reach. Used for spacing
+ * (layout/timeline.js) and drawing (draw/handMarks.js) alike.
+ */
+export function fingeringLayout(notes, chord, theme) {
+  if (!chord) return null;
+  const s = theme.staffLineSpacing;
+  const items = chord.heads
+    .map((h) => ({ noteIndex: h.noteIndex, label: fingerOf(notes[h.noteIndex]?.finger), pos: h.pos }))
+    .filter((it) => it.label != null)
+    .sort((a, b) => b.pos - a.pos);
+  if (!items.length) return null;
+  const columns = [];
+  const right = -arpeggioInnerLeft(chord) - FINGER_GAP_SP * s;
+  let left = 0;
+  items.forEach((it) => {
+    let c = 0;
+    while (columns[c]?.some((pos) => Math.abs(pos - it.pos) <= 1)) c++;
+    (columns[c] = columns[c] || []).push(it.pos);
+    it.label = String(it.label);
+    it.dx = right - c * FINGER_COLUMN_SP * s;
+    left = Math.max(left, -it.dx + estimateTextWidth(it.label, FINGER_SIZE_SP * s));
+  });
+  return { items, left };
+}
+
+/** Leftmost notation ink of a chord including its left-hand fingering (fingeringLayout), else arpeggioInnerLeft. */
+export function notationInnerLeft(notes, chord, theme) {
+  return fingeringLayout(notes, chord, theme)?.left ?? arpeggioInnerLeft(chord);
 }
 
 /** Staff position where a dot for a note at `pos` sits (the space above a line note). */

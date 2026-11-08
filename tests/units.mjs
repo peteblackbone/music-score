@@ -3459,6 +3459,68 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.7.0 left-hand fingering (layout/chord.js fingeringLayout, draw/handMarks.js) ----------
+{
+  const { layoutChord, fingeringLayout, notationInnerLeft, arpeggioInnerLeft } = await imp('src/layout/chord.js');
+  const { staffPosition } = await imp('src/pitch.js');
+  const { noteheadForDuration } = await imp('src/glyphs.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const theme = resolveTheme({ staffLineSpacing: 10 });
+  const chordOf = (notes, accs = notes.map(() => null)) => layoutChord(notes, notes.map((n) => staffPosition(n.pitch)), true, accs,
+    { headGlyph: noteheadForDuration('quarter'), duration: 'quarter' }, theme);
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const byClass = (root, cls) => walk(root).filter((n) => (n.getAttribute('class') || '').split(' ').includes(cls));
+
+  test('fingering: fingeringLayout is null without a chord or a fingered note; notationInnerLeft is then arpeggioInnerLeft', () => {
+    const notes = [{ pitch: 'E4' }, { pitch: 'G4', finger: 'x' }];
+    const chord = chordOf(notes);
+    eq(fingeringLayout(notes, null, theme), null);
+    eq(fingeringLayout(notes, chord, theme), null);
+    eq(notationInnerLeft(notes, chord, theme), arpeggioInnerLeft(chord));
+    eq(notationInnerLeft(notes, null, theme), 0);
+  });
+  test('fingering: a second takes two columns 9 px apart, the first 3 px left of the accidentals; left reaches past the digits', () => {
+    const notes = [{ pitch: 'G#4', finger: 4 }, { pitch: 'A4', finger: '3' }, { pitch: 'C5', finger: 't' }];
+    const chord = chordOf(notes, ['sharp', null, null]);
+    const fl = fingeringLayout(notes, chord, theme);
+    const right = -arpeggioInnerLeft(chord) - 3;
+    eq(fl.items.map((it) => [it.noteIndex, it.label, Math.round((it.dx - right) * 100) / 100]), [[2, 'T', 0], [1, '3', 0], [0, '4', -9]]);
+    eq(fl.left > arpeggioInnerLeft(chord) + 9 + 3, true, 'left covers the second column');
+    eq(notationInnerLeft(notes, chord, theme), fl.left);
+  });
+  test('fingering: digits drawn at note height in voice 1 only, left of the accidental; the onset moves only with fingers', () => {
+    const mk = (finger) => ({ tracks: [{ showTablature: true, measures: [{ beats: [
+      { type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }] },
+      { type: 'note', duration: 'quarter', notes: [{ pitch: 'F#4', string: 4, fret: 4, ...finger }] },
+      { type: 'note', duration: 'half', notes: [{ pitch: 'A4' }] },
+    ] }, { voices: [{ beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'D5', finger: 1 }] }] },
+      { beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'G4', finger: 2 }] }] }] }] }] });
+    const svg = render(mk({ finger: 2 }));
+    const groups = byClass(svg, 'fingering-left');
+    eq(groups.map((g) => g.children.map((t) => t.textContent)), [['2'], ['1']], 'one digit per fingered voice-1 note; voice 2 none');
+    eq(byClass(svg, 'staff-tab').some((s) => byClass(s, 'fingering-left').length), false, 'none on TAB');
+    const plain = render(mk({}));
+    eq(byClass(plain, 'fingering-left').length, 1);
+    const glyphXs = (svg, ch) => walk(byClass(svg, 'staff-notation')[0]).filter((n) => n.tag === 'text' && n.textContent === ch).map((n) => Number(n.getAttribute('x')));
+    const sharpX = glyphXs(svg, Glyph.accidentalSharp)[0];
+    const digit = groups[0].children[0];
+    eq(Number(digit.getAttribute('x')) <= sharpX - 3, true, 'digit right edge at least 0.3 sp left of the sharp');
+    const headY = walk(byClass(svg, 'staff-notation')[0]).filter((n) => n.tag === 'text' && n.textContent === Glyph.noteheadBlack)
+      .map((n) => [Number(n.getAttribute('x')), Number(n.getAttribute('y'))]);
+    eq(Math.abs(Number(digit.getAttribute('y')) - 11 * 0.35 - headY[1][1]) < 1e-9, true, 'centred on the F#4 head');
+    const heads = (s2) => glyphXs(s2, Glyph.noteheadBlack);
+    eq(heads(svg)[1] > heads(plain)[1], true, 'the fingered onset moves right');
+    eq(heads(svg)[0], heads(plain)[0], 'the first onset stays');
+    eq(digit.getAttribute('text-anchor'), 'end');
+    eq(digit.getAttribute('font-size'), '11');
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
