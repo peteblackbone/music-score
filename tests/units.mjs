@@ -3769,6 +3769,150 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- pre-1.8 characterization: voices & TAB rhythm (pins taken before the 1.8.0 change) ----------
+{
+  const { cases } = await import('./cases.mjs');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { durationR } = await imp('src/duration.js');
+  const { add, ZERO, key } = await imp('src/rational.js');
+  const th = resolveTheme();
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+
+  // Trigger scan over normalizeScore output. Per two-voice measure ("track.measure", 1-based measures):
+  // R1 = voice-2 beats carrying vibrato / trill / ornament / rightFinger / tap-style letters / golpe / pickStroke /
+  // fermata, or a tremolo on a TAB track; R4 = over-approximated unison (same pitch string in both voices at one
+  // onset); R5 = merged-rest candidate (non-hidden rests of equal duration and dots at one onset).
+  const scan = (c) => {
+    const sc = normalizeScore(c.score);
+    const r = { r1: [], r4: [], r5: [], band: [], two: [], rests: [], tiedFrets: [] };
+    sc.tracks.forEach((t, ti) => {
+      if (t.tiedFrets !== undefined) r.tiedFrets.push(ti);
+      t.measures.forEach((m, mi) => {
+        if (!m.voice2Beats) return;
+        const id = `${ti}.${mi + 1}`;
+        r.two.push(id);
+        if (t.tabRhythm) r.band.push(id);
+        const cats = new Set();
+        for (const b of m.voice2Beats) {
+          if (b.vibrato) cats.add('vibrato');
+          if (b.golpe) cats.add('golpe');
+          if (b.pickStroke) cats.add('pick');
+          if (b.fermata) cats.add('fermata');
+          if (b.tremolo && t.showTablature) cats.add('tabTremolo');
+          for (const n of b.notes || []) {
+            if (n.trill) cats.add('trill');
+            if (n.ornament) cats.add('ornament');
+            if (n.rightFinger) cats.add('rightFinger');
+            if (n.tap || n.leftHandTap || n.slap || n.pop) cats.add('tap');
+          }
+        }
+        if (cats.size) r.r1.push(`${id}:${[...cats].sort().join('+')}`);
+        const onsets = (beats) => { let t0 = ZERO; return beats.map((b) => { const o = key(t0); if (b.type !== 'grace') t0 = add(t0, durationR(b)); return [o, b]; }); };
+        const o1 = onsets(m.beats); const o2 = onsets(m.voice2Beats);
+        o1.forEach(([k1, b1]) => {
+          if (b1.type === 'rest' && !b1.hidden) r.rests.push(`${id}:v1@${k1}`);
+        });
+        o2.forEach(([k2, b2]) => {
+          if (b2.type === 'rest' && !b2.hidden) r.rests.push(`${id}:v2@${k2}`);
+          o1.forEach(([k1, b1]) => {
+            if (k1 !== k2 || b1.type === 'grace' || b2.type === 'grace') return;
+            if (b1.type === 'note' && b2.type === 'note' && b1.notes.some((n1) => b2.notes.some((n2) => n1.pitch != null && n1.pitch === n2.pitch))) r.r4.push(`${id}@${k1}`);
+            if (b1.type === 'rest' && b2.type === 'rest' && !b1.hidden && !b2.hidden && key(durationR(b1)) === key(durationR(b2)) && (b1.dots || 0) === (b2.dots || 0)) r.r5.push(`${id}@${k1}`);
+          });
+        });
+      });
+    });
+    return r;
+  };
+  const scans = new Map(cases.map((c) => [c.id, scan(c)]));
+  const twoVoiceIds = [...scans].filter(([, r]) => r.two.length).map(([id]) => id);
+
+  test('pre-1.8 scan: the two-voice cases are exactly the six known fixtures', () => {
+    eq(cases.length, 63);
+    eq(twoVoiceIds, ['char-voices-w900', 'char-voices-break-w600', 'char-voices-tab-w900', 'char-note-effects-w900', 'char-score-text-w900', 'char-ornaments-w900']);
+  });
+  test('pre-1.8 scan: voices-break, score-text, ornaments and voices-tab have no R1 / R4 / R5 triggers; their other variants are single-voice', () => {
+    for (const id of ['char-voices-break-w600', 'char-score-text-w900', 'char-ornaments-w900', 'char-voices-tab-w900']) {
+      const r = scans.get(id);
+      eq([id, r.r1, r.r4, r.r5], [id, [], [], []]);
+    }
+    for (const id of cases.map((c) => c.id).filter((i) => /^char-(score-text|ornaments)-/.test(i) && !twoVoiceIds.includes(i))) eq([id, scans.get(id).two], [id, []]);
+  });
+  test('pre-1.8 scan: voices has exactly the R4 candidate at m3 and TAB tremolo at m6 / m8', () => {
+    const r = scans.get('char-voices-w900');
+    eq([r.r1, r.r4, r.r5, r.band, r.two.length], [['0.6:tabTremolo', '0.8:tabTremolo'], ['0.3@1/4'], [], [], 8]);
+  });
+  test('pre-1.8 scan: voices-tab has the rhythm band on the TAB track only, a voice-1 rest in m4 and a voice-2 rest in m3', () => {
+    const r = scans.get('char-voices-tab-w900');
+    eq(r.band, ['1.1', '1.2', '1.3', '1.4']);
+    eq(r.two, ['0.1', '0.2', '0.3', '0.4', '1.1', '1.2', '1.3', '1.4']);
+    eq(r.rests.filter((s) => s.startsWith('1.')), ['1.3:v2@3/4', '1.4:v1@0/1']);
+  });
+  test('pre-1.8 scan: note-effects has R1 at m13 only (fermata, TAB tremolo and vibrato on voice 2)', () => {
+    const r = scans.get('char-note-effects-w900');
+    eq([r.r1, r.r4, r.r5, r.two], [['0.13:fermata+tabTremolo+vibrato'], [], [], ['0.13']]);
+  });
+  test('pre-1.8 scan: no case has an R5 candidate or a tiedFrets key; the only band with two voices is voices-tab', () => {
+    for (const [id, r] of scans) eq([id, r.r5, r.tiedFrets], [id, [], []]);
+    eq([...scans].filter(([, r]) => r.band.length).map(([id, r]) => [id, r.band]), [['char-voices-tab-w900', ['1.1', '1.2', '1.3', '1.4']]]);
+  });
+  test('pre-1.8 scan: normalizeScore passes a tiedFrets key through untouched and adds none otherwise', () => {
+    const t = (extra) => normalizeScore({ tracks: [{ showTablature: true, ...extra, measures: [{ beats: [{ type: 'note', duration: 'whole', notes: [{ string: 1, fret: 3 }] }] }] }] }).tracks[0];
+    eq('tiedFrets' in t({}), false);
+    eq([t({ tiedFrets: ' Parens ' }).tiedFrets, t({ tiedFrets: 'x' }).tiedFrets], [' Parens ', 'x']);
+  });
+
+  // combineVoices JSON for unisons the 1.8 shared head must NOT merge: voice 2 keeps its clash shift of one head width.
+  const nb = (ps, duration = 'quarter', x = {}) => ({ type: 'note', duration, notes: ps.map((p) => (typeof p === 'string' ? { pitch: p } : p)), ...x });
+  const rs = (duration = 'quarter', x = {}) => ({ type: 'rest', duration, ...x });
+  const vm = (b1, b2) => ({ voices: [{ beats: b1 }, { beats: b2 }] });
+  const col = (b1, b2) => computeLayout(normalizeScore({ tracks: [{ showStandardNotation: true, measures: [vm(b1, b2)] }] }), th, 900).systems[0].tracks[0].measures[0];
+  const sl = (c) => ({ heads: c.heads, accidentals: c.accidentals, dots: c.dots, leftExt: c.leftExt, rightExt: c.rightExt, stemUp: c.stemUp });
+  const pinOf = (m) => ({ dx: m.elements2[0].dx, x: [m.elements[0].x, m.elements2[0].x], v1: sl(m.elements[0].chord), v2: sl(m.elements2[0].chord) });
+  const R = [rs(), rs('half')];
+  const unisons = {
+    accidental: [[nb(['G#4']), ...R], [nb(['G4']), ...R]],
+    dots: [[nb(['G4'], 'half', { dots: 1 }), rs()], [nb(['G4'], 'half'), rs('half')]],
+    mute: [[nb(['G4']), ...R], [nb([{ pitch: 'G4', mute: true }]), ...R]],
+    second: [[nb(['G4', 'A4']), ...R], [nb(['G4']), ...R]],
+    headGlyph: [[nb(['G4'], 'half'), rs('half')], [nb(['G4']), ...R]],
+  };
+  const PINS = {
+    accidental: {"dx":11.799999999999999,"x":[135.96,147.76000000000002],"v1":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a4","width":11.799999999999999}],"accidentals":[{"noteIndex":0,"name":"sharp","dx":-18.36}],"dots":{"dx":10.899999999999999,"step":5,"radius":1.7000000000000002,"positions":[3]},"leftExt":26.12,"rightExt":5.8999999999999995,"stemUp":true},"v2":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a4","width":11.799999999999999}],"accidentals":[{"noteIndex":0,"name":"natural","dx":-37.92}],"dots":{"dx":10.899999999999999,"step":5,"radius":1.7000000000000002,"positions":[1]},"leftExt":37.92,"rightExt":5.8999999999999995,"stemUp":false}},
+    dots: {"dx":11.799999999999999,"x":[115.74000000000001,127.54],"v1":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a3","width":11.799999999999999}],"accidentals":[],"dots":{"dx":22.7,"step":5,"radius":1.7000000000000002,"positions":[3]},"leftExt":5.8999999999999995,"rightExt":24.4,"stemUp":true},"v2":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a3","width":11.799999999999999}],"accidentals":[],"dots":{"dx":10.9,"step":5,"radius":1.7000000000000002,"positions":[1]},"leftExt":5.8999999999999995,"rightExt":5.8999999999999995,"stemUp":false}},
+    mute: {"dx":11.799999999999999,"x":[115.74000000000001,127.54],"v1":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a4","width":11.799999999999999}],"accidentals":[],"dots":{"dx":10.899999999999999,"step":5,"radius":1.7000000000000002,"positions":[3]},"leftExt":5.8999999999999995,"rightExt":5.8999999999999995,"stemUp":true},"v2":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a4","width":11.799999999999999}],"accidentals":[],"dots":{"dx":10.899999999999999,"step":5,"radius":1.7000000000000002,"positions":[1]},"leftExt":5.8999999999999995,"rightExt":5.8999999999999995,"stemUp":false}},
+    second: {"dx":23.599999999999998,"x":[115.74000000000001,139.34],"v1":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a4","width":11.799999999999999},{"noteIndex":1,"pos":3,"dx":11.799999999999999,"glyph":"\ue0a4","width":11.799999999999999}],"accidentals":[],"dots":{"dx":22.7,"step":5,"radius":1.7000000000000002,"positions":[3]},"leftExt":5.8999999999999995,"rightExt":17.7,"stemUp":true},"v2":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a4","width":11.799999999999999}],"accidentals":[],"dots":{"dx":10.899999999999999,"step":5,"radius":1.7000000000000002,"positions":[1]},"leftExt":5.8999999999999995,"rightExt":5.8999999999999995,"stemUp":false}},
+    headGlyph: {"dx":11.799999999999999,"x":[115.74000000000001,127.54],"v1":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a3","width":11.799999999999999}],"accidentals":[],"dots":{"dx":10.899999999999999,"step":5,"radius":1.7000000000000002,"positions":[3]},"leftExt":5.8999999999999995,"rightExt":5.8999999999999995,"stemUp":true},"v2":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a4","width":11.799999999999999}],"accidentals":[],"dots":{"dx":10.899999999999999,"step":5,"radius":1.7000000000000002,"positions":[1]},"leftExt":5.8999999999999995,"rightExt":5.8999999999999995,"stemUp":false}},
+  };
+  for (const [name, [a, b]] of Object.entries(unisons)) {
+    test(`pre-1.8 combineVoices: non-eligible unison (${name}) keeps two heads, voice 2 shifted by a head width`, () => {
+      eq(pinOf(col(a, b)), PINS[name]);
+    });
+  }
+
+  // Serialized TAB rhythm groups on a tab-only track (notation off -> band on).
+  const e8 = (p) => nb([p], '8th');
+  const single = { beats: [e8('C5'), e8('D5'), nb(['E5'], 'quarter', { dots: 1 }), e8('F5'), rs('quarter')] };
+  const two = vm([e8('C5'), e8('D5'), nb(['E5'], 'half'), nb(['G5'])], [nb(['C4'], 'half'), nb(['E4']), nb(['G4'])]);
+  const tabOnly = (ms) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures: ms }] });
+  const groups = (svg) => walk(svg).filter((n) => (n.getAttribute('class') || '').split(' ').includes('tab-rhythm'));
+  const SINGLE_ON_TWO_VOICE_TRACK = "<g class=\"tab-rhythm\">\n  <line x1=\"98.69\" y1=\"85\" x2=\"98.69\" y2=\"110\" stroke=\"#1a1a1a\" stroke-width=\"1.3\"/>\n  <line x1=\"123.44\" y1=\"85\" x2=\"123.44\" y2=\"110\" stroke=\"#1a1a1a\" stroke-width=\"1.3\"/>\n  <line x1=\"148.19\" y1=\"85\" x2=\"148.19\" y2=\"110\" stroke=\"#1a1a1a\" stroke-width=\"1.3\"/>\n  <circle cx=\"153.19\" cy=\"94\" r=\"1.7\" fill=\"#1a1a1a\"/>\n  <line x1=\"191.06\" y1=\"85\" x2=\"191.06\" y2=\"110\" stroke=\"#1a1a1a\" stroke-width=\"1.3\"/>\n  <text x=\"191.06\" y=\"110\" font-family=\"Bravura, BravuraFallback, serif\" font-size=\"30\" fill=\"#1a1a1a\">\ue241</text>\n  <g class=\"tab-rest\">\n    <rect x=\"208.4\" y=\"20.54\" width=\"14.8\" height=\"33.92\" fill=\"#ffffff\"/>\n    <text x=\"215.8\" y=\"37.46\" font-family=\"Bravura, BravuraFallback, serif\" font-size=\"40\" fill=\"#1a1a1a\" text-anchor=\"middle\">\ue4e5</text>\n  </g>\n  <path d=\"M 97.64 110 L 124.49 110 L 124.49 105 L 97.64 105 Z\" fill=\"#1a1a1a\" stroke=\"none\"/>\n</g>\n";
+  const ROW1_NO_RESTS = "<g class=\"tab-rhythm\">\n  <line x1=\"98.69\" y1=\"85\" x2=\"98.69\" y2=\"110\" stroke=\"#1a1a1a\" stroke-width=\"1.3\"/>\n  <line x1=\"123.44\" y1=\"85\" x2=\"123.44\" y2=\"110\" stroke=\"#1a1a1a\" stroke-width=\"1.3\"/>\n  <line x1=\"148.19\" y1=\"85\" x2=\"148.19\" y2=\"97.5\" stroke=\"#1a1a1a\" stroke-width=\"1.3\"/>\n  <line x1=\"218.19\" y1=\"85\" x2=\"218.19\" y2=\"110\" stroke=\"#1a1a1a\" stroke-width=\"1.3\"/>\n  <path d=\"M 97.64 110 L 124.49 110 L 124.49 105 L 97.64 105 Z\" fill=\"#1a1a1a\" stroke=\"none\"/>\n</g>\n";
+  test('pre-1.8 tab rhythm: a single-voice measure on a track that also has a two-voice measure serializes exactly', () => {
+    eq(serialize(groups(render(tabOnly([single, two])))[0]), SINGLE_ON_TWO_VOICE_TRACK);
+  });
+  test('pre-1.8 tab rhythm: row 1 of a two-voice measure without rests serializes exactly (voice 1 only, one group)', () => {
+    const gs = groups(render(tabOnly([two])));
+    eq(gs.length, 1);
+    eq(serialize(gs[0]), ROW1_NO_RESTS);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
