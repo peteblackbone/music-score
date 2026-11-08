@@ -63,7 +63,8 @@ export function renderNotationElement(g, layoutEl, measure, track, theme, opts =
   const clef = track.clef;
 
   if (el.type === 'rest') {
-    if (el.hidden) return { isRest: true, hidden: true, x, noteheads: [] };
+    // A voice-2 rest merged with voice 1's (layout/voices.js) is drawn once, by voice 1.
+    if (el.hidden || (layoutEl.restMerged && voiceOf(layoutEl) === 2)) return { isRest: true, hidden: true, x, noteheads: [] };
     if (opts.wholeMeasureRest) {
       renderWholeMeasureRest(g, x, layoutEl.baselineY, theme, layoutEl.restPos ?? 6);
       return { isRest: true, x, noteheads: [] };

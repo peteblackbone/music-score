@@ -2335,7 +2335,9 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
   test('two-voice layout: rest positions 8 / 0, whole-measure rests 8 / 2', () => {
     const m = col([rs(), nb(['C5']), rs('half')], [nb(['E4']), rs(), rs('half')]);
-    eq([m.elements[0].restPos, m.elements2[1].restPos, m.elements[2].restPos, m.elements2[2].restPos], [8, 0, 8, 0]);
+    // 1.8: the two half rests at beat 3 merge (one rest at the single-voice position, no restPos)
+    eq([m.elements[0].restPos, m.elements2[1].restPos, m.elements[2].restPos, m.elements2[2].restPos], [8, 0, undefined, undefined]);
+    eq([m.elements[2].restMerged, m.elements2[2].restMerged, m.elements[0].restMerged], [true, true, undefined]);
     const w = lay2([vm([rs('whole')], quarters('E4')), vm(quarters('C5'), [rs('whole')])]);
     eq([w[0].elements[0].restPos, w[0].elements[0].wholeMeasureRest, w[1].elements2[0].restPos, w[1].elements2[0].wholeMeasureRest], [8, true, 2, true]);
     eq('restPos' in w[0].elements2[0], false);
@@ -3972,6 +3974,66 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
       const p = glyphBox(plain); const l = glyphBox(leger);
       eq([l.left < p.left, l.right > p.right, Math.abs((l.left + l.right) / 2 - p.width / 2) < 0.01], [true, true, true], leger);
     }
+  });
+}
+
+// ---------- 1.8.0: merged rests (R5, layout/voices.js mergedRestPairs) ----------
+{
+  const { mergedRestPairs } = await imp('src/layout/voices.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { drawSystem } = await imp('src/draw/system.js');
+  const { restForDuration } = await imp('src/glyphs.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing; const BL = 4 * S;
+  const nb = (ps, duration = 'quarter', x = {}) => ({ type: 'note', duration, notes: ps.map((p) => (typeof p === 'string' ? { pitch: p } : p)), ...x });
+  const rs = (duration = 'quarter', x = {}) => ({ type: 'rest', duration, ...x });
+  const vm = (b1, b2, x = {}) => ({ ...x, voices: [{ beats: b1 }, { beats: b2 }] });
+  const sets = (r) => [[...r.v1], [...r.v2]];
+  const ts44 = { beats: 4, beatType: 4 };
+  const nodes = (g, pred) => [...walk(g)].filter(({ nd, cls }) => pred(nd, cls)).map(({ nd }) => nd);
+  const draw = (measures, track = {}) => {
+    const sc = normalizeScore({ tracks: [{ showStandardNotation: true, ...track, measures }] });
+    const sys = computeLayout(sc, th, 900).systems[0];
+    const d = drawSystem(makeContainer(), sys, 0, sc, th);
+    return { ms: sys.tracks[0].measures, staff: (kind) => d.staves.find((st) => st.kind === kind)?.g };
+  };
+  test('R5 mergedRestPairs: same onset, duration, dots and length merge; dots, tuplet ratio, hidden or onset differences do not', () => {
+    eq(sets(mergedRestPairs([nb(['C5']), rs(), rs('half')], [nb(['E4']), rs(), rs('half')], ts44)), [[1, 2], [1, 2]]);
+    eq(sets(mergedRestPairs([rs('half', { dots: 1 }), nb(['C5'])], [rs('half'), rs()], ts44)), [[], []]);
+    eq(sets(mergedRestPairs([rs('8th', { tuplet: 3 }), nb(['C5'], '8th', { tuplet: 3 }), nb(['C5'], '8th', { tuplet: 3 })], [rs('8th'), nb(['E4'], '8th')], { beats: 1, beatType: 4 })), [[], []]);
+    eq(sets(mergedRestPairs([rs('half', { hidden: true }), rs('half')], [rs('half'), rs('half')], ts44)), [[1], [1]], 'a hidden rest takes time but never merges');
+    eq(sets(mergedRestPairs([{ type: 'grace', notes: [{ pitch: 'D5' }] }, rs(), nb(['C5'], 'half', { dots: 1 })], [rs(), nb(['E4'], 'half', { dots: 1 })], ts44)), [[1], [0]], 'graces take no time');
+    eq(sets(mergedRestPairs([nb(['C5']), rs()], [rs(), nb(['E4'])], { beats: 2, beatType: 4 })), [[], []], 'different onsets');
+  });
+  test('R5 mergedRestPairs: a whole-measure rest merges only with a whole-measure rest', () => {
+    eq(sets(mergedRestPairs([rs('whole')], [rs('whole')], ts44)), [[0], [0]]);
+    const ts24 = { beats: 2, beatType: 4 };
+    eq(sets(mergedRestPairs([rs('whole')], [rs('whole'), nb(['E4'])], ts24)), [[], []]);
+  });
+  test('R5 layout: merged rests carry restMerged and no restPos / restLedger; unmerged rests keep theirs', () => {
+    const m = draw([vm([nb(['C5']), rs(), rs('half')], [rs(), rs(), nb(['E4'], 'half')])]).ms[0];
+    eq([m.elements[1].restMerged, m.elements2[1].restMerged, 'restPos' in m.elements[1], 'restPos' in m.elements2[1]], [true, true, false, false]);
+    eq([m.elements2[0].restMerged, m.elements2[0].restPos, m.elements[2].restMerged, m.elements[2].restPos], [undefined, 0, undefined, 8]);
+  });
+  test('R5 notation: one rest from voice 1 at the single-voice position (pos 4 / 4 / 6), no ledger, nothing in voice 2', () => {
+    const { ms, staff } = draw([vm([nb(['C5']), rs(), rs('half')], [nb(['E4']), rs(), rs('half')]), vm([rs('whole')], [rs('whole')])]);
+    const g = staff('notation');
+    const restY = (glyph, inV2) => nodes(g, (nd, cls) => nd.tag === 'text' && nd.textContent === glyph && cls.includes('voice-2') === inV2).map((nd) => +nd.getAttribute('y'));
+    eq([restY(restForDuration('quarter'), false), restY(restForDuration('half'), false), restY(restForDuration('whole'), false)], [[BL - 2 * S], [BL - 2 * S], [BL - 3 * S]]);
+    eq(['quarter', 'half', 'whole'].map((d) => restY(restForDuration(d), true).length), [0, 0, 0]);
+    eq(nodes(g, (nd) => nd.tag === 'line' && nd.getAttribute('y1') === nd.getAttribute('y2') && (+nd.getAttribute('y1') < 0 || +nd.getAttribute('y1') > BL)).length, 0, 'no ledger');
+    eq([ms[0].elements2[1].rendered.hidden, ms[0].elements2[2].rendered.hidden, ms[1].elements2[0].rendered.hidden, ms[1].elements[0].wholeMeasureRest], [true, true, true, true]);
+  });
+  test('R5 TAB (rhythm band): the merged rest is drawn once inside the staff with its knock-out', () => {
+    const fr = (string, fret, d = 'quarter') => ({ type: 'note', duration: d, notes: [{ string, fret }] });
+    const { staff } = draw([vm([fr(2, 5), rs(), fr(1, 3, 'half')], [fr(5, 2), rs(), fr(5, 4, 'half')])], { showStandardNotation: false, showTablature: true });
+    const restGs = nodes(staff('tab'), (nd) => nd.tag === 'g' && nd.getAttribute('class') === 'tab-rest');
+    eq([restGs.length, restGs[0].children[0].tag, restGs[0].children[1].textContent], [1, 'rect', restForDuration('quarter')]);
+  });
+  test('R5 fermatas: on a merged rest only the voice-1 fermata is drawn', () => {
+    const svg = renderTree({ tracks: [{ showStandardNotation: true, measures: [vm([nb(['C5'], 'half'), rs('half', { fermata: true })], [nb(['E4'], 'half'), rs('half', { fermata: 'long' })])] }] });
+    const fs = nodes(svg, (nd) => nd.tag === 'g' && /^fermata( |$)/.test(nd.getAttribute('class') || ''));
+    eq(fs.map((f) => f.getAttribute('class')), ['fermata']);
   });
 }
 

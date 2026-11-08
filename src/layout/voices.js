@@ -20,6 +20,10 @@
  *   outward in whole spaces until 0.5 sp clear of the other voice's
  *   noteheads at the same onset (`ev.restPos`); a whole/half rest on a
  *   line outside the staff gets a ledger line (`ev.restLedger`).
+ * - Merged rests (mergedRestPairs: both voices rest at one onset with the
+ *   same duration, dots and length, neither hidden, both or neither
+ *   whole-measure): one rest, voice 1's, at the single-voice position (no
+ *   `restPos`); both events get `ev.restMerged` and voice 2's draws nothing.
  * - Extents: the column's left/right extents cover both voices; the own
  *   left extent (where graces start) is the same for both voices.
  *
@@ -29,7 +33,8 @@
 import { stemDxSp, accidentalRightSp, placeAccidentalColumns, DOT_GAP_SP, DOT_STEP_SP, DOT_RADIUS_SP } from './chord.js';
 import { accidentalGlyph, restForDuration } from '../glyphs.js';
 import { glyphBox } from '../glyphMetrics.js';
-import { key } from '../rational.js';
+import { R, ZERO, add, cmp, key } from '../rational.js';
+import { durationR, isHiddenRest } from '../duration.js';
 
 const REST_CLEAR_POS = 1;          // rest ink -> other voice's notehead (staff positions; 0.5 sp)
 const REST_MAX_STEPS = 20;         // bound on the whole-space moves of one rest
@@ -130,11 +135,42 @@ function pairColumn(e1, el1, e2, el2, s) {
 }
 
 /**
+ * Merged rest pairs of a two-voice measure (see the header): `{ v1, v2 }`,
+ * Sets of beat indices into `beats1` / `beats2`. Onsets are exact (hidden
+ * rests take time, graces none); `ts` is the measure's time signature.
+ */
+export function mergedRestPairs(beats1, beats2, ts) {
+  const bar = R(ts.beats, ts.beatType);
+  const restsAt = (beats) => {
+    const mains = beats.filter((b) => b.type !== 'grace');
+    const whole = mains.length === 1 && mains[0].type === 'rest' && cmp(durationR(mains[0]), bar) >= 0;
+    const out = new Map();
+    let t = ZERO;
+    beats.forEach((b, i) => {
+      if (b.type === 'grace') return;
+      if (b.type === 'rest' && !isHiddenRest(b)) out.set(key(t), { i, b, whole });
+      t = add(t, durationR(b));
+    });
+    return out;
+  };
+  const a = restsAt(beats1); const b = restsAt(beats2);
+  const v1 = new Set(); const v2 = new Set();
+  a.forEach((r1, k) => {
+    const r2 = b.get(k);
+    if (!r2 || r1.whole !== r2.whole || r1.b.duration !== r2.b.duration || (r1.b.dots || 0) !== (r2.b.dots || 0)) return;
+    if (key(durationR(r1.b)) !== key(durationR(r2.b))) return; // tuplet ratio
+    v1.add(r1.i); v2.add(r2.i);
+  });
+  return { v1, v2 };
+}
+
+/**
  * Combine voice 1's events `ev1` and voice 2's `ev2` (voiceEvents, in beat
  * order of `measure.beats` / `measure.voice2Beats`) in place. Every voice-2
- * main event gets `dx` (px, its chord's clash shift; 0 = none).
+ * main event gets `dx` (px, its chord's clash shift; 0 = none). `merged`
+ * (mergedRestPairs) are the merged rests: no `restPos`, `restMerged: true`.
  */
-export function combineVoices(ev1, ev2, measure, theme) {
+export function combineVoices(ev1, ev2, measure, theme, merged = { v1: new Set(), v2: new Set() }) {
   const s = theme.staffLineSpacing;
   const beats = [measure.beats, measure.voice2Beats];
   const main = (ev) => !ev.grace && !ev.hidden;
@@ -152,6 +188,7 @@ export function combineVoices(ev1, ev2, measure, theme) {
   });
   [ev1, ev2].forEach((evs, v) => evs.forEach((ev, i) => {
     if (!main(ev) || beats[v][i].type !== 'rest') return;
+    if ((v ? merged.v2 : merged.v1).has(i)) { ev.restMerged = true; return; }
     const o = ev.wholeMeasureRest ? undefined : at[1 - v].get(key(ev.t));
     placeRest(ev, beats[v][i], v + 1, o === undefined ? null : [ev1, ev2][1 - v][o].chord, s);
   }));

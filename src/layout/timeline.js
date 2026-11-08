@@ -37,7 +37,7 @@ import { glyphBox } from '../glyphMetrics.js';
 import { groupBeams } from './beams.js';
 import { layoutChord, fingeringLayout, notationInnerLeft, graceAccidentalRoom, DOT_GAP_SP, DOT_STEP_SP, DOT_RADIUS_SP, ARPEGGIO_ROOM_SP } from './chord.js';
 import { resolveMeasureAccidentals, resolveVoiceAccidentals } from './accidentals.js';
-import { combineVoices } from './voices.js';
+import { combineVoices, mergedRestPairs } from './voices.js';
 import { fretLabel, fretLabelWidth } from '../textMetrics.js';
 import { layoutHeadGlyph } from '../harmonics.js';
 import { tabRhythmExtents } from './tabRhythm.js';
@@ -124,7 +124,7 @@ function anchorGraces(pending, anchor) {
  * variants apply when the measure opens a system: tied continuations at
  * the first onset restate their accidental (ui.md §7). Two-voice measures add
  * `events2` (voice 2, same shape; main events carry `dx`, rests `restPos` /
- * `restLedger`; see layout/voices.js); hidden rests are `{ t, hidden: true, … }`.
+ * `restLedger`, merged rests `restMerged`; see layout/voices.js); hidden rests are `{ t, hidden: true, … }`.
  */
 function trackEvents(track, mi, theme) {
   const measure = track.measures[mi];
@@ -136,7 +136,7 @@ function trackEvents(track, mi, theme) {
   const [a1, a2] = track.showStandardNotation ? resolveVoiceAccidentals(track, mi) : [null, null];
   const r1 = voiceEvents(track, measure, measure.beats, a1, true, theme, { tabBand: true, arpeggio: true, fingers: true });
   const r2 = voiceEvents(track, measure, measure.voice2Beats, a2, false, theme, { tabBand: false, arpeggio: false, fingers: false });
-  combineVoices(r1.events, r2.events, measure, theme);
+  combineVoices(r1.events, r2.events, measure, theme, mergedRestPairs(measure.beats, measure.voice2Beats, measure.timeSignature));
   return {
     events: r1.events, events2: r2.events, end: rmax(r1.end, r2.end), wholeMeasureRest: r1.wholeMeasureRest, empty: false,
     trailingGraces: Math.max(r1.trailingGraces, r2.trailingGraces), trailingAccRoom: Math.max(r1.trailingAccRoom, r2.trailingAccRoom),

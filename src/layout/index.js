@@ -21,7 +21,8 @@
  * Two-voice measures (normalize.js `voice2Beats`) also get `elements2`,
  * `beamGroups2`, `tupletGroups2` (voice 2, indices into `voice2Beats`) and
  * `wholeRest: null`; every element of such a measure has `voice` (1 | 2),
- * rests their `restPos` (`restLedger`), voice-2 elements `dx` (clash shift,
+ * rests their `restPos` (`restLedger`) or, merged with the other voice's
+ * rest (layout/voices.js), `restMerged: true`, voice-2 elements `dx` (clash shift,
  * already in `x`) and `tabEl` (the beat as drawn on TAB: no beat marks,
  * no note on a string voice 1 frets at the same onset).
  */
@@ -92,6 +93,7 @@ function tagVoice(elements, events, voice) {
     le.voice = voice;
     if (ev.restPos != null) le.restPos = ev.restPos;
     if (ev.restLedger != null) le.restLedger = ev.restLedger;
+    if (ev.restMerged) le.restMerged = true;
     if (voice === 2) { le.dx = ev.dx || 0; le.x += le.dx; }
   });
 }
