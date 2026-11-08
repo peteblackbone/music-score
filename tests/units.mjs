@@ -2037,10 +2037,10 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
 // ---------- pre-1.4 characterization (C0): pins taken from the code before two-voice measures ----------
 {
   const { createHash } = await import('node:crypto');
-  // the 52 pre-1.4 cases (the 1.4.0 two-voice fixtures char-voices-*, the 1.5.0 char-note-effects-* and the 1.6.0
-  // char-score-text-* came later)
+  // the 52 pre-1.4 cases (the 1.4.0 two-voice fixtures char-voices-*, the 1.5.0 char-note-effects-*, the 1.6.0
+  // char-score-text-* and the 1.7.0 char-ornaments-* came later)
   const isVoices = (id) => id.startsWith('char-voices-');
-  const isPost14 = (id) => /^char-(voices|note-effects|score-text)-/.test(id);
+  const isPost14 = (id) => /^char-(voices|note-effects|score-text|ornaments)-/.test(id);
   const cases = (await import('./cases.mjs')).cases.filter((c) => !isPost14(c.id));
   const { computeLayout } = await imp('src/layout/index.js');
   const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
@@ -2640,8 +2640,9 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   const { renderNavigation } = await imp('src/draw/navigation.js');
   const { drawScoreHeader } = await imp('src/draw/header.js');
   const { group: svgGroup } = await imp('src/draw/svgUtil.js');
-  // the 57 pre-1.6 cases (the 1.6.0 char-score-text-* fixtures use the new fields on purpose)
-  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-score-text-/.test(c.id));
+  // the 57 pre-1.6 cases (the 1.6.0 char-score-text-* fixtures use the new fields on purpose; the 1.7.0
+  // char-ornaments-* came later)
+  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments)-/.test(c.id));
   const thm = resolveTheme({});
   const s = thm.staffLineSpacing;
   const ok = (c, m) => { if (!c) throw new Error(m); };

@@ -1678,7 +1678,7 @@ const dirLabelStaff = (m, si, tr) => staffOf(m, si, tr, tr.tab);
 test('directions', 'AC1: every pre-existing fixture/example emits no let-ring / pick-stroke / tap / whammy group and no U+E610 / U+E612 glyph', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams') || name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-legato-slides') || name.startsWith('char-note-effects')) continue; // newer fixtures using directions on purpose
+    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams') || name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-legato-slides') || name.startsWith('char-note-effects') || name.startsWith('char-ornaments')) continue; // newer fixtures using directions on purpose
     for (const width of [600, 900]) {
       all(renderTree(score, width, options)).forEach(({ n }) => {
         const c = cls(n).split(' ');
@@ -4675,7 +4675,7 @@ const T11_CLASSES = ['slap', 'pop', 'rake', 'trill'];
 test('techniques11', 'AC1: no pre-existing fixture / example emits a slap / pop / rake / trill group, a dive / hold / return / pre-dive line or a U+E566 glyph', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-note-effects')) continue;
+    if (name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-note-effects') || name.startsWith('char-ornaments')) continue;
     for (const width of [600, 900]) {
       all(renderTree(score, width, options)).forEach(({ n }) => {
         const c = cls(n).split(' ');
@@ -5072,7 +5072,7 @@ const mapBeats = (score, f) => ({ ...score, tracks: score.tracks.map((t) => ({ .
 test('strumArpeggio', 'E1: no pre-existing fixture / example emits an arpeggio or strum group', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-strum-arpeggio') || name.startsWith('char-note-effects')) continue;
+    if (name.startsWith('char-strum-arpeggio') || name.startsWith('char-note-effects') || name.startsWith('char-ornaments')) continue;
     for (const width of [600, 900]) {
       all(renderTree(score, width, options)).forEach(({ n }) => {
         ok(!cls(n).split(' ').some((x) => /^(arpeggio|strum)(-up|-down)?$/.test(x)), `${name}@${width}: class "${cls(n)}"`);
@@ -5802,6 +5802,259 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
       ok(num(n, 'y') - 0.8 * 12 >= num(under[0], 'y2') + 0.5 * s - EPS, `${n.textContent} clears its stem by 0.5 sp`);
     });
     ok(groupsOf(g, /^section$/).length === 1, 'section');
+  });
+}
+
+// ======================= hands17 (1.7.0 fixtures ornaments / ornaments-break / ornaments-tab-only) =======================
+{
+  const fs = await import('node:fs');
+  const { cases } = await import('./cases.mjs');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const OR = characterizationCases.filter((c) => /^ornaments/.test(c.name));
+  const fx = (name) => OR.find((c) => c.name === name);
+  const s = 10;
+  const thm = resolveTheme();
+  const groupsOf = (tree, re) => all(tree).filter(({ n }) => re.test(cls(n))).map(({ n }) => n);
+  const staves = (svg, kind) => systemsOf(svg).flatMap((sy) => staffGroups(sy)).filter((g) => cls(g).includes(`staff-${kind}`));
+  const NEW_CLASSES = /^(ornament|fingering-left|fingering-right|golpe|pick-scrape|barre|left-hand-tap)\b/;
+  const NEW_GLYPHS = [0xE567, 0xE568, 0xE56C, 0xE56D, 0xE840, 0xE842];
+  // Glyph ink bottom / top (local y) of a centred glyph drawn by draw/handMarks.js or the TAB left-hand tap.
+  const glyphBottom = (t) => num(t, 'y') - glyphBox(String.fromCodePoint(cpOf(t))).bottom * s;
+  const glyphTop = (t) => num(t, 'y') - glyphBox(String.fromCodePoint(cpOf(t))).top * s;
+  const textOf = (g) => g.children.map((n) => n.textContent);
+  const stripFingers = (score) => JSON.parse(JSON.stringify(score), (k, v) => (k === 'finger' ? undefined : v));
+
+  test('hands17', 'fixtures exist and render deterministically without bad numbers or empty new groups at several widths', () => {
+    ok(OR.map((c) => c.name).join() === 'ornaments,ornaments-break,ornaments-tab-only', 'fixture names');
+    for (const f of OR) for (const w of [f.width, 600, 1400]) {
+      const tree = renderTree(f.score, w, f.options || {});
+      const out = serialize(tree);
+      ok(!/NaN|Infinity|undefined/.test(out), `${f.name}@${w}: bad number`);
+      ok(out === serialize(renderTree(f.score, w, f.options || {})), `${f.name}@${w}: two renders differ`);
+      groupsOf(tree, NEW_CLASSES).forEach((g) => ok(g.children.length > 0, `${f.name}@${w}: empty <g class="${cls(g)}">`));
+    }
+  });
+
+  test('hands17', 'G2: every pre-1.7 case with every new field set to garbage renders byte-identical to its snapshot', () => {
+    const pre = cases.filter((c) => !/^char-ornaments-/.test(c.id));
+    const snaps = fs.readdirSync(path.join(root0, 'tests/snapshots')).filter((f) => f.endsWith('.svg') && !/^char-ornaments-/.test(f));
+    ok(pre.length === 60 && snaps.length === 60, `${pre.length} pre-1.7 cases vs ${snaps.length} pre-1.7 snapshots`);
+    const NOTE = [{ ornament: 'trill', finger: 9, rightFinger: 'q', leftHandTap: false }, { ornament: 5, finger: 'x', rightFinger: 1, leftHandTap: 0 },
+      { ornament: {}, finger: -1, rightFinger: 'pi', leftHandTap: '' }, { ornament: '', finger: 1.5, rightFinger: null, leftHandTap: null }];
+    const BEAT = [{ golpe: 'x', pickScrape: 'sideways', barre: 'II' }, { golpe: 1, pickScrape: 0, barre: 0 }, { golpe: {}, pickScrape: false, barre: { half: true } }, { golpe: '', pickScrape: [], barre: 25 }];
+    for (const c of pre) {
+      const sc = clone(c.score);
+      let k = 0;
+      sc.tracks.forEach((t) => (t.measures || []).forEach((m) => {
+        if (!m) return;
+        const vs = Array.isArray(m.voices) ? m.voices.map((v) => v?.beats || []) : [m.beats || []];
+        vs.forEach((beats) => beats.forEach((b) => {
+          if (!b) return;
+          Object.assign(b, BEAT[k % 4]);
+          (b.notes || []).forEach((n) => Object.assign(n, NOTE[k++ % 4]));
+          k++;
+        }));
+      }));
+      const want = fs.readFileSync(path.join(root0, 'tests/snapshots', `${c.id}.svg`), 'utf8').replace(/\r\n/g, '\n');
+      const box = makeContainer();
+      new MusicScoreRenderer(box, clone(sc), { width: c.width, ...(c.options || {}) }).render();
+      ok(serialize(box.children[0]) === want, `${c.id}: differs with garbage fields`);
+      const drop = (key, v) => (['ornament', 'finger', 'rightFinger', 'leftHandTap', 'golpe', 'pickScrape', 'barre'].includes(key) ? undefined : v);
+      ok(JSON.stringify(layoutOf(sc, c.width, c.options || {}), drop) === JSON.stringify(layoutOf(c.score, c.width, c.options || {}), drop), `${c.id}: layout differs`);
+    }
+  });
+
+  test('hands17', 'AC1: no pre-existing fixture / example emits a 1.7.0 class or glyph', () => {
+    let checked = 0;
+    for (const [name, score, options] of SCORES) {
+      if (name.startsWith('char-ornaments')) continue;
+      for (const width of [600, 900]) {
+        all(renderTree(score, width, options)).forEach(({ n }) => {
+          ok(!cls(n).split(' ').some((x) => NEW_CLASSES.test(x)), `${name}@${width}: class "${cls(n)}"`);
+          if (n.tag === 'text') ok(!NEW_GLYPHS.includes(cpOf(n)), `${name}@${width}: glyph ${cpOf(n).toString(16)}`);
+        });
+        checked++;
+      }
+    }
+    ok(checked === (SCORES.length - 3) * 2, `${checked} renders`);
+  });
+
+  test('hands17', 'O1-O4: ornament glyph and class per kind, centred on the beat above the staff; none on TAB, graces, rests, a trilled beat or tab-only', () => {
+    const f = fx('ornaments');
+    const svg = renderTree(f.score, f.width);
+    const L = layoutOf(f.score, f.width);
+    const [nota] = staves(svg, 'notation');
+    const orns = groupsOf(nota, /^ornament /);
+    ok(orns.map(cls).join() === ['turn', 'inverted-turn', 'upper-mordent', 'lower-mordent', 'turn'].map((k) => `ornament ornament-${k}`).join(), `classes ${orns.map(cls)}`);
+    ok(orns.map((g) => cpOf(g.children[0])).join() === [0xE567, 0xE568, 0xE56C, 0xE56D, 0xE567].join(), 'glyphs');
+    const beatXs = [1, 2, 3, 4].map((i) => L.systems[0].tracks[0].measures[0].elements[i].x).concat([L.systems[0].tracks[0].measures[2].elements[0].x]);
+    orns.forEach((g, i) => {
+      const t = g.children[0];
+      const gb = glyphBox(String.fromCodePoint(cpOf(t)));
+      near(num(t, 'x') + (gb.left + gb.width / 2) * s, beatXs[i], EPS, `${cls(g)} centred`);
+      ok(glyphBottom(t) <= -s + EPS, `${cls(g)} at least 1 sp above the staff`);
+    });
+    staves(svg, 'tab').forEach((g) => ok(groupsOf(g, /^ornament/).length === 0, 'none on TAB'));
+    ok(groupsOf(renderTree(fx('ornaments-tab-only').score, 900), /^ornament/).length === 0, 'none on tab-only');
+  });
+
+  test('hands17', 'F1-F4: left-hand digits at note height, 0.3 sp left of the accidentals, right of the arpeggio, columns apart; voice 1 notation only', () => {
+    const f = fx('ornaments');
+    const svg = renderTree(f.score, f.width);
+    const [nota] = staves(svg, 'notation');
+    const fl = groupsOf(svg, /^fingering-left$/);
+    ok(fl.length === 2 && fl.every((g) => all(nota).some(({ n }) => n === g)), 'two chords, on the Gt. notation staff');
+    ok(fl.map((g) => textOf(g).join(' ')).join(' / ') === '1 0 3 / 1 T 2', `digits ${fl.map((g) => textOf(g))}`);
+    const heads = all(nota).filter(({ n }) => n.tag === 'text' && [0xE0A3, 0xE0A4].includes(cpOf(n))).map(({ n }) => n);
+    const accs = all(nota).filter(({ n }) => n.tag === 'text' && [0xE261, 0xE262].includes(cpOf(n))).map(({ n }) => n);
+    fl.forEach((g, gi) => {
+      const digits = g.children;
+      digits.forEach((d) => {
+        ok(d.getAttribute('text-anchor') === 'end' && d.getAttribute('font-size') === '11', 'plain right-aligned 1.1 sp digit');
+        ok(heads.some((h) => Math.abs(num(h, 'y') - (num(d, 'y') - 0.35 * 11)) < EPS && num(h, 'x') > num(d, 'x')), `${d.textContent}: at a notehead's y`);
+        const right = accs.filter((a) => num(a, 'x') > num(d, 'x') && num(a, 'x') < num(d, 'x') + 3 * s);
+        ok(right.length > 0 && right.every((a) => num(d, 'x') <= num(a, 'x') - 0.3 * s + EPS), `${d.textContent}: 0.3 sp left of the accidentals`);
+      });
+      digits.forEach((a, i) => digits.slice(i + 1).forEach((b) => {
+        if (Math.abs(num(a, 'y') - num(b, 'y')) < s - EPS) ok(Math.abs(num(a, 'x') - num(b, 'x')) >= 0.9 * s - EPS, `${a.textContent}/${b.textContent}: own columns`);
+      }));
+      if (gi === 1) {
+        const arp = groupsOf(nota, /^arpeggio/)[0];
+        const ax = Math.max(...arp.children[0].getAttribute('d').match(/-?\d+(\.\d+)?/g).map(Number).filter((_, k) => k % 2 === 0));
+        digits.forEach((d) => ok(num(d, 'x') - estimateTextWidth(d.textContent, 11) > ax + 0.25 * s - EPS, `${d.textContent}: right of the arpeggio`));
+      }
+    });
+    staves(svg, 'tab').forEach((g) => ok(groupsOf(g, /^fingering-left/).length === 0, 'none on TAB'));
+    ok(groupsOf(nota, /^voice-2$/).every((v) => groupsOf(v, /^fingering-left/).length === 0), 'none on voice 2');
+    ok(groupsOf(renderTree(fx('ornaments-tab-only').score, 900), /^fingering-left/).length === 0, 'none on tab-only');
+    // Room only with fingers (pre-1.7 layouts stay unchanged: G2): m2's fingered first chord sits further right of its barline.
+    const A = layoutOf(f.score, f.width).systems[0].tracks[0].measures;
+    const B = layoutOf(stripFingers(f.score), f.width).systems[0].tracks[0].measures;
+    ok(A[1].elements[0].x - A[1].x > B[1].elements[0].x - B[1].x + s, 'm2 first chord moved right by the digits');
+    const br = renderTree(fx('ornaments-break').score, 600);
+    const restated = staffGroups(systemsOf(br)[1])[0];
+    ok(groupsOf(restated, /^fingering-left$/).map((g) => textOf(g).join()).join() === '2', 'break: the tied first beat keeps its finger');
+    const sharp = all(restated).filter(({ n }) => cpOf(n) === 0xE262).map(({ n }) => n)[0];
+    ok(num(groupsOf(restated, /^fingering-left$/)[0].children[0], 'x') <= num(sharp, 'x') - 0.3 * s + EPS, 'left of the restated sharp');
+  });
+
+  test('hands17', 'F5-F6: italic right-hand letters, lowest note at the bottom; tab-only above the TAB ink and 0.4 sp below the pick; none in a notation + TAB track\'s TAB group', () => {
+    const f = fx('ornaments');
+    const svg = renderTree(f.score, f.width);
+    const rh = groupsOf(svg, /^fingering-right$/);
+    ok(rh.map((g) => textOf(g).join('')).join() === 'pim,pi', `letters ${rh.map(textOf)}`);
+    rh.forEach((g) => g.children.forEach((t, i) => {
+      ok(t.getAttribute('font-style') === 'italic', 'italic');
+      if (i) ok(num(t, 'y') < num(g.children[i - 1], 'y'), 'stacked upward');
+    }));
+    staves(svg, 'tab').forEach((g) => ok(groupsOf(g, /^fingering-right/).length === 0, 'none in the TAB group'));
+    const tsvg = renderTree(fx('ornaments-tab-only').score, 900);
+    const [tab] = staves(tsvg, 'tab');
+    const info = staffInfo(tab);
+    const trh = groupsOf(tab, /^fingering-right$/);
+    ok(trh.map((g) => textOf(g).join('')).join() === 'pima,c,a,i', `tab-only letters ${trh.map(textOf)}`);
+    const picks = groupsOf(tab, /^pick-stroke/);
+    ok(picks.length === 2, 'two picks');
+    trh.forEach((g) => {
+      const bottom = num(g.children[0], 'y') + 0.25 * 11;
+      ok(bottom <= info.localTop - s + EPS, 'letters at least 1 sp above the TAB top line');
+      const top = num(g.children.at(-1), 'y') - 0.8 * 11;
+      picks.filter((p) => Math.abs(num(p.children[0], 'x') + glyphBox(String.fromCodePoint(cpOf(p.children[0]))).width * s / 2 - num(g.children[0], 'x')) < EPS)
+        .forEach((p) => ok(num(p.children[0], 'y') <= top - 0.4 * s + EPS, 'pick 0.4 sp above the letters'));
+    });
+    const hLetter = groupsOf(tab, /^hammer-pull/).flatMap((g) => g.children.filter((n) => n.tag === 'text'))[0];
+    ok(hLetter, 'an H letter in the tab-only fixture');
+  });
+
+  test('hands17', 'H1/H3: golpe above the tap slot on notation and TAB; left-hand tap glyph, tap > left-hand tap > slap', () => {
+    const f = fx('ornaments');
+    const svg = renderTree(f.score, f.width);
+    for (const g of [staves(svg, 'notation')[0], staves(svg, 'tab')[0]]) {
+      const golpes = groupsOf(g, /^golpe/);
+      ok(golpes.map(cls).join() === 'golpe,golpe golpe-thumb,golpe golpe-finger', `golpe classes ${golpes.map(cls)}`);
+      ok(golpes.every((n) => cpOf(n.children[0]) === 0xE842), 'golpe glyph');
+      const tap = groupsOf(g, /^tap$/)[0].children[0];
+      const golpe = golpes[0].children[0];
+      near(num(golpe, 'x') + glyphBox(String.fromCodePoint(0xE842)).width * s / 2, num(tap, 'x'), EPS, 'golpe over the T');
+      ok(glyphBottom(golpe) <= num(tap, 'y') - 0.8 * num(tap, 'font-size') - 0.4 * s + EPS, 'golpe 0.4 sp above the T');
+      const lh = groupsOf(g, /^left-hand-tap$/);
+      ok(lh.length === 2 && lh.every((n) => cpOf(n.children[0]) === 0xE840), 'two left-hand taps');
+      ok(groupsOf(g, /^tap$/).length === 2 && groupsOf(g, /^(slap|pop)$/).length === 0, 'T wins over the left-hand tap, which wins over slap');
+    }
+    const tab = staves(renderTree(fx('ornaments-tab-only').score, 900), 'tab')[0];
+    const lh = groupsOf(tab, /^left-hand-tap$/)[0].children[0];
+    const wave = groupsOf(tab, /^trill/)[0].children.find((n) => n.tag === 'path').getAttribute('d').match(/-?\d+(\.\d+)?/g).map(Number).filter((_, k) => k % 2 === 1);
+    ok(glyphBottom(lh) <= (Math.min(...wave) + Math.max(...wave)) / 2 - 0.2 * s - 0.4 * s + EPS, 'left-hand tap 0.4 sp above the neighbouring trill wave');
+    const golpe = groupsOf(tab, /^golpe/)[0].children[0];
+    ok(glyphBottom(golpe) <= glyphTop(lh) - 0.4 * s + EPS, 'golpe 0.4 sp above the left-hand tap');
+  });
+
+  test('hands17', 'H2/B1-B4: P.S. and barre runs, labels, bridging, ends and lanes', () => {
+    const f = fx('ornaments');
+    const svg = renderTree(f.score, f.width);
+    const labels = (root, re) => groupsOf(root, re).map((g) => `${cls(g)}:${g.children[0].textContent}`);
+    ok(labels(svg, /^pick-scrape/).join() === 'pick-scrape:P.S.,pick-scrape pick-scrape-down:P.S.', `P.S. ${labels(svg, /^pick-scrape/)}`);
+    ok(labels(svg, /^barre/).join() === 'barre:C III,barre:C II,barre barre-half:½C V', `barre ${labels(svg, /^barre/)}`);
+    const ys = (root, re) => groupsOf(root, re).map((g) => num(g.children[0], 'y'));
+    const sys1 = staffGroups(systemsOf(svg)[1]).find((g) => cls(g).includes('staff-tab'));
+    const [pm, ring, ps, barre] = [/^palm-mute/, /^let-ring/, /^pick-scrape/, /^barre$/].map((re) => Math.min(...ys(sys1, re)));
+    ok(pm > ring && ring > ps && ps > barre, `m4 lanes outward P.M. ${pm} < let ring ${ring} < P.S. ${ps} < barre ${barre}`);
+    const vox = staves(svg, 'notation')[1];
+    ok(ys(vox, /^pick-scrape/)[0] > 4 * s && ys(vox, /^barre/)[0] > ys(vox, /^pick-scrape/)[0], 'notation-only: below the staff, barre outside P.S.');
+
+    const t = renderTree(fx('ornaments-tab-only').score, 900);
+    const lane = ['palm-mute', 'let-ring', 'pick-scrape', 'barre', 'rake'].map((c) => ys(t, new RegExp(`^${c}`))[0]);
+    ok(lane.every((v, i) => i === 0 || v < lane[i - 1]), `tab-only lanes outward ${lane}`);
+    ok(labels(t, /^barre/).join() === 'barre:C II,barre barre-half:½C IV', `tab-only barre ${labels(t, /^barre/)}`);
+
+    const b = fx('ornaments-break');
+    const bsvg = renderTree(b.score, b.width);
+    const L = layoutOf(b.score, b.width);
+    ok(L.systems[0].measureIndices.at(-1) === 1, 'm2 ends the first system');
+    ok(labels(bsvg, /^barre/).map((l) => l.split(':')[1]).join() === 'C V,C V,C VII,½C IX', `break barre ${labels(bsvg, /^barre/)}`);
+    ok(labels(bsvg, /^pick-scrape/).length === 2, 'P.S. repeated after the break');
+    systemsOf(bsvg).forEach((sy, si) => {
+      const xs = L.systems[si].tracks[0].measures.flatMap((m) => m.elements.map((e) => e.x));
+      groupsOf(sy, /^(barre|pick-scrape)/).forEach((g) => {
+        const tick = g.children.find((n) => n.tag === 'line');
+        if (!tick) return;
+        const endX = num(tick, 'x1');
+        const labelX = num(g.children[0], 'x');
+        ok(endX <= L.systems[si].lastBarlineX - 0.5 * s + EPS, `${cls(g)} sys${si}: ends before the barline`);
+        const next = xs.filter((x) => x > endX - EPS).sort((a, c) => a - c)[0];
+        if (next !== undefined) ok(endX <= next - 0.6 * s + EPS, `${cls(g)} sys${si}: ends 0.6 sp before the next beat`);
+        ok(xs.some((x) => Math.abs(x - labelX) < EPS), `${cls(g)} sys${si}: label at a beat`);
+      });
+    });
+  });
+
+  test('hands17', 'stack: turn < letters < T < golpe < pick bottom up, 0.4 sp apart; beam-group picks share one baseline', () => {
+    const f = fx('ornaments');
+    const nota = staves(renderTree(f.score, f.width), 'notation')[0];
+    const orn = groupsOf(nota, /^ornament /)[4].children[0];
+    const rh = groupsOf(nota, /^fingering-right$/)[0].children;
+    const tap = groupsOf(nota, /^tap$/)[0].children[0];
+    const golpe = groupsOf(nota, /^golpe$/)[0].children[0];
+    const pick = groupsOf(nota, /^pick-stroke/)[0].children[0];
+    const layers = [
+      [glyphBottom(orn), glyphTop(orn)],
+      [num(rh[0], 'y') + 0.25 * 11, num(rh.at(-1), 'y') - 0.8 * 11],
+      [num(tap, 'y') + 0.25 * num(tap, 'font-size'), num(tap, 'y') - 0.8 * num(tap, 'font-size')],
+      [glyphBottom(golpe), glyphTop(golpe)],
+      [num(pick, 'y'), num(pick, 'y') - 1.3 * s],
+    ];
+    layers.slice(1).forEach(([bottom], i) => ok(bottom <= layers[i][1] - 0.4 * s + EPS, `layer ${i + 1} 0.4 sp above layer ${i}`));
+    const pair = groupsOf(nota, /^pick-stroke/).slice(1);
+    ok(pair.length === 2 && num(pair[0].children[0], 'y') === num(pair[1].children[0], 'y'), 'golpe pair picks share a baseline');
+  });
+
+  test('hands17', 'G4: injected strings in the new fields never reach the SVG', () => {
+    const bad = '<b>X</b>';
+    const sc = oneTrack([{ beats: [{ type: 'note', duration: 'quarter', golpe: bad, pickScrape: bad, barre: bad,
+      notes: [{ pitch: 'E4', ornament: bad, finger: bad, rightFinger: bad, leftHandTap: bad }] }, q('E4'), q('E4'), q('E4')] }]);
+    const out = serialize(renderTree(sc, 900));
+    ok(!out.includes('<b>') && !out.includes('X</b>') && !out.includes('&lt;b&gt;'), 'no injected text');
+    ok(groupsOf(renderTree(sc, 900), /^left-hand-tap$/).length === 1, 'a truthy leftHandTap still draws its glyph');
   });
 }
 
