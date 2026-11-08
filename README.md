@@ -725,7 +725,7 @@ Initial public release.
 
 **Articulations, fermatas and dynamics**
 
-- Staccato, accent and tenuto marks, fermatas, and dynamics from p to fff, plus sfz, rfz and n.
+- Staccato, staccatissimo, tenuto, accent and marcato marks, normal, short and long fermatas, normal and wide vibrato, tremolo picking at three speeds, and dynamics from p to fff, plus sfz, rfz and n.
 
 **Theme and accessibility**
 
