@@ -115,7 +115,7 @@ function drawMark(navG, mark, baseline, theme) {
     }));
     return;
   }
-  const kindClass =mark.jumpKind === 'toCoda' ? ' to-coda' : mark.jumpKind === 'fine' ? ' fine' : '';
+  const kindClass = mark.jumpKind === 'toCoda' ? ' to-coda' : mark.jumpKind === 'fine' ? ' fine' : '';
   const g = group({ class: `jump${kindClass}` });
   let textX = mark.xEnd;
   if (mark.jumpKind === 'toCoda') {
