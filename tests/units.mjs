@@ -3262,6 +3262,117 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- pre-1.7 characterization: pins taken from the code before ornaments, hand marks and barre ----------
+// Exact x / y numbers (theme.staffLineSpacing 10, width 900 unless stated) of the playing-direction stack
+// (draw/passes/playingDirections.js) that 1.7.0 reorganises: slur clearance, beam-group sharing, trill and
+// strum runs, and the tab-only pick stroke. Small inline scores; the 1.7.0 rework must leave every number alone.
+{
+  const { characterizationCases } = await imp('tests/fixtures/characterization.js');
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const byClass = (root, cls) => walk(root).filter((n) => (n.getAttribute('class') || '').split(' ').includes(cls));
+  const xy = (g) => [g.children[0].getAttribute('x'), g.children[0].getAttribute('y')];
+  const pickOf = (svg) => [...byClass(svg, 'pick-stroke-down'), ...byClass(svg, 'pick-stroke-up')].map(xy);
+  const nq = (pitch, extra = {}) => ({ type: 'note', duration: 'quarter', notes: [{ pitch }], ...extra });
+  const n8 = (pitch, extra = {}) => ({ type: 'note', duration: '8th', notes: [{ pitch }], ...extra });
+  const one = (beats) => ({ tracks: [{ measures: [{ beats }] }] });
+  const nums = (d) => d.match(/-?\d+(\.\d+)?/g).map(Number);
+
+  test('pre-1.7 (a): pick stroke under the second segment of a split slur sits at y -22.48; the same beat without the slur at -10', () => {
+    const mk = (slur) => ({ tracks: [{ measures: [
+      { beats: [nq('E4'), nq('G4'), nq('B4'), nq('D5', slur ? { slurStart: true } : {})] },
+      { beats: [nq('F4', { slurEnd: slur, pickStroke: 'down' }), nq('G4'), nq('A4'), nq('B4')] },
+    ] }] });
+    const split = render(mk(true), 300);
+    eq(byClass(split, 'staff').length, 2, 'two systems');
+    eq(byClass(split, 'slur').length, 2, 'the slur is split into two segments');
+    eq(pickOf(split), [['87.74', '-22.48']]);
+    const plain = render(mk(false), 300);
+    eq(byClass(plain, 'slur').length, 0);
+    eq(pickOf(plain), [['87.74', '-10']]);
+  });
+
+  test('pre-1.7 (b): picks of a beam group with a high and a low note share one y; a T on either note stays under the shared line', () => {
+    const rest = [n8('E4'), n8('E4'), nq('E4'), nq('E4')];
+    const lowPick = (extra = {}) => n8('C4', { pickStroke: 'down', ...extra });
+    const highPick = (extra = {}) => n8('A5', { pickStroke: 'up', ...extra });
+    const tapped = (b) => ({ ...b, notes: [{ ...b.notes[0], tap: true }] });
+    eq(pickOf(render(one([lowPick(), highPick(), ...rest]))), [['115.74', '-20'], ['140.49', '-20']], 'shared by the high note');
+    eq(pickOf(render(one([lowPick(), n8('C4', { pickStroke: 'up' }), ...rest]))), [['115.74', '-10'], ['140.49', '-10']], 'two low picks alone');
+    const lowT = render(one([tapped(lowPick()), highPick(), ...rest]));
+    eq(pickOf(lowT), [['115.74', '-25.55'], ['140.49', '-25.55']], 'both lifted above the low note\'s T');
+    eq(byClass(lowT, 'tap').map((g) => [...xy(g), g.children[0].textContent]), [['115.74', '-12.75', 'T']]);
+    const highT = render(one([lowPick(), tapped(highPick()), ...rest]));
+    eq(pickOf(highT), [['115.74', '-35.55'], ['140.49', '-35.55']]);
+    eq(byClass(highT, 'tap').map(xy), [['140.49', '-22.75']]);
+  });
+
+  test('pre-1.7 (c): two trills with a grace between share one line y (-50.63); the first wave ends at 139.34, before the second "tr" at 165.24', () => {
+    const half = (pitch, extra = {}) => ({ type: 'note', duration: 'half', notes: [{ pitch, ...extra }] });
+    const svg = render(one([half('E4', { trill: true }), { type: 'grace', duration: '16th', notes: [{ pitch: 'D4' }] }, half('G6', { trill: true })]));
+    const trills = byClass(svg, 'trill');
+    eq(trills.map(xy), [['115.74', '-50.63'], ['165.24', '-50.63']]);
+    const wave = trills.map((g) => nums(g.children.find((c) => c.tag === 'path').getAttribute('d')));
+    eq([wave[0][0], wave[0].slice(-2)], [128.87, [139.34, -55.63]]);
+    eq([wave[1][0], wave[1].slice(-2)], [178.36, [204.73, -55.63]]);
+    eq(wave[0].slice(-2)[0] < 165.24, true, 'first wave ends before the second "tr"');
+    const lone = render(one([{ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4', trill: true }] }, nq('E4'), nq('E4'), nq('E4')]));
+    eq(byClass(lone, 'trill').map((g) => g.children[0].getAttribute('y')), ['-10.63'], 'the low trill alone');
+  });
+
+  test('pre-1.7 (d): a strum run on a notation-only track shares one bottom (-20) set by the high note; a low strum alone sits at -10', () => {
+    const arrows = (svg) => byClass(svg, 'strum').map((g) => g.children.map((c) => c.getAttribute('d')));
+    const svg = render(one([nq('E4', { strum: 'down' }), nq('A5', { strum: 'up' }), nq('E4', { strum: 'down' }), nq('E4')]));
+    eq(arrows(svg), [
+      ['M 115.74 -35 L 115.74 -24', 'M 115.74 -20 L 112.74 -25 L 118.74 -25 Z'],
+      ['M 150.74 -20 L 150.74 -31', 'M 150.74 -35 L 153.74 -30 L 147.74 -30 Z'],
+      ['M 185.74 -35 L 185.74 -24', 'M 185.74 -20 L 182.74 -25 L 188.74 -25 Z'],
+    ]);
+    const low = render(one([nq('E4', { strum: 'down' }), nq('E4'), nq('E4'), nq('E4')]));
+    eq(arrows(low), [['M 115.74 -25 L 115.74 -14', 'M 115.74 -10 L 112.74 -15 L 118.74 -15 Z']]);
+  });
+
+  test('pre-1.7 (e): tab-only pick stroke clears an H letter (-31, letter -17) and a P.M. label (-18.8, label -6); bare -11', () => {
+    const t = (fret, extra = {}, note = {}) => ({ type: 'note', duration: '16th', notes: [{ string: 1, fret, ...note }], ...extra });
+    const texts = (svg, s) => walk(svg).filter((n) => n.tag === 'text' && n.textContent === s).map((n) => n.getAttribute('y'));
+    const score = (beats) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats }] }] });
+    eq(pickOf(render(score([t(2), t(4, { pickStroke: 'down' }), t(2, { pickStroke: 'up' }), t(4)]))), [['121.19', '-11'], ['139.19', '-11']]);
+    const hp = render(score([t(2, {}, { hammerPull: true }), t(4, { pickStroke: 'down' }), t(2, { pickStroke: 'up' }), t(4)]));
+    eq(pickOf(hp), [['121.19', '-31'], ['139.19', '-11']]);
+    eq(texts(hp, 'H'), ['-17']);
+    const pmBeats = (note) => [t(2, { palmMute: true }, note), t(4, { pickStroke: 'down', palmMute: true }), t(2, { pickStroke: 'up', palmMute: true }), t(4)];
+    const pm = render(score(pmBeats({})));
+    eq(pickOf(pm), [['121.19', '-18.8'], ['139.19', '-16.27']]);
+    eq(texts(pm, 'P.M.'), ['-6']);
+    const both = render(score(pmBeats({ hammerPull: true })));
+    eq(pickOf(both), [['121.19', '-31'], ['139.19', '-16.27']]);
+    eq([texts(both, 'H'), texts(both, 'P.M.')], [['-17'], ['-6']]);
+  });
+
+  test('pre-1.7 audit: char-directions-break, char-techniques-11-break and char-strum-arpeggio-break still hit the stack paths, with these counts', () => {
+    const audit = (name) => {
+      const f = characterizationCases.find((c) => c.name === name);
+      const svg = render(f.score, f.width);
+      const trills = byClass(svg, 'trill');
+      return {
+        picks: pickOf(svg), taps: byClass(svg, 'tap').length,
+        trills: trills.length, trillWaves: trills.filter((g) => g.children.some((c) => c.tag === 'path')).length,
+        strums: byClass(svg, 'strum').length, slurs: byClass(svg, 'slur').length, staves: byClass(svg, 'staff').length,
+      };
+    };
+    eq(audit('directions-break'), { picks: [['202.48', '-40.55']], taps: 2, trills: 0, trillWaves: 0, strums: 0, slurs: 1, staves: 4 },
+      'one pick stroke stacked above its T (notation + TAB tap); no beam group, trill or strum');
+    eq(audit('techniques-11-break'), { picks: [], taps: 0, trills: 4, trillWaves: 3, strums: 0, slurs: 3, staves: 8 },
+      'four trills, three with a wave (one too short for it); no pick strokes');
+    eq(audit('strum-arpeggio-break'), { picks: [], taps: 0, trills: 0, trillWaves: 0, strums: 10, slurs: 0, staves: 6 },
+      'ten strum arrows; no pick strokes, no slurs');
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
