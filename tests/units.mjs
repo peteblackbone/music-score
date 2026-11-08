@@ -3950,6 +3950,31 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.8.0: inverted short / long fermatas and leger-line rests (glyphs.js, glyphMetrics.js) ----------
+{
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const cpOf = (name) => Glyph[name].codePointAt(0).toString(16).toUpperCase();
+  test('1.8 glyphs: codepoints E4C5 / E4C7 / E4F4 / E4F5 (verified in the bundled Bravura cmap)', () => {
+    eq(['fermataShortBelow', 'fermataLongBelow', 'restWholeLegerLine', 'restHalfLegerLine'].map(cpOf), ['E4C5', 'E4C7', 'E4F4', 'E4F5']);
+  });
+  test('1.8 glyphs: measured ink boxes; inverted fermatas hang from the origin and mirror the upright ones', () => {
+    const b = (n) => { const x = glyphBox(n); return [x.left, x.right, x.top, x.bottom]; };
+    eq([b('fermataShortBelow'), b('fermataLongBelow')], [[0, 2.415, 0, -1.365], [0, 2.41, 0.005, -1.335]]);
+    for (const [up, down] of [['fermataShortAbove', 'fermataShortBelow'], ['fermataLongAbove', 'fermataLongBelow']]) {
+      const u = glyphBox(up); const d = glyphBox(down);
+      eq([u.width === d.width, Math.abs(u.top + d.bottom) < 1e-9, Math.abs(u.bottom + d.top) < 1e-9], [true, true, true], down);
+    }
+  });
+  test('1.8 glyphs: leger-line rests keep the height range of the plain rest, the leger reaching past both sides of its advance', () => {
+    const b = (n) => { const x = glyphBox(n); return [x.left, x.right, x.top, x.bottom]; };
+    eq([b('restWholeLegerLine'), b('restHalfLegerLine')], [[-0.47, 1.595, 0.08, -0.54], [-0.47, 1.595, 0.57, -0.055]]);
+    for (const [plain, leger] of [['restWhole', 'restWholeLegerLine'], ['restHalf', 'restHalfLegerLine']]) {
+      const p = glyphBox(plain); const l = glyphBox(leger);
+      eq([l.left < p.left, l.right > p.right, Math.abs((l.left + l.right) / 2 - p.width / 2) < 0.01], [true, true, true], leger);
+    }
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

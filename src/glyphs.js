@@ -44,6 +44,8 @@ export const Glyph = {
   rest16th: '',
   rest32nd: '',
   rest64th: '',
+  restWholeLegerLine: '', // whole / half rest with a short leger line (TAB band rows)
+  restHalfLegerLine: '',
 
   // Flags
   flag8thUp: '',
@@ -110,6 +112,8 @@ export const Glyph = {
   fermataBelow: '',
   fermataShortAbove: '',
   fermataLongAbove: '',
+  fermataShortBelow: '',
+  fermataLongBelow: '',
   ornamentTurn: '',
   ornamentTurnInverted: '',
   ornamentShortTrill: '', // upper mordent
