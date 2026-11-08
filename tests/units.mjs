@@ -2632,6 +2632,93 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- pre-1.6 characterization: pins taken from the code before score text & structure ----------
+{
+  const { resolveTheme } = await imp('src/theme.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { renderNavigation } = await imp('src/draw/navigation.js');
+  const { drawScoreHeader } = await imp('src/draw/header.js');
+  const { group: svgGroup } = await imp('src/draw/svgUtil.js');
+  const { cases: allCases } = await import('./cases.mjs');
+  const thm = resolveTheme({});
+  const s = thm.staffLineSpacing;
+  const ok = (c, m) => { if (!c) throw new Error(m); };
+  const bar = (extra = {}) => ({ beats: [nq, nq, nq, nq], ...extra });
+  const lay = (measures, width) => computeLayout(normalizeScore({ tracks: [{ measures }] }), thm, width);
+
+  test('pre-1.6: renderNavigation returns null and appends nothing for every system of a multi-system plain layout', () => {
+    const L = lay(Array.from({ length: 12 }, () => bar()), 400);
+    ok(L.systems.length > 1, 'multi-system');
+    L.systems.forEach((sys, i) => {
+      const g = svgGroup({});
+      eq(renderNavigation(g, sys, thm), null, `system ${i}`);
+      eq(g.children.length, 0, `system ${i} appended nothing`);
+    });
+  });
+  test('pre-1.6: only system 1 has a segno -> system 0 returns null and appends nothing; system 1 draws', () => {
+    const plain = lay(Array.from({ length: 12 }, () => bar()), 400);
+    const startMi = plain.systems[1].measureIndices[0];
+    const L = lay(Array.from({ length: 12 }, (_, i) => bar(i === startMi ? { segno: true } : {})), 400);
+    const g0 = svgGroup({});
+    eq(renderNavigation(g0, L.systems[0], thm), null);
+    eq(g0.children.length, 0);
+    eq(L.systems[0].marks, []);
+    eq(L.systems[1].marks.map((m) => m.kind), ['segno']);
+    const g1 = svgGroup({});
+    ok(renderNavigation(g1, L.systems[1], thm) != null, 'system 1 draws a navigation group');
+    eq(g1.children.length, 1);
+  });
+  test('pre-1.6: all 57 cases keep navigation columns at exactly [ending, segno, coda, jump]; mark kinds within segno/coda/jump', () => {
+    eq(allCases.length, 57);
+    for (const c of allCases) {
+      const score = normalizeScore(JSON.parse(JSON.stringify(c.score)));
+      score.navigation.forEach((col, mi) => eq(Object.keys(col), ['ending', 'segno', 'coda', 'jump'], `${c.id} measure ${mi}`));
+      const L = computeLayout(score, resolveTheme(c.options?.theme ?? {}), c.width);
+      for (const sys of L.systems) for (const m of sys.marks) ok(['segno', 'coda', 'jump'].includes(m.kind), `${c.id} mark kind ${m.kind}`);
+    }
+  });
+
+  const FONT = '&quot;Times New Roman&quot;, Georgia, serif';
+  const hdr = (sc) => { const svg = svgGroup({}); const r = drawScoreHeader(svg, sc, thm, 10, 900); return { r, out: svg.children.map(serialize) }; };
+  const titleXml = `<text x="450" y="28" class="title" font-family="${FONT}" font-size="24" text-anchor="middle" fill="#1a1a1a">T</text>`;
+  const tuningXml = (y) => `<text x="30" y="${y}" class="tuning" font-family="${FONT}" font-size="13" font-style="italic" fill="#1a1a1a">Drop D</text>`;
+  const composerXml = (y) => `<text x="870" y="${y}" class="composer" font-family="${FONT}" font-size="13" text-anchor="end" fill="#1a1a1a">C</text>`;
+  const wrap = (...rows) => [`<g class="score-header">\n${rows.map((r) => `  ${r}\n`).join('')}</g>\n`];
+  test('pre-1.6: drawScoreHeader title only -> returns top + 0.75 * 2.4 s, exact group', () => {
+    const h = hdr({ title: 'T' });
+    eq(h.r, 10 + 0.75 * 2.4 * s);
+    eq(h.r, 28);
+    eq(h.out, wrap(titleXml));
+  });
+  test('pre-1.6: drawScoreHeader title + composer + tuningLabel -> + 2.5 s, exact group (tuning, then composer)', () => {
+    const h = hdr({ title: 'T', composer: 'C', tuningLabel: 'Drop D' });
+    eq(h.r, 28 + 2.5 * s);
+    eq(h.out, wrap(titleXml, tuningXml(53), composerXml(53)));
+  });
+  test('pre-1.6: drawScoreHeader tuningLabel only -> top + 0.75 * 1.3 s, exact group', () => {
+    const h = hdr({ tuningLabel: 'Drop D' });
+    eq(h.r, 10 + 0.75 * 1.3 * s);
+    eq(h.r, 19.75);
+    eq(h.out, wrap(tuningXml(19.75)));
+  });
+  test('pre-1.6: drawScoreHeader composer only -> top + 0.75 * 1.3 s, exact group', () => {
+    const h = hdr({ composer: 'C' });
+    eq(h.r, 19.75);
+    eq(h.out, wrap(composerXml(19.75)));
+  });
+  test('pre-1.6: drawScoreHeader with no title/composer/tuningLabel returns null and appends nothing', () => {
+    const h = hdr({});
+    eq(h.r, null);
+    eq(h.out, []);
+  });
+
+  test('pre-1.6: MusicScoreRenderer.js source order renderFermatas( < renderNavigation( < drawTempo(', () => {
+    const src = fs.readFileSync(path.join(root0, 'src/MusicScoreRenderer.js'), 'utf8');
+    const a = src.indexOf('renderFermatas('), b = src.indexOf('renderNavigation('), c = src.indexOf('drawTempo(');
+    ok(a >= 0 && b > a && c > b, `order ${a} ${b} ${c}`);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
