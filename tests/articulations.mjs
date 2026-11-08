@@ -10,7 +10,7 @@ const root0 = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const imp = (p) => import(pathToFileURL(path.join(root0, p)).href);
 const { makeContainer, serialize } = await import('./dom-shim.mjs');
 const { MusicScoreRenderer } = await imp('src/MusicScoreRenderer.js');
-const { normalizeArticulations } = await imp('src/draw/notation.js');
+const { normalizeArticulations, renderArticulations } = await imp('src/draw/notation.js');
 const { Glyph } = await imp('src/glyphs.js');
 const { articulationsScore } = await imp('examples/articulations-demo.js');
 const { exampleScore } = await imp('examples/example-score.js');
@@ -43,9 +43,11 @@ const staffTopOf = (tree) => baselineOf(tree) - 4 * SP;
 // y of a staff position (E4 = 0 is the bottom line; +1 per half space)
 const posY = (tree, pos) => baselineOf(tree) - pos * (SP / 2);
 
-const HALF = { E4A2: 0.17, E4A3: 0.17, E4A4: 0.08, E4A5: 0.08, E4A0: 0.37, E4A1: 0.37 }; // design half-heights (sp)
-const NAME = { E4A2: 'staccato', E4A3: 'staccato', E4A4: 'tenuto', E4A5: 'tenuto', E4A0: 'accent', E4A1: 'accent' };
-const BELOW = new Set(['E4A3', 'E4A5', 'E4A1']);
+const HALF = { E4A2: 0.17, E4A3: 0.17, E4A4: 0.08, E4A5: 0.08, E4A0: 0.37, E4A1: 0.37, // design half-heights (sp)
+  E4A6: 0.59, E4A7: 0.59, E4AC: 0.5, E4AD: 0.5 };
+const NAME = { E4A2: 'staccato', E4A3: 'staccato', E4A4: 'tenuto', E4A5: 'tenuto', E4A0: 'accent', E4A1: 'accent',
+  E4A6: 'staccatissimo', E4A7: 'staccatissimo', E4AC: 'marcato', E4AD: 'marcato' };
+const BELOW = new Set(['E4A3', 'E4A5', 'E4A1', 'E4A7', 'E4AD']);
 // Mark descriptors for one `articulations` group: centre y is the glyph origin
 // shifted back by half its height (the renderer shifts origin toward the far edge).
 function marksOf(g) {
@@ -80,7 +82,7 @@ function deepEq(a, b, what = '') { eq(JSON.stringify(a), JSON.stringify(b), what
 // ---------- AC6/AC7: inert inputs ----------
 const mapBeats = (score, f) => { const s = clone(score); s.tracks.forEach((t) => t.measures.forEach((m) => { m.beats = m.beats.map(f); })); return s; };
 const INERT = [
-  { articulations: [] }, { articulations: 'staccato' }, { articulations: ['bogus', 1, null, 'marcato'] },
+  { articulations: [] }, { articulations: 'staccato' }, { articulations: ['bogus', 1, null, 'zzz'] },
   { articulations: null }, { articulations: { 0: 'staccato' } },
   { fermata: false }, { fermata: 'true' }, { fermata: 1 }, { fermata: null },
   { articulations: [], fermata: false },
@@ -93,7 +95,7 @@ for (const [nm, sc] of [['example-score', exampleScore], ['lead-riff', leadRiff]
 }
 test('[AC6] unknown-only articulations leave a dynamic beat byte-identical (same node order)', () => {
   const a = oneTrack([q('E4', { dynamic: 'mf' }), q('G4')]);
-  const b = oneTrack([q('E4', { dynamic: 'mf', articulations: ['marcato', 'bogus'] }), q('G4')]);
+  const b = oneTrack([q('E4', { dynamic: 'mf', articulations: ['zzz', 'bogus'] }), q('G4')]);
   ok(render(b) === render(a), 'differs');
 });
 
@@ -101,7 +103,7 @@ test('[AC6] unknown-only articulations leave a dynamic beat byte-identical (same
 test('[AC2,AC6] normalizeArticulations: fixed order, dedupe, drop unknown/non-array', () => {
   deepEq(normalizeArticulations(['accent', 'staccato', 'tenuto']), ['staccato', 'tenuto', 'accent']);
   deepEq(normalizeArticulations(['accent', 'accent', 'staccato', 'staccato']), ['staccato', 'accent']);
-  deepEq(normalizeArticulations(['marcato', 'bogus', 1, null, 'tenuto']), ['tenuto']);
+  deepEq(normalizeArticulations(['marcato', 'bogus', 1, null, 'tenuto']), ['tenuto', 'marcato']);
   deepEq(normalizeArticulations('staccato'), []);
   deepEq(normalizeArticulations(undefined), []);
   deepEq(normalizeArticulations(null), []);
@@ -396,6 +398,425 @@ test('determinism: demo renders identically twice, re-render is stable, input no
   eq(box.children.length, 1);
   ok(serialize(box.children[0]) === a, 're-render differs');
   eq(JSON.stringify(articulationsScore), before);
+});
+
+// ---------- [PIN-1.5] characterization of today's tremolo / vibrato / fermata / articulation handling ----------
+// Written before the note-effects 1.5 work. "Permanent" pins must survive it; "flip-later" pins
+// record behavior a named commit will deliberately change (A, T, W, F) and are updated by that commit.
+const pinBoth = (beats) => ({ tracks: [{ name: 'G', clef: 'treble', showStandardNotation: true, showTablature: true,
+  tuning: TUNING, timeSignature: { beats: 4, beatType: 4 }, keySignature: 0, measures: [{ beats }] }] });
+const pinNote = (duration, extra = {}) => ({ type: 'note', duration, ...extra, notes: [{ string: 2, fret: 3 }] });
+const strokes = (tree, cls) => groups(tree, cls).map((g) => g.children.map((c) => c.tag));
+const THREE = ['line', 'line', 'line'];
+
+// permanent: tremolo 2 -> three strokes in g.tremolo (stemmed and whole) and g.tab-tremolo
+for (const [nm, dur] of [['stemmed quarter', 'quarter'], ['whole note', 'whole']]) {
+  test(`[PIN-1.5] tremolo: 2 on a ${nm}: one g.tremolo with 3 lines and one g.tab-tremolo with 3 lines`, () => {
+    const tree = renderTree(pinBoth([pinNote(dur, { tremolo: 2 })]));
+    deepEq(strokes(tree, 'tremolo'), [THREE], 'tremolo');
+    deepEq(strokes(tree, 'tab-tremolo'), [THREE], 'tab-tremolo');
+  });
+}
+test('[PIN-1.5] tremolo group class is exactly "tremolo" (not tremolo-N / tremolo-2)', () => {
+  const sc = pinBoth([pinNote('quarter', { tremolo: 2 })]);
+  const classes = all(renderTree(sc)).filter((x) => x.n.tag === 'g' && /tremolo/.test(x.n.getAttribute('class') || '')).map((x) => x.n.getAttribute('class'));
+  deepEq(classes, ['tremolo', 'tab-tremolo']);
+  ok(!render(sc).includes('tremolo-'), 'suffixed class');
+});
+test('[PIN-1.5] tremolo 8 / 16 / 32 each draw 3 strokes (same as 2)', () => {
+  [8, 16, 32].forEach((v) => {
+    const tree = renderTree(pinBoth([pinNote('quarter', { tremolo: v })]));
+    deepEq(strokes(tree, 'tremolo'), [THREE], `tremolo ${v}`);
+    deepEq(strokes(tree, 'tab-tremolo'), [THREE], `tab-tremolo ${v}`);
+  });
+});
+test('[PIN-1.5] vibrato 1 and "x" render byte-equal to vibrato true', () => {
+  const base = render(pinBoth([pinNote('quarter', { vibrato: true })]));
+  ok(base.includes('class="vibrato"'), 'baseline has vibrato');
+  [1, 'x'].forEach((v) => ok(render(pinBoth([pinNote('quarter', { vibrato: v })])) === base, `vibrato ${JSON.stringify(v)}`));
+});
+test('[PIN-1.5] fermata "true" and 1 draw no fermata (output equals no fermata)', () => {
+  const base = render(oneTrack([q('E4'), q('G4')]));
+  ['true', 1].forEach((v) => {
+    const s = render(oneTrack([q('E4', { fermata: v }), q('G4')]));
+    ok(!s.includes('class="fermata"'), `fermata ${JSON.stringify(v)} drew one`);
+    ok(s === base, `fermata ${JSON.stringify(v)} differs`);
+  });
+});
+
+// flipped by commit A (was: articulations [marcato] / [heavyAccent] / [staccatissimo] byte-equal to none)
+test('[PIN-1.5][flipped A] articulations [marcato] / [heavyAccent] / [staccatissimo] now draw one mark', () => {
+  const base = render(oneTrack([q('E4'), q('G4')]));
+  [['marcato', 'E4AD'], ['heavyAccent', 'E4AD'], ['staccatissimo', 'E4A7']].forEach(([n, code]) => {
+    const tree = renderTree(oneTrack([q('E4', { articulations: [n] }), q('G4')]));
+    ok(serialize(tree) !== base, n);
+    deepEq(marksOf(groups(tree, 'articulations')[0]).map((m) => m.code), [code], n);
+  });
+});
+// flipped by commit T (was: tremolo "8th" and "16th" draw 3 strokes with class "tremolo")
+test('[PIN-1.5][flipped T] tremolo "8th" / "16th" draw 1 / 2 strokes with a speed class', () => {
+  [['8th', 1], ['16th', 2]].forEach(([v, n]) => {
+    const tree = renderTree(oneTrack([q('E4', { tremolo: v })]));
+    deepEq(strokes(tree, `tremolo tremolo-${v}`), [Array(n).fill('line')], `tremolo ${v}`);
+    eq(groups(tree, 'tremolo').length, 0, `no plain tremolo group for ${v}`);
+  });
+});
+// flipped by commit W (was: vibrato "wide" renders byte-equal to vibrato true)
+test('[PIN-1.5][flipped W] vibrato "wide" draws the wide wave on notation and TAB', () => {
+  const base = render(pinBoth([pinNote('quarter', { vibrato: true })]));
+  const wide = render(pinBoth([pinNote('quarter', { vibrato: 'wide' })]));
+  ok(wide !== base, 'wide equals normal');
+  ok(wide.includes('class="vibrato vibrato-wide"') && wide.includes('class="tab-vibrato tab-vibrato-wide"'), 'wide classes');
+});
+// flipped by commit F (was: fermata "short" / "long" / "normal" draw no g.fermata)
+test('[PIN-1.5][flipped F] fermata "short" / "long" / "normal" each draw one fermata', () => {
+  [['short', 'fermata fermata-short'], ['long', 'fermata fermata-long'], ['normal', 'fermata']].forEach(([v, cls]) =>
+    eq(groups(renderTree(oneTrack([q('E4', { fermata: v })])), cls).length, 1, `fermata ${v}`));
+});
+
+// ---------- 1.5 marcato / staccatissimo (A1-A3) ----------
+// Proof for the re-recorded articulations-demo snapshots: the demo's only new mark is one 'marcato'; renamed to an
+// unknown name it must still hash to the opt-out baselines recorded before 1.5.0 (tests/fixtures/pre-1.3-hashes.json
+// at 588220a), so nothing but that mark changed.
+{
+  const { createHash } = await import('node:crypto');
+  const OLD = {
+    600: '9afeb20459b9de681ade0b5ac41b81cb67283f350c60964a837eb69f22d1be7e',
+    900: '467bf13ef094295d2b3dcafceadec44e114a6c6a649c7ec430d8fda3292c6a45',
+  };
+  const swapped = mapBeats(articulationsScore, (b) => (b.articulations
+    ? { ...b, articulations: b.articulations.map((n) => (n === 'marcato' ? 'zzz' : n)) } : b));
+  for (const w of [900, 600]) {
+    test(`[A1] articulations demo with 'marcato' renamed to 'zzz' hashes to its pre-1.5 opt-out baseline @${w}`, () => {
+      const box = makeContainer();
+      new MusicScoreRenderer(box, clone(swapped), { width: w, theme: { hammerPullSlurs: false } }).render();
+      eq(createHash('sha256').update(serialize(box.children[0])).digest('hex'), OLD[w]);
+    });
+  }
+  test('[A1] the demo uses exactly one marcato (its only 1.5 mark)', () => {
+    const names = articulationsScore.tracks.flatMap((t) => t.measures.flatMap((m) => m.beats.flatMap((b) => b.articulations || [])));
+    eq(names.filter((n) => n === 'marcato').length, 1);
+    ok(!names.some((n) => ['heavyAccent', 'staccatissimo'].includes(n)), 'no other 1.5 names');
+  });
+}
+const codesOf = (tree) => groups(tree, 'articulations').map((g) => marksOf(g).map((m) => m.code));
+test('[A1] stem up -> Below glyphs, stem down -> Above glyphs', () => {
+  deepEq(codesOf(renderTree(oneTrack([q('E4', { articulations: ['staccatissimo', 'marcato'] })]))), [['E4A7', 'E4AD']]);
+  deepEq(codesOf(renderTree(oneTrack([q('D5', { articulations: ['staccatissimo', 'marcato'] })]))), [['E4A6', 'E4AC']]);
+  deepEq(codesOf(renderTree(oneTrack([whole(['D5'], { articulations: ['heavyAccent'] })]))), [['E4AC']]);
+  deepEq(codesOf(renderTree(oneTrack([whole(['G4'], { articulations: ['heavyAccent'] })]))), [['E4AD']]);
+});
+test('[A1] two voices: voice 1 marks above, voice 2 marks below', () => {
+  const rests = [{ type: 'rest', duration: 'quarter' }, { type: 'rest', duration: 'half' }];
+  const sc = oneTrack([]);
+  sc.tracks[0].measures = [{ voices: [
+    { beats: [q('E5', { articulations: ['marcato', 'tenuto', 'staccatissimo'] }), ...rests] },
+    { beats: [q('E4', { articulations: ['marcato', 'tenuto', 'staccatissimo'] }), ...rests] },
+  ] }];
+  const [g1, g2] = groups(renderTree(sc), 'articulations').map(marksOf);
+  deepEq(g1.map((m) => m.code), ['E4A6', 'E4A4', 'E4AC']);
+  deepEq(g2.map((m) => m.code), ['E4A7', 'E4A5', 'E4AD']);
+  [0, 1].forEach((i) => {
+    eq(g1[i].center - g1[i + 1].center, SP, `voice 1 stacks upward ${i}`);
+    eq(g2[i + 1].center - g2[i].center, SP, `voice 2 stacks downward ${i}`);
+  });
+});
+test('[A2] normalizeArticulations: precedence, order, alias, exact names', () => {
+  deepEq(normalizeArticulations(['accent', 'marcato', 'staccato', 'staccatissimo', 'tenuto']), ['staccatissimo', 'tenuto', 'marcato']);
+  deepEq(normalizeArticulations(['heavyAccent', 'accent']), ['marcato']);
+  deepEq(normalizeArticulations(['marcato', 'heavyAccent', 'marcato']), ['marcato']);
+  deepEq(normalizeArticulations(['staccato', 'staccatissimo']), ['staccatissimo']);
+  deepEq(normalizeArticulations(['accent', 'staccatissimo']), ['staccatissimo', 'accent']);
+  deepEq(normalizeArticulations(['Marcato', ' marcato', 'STACCATISSIMO', 'heavyaccent', 'marcato ']), []);
+  deepEq(normalizeArticulations(['tenuto', 'staccato', 'accent']), ['staccato', 'tenuto', 'accent']);
+  const once = normalizeArticulations(['accent', 'heavyAccent', 'staccato', 'staccatissimo', 'tenuto']);
+  deepEq(normalizeArticulations(once), once, 'idempotent');
+});
+test('[A2] stacked centres step 1 sp from the first staff space out, both sides', () => {
+  const up = renderTree(oneTrack([q('E4', { articulations: ['marcato', 'tenuto', 'staccatissimo'] })]));
+  const ms = marksOf(groups(up, 'articulations')[0]);
+  deepEq(ms.map((m) => m.name), ['staccatissimo', 'tenuto', 'marcato']);
+  [-3, -5, -7].forEach((p, i) => eq(ms[i].center, posY(up, p), `up ${i}`));
+  const dn = renderTree(oneTrack([q('D5', { articulations: ['heavyAccent', 'tenuto', 'staccatissimo'] })]));
+  const md = marksOf(groups(dn, 'articulations')[0]);
+  [9, 11, 13].forEach((p, i) => eq(md[i].center, posY(dn, p), `down ${i}`));
+});
+// Marcato (1.0 sp) and staccatissimo (1.18 sp) are too tall to sit in the space next to a notehead or right
+// outside a staccatissimo: they move out one more space; the older marks keep their places.
+test('[A2] tall marks move out a space instead of touching the notehead or the mark inside them', () => {
+  const at = (pitch, arts) => {
+    const tree = renderTree(oneTrack([q(pitch, { articulations: arts })]));
+    return marksOf(groups(tree, 'articulations')[0]).map((m) => Math.round((baselineOf(tree) - m.center) / (SP / 2)));
+  };
+  deepEq(at('E5', ['staccatissimo']), [11]); // E5 pos 7: the space next to it (9) is too small
+  deepEq(at('E5', ['marcato']), [11]);
+  deepEq(at('E5', ['accent']), [9]);
+  deepEq(at('E5', ['staccato', 'marcato']), [9, 11]);
+  deepEq(at('F4', ['staccatissimo', 'tenuto']), [-3, -5]); // F4 pos 1 stem up
+  deepEq(at('E4', ['staccatissimo']), [-3]);
+  deepEq(at('E4', ['marcato']), [-3]);
+  deepEq(at('E4', ['staccatissimo', 'marcato']), [-3, -7]);
+  deepEq(at('E4', ['staccatissimo', 'accent']), [-3, -7]);
+  deepEq(at('E4', ['staccato', 'tenuto', 'accent']), [-3, -5, -7]);
+});
+test('[A2] every mark keeps >= 0.1 sp from the notehead and the mark inside it, centred in a space', () => {
+  const combos = [['staccatissimo'], ['marcato'], ['staccatissimo', 'marcato'], ['staccatissimo', 'accent'],
+    ['staccato', 'marcato'], ['staccatissimo', 'tenuto', 'marcato'], ['staccato', 'tenuto', 'accent']];
+  ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5', 'D5', 'E5', 'F5', 'G5', 'A5', 'C6'].forEach((p) => combos.forEach((arts) => {
+    const tree = renderTree(oneTrack([q(p, { articulations: arts })]));
+    const ms = marksOf(groups(tree, 'articulations')[0]);
+    const head = all(tree).find((x) => x.n.tag === 'text' && x.n.getAttribute('text-anchor') === 'middle' && !x.cls.includes('articulations')).n;
+    const below = ms[0].below;
+    const d = below ? 1 : -1; // y direction away from the notehead
+    let edge = num(head, 'y') + d * 0.5 * SP;
+    ms.forEach((m) => {
+      const h = HALF[m.code] * SP;
+      ok(d * (m.center - d * h - edge) >= 0.1 * SP - EPS, `${p} ${arts} ${m.name}: gap ${d * (m.center - d * h - edge)}`);
+      const pos = (baselineOf(tree) - m.center) / (SP / 2);
+      ok(near(pos, Math.round(pos)) && Math.abs(Math.round(pos)) % 2 === 1, `${p} ${arts} ${m.name} at ${pos}`);
+      edge = m.center + d * h;
+    });
+  }));
+});
+test('[A2] articTopY / articBottomY use the new half heights', () => {
+  const theme = { staffLineSpacing: SP, fontFamily: 'Bravura', noteColor: '#000', fontSize: 40 };
+  const g = makeContainer();
+  // baseline y 0: staff position p sits at y = -p * SP / 2
+  const below = { x: 0, noteheads: [{ y: 0 }], stemUp: true, minPos: 0, maxPos: 0, duration: 'quarter' };
+  renderArticulations(g, below, ['staccatissimo', 'marcato'], 0, theme);
+  eq(below.articBottomY, 7 * (SP / 2) + 0.5 * SP, 'marcato outer edge below (pos -7: moved out past the staccatissimo)');
+  const above = { x: 0, noteheads: [{ y: 0 }], stemUp: false, minPos: 8, maxPos: 8, duration: 'quarter' };
+  renderArticulations(g, above, ['staccatissimo'], 0, theme);
+  eq(above.articTopY, -11 * (SP / 2) - 0.59 * SP, 'staccatissimo outer edge above (pos 11)');
+});
+test('[A3] marcato / staccatissimo ignored on rests, graces and a tab-only track', () => {
+  const r = renderTree(oneTrack([{ type: 'rest', duration: 'quarter', articulations: ['marcato', 'staccatissimo'] }, q('E4')]));
+  eq(groups(r, 'articulations').length, 0);
+  const plain = oneTrack([{ type: 'grace', notes: [{ pitch: 'E4' }] }, q('B4')]);
+  const marked = oneTrack([{ type: 'grace', articulations: ['marcato', 'heavyAccent', 'staccatissimo'], notes: [{ pitch: 'E4' }] }, q('B4')]);
+  ok(render(marked) === render(plain), 'grace differs');
+  const mk = (extra) => ({ tracks: [{ name: 'Tab', clef: 'treble', showStandardNotation: false, showTablature: true,
+    tuning: TUNING, timeSignature: { beats: 4, beatType: 4 }, keySignature: 0,
+    measures: [{ beats: [{ type: 'note', duration: 'whole', ...extra, notes: [{ string: 2, fret: 3 }] }] }] }] });
+  ok(render(mk({ articulations: ['marcato', 'staccatissimo', 'heavyAccent'] })) === render(mk({})), 'tab-only differs');
+});
+
+// ---------- 1.5 tremolo speeds (T1-T2) ----------
+// All tremolo groups of a tree, in document order: { cls, centres: stroke centre y's }.
+const tremolos = (tree) => all(tree).filter((x) => x.n.tag === 'g' && /(^| )(tab-)?tremolo( |$)/.test(x.n.getAttribute('class') || ''))
+  .map((x) => ({ cls: x.n.getAttribute('class'), x: (num(x.n.children[0], 'x1') + num(x.n.children[0], 'x2')) / 2,
+    centres: x.n.children.map((l) => (num(l, 'y1') + num(l, 'y2')) / 2) }));
+const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+const nearly = (a, b, what) => ok(Math.abs(a - b) < 1e-9, `${what}: ${a} vs ${b}`);
+const SPEEDS = [['8th', 1], ['16th', 2], ['32nd', 3]];
+test('[T1] notation + TAB: 1 / 2 / 3 strokes per speed, centred where the plain three are, speed classes', () => {
+  for (const dur of ['quarter', 'whole']) {
+    const plain = tremolos(renderTree(pinBoth([pinNote(dur, { tremolo: true })])));
+    deepEq(plain.map((t) => t.cls), ['tremolo', 'tab-tremolo'], dur);
+    for (const [v, n] of SPEEDS) {
+      const ts = tremolos(renderTree(pinBoth([pinNote(dur, { tremolo: v })])));
+      deepEq(ts.map((t) => t.cls), [`tremolo tremolo-${v}`, `tab-tremolo tab-tremolo-${v}`], `${dur} ${v}`);
+      ts.forEach((t, i) => {
+        eq(t.centres.length, n, `${dur} ${v} ${t.cls} strokes`);
+        nearly(mean(t.centres), mean(plain[i].centres), `${dur} ${v} ${t.cls} centre`);
+        nearly(t.x, plain[i].x, `${dur} ${v} ${t.cls} x`);
+      });
+    }
+  }
+});
+test('[T1] stemmed and beamed: mean stroke centre is the stem midpoint', () => {
+  const stemMid = (tree, x) => {
+    const st = all(tree).filter((e) => e.n.tag === 'line' && near(num(e.n, 'x1'), x) && near(num(e.n, 'x2'), x)
+      && !e.cls.some((c) => /tremolo/.test(c)));
+    ok(st.length === 1, `one stem at x ${x}, got ${st.length}`);
+    return (num(st[0].n, 'y1') + num(st[0].n, 'y2')) / 2;
+  };
+  const e8 = (p, extra) => ({ type: 'note', duration: '8th', notes: [{ pitch: p }], ...extra });
+  for (const [v, n] of SPEEDS) {
+    const tree = renderTree(oneTrack([q('E4', { tremolo: v }), q('D5', { tremolo: v }),
+      e8('G4', { tremolo: v }), e8('B4', { tremolo: v }), { type: 'rest', duration: 'quarter' }]));
+    const ts = tremolos(tree);
+    eq(ts.length, 4, v);
+    ts.forEach((t, i) => {
+      eq(t.centres.length, n, `${v} #${i}`);
+      nearly(mean(t.centres), stemMid(tree, t.x), `${v} #${i}`);
+    });
+  }
+});
+test('[T1] voice-2 whole note: strokes hang below and keep their count', () => {
+  const sc = (v) => {
+    const s = oneTrack([]);
+    s.tracks[0].measures = [{ voices: [{ beats: [whole(['D5'])] }, { beats: [whole(['E4'], { tremolo: v })] }] }];
+    return s;
+  };
+  const plain = tremolos(renderTree(sc(true)))[0];
+  ok(mean(plain.centres) > posY(renderTree(sc(true)), 0), 'below the E4 notehead');
+  for (const [v, n] of SPEEDS) {
+    const [t] = tremolos(renderTree(sc(v)));
+    eq(t.cls, `tremolo tremolo-${v}`);
+    eq(t.centres.length, n, v);
+    nearly(mean(t.centres), mean(plain.centres), v);
+  }
+});
+test('[T2] true, numbers and other values draw 3 strokes with no speed class', () => {
+  [true, 1, 2, 8, 16, 32, 'x', '64th', 'eighth', [], {}, ' 8th '].forEach((v) => {
+    const ts = tremolos(renderTree(pinBoth([pinNote('quarter', { tremolo: v })])));
+    const want = v === ' 8th ' ? ['tremolo tremolo-8th', 'tab-tremolo tab-tremolo-8th'] : ['tremolo', 'tab-tremolo'];
+    deepEq(ts.map((t) => t.cls), want, JSON.stringify(v));
+    if (v !== ' 8th ') ts.forEach((t) => eq(t.centres.length, 3, JSON.stringify(v)));
+  });
+  [false, 0, '', null].forEach((v) => eq(tremolos(renderTree(pinBoth([pinNote('quarter', { tremolo: v })]))).length, 0, JSON.stringify(v)));
+});
+
+// ---------- 1.5 wide vibrato (W1-W4) ----------
+const glyphBoxTrillBottom = -0.063; // glyphMetrics ornamentTrill bBoxSW y
+// Each vibrato group's wave: { cls, x1, y (centre line), top / bottom (control points), amp, step (Q segment), width }.
+const waves = (tree) => all(tree).filter((x) => x.n.tag === 'g' && /(^| )(tab-)?vibrato( |$)/.test(x.n.getAttribute('class') || ''))
+  .map((x) => {
+    const p = x.n.children[0];
+    const v = p.getAttribute('d').match(/-?[\d.]+(e-?\d+)?/g).map(Number);
+    const ys = v.filter((_, i) => i % 2 === 1);
+    const y = v[1];
+    return { cls: x.n.getAttribute('class'), x1: v[0], y, top: Math.min(...ys), bottom: Math.max(...ys),
+      amp: Math.max(...ys) - y, step: v[4] - v[0], width: num(p, 'stroke-width') };
+  });
+test('[W1] wide wave: amplitude, wavelength, stroke and lift on notation and TAB; classes', () => {
+  const [n, tn] = waves(renderTree(pinBoth([pinNote('quarter', { vibrato: true })])));
+  const [w, tw] = waves(renderTree(pinBoth([pinNote('quarter', { vibrato: ' WIDE ' })])));
+  deepEq([n.cls, tn.cls, w.cls, tw.cls], ['vibrato', 'tab-vibrato', 'vibrato vibrato-wide', 'tab-vibrato tab-vibrato-wide']);
+  eq(n.width, 1.2); eq(n.amp, 0.2 * SP); eq(n.step, 0.35 * SP);
+  eq(w.width, 1.6); eq(w.amp, 0.35 * SP); eq(w.step, 0.5 * SP);
+  eq(near(w.y - w.top, 0.35 * SP), true, 'control point above');
+  eq(w.y, n.y - 0.15 * SP, 'notation lift'); eq(w.x1, n.x1, 'same start');
+  eq(tn.width, 1.1); eq(tn.amp, 0.18 * SP); eq(tn.step, 0.3 * SP);
+  eq(tw.width, 1.5); eq(tw.amp, 0.32 * SP); eq(tw.step, 0.43 * SP);
+  eq(tw.y, tn.y - 0.14 * SP, 'TAB lift'); eq(tw.x1, tn.x1, 'same TAB start');
+});
+test('[W3] notation: pick stroke, T, trill, strum and fermata stay >= 0.7 sp above a wide wave', () => {
+  const nq = (pitch, extra = {}, noteExtra = {}) => ({ type: 'note', duration: 'quarter', notes: [{ pitch, ...noteExtra }], ...extra });
+  const chordQ = (extra) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }, { pitch: 'G4' }, { pitch: 'B4' }], ...extra });
+  const sc = (kind) => oneTrack([nq('E4', { vibrato: kind, pickStroke: 'down' }), nq('D5', { vibrato: kind }, { tap: true }),
+    nq('G4', { vibrato: kind }, { trill: true }), chordQ({ vibrato: kind, strum: 'down' }),
+    nq('A4', { vibrato: kind, fermata: true }), nq('C5', { vibrato: kind, pickStroke: 'up' }, { slap: true })]);
+  const bottoms = (tree) => all(tree).filter((x) => x.n.tag === 'g').flatMap((x) => {
+    const cls = x.n.getAttribute('class') || '';
+    const t = x.n.children[0];
+    if (/^(pick-stroke|fermata)/.test(cls)) return [{ cls, x: num(t, 'x'), bottom: num(t, 'y') }];
+    if (cls === 'tap' || cls === 'slap') return [{ cls, x: num(t, 'x'), bottom: num(t, 'y') + 0.25 * num(t, 'font-size') }];
+    if (cls === 'trill') return [{ cls, x: num(t, 'x'), bottom: num(t, 'y') - glyphBoxTrillBottom * SP }];
+    if (/^strum/.test(cls)) {
+      const ys = x.n.children.flatMap((c) => (c.getAttribute('d') || c.getAttribute('points') || '').match(/-?[\d.]+/g).map(Number).filter((_, i) => i % 2 === 1));
+      return [{ cls, x: Number(x.n.children[0].getAttribute('d').match(/-?[\d.]+/g)[0]), bottom: Math.max(...ys) }];
+    }
+    return [];
+  });
+  for (const kind of [true, 'wide']) {
+    const tree = renderTree(sc(kind));
+    const ws = waves(tree);
+    eq(ws.length, 6, `${kind} waves`);
+    const bs = bottoms(tree);
+    deepEq(bs.map((b) => b.cls).sort(), ['fermata', 'pick-stroke pick-stroke-down', 'pick-stroke pick-stroke-up', 'slap', 'strum strum-down', 'tap', 'trill'].sort(), `${kind} marks`);
+    bs.forEach((b) => {
+      const w = ws.find((v) => near(v.x1 - 0.5 * SP, b.x));
+      ok(w, `${kind} ${b.cls}: wave at x ${b.x}`);
+      ok(b.bottom <= w.top - 0.7 * SP + EPS, `${kind} ${b.cls}: bottom ${b.bottom} vs wave top ${w.top}`);
+    });
+  }
+});
+test('[W3] TAB: tap T, trill and strum clear a wide wave; with a tremolo the wave stays above it', () => {
+  const tb = (extra, noteExtra = {}) => ({ type: 'note', duration: 'quarter', ...extra, notes: [{ string: 2, fret: 3, ...noteExtra }] });
+  const tree = renderTree(pinBoth([tb({ vibrato: 'wide' }, { tap: true }), tb({ vibrato: 'wide' }, { trill: 5 }),
+    { type: 'note', duration: 'quarter', vibrato: 'wide', strum: 'up', notes: [{ string: 1, fret: 0 }, { string: 2, fret: 1 }] },
+    tb({ vibrato: 'wide', tremolo: '16th' })]));
+  const tabWaves = waves(tree).filter((w) => w.cls.startsWith('tab-'));
+  eq(tabWaves.length, 4);
+  const tabG = all(tree).find((x) => x.n.tag === 'g' && /staff-tab/.test(x.n.getAttribute('class') || '')).n;
+  const inTab = all(tabG);
+  const tap = inTab.find((x) => x.n.tag === 'g' && x.n.getAttribute('class') === 'tap').n.children[0];
+  ok(num(tap, 'y') + 0.25 * num(tap, 'font-size') <= tabWaves[0].top + EPS, 'T above the wave');
+  const tr = inTab.find((x) => x.n.tag === 'g' && x.n.getAttribute('class') === 'trill').n.children[0];
+  ok(num(tr, 'y') - glyphBoxTrillBottom * SP <= tabWaves[1].top + EPS, 'trill above the wave');
+  const strum = inTab.find((x) => x.n.tag === 'g' && /^strum/.test(x.n.getAttribute('class') || '')).n;
+  const sys = strum.children.flatMap((c) => (c.getAttribute('d') || c.getAttribute('points') || '').match(/-?[\d.]+/g).map(Number).filter((_, i) => i % 2 === 1));
+  ok(Math.max(...sys) <= tabWaves[2].top + EPS, 'strum above the wave');
+  const trem = inTab.find((x) => x.n.tag === 'g' && /tab-tremolo/.test(x.n.getAttribute('class') || '')).n;
+  const tremTop = Math.min(...trem.children.flatMap((l) => [num(l, 'y1'), num(l, 'y2')]));
+  ok(tabWaves[3].bottom < tremTop, `wave bottom ${tabWaves[3].bottom} above tremolo top ${tremTop}`);
+});
+test('[W4] voice 2: vibrato "wide" draws nothing on notation or TAB', () => {
+  const mk = (v2) => {
+    const s = pinBoth([]);
+    s.tracks[0].measures = [{ voices: [{ beats: [pinNote('whole')] },
+      { beats: [{ type: 'note', duration: 'whole', ...v2, notes: [{ string: 4, fret: 2 }] }] }] }];
+    return s;
+  };
+  const a = render(mk({}));
+  const b = render(mk({ vibrato: 'wide' }));
+  ok(!/vibrato/.test(b), 'no vibrato group');
+  ok(a === b, 'differs from unmarked');
+});
+
+// ---------- 1.5 fermata kinds (F1-F2) ----------
+const fermatas = (tree) => all(tree).filter((x) => x.n.tag === 'g' && /^fermata( |$)/.test(x.n.getAttribute('class') || ''))
+  .map((x) => ({ cls: x.n.getAttribute('class'), code: cp(x.n.children[0]), x: num(x.n.children[0], 'x'), y: num(x.n.children[0], 'y') }));
+test('[F1] codepoint and class per kind; explicit "normal" is byte-equal to true', () => {
+  [[true, 'fermata', 'E4C0'], [' Normal', 'fermata', 'E4C0'], ['short', 'fermata fermata-short', 'E4C4'],
+    ['LONG', 'fermata fermata-long', 'E4C6']].forEach(([v, cls, code]) => {
+    const fs = fermatas(renderTree(oneTrack([q('E4', { fermata: v }), q('G4')])));
+    deepEq(fs.map((f) => [f.cls, f.code]), [[cls, code]], JSON.stringify(v));
+  });
+  ok(render(oneTrack([q('E4', { fermata: 'normal' })])) === render(oneTrack([q('E4', { fermata: true })])), 'normal differs from true');
+});
+test('[F1] short / long sit where the normal one does: over a chord symbol, under a slur, on a rest', () => {
+  const scores = [
+    (v) => oneTrack([q('E4', { fermata: v, chord: 'Am' }), q('G4')]),
+    (v) => oneTrack([q('E4', { slurStart: true }), q('B4', { fermata: v }), q('B4', { slurEnd: true }), q('E4')]),
+    (v) => oneTrack([{ type: 'rest', duration: 'quarter', fermata: v }, q('E4')]),
+    (v) => oneTrack([q('C6', { fermata: v, articulations: ['marcato'] })]),
+  ];
+  scores.forEach((mk, i) => {
+    const [n] = fermatas(renderTree(mk(true)));
+    for (const v of ['short', 'long']) {
+      const [f] = fermatas(renderTree(mk(v)));
+      ok(f, `score ${i} ${v}: drawn`);
+      eq(f.y, n.y, `score ${i} ${v}: bottom`); eq(f.x, n.x, `score ${i} ${v}: x`);
+    }
+  });
+});
+test('[F2] "true", 1, false, null, garbage draw nothing; graces and voice 2 draw nothing', () => {
+  const base = render(oneTrack([q('E4'), q('G4')]));
+  ['true', 1, false, null, 'x', 'wide', 0, [], {}].forEach((v) =>
+    ok(render(oneTrack([q('E4', { fermata: v }), q('G4')])) === base, `fermata ${JSON.stringify(v)}`));
+  const plain = oneTrack([{ type: 'grace', notes: [{ pitch: 'E4' }] }, q('B4')]);
+  ['short', 'long', 'normal'].forEach((v) => ok(render(oneTrack([{ type: 'grace', fermata: v, notes: [{ pitch: 'E4' }] }, q('B4')])) === render(plain), `grace ${v}`));
+  const two = (extra) => {
+    const s = oneTrack([]);
+    s.tracks[0].measures = [{ voices: [{ beats: [whole(['D5'])] }, { beats: [whole(['E4'], extra)] }] }];
+    return s;
+  };
+  ['short', 'long', 'normal', true].forEach((v) => ok(render(two({ fermata: v })) === render(two({})), `voice 2 ${v}`));
+});
+
+// ---------- 1.5 regressions: step-out cap and vibrato clearance ----------
+const { spawnSync } = await import('node:child_process');
+const { vibratoClearSp } = await imp('src/draw/noteMarks.js');
+test('[A2] a nonsensical theme (staffLineSpacing -10) still renders staccato + marcato on a whole note (no hang)', () => {
+  const code = `
+    import { register } from 'node:module';
+    register(${JSON.stringify(pathToFileURL(path.join(root0, 'tests/hooks.mjs')).href)});
+    const { makeContainer, serialize } = await import(${JSON.stringify(pathToFileURL(path.join(root0, 'tests/dom-shim.mjs')).href)});
+    const { MusicScoreRenderer } = await import(${JSON.stringify(pathToFileURL(path.join(root0, 'src/MusicScoreRenderer.js')).href)});
+    const score = ${JSON.stringify(oneTrack([whole(['E4'], { articulations: ['staccato', 'marcato'] })]))};
+    const box = makeContainer();
+    new MusicScoreRenderer(box, score, { width: 900, theme: { staffLineSpacing: -10 } }).render();
+    console.log('DONE ' + serialize(box.children[0]).length);`;
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8', timeout: 20000 });
+  ok(!r.error, `did not finish: ${r.error && r.error.message}`);
+  ok(r.status === 0 && /^DONE \d+/m.test(r.stdout), `status ${r.status}: ${r.stderr}`);
+});
+test('[W3] vibratoClearSp: exactly 2 sp for a normal wave, 2.3 sp for a wide one', () => {
+  ok(vibratoClearSp(true) === 2, `normal ${vibratoClearSp(true)}`);
+  ok(vibratoClearSp('wide') === 2.3, `wide ${vibratoClearSp('wide')}`);
 });
 
 // ---------- report ----------

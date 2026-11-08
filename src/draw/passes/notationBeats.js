@@ -7,6 +7,8 @@
  * chordsFermatas.js. Reads only; draws nothing.
  */
 import { elementTop, elementBottom } from '../notation.js';
+import { vibratoClearSp } from '../noteMarks.js';
+import { vibratoOf } from '../../noteEffects.js';
 import { linkTarget } from '../../directions.js';
 import { flattenRuns } from './common.js';
 
@@ -128,7 +130,7 @@ function hammerPullSpans(beats, explicit) {
 /**
  * Lowest y a mark may reach above a rendered beat (`item` from
  * collectBeats): 1 sp above the staff and the beat's own top, 2 sp above a
- * vibrato, 2.8 sp above a stemless tremolo, 0.6 sp above a tuplet bracket,
+ * vibrato (2.3 sp above a wide one; vibratoClearSp), 2.8 sp above a stemless tremolo, 0.6 sp above a tuplet bracket,
  * and at most `slurY` — by default `item.slurLimit` (slurAboveLimits: under
  * no slur drawn above it, as for fermatas).
  */
@@ -138,7 +140,7 @@ export function beatClearTop(item, sp, slurY = item.slurLimit) {
   return Math.min(
     item.baselineY - sp * 4 - sp,
     item.topY - sp,
-    el.vibrato && !info.isRest ? item.topY - sp * 2 : Infinity,
+    el.vibrato && !info.isRest ? item.topY - sp * vibratoClearSp(vibratoOf(el.vibrato)) : Infinity,
     el.tremolo && isStemless ? item.topY - sp * 2.8 : Infinity,
     info.tupletY != null ? info.tupletY - sp * 0.6 : Infinity,
     slurY,

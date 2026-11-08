@@ -5,7 +5,7 @@
 // Areas (assertion counts are printed per area at the end):
 //   align, justify, signatures, measure-numbers, barlines, repeats, vertical, numbers,
 //   scaling, octave, beaming, accidentals, ties, tab-clef, a11y, theme, robustness, header, collisions, harmonics, directions, tab-rhythm, navigation, chordDiagrams, techniques11, strumArpeggio,
-//   legatoSlides, graceAccidentals, releaseCap
+//   legatoSlides, graceAccidentals, releaseCap, noteEffects
 //
 // Most geometric checks read the rendered SVG tree (class names + transforms); a few read the
 // layout model (computeLayout) for facts that are not observable in the SVG (onset times,
@@ -1671,7 +1671,7 @@ const dirLabelStaff = (m, si, tr) => staffOf(m, si, tr, tr.tab);
 test('directions', 'AC1: every pre-existing fixture/example emits no let-ring / pick-stroke / tap / whammy group and no U+E610 / U+E612 glyph', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams') || name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-legato-slides')) continue; // newer fixtures using directions on purpose
+    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams') || name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-legato-slides') || name.startsWith('char-note-effects')) continue; // newer fixtures using directions on purpose
     for (const width of [600, 900]) {
       all(renderTree(score, width, options)).forEach(({ n }) => {
         const c = cls(n).split(' ');
@@ -4667,7 +4667,7 @@ const T11_CLASSES = ['slap', 'pop', 'rake', 'trill'];
 test('techniques11', 'AC1: no pre-existing fixture / example emits a slap / pop / rake / trill group, a dive / hold / return / pre-dive line or a U+E566 glyph', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio')) continue;
+    if (name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-note-effects')) continue;
     for (const width of [600, 900]) {
       all(renderTree(score, width, options)).forEach(({ n }) => {
         const c = cls(n).split(' ');
@@ -5064,7 +5064,7 @@ const mapBeats = (score, f) => ({ ...score, tracks: score.tracks.map((t) => ({ .
 test('strumArpeggio', 'E1: no pre-existing fixture / example emits an arpeggio or strum group', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-strum-arpeggio')) continue;
+    if (name.startsWith('char-strum-arpeggio') || name.startsWith('char-note-effects')) continue;
     for (const width of [600, 900]) {
       all(renderTree(score, width, options)).forEach(({ n }) => {
         ok(!cls(n).split(' ').some((x) => /^(arpeggio|strum)(-up|-down)?$/.test(x)), `${name}@${width}: class "${cls(n)}"`);
@@ -5597,6 +5597,68 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
     ok(JSON.stringify(fx.score) === before, `${fx.name}: input score mutated by render`);
   }
 });
+
+// ======================= noteEffects (1.5.0 fixtures note-effects / note-effects-break) =======================
+{
+  const NE = characterizationCases.filter((c) => /^note-effects/.test(c.name));
+  const groupsOf = (tree, re) => all(tree).filter(({ n }) => n.tag === 'g' && re.test(cls(n))).map(({ n }) => n);
+  const waveOf = (g) => {
+    const v = g.children[0].getAttribute('d').match(/-?[\d.]+/g).map(Number);
+    const ys = v.filter((_, i) => i % 2 === 1);
+    return { x1: v[0], top: Math.min(...ys), bottom: Math.max(...ys) };
+  };
+  test('noteEffects', 'fixtures exist and render deterministically without bad numbers at several widths', () => {
+    ok(NE.map((c) => c.name).join() === 'note-effects,note-effects-break', 'fixture names');
+    for (const fx of NE) for (const w of [fx.width, 600, 1400]) {
+      const out = serialize(renderTree(fx.score, w, fx.options || {}));
+      ok(!/NaN|Infinity|undefined/.test(out), `${fx.name}@${w}: bad number`);
+      ok(out === serialize(renderTree(fx.score, w, fx.options || {})), `${fx.name}@${w}: two renders differ`);
+    }
+  });
+  test('noteEffects', 'tremolo groups: stroke count matches the speed class (notation and TAB)', () => {
+    const want = { '8th': 1, '16th': 2, '32nd': 3 };
+    for (const fx of NE) {
+      const gs = groupsOf(renderTree(fx.score, fx.width), /^(tab-)?tremolo( |$)/);
+      ok(gs.length > 0, `${fx.name}: tremolos`);
+      gs.forEach((g) => {
+        const m = /tremolo-(8th|16th|32nd)$/.exec(cls(g));
+        ok(g.children.length === (m ? want[m[1]] : 3), `${fx.name}: ${cls(g)} has ${g.children.length} strokes`);
+      });
+    }
+  });
+  test('noteEffects', 'wide vibrato: marks above its beat (pick stroke, fermata, trill, T) stay >= 0.7 sp above the wave', () => {
+    for (const fx of NE) for (const w of [fx.width, 600]) {
+      const tree = renderTree(fx.score, w, fx.options || {});
+      for (const sg of all(tree).filter(({ n }) => /^staff staff-notation/.test(cls(n))).map(({ n }) => n)) {
+        const sp = 10;
+        const waves = groupsOf(sg, /^vibrato vibrato-wide$/).map(waveOf);
+        const marks = groupsOf(sg, /^(pick-stroke|fermata|trill$|tap$)/).map((g) => {
+          const t = g.children[0];
+          const y = num(t, 'y');
+          const bottom = cls(g) === 'tap' ? y + 0.25 * num(t, 'font-size') : cls(g) === 'trill' ? y + 0.063 * sp : y;
+          return { c: cls(g), x: num(t, 'x'), bottom };
+        });
+        waves.forEach((wv) => marks.filter((m) => Math.abs(m.x - (wv.x1 - 0.5 * sp)) < 0.01).forEach((m) =>
+          ok(m.bottom <= wv.top - 0.7 * sp + EPS, `${fx.name}@${w} ${m.c}: bottom ${m.bottom} vs wave top ${wv.top}`)));
+      }
+    }
+  });
+  test('noteEffects', 'fermata kinds, marcato / staccatissimo glyphs, nothing on the TAB-only track', () => {
+    const tree = renderTree(NE[0].score, NE[0].width);
+    const fc = groupsOf(tree, /^fermata( |$)/).map((g) => cls(g));
+    ok(fc.includes('fermata') && fc.includes('fermata fermata-short') && fc.includes('fermata fermata-long'), `fermata classes ${fc}`);
+    groupsOf(tree, /^fermata( |$)/).forEach((g) => {
+      const code = cpOf(g.children[0]);
+      ok(code === { fermata: 0xE4C0, 'fermata fermata-short': 0xE4C4, 'fermata fermata-long': 0xE4C6 }[cls(g)], `${cls(g)} glyph ${code.toString(16)}`);
+    });
+    const codes = groupsOf(tree, /^articulations$/).flatMap((g) => g.children.map(cpOf));
+    [0xE4A6, 0xE4A7, 0xE4AC, 0xE4AD].forEach((c) => ok(codes.includes(c), `glyph ${c.toString(16)} drawn`));
+    const tabOnly = staffGroups(systemsOf(tree)[0]).filter((g) => g.getAttribute('data-track') === '1');
+    ok(tabOnly.length === 1, 'one TAB-only staff on system 1');
+    tabOnly.forEach((g) => ok(groupsOf(g, /^(articulations|fermata)/).length === 0, 'no marks on the TAB-only staff'));
+    ok(groupsOf(tree, /^tab-vibrato tab-vibrato-wide$/).length > 0, 'wide TAB vibrato drawn');
+  });
+}
 
 // ---------- report ----------
 export function summary() {

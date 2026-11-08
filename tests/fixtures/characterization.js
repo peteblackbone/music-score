@@ -1200,6 +1200,83 @@ export const characterizationCases = [
       }],
     },
   },
+  {
+    // 1.5.0 note-effect variants (notation + TAB, and a TAB-only track whose marks draw nothing but its own
+    // vibrato / tremolo): m1 vibrato true vs 'wide', stem up and down; m2 'wide' over tremolo '16th' and true, a half;
+    // m3 'wide' on a whole note; m4-m5 'wide' under a pick stroke, tap "T", trill, fermata 'long', a strum chord and a
+    // pick stroke + fermata; m6-m7 marcato below a ledger-line E and above, heavyAccent, staccatissimo, full stacks both sides, a marcato
+    // chord, a marcato rest and grace (ignored); m8-m10 tremolo '8th', '16th' beamed 8ths, '32nd' half, true, '8th'
+    // stem down, '16th' half and whole (TAB tremolos inside the staff: their fixed-px strokes would otherwise set the
+    // TAB staff's distance and break exact x2 scaling); m11-m12 fermata true, 'normal', 'short' under "Am", 'long' under a slur,
+    // 'short' on a rest, 'long' on a grace (ignored); m13 two voices: voice 1 marcato + fermata 'short', voice 2
+    // 'wide', tremolo '8th', staccatissimo and fermata 'long' (vibrato and fermata ignored on voice 2).
+    name: 'note-effects', width: 900,
+    score: {
+      tracks: [{
+        name: 'Gt.', showTablature: true,
+        measures: [
+          { beats: [tabq(3, 0, { vibrato: true }), tabq(3, 0, { vibrato: 'wide' }), tabq(1, 5, { vibrato: true }), tabq(1, 5, { vibrato: 'wide' })] },
+          { beats: [tabq(2, 1, { vibrato: 'wide', tremolo: '16th' }), tabq(2, 3, { vibrato: 'wide', tremolo: true }), tabd('half', 2, 1, {}, { vibrato: 'wide' })] },
+          { beats: [tabd('whole', 3, 2, {}, { vibrato: 'wide' })] },
+          { beats: [tabq(2, 1, { vibrato: 'wide', pickStroke: 'down' }), tabh(1, 5, { tap: true }, { vibrato: 'wide' }),
+            tabh(2, 5, { trill: 7 }, { vibrato: 'wide' }), tabq(2, 3, { vibrato: 'wide', fermata: 'long' })] },
+          { beats: [tabc(E_TOP, { strum: 'down', vibrato: 'wide' }, 'half'), tabd('half', 1, 3, {}, { vibrato: 'wide', pickStroke: 'up', fermata: 'long' })] },
+          { beats: [tabq(6, 0, { articulations: ['marcato'] }), tabq(1, 5, { articulations: ['marcato'] }),
+            tabq(2, 1, { articulations: ['heavyAccent'] }), tabq(1, 3, { articulations: ['staccatissimo'] })] },
+          { beats: [tabq(3, 0, { articulations: ['marcato', 'tenuto', 'staccatissimo'] }), tabq(1, 3, { articulations: ['staccatissimo', 'tenuto', 'heavyAccent'] }),
+            { type: 'grace', duration: '16th', articulations: ['marcato', 'staccatissimo'], notes: [{ string: 2, fret: 0 }] },
+            tabc(E_TOP, { articulations: ['marcato', 'accent'] }), { type: 'rest', duration: 'quarter', articulations: ['marcato', 'staccatissimo'] }] },
+          { beats: [tabq(3, 2, { tremolo: '8th' }), tabe(3, 2, { tremolo: '16th' }), tabe(3, 4, { tremolo: '16th' }), tabd('half', 4, 2, {}, { tremolo: '32nd' })] },
+          { beats: [tabq(3, 2, { tremolo: true }), tabq(2, 10, { tremolo: '8th' }), tabd('half', 3, 0, {}, { tremolo: '16th' })] },
+          { beats: [tabd('whole', 4, 2, {}, { tremolo: '16th' })] },
+          { beats: [tabq(2, 1, { fermata: true }), tabq(2, 3, { fermata: 'normal' }), tabq(3, 2, { fermata: 'short', chord: 'Am' }), tabq(2, 1, { slurStart: true })] },
+          { beats: [tabq(1, 0, { fermata: 'long' }), tabq(2, 3, { slurEnd: true }), { type: 'rest', duration: 'quarter', fermata: 'short' },
+            { type: 'grace', duration: '16th', fermata: 'long', notes: [{ string: 2, fret: 0 }] }, tabq(2, 1)] },
+          vm([tabq(1, 0, { articulations: ['marcato'], fermata: 'short' }), tabq(1, 1), tabd('half', 1, 3)],
+            [tabq(4, 2, { vibrato: 'wide', tremolo: '8th', articulations: ['staccatissimo'], fermata: 'long' }), tabq(4, 0), tabd('half', 5, 2, {}, { tremolo: '8th' })]),
+        ],
+      }, {
+        name: 'TAB', showStandardNotation: false, showTablature: true,
+        measures: [
+          { beats: [tabd('whole', 2, 5, {}, { vibrato: 'wide' })] },
+          { beats: [tabd('whole', 2, 5, {}, { vibrato: 'wide', tremolo: '8th' })] },
+          { beats: [tabd('whole', 2, 5, {}, { tremolo: '16th' })] },
+          { beats: [tabd('whole', 2, 5, {}, { articulations: ['marcato', 'staccatissimo', 'heavyAccent'], fermata: 'long' })] },
+          { beats: [tabd('whole', 2, 5, {}, { fermata: 'short' })] },
+          { beats: [tabd('whole', 2, 5)] },
+          { beats: [tabd('whole', 2, 5)] },
+          { beats: [tabd('whole', 2, 5)] },
+          { beats: [tabd('whole', 2, 5)] },
+          { beats: [tabd('whole', 2, 5)] },
+          { beats: [tabd('whole', 2, 5)] },
+          { beats: [tabd('whole', 2, 5)] },
+          { beats: [tabd('whole', 2, 5)] },
+        ],
+      }],
+    },
+  },
+  {
+    // The 1.5.0 marks at system ends and starts (600): a wide vibrato and a 'long' fermata on the last beat of
+    // m1-m3, slurs from each of those beats into the next measure with a 'long' fermata under them (one crosses each
+    // break), marcato / staccatissimo / tremolo speeds on the first beats.
+    name: 'note-effects-break', width: 600,
+    score: {
+      tracks: [{
+        name: 'Gt.', showTablature: true,
+        measures: [
+          { beats: [tabq(2, 1, { articulations: ['marcato'] }), tabq(2, 3, { tremolo: '16th' }), tabq(1, 0, { articulations: ['staccatissimo'] }),
+            tabq(1, 3, { vibrato: 'wide', fermata: 'long', slurStart: true })] },
+          { beats: [tabq(1, 5, { fermata: 'long' }), tabq(1, 3, { slurEnd: true, fermata: 'short' }), tabq(2, 3, { tremolo: '8th' }),
+            tabq(2, 1, { vibrato: 'wide', fermata: 'long', slurStart: true })] },
+          { beats: [tabq(1, 0, { fermata: 'long', articulations: ['heavyAccent'] }), tabq(2, 3, { slurEnd: true }),
+            tabd('half', 2, 1, {}, { vibrato: 'wide', tremolo: '32nd', fermata: 'long', slurStart: true })] },
+          { beats: [tabq(1, 3, { fermata: 'long' }), tabq(1, 1, { slurEnd: true, articulations: ['staccatissimo', 'marcato'] }),
+            tabd('half', 1, 0, {}, { vibrato: 'wide', fermata: 'long' })] },
+          { beats: [tabd('whole', 2, 1, {}, { vibrato: 'wide', tremolo: '8th', fermata: 'short' })] },
+        ],
+      }],
+    },
+  },
 ];
 
 // Copy of a score with tabRhythm: false on every track (source untouched). Today the field is ignored, so

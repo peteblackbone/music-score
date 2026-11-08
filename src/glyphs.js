@@ -85,6 +85,9 @@ export const Glyph = {
   articTenutoAbove: '',
   articTenutoBelow: '',
   articStaccatissimoAbove: '',
+  articStaccatissimoBelow: '',
+  articMarcatoAbove: '',
+  articMarcatoBelow: '',
 
   // Dynamics
   dynamicPiano: '',
@@ -105,6 +108,8 @@ export const Glyph = {
   ornamentTrill: '',
   fermataAbove: '',
   fermataBelow: '',
+  fermataShortAbove: '',
+  fermataLongAbove: '',
 
   // Bowing marks, used as pick strokes (down-bow = downstroke, up-bow "V" = upstroke)
   stringsDownBow: '',

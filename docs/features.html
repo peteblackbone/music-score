@@ -164,8 +164,15 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 <div class="demo" data-demo="curves" data-width="520"></div>
 
 <h2 id="marks">Articulations, fermatas, dynamics, chord symbols</h2>
-<p>Staccato, tenuto and accent go on the side opposite the stem and stack in a fixed order. Fermatas sit above everything on the beat. Chord symbols share one line above each system and dynamics one line below, both kept clear of the notes.</p>
+<p>Staccatissimo, staccato, tenuto, marcato and accent go on the side opposite the stem and stack in a fixed order. Fermatas come in normal, short and long forms and sit above everything on the beat. Chord symbols share one line above each system and dynamics one line below, both kept clear of the notes.</p>
 <div class="demo" data-demo="marks" data-width="640"></div>
+<ul class="points">
+  <li><code>marcato</code> (or <code>heavyAccent</code>) and <code>staccatissimo</code> are drawn as their own marks. When both halves of a pair are given, the stronger one replaces the other: <code>staccatissimo</code> replaces <code>staccato</code>, and <code>marcato</code> replaces <code>accent</code>.</li>
+  <li>A taller mark that would touch its notehead moves out one staff space.</li>
+  <li><code>fermata: 'short'</code> and <code>'long'</code> are the short and long fermatas. <code>'normal'</code> and <code>true</code> give the usual one.</li>
+  <li><code>vibrato: 'wide'</code> draws a taller, heavier wave than <code>true</code>, on notation and TAB. <code>tremolo: '8th'</code> and <code>'16th'</code> draw one and two strokes; <code>'32nd'</code> and <code>true</code> draw three.</li>
+</ul>
+<div class="demo" data-demo="noteEffects" data-width="680"></div>
 
 <h2 id="chord-diagrams">Chord diagrams</h2>
 <p>Fretboard boxes above the chord symbols, as in lead sheets and guitar books. List the shapes once in the score's <code>chordShapes</code>, keyed by chord name; every beat whose <code>chord</code> matches gets a diagram with the name centred above it.</p>
@@ -194,7 +201,8 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <tr><td><code>slideOut</code></td><td>Short slide off the note: <code>true</code> or <code>'down'</code> downward; <code>'up'</code> upward</td></tr>
   <tr><td><code>bend</code></td><td>Arrow with amount (<code>1/2</code>, <code>full</code>, <code>1 1/2</code>…), optional release or hold; <code>'prebend full'</code> (or <code>'pb 1/2'</code>) bends before the pick; <code>'release'</code> is a note that falls back to the unbent pitch</td></tr>
   <tr><td><code>palmMute</code></td><td>"P.M." with a dashed line over consecutive beats</td></tr>
-  <tr><td><code>vibrato</code>, <code>tremolo</code></td><td>Wavy line; tremolo slashes</td></tr>
+  <tr><td><code>vibrato</code></td><td>Wavy line on notation and TAB; <code>'wide'</code> draws a taller, heavier wave</td></tr>
+  <tr><td><code>tremolo</code></td><td>Tremolo slashes: three for <code>true</code>; <code>'8th'</code>, <code>'16th'</code> or <code>'32nd'</code> draw one, two or three</td></tr>
   <tr><td><code>mute</code>, <code>ghost</code></td><td>x notehead / x on tab; parentheses</td></tr>
   <tr><td><code>type: 'grace'</code></td><td>Small slashed note slurred to the next beat</td></tr>
   <tr><td><code>harmonic</code>, <code>harmonicFret</code></td><td>Natural: diamond and <code>&lt;12&gt;</code> on tab. Artificial, tapped, pinch, semi: <code>A.H.</code>, <code>T.H.</code>, <code>P.H.</code>, <code>S.H.</code> label; <code>harmonicFret</code> gives the touched fret, e.g. <code>5(17)</code></td></tr>
@@ -408,6 +416,17 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
           { beats: [n('quarter', 'E4', { articulations: ['staccato'], dynamic: 'p', chord: 'C' }), n('quarter', 'G4', { articulations: ['tenuto'] }), n('quarter', 'C5', { articulations: ['accent'] }), n('quarter', 'E5', { articulations: ['staccato', 'accent'] })] },
           { beats: [n('half', 'D5', { chord: 'G7', dynamic: 'mf' }), n('half', 'B4', { fermata: true })] },
           { beats: [chord('quarter', ['C4', 'E4', 'G4'], { chord: 'C', dynamic: 'f', articulations: ['accent'] }), r('quarter', { fermata: true }), n('half', 'C5', { dynamic: 'sfz', fermata: true })] },
+        ],
+      }],
+    },
+
+    noteEffects: {
+      tracks: [{
+        showStandardNotation: true, showTablature: true,
+        measures: [
+          { beats: [t('quarter', 2, 5, {}, { vibrato: true }), t('quarter', 2, 7, {}, { vibrato: 'wide' }), t('quarter', 2, 8, {}, { tremolo: '8th' }), t('quarter', 2, 10, {}, { tremolo: '16th' })] },
+          { beats: [t('quarter', 3, 5, {}, { fermata: 'short' }), t('quarter', 3, 7, {}, { fermata: 'long' }), t('quarter', 3, 9, {}, { fermata: 'normal' }), t('quarter', 3, 7, {}, { fermata: true })] },
+          { beats: [t('quarter', 2, 5, {}, { articulations: ['marcato'] }), t('quarter', 2, 7, {}, { articulations: ['staccatissimo', 'staccato'] }), t('quarter', 2, 8, {}, { articulations: ['accent', 'heavyAccent'] }), t('quarter', 2, 10, {}, { tremolo: '32nd' })] },
         ],
       }],
     },

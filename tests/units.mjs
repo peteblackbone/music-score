@@ -2037,9 +2037,10 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
 // ---------- pre-1.4 characterization (C0): pins taken from the code before two-voice measures ----------
 {
   const { createHash } = await import('node:crypto');
-  // the 52 pre-1.4 cases (the 1.4.0 two-voice fixtures char-voices-* came later)
+  // the 52 pre-1.4 cases (the 1.4.0 two-voice fixtures char-voices-* and the 1.5.0 char-note-effects-* came later)
   const isVoices = (id) => id.startsWith('char-voices-');
-  const cases = (await import('./cases.mjs')).cases.filter((c) => !isVoices(c.id));
+  const isPost14 = (id) => /^char-(voices|note-effects)-/.test(id);
+  const cases = (await import('./cases.mjs')).cases.filter((c) => !isPost14(c.id));
   const { computeLayout } = await imp('src/layout/index.js');
   const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
   const { flattenRuns } = await imp('src/draw/passes/common.js');
@@ -2067,7 +2068,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   test('no pre-1.4 snapshot SVG contains "voice-2"; every two-voice fixture snapshot does', () => {
     const dir = path.join(root0, 'tests/snapshots');
     const files = fs.readdirSync(dir).filter((f) => f.endsWith('.svg'));
-    const old = files.filter((f) => !isVoices(f));
+    const old = files.filter((f) => !isPost14(f));
     eq(old.length, 52);
     eq(old.filter((f) => fs.readFileSync(path.join(dir, f), 'utf8').includes('voice-2')), []);
     eq(files.filter((f) => isVoices(f) && !fs.readFileSync(path.join(dir, f), 'utf8').includes('voice-2')), []);
@@ -2579,6 +2580,55 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(near(m.elements2[0].x - m.elements[0].x, (stemDxSp(NH, true) - stemDxSp(NH, false)) * S), true);
     eq(near(m.elements2[0].x - m.elements[0].x, hw), true, 'one head width');
     eq(near(hw, glyphBox(NH).width * S), true);
+  });
+}
+
+// ---------- 1.5 note effects: canonicalizers (src/noteEffects.js) and new glyphs ----------
+{
+  const { vibratoOf, tremoloOf, tremoloStrokes, fermataOf } = await imp('src/noteEffects.js');
+  const { glyphBox, hasGlyphBox } = await imp('src/glyphMetrics.js');
+  const ODD = [undefined, null, false, 0, '', true, 1, 2, 8, 16, 32, -1, 'x', 'true', 'wide', ' Wide ', 'WIDE', 'wid e',
+    '8th', ' 16TH ', '32nd', '32ND\t', '64th', 'normal', ' Short', 'LONG ', 'constructor', 'toString', '__proto__',
+    [], ['wide'], {}, { kind: 'wide' }];
+  test('[W2] vibratoOf: table', () => {
+    eq([undefined, null, false, 0, ''].map(vibratoOf), [null, null, null, null, null]);
+    eq([true, 1, 2, 'x', 'true', 'normal', 'wid e', [], ['wide'], {}].map(vibratoOf), Array(10).fill(true));
+    eq(['wide', ' Wide ', 'WIDE', '\twide\n'].map(vibratoOf), Array(4).fill('wide'));
+  });
+  test('[T2] tremoloOf: table', () => {
+    eq([undefined, null, false, 0, ''].map(tremoloOf), [null, null, null, null, null]);
+    eq(['8th', ' 16TH ', '32nd', '32ND\t'].map(tremoloOf), ['8th', '16th', '32nd', '32nd']);
+    eq([true, 1, 2, 8, 16, 32, 'x', '8', '64th', 'constructor', 'toString', '__proto__', [], {}].map(tremoloOf), Array(14).fill(true));
+  });
+  test('[T1,T2] tremoloStrokes: 1 / 2 / 3 for 8th / 16th / 32nd, 3 for anything else', () => {
+    eq(['8th', '16th', '32nd'].map(tremoloStrokes), [1, 2, 3]);
+    eq([true, null, undefined, 2, '8TH', 'constructor', 'toString'].map(tremoloStrokes), Array(7).fill(3));
+  });
+  test('[F2] fermataOf: table', () => {
+    eq([true, 'normal', ' Normal ', 'short', 'SHORT', 'long', '\tLong'].map(fermataOf), ['normal', 'normal', 'normal', 'short', 'short', 'long', 'long']);
+    eq(['true', 1, 0, false, null, undefined, '', 'x', 'wide', 'constructor', [], {}].map(fermataOf), Array(12).fill(null));
+  });
+  test('[G2] canonicalizers are idempotent and truthiness-preserving for vibrato/tremolo', () => {
+    for (const f of [vibratoOf, tremoloOf, fermataOf]) ODD.forEach((v) => eq(f(f(v)), f(v), `${f.name}(${JSON.stringify(v)})`));
+    ODD.forEach((v) => {
+      eq(vibratoOf(v) != null, !!v, `vibratoOf(${JSON.stringify(v)})`);
+      eq(tremoloOf(v) != null, !!v, `tremoloOf(${JSON.stringify(v)})`);
+    });
+  });
+  test('[G1] new glyph codepoints and boxes', () => {
+    const cps = { articStaccatissimoAbove: 'e4a6', articStaccatissimoBelow: 'e4a7', articMarcatoAbove: 'e4ac',
+      articMarcatoBelow: 'e4ad', fermataShortAbove: 'e4c4', fermataLongAbove: 'e4c6' };
+    for (const [n, cp] of Object.entries(cps)) {
+      eq(Glyph[n].codePointAt(0).toString(16), cp, n);
+      eq(Glyph[n].length, 1, `${n} is one UTF-16 unit`);
+      eq(hasGlyphBox(n) && hasGlyphBox(Glyph[n]), true, `${n} box`);
+    }
+    // Above marks sit on their origin and rise; Below marks hang from it (same height).
+    for (const k of ['Staccatissimo', 'Marcato']) {
+      const a = glyphBox(`artic${k}Above`), b = glyphBox(`artic${k}Below`);
+      eq([a.bottom, b.top, a.top, a.width], [0, 0, -b.bottom, b.width], k);
+    }
+    eq(glyphBox('fermataShortAbove').top > 1 && glyphBox('fermataLongAbove').top > 1, true);
   });
 }
 

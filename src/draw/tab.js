@@ -8,6 +8,8 @@ import { fretLabel, fretLabelWidth, estimateTextWidth } from '../textMetrics.js'
 import { TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../layout/ink.js';
 import { whammyLabel, TAP_MARK_LETTERS, bendOf } from '../directions.js';
 import { tabFretKnockoutHalf } from '../layout/tabRhythm.js';
+import { tremoloOf, tremoloStrokes, vibratoOf } from '../noteEffects.js';
+import { strokeOffsets } from './noteMarks.js';
 
 /** Draw the tab staff lines for `stringCount` strings, baseline = bottom (highest-numbered) string. */
 export function drawTabStaffLines(x, endX, baselineY, stringCount, theme) {
@@ -92,16 +94,18 @@ export function renderTabElement(g, layoutEl, stringCount, theme) {
   // in this beat, mirroring the ones drawn on the notation staff above.
   // When both are set, vibrato stacks above the tremolo marks so they
   // don't overlap.
-  if (el.tremolo || el.vibrato) {
+  const trem = tremoloOf(el.tremolo);
+  const vib = vibratoOf(el.vibrato);
+  if (trem || vib) {
     const usedYs = notes.filter((n) => n.string != null && n.fret != null)
       .map((n) => layoutEl.tabBaselineY - (stringCount - n.string) * theme.tabStaffLineSpacing);
     if (usedYs.length) {
       const baseTopY = Math.min(...usedYs) - theme.tabFontSize - 0.5 * spacing;
-      if (el.tremolo) marksTopY = Math.min(marksTopY, renderTabTremolo(g, x, baseTopY, theme));
-      if (el.vibrato) {
-        const vibratoY = el.tremolo ? baseTopY - 1.0 * spacing : baseTopY;
+      if (trem) marksTopY = Math.min(marksTopY, renderTabTremolo(g, x, baseTopY, theme, trem));
+      if (vib) {
+        const vibratoY = (trem ? baseTopY - 1.0 * spacing : baseTopY) - (vib === 'wide' ? TAB_VIB_WIDE_LIFT_SP * spacing : 0);
         const span = Math.max(1.4 * spacing, Math.min(3.4 * spacing, (layoutEl.width ?? 2.8 * spacing) - 0.8 * spacing));
-        marksTopY = Math.min(marksTopY, renderTabVibrato(g, x + 0.5 * spacing, vibratoY, span, theme));
+        marksTopY = Math.min(marksTopY, renderTabVibrato(g, x + 0.5 * spacing, vibratoY, span, theme, vib));
       }
     }
   }
@@ -109,44 +113,57 @@ export function renderTabElement(g, layoutEl, stringCount, theme) {
 }
 
 /**
- * The tab-side counterpart to `renderTremolo` in notation.js: three short
+ * The tab-side counterpart to `renderTremolo` in draw/noteMarks.js: short
  * parallel diagonal strokes marking rapid alternate-picking on a single
  * held fret, hung above it instead of crossing a stem (tab has none).
+ * `speed` as for renderTremolo: '8th' | '16th' | '32nd' draws 1 / 2 / 3
+ * strokes centred on `y` (class `tab-tremolo-<speed>`), true the plain three.
  * Returns the top of its strokes (centre lines; stroke widths are fixed px
  * and stay out of positions so layout scales exactly with the staff).
  */
-function renderTabTremolo(g, x, y, theme) {
-  const gEl = group({ class: 'tab-tremolo' });
+function renderTabTremolo(g, x, y, theme, speed = true) {
+  const gEl = group({ class: typeof speed === 'string' ? `tab-tremolo tab-tremolo-${speed}` : 'tab-tremolo' });
   const color = theme.tabFretColor;
   const strokeLen = 0.7 * theme.staffLineSpacing;
   const gap = 0.4 * theme.staffLineSpacing;
   const rad = (-32 * Math.PI) / 180;
   const hx = Math.cos(rad) * (strokeLen / 2);
   const hy = Math.sin(rad) * (strokeLen / 2);
-  for (let i = -1; i <= 1; i++) {
-    const cy = y + i * gap;
+  const offs = strokeOffsets(tremoloStrokes(speed));
+  for (const k of offs) {
+    const cy = y + k * gap;
     gEl.appendChild(line(x - hx, cy + hy, x + hx, cy - hy, {
       stroke: color, 'stroke-width': 1.3, 'stroke-linecap': 'round',
     }));
   }
   g.appendChild(gEl);
-  return y - gap - Math.abs(hy);
+  return y + offs[0] * gap - Math.abs(hy);
 }
 
+// TAB vibrato wave per kind (amplitude / wavelength in sp, stroke in px); a wide one sits TAB_VIB_WIDE_LIFT_SP higher.
+const TAB_VIB = {
+  normal: { amp: 0.18, wave: 0.6, stroke: 1.1 },
+  wide: { amp: 0.32, wave: 0.86, stroke: 1.5 },
+};
+const TAB_VIB_WIDE_LIFT_SP = 0.14;
+
 /**
- * The tab-side counterpart to `renderVibrato` in notation.js: a short wavy
- * horizontal line hung above the fret number, spanning roughly the note's
- * own column width, marking a pitch wobbled with the fretting hand.
+ * The tab-side counterpart to `renderVibrato` in draw/noteMarks.js: a short
+ * wavy horizontal line hung above the fret number, spanning roughly the
+ * note's own column width, marking a pitch wobbled with the fretting hand;
+ * `kind` 'wide' draws the wide wave (class `tab-vibrato tab-vibrato-wide`).
  * Returns the top of its wave (control points included, like layout/ink.js;
  * stroke width left out, as for the tremolo).
  */
-function renderTabVibrato(g, x1, y, span, theme) {
-  const gEl = group({ class: 'tab-vibrato' });
-  gEl.appendChild(path(wavyPathD(x1, x1 + span, y, 0.18 * theme.staffLineSpacing, 0.6 * theme.staffLineSpacing), {
-    fill: 'none', stroke: theme.tabFretColor, 'stroke-width': 1.1, 'stroke-linecap': 'round',
+function renderTabVibrato(g, x1, y, span, theme, kind = true) {
+  const wide = kind === 'wide';
+  const v = wide ? TAB_VIB.wide : TAB_VIB.normal;
+  const gEl = group({ class: wide ? 'tab-vibrato tab-vibrato-wide' : 'tab-vibrato' });
+  gEl.appendChild(path(wavyPathD(x1, x1 + span, y, v.amp * theme.staffLineSpacing, v.wave * theme.staffLineSpacing), {
+    fill: 'none', stroke: theme.tabFretColor, 'stroke-width': v.stroke, 'stroke-linecap': 'round',
   }));
   g.appendChild(gEl);
-  return y - 0.18 * theme.staffLineSpacing;
+  return y - v.amp * theme.staffLineSpacing;
 }
 
 /**
