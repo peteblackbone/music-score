@@ -685,7 +685,7 @@ Free text on a beat, such as "rit.", "mute" or "let go". It is italic and starts
 - **Voices: dots.** Where the voices do not clash, a dot can sit close to the other voice's noteheads.
 - **Tremolo room.** A stemless (whole) note keeps the room for three strokes even with `'8th'` or `'16th'`, so a mark above it can sit a little higher than it needs to.
 - **Articulations and fermatas on tab.** They are not drawn on tab-only tracks.
-- **Score text: no wrapping.** Title, subtitle, artist, album, credits, instructions, copyright, beat text and section text each take one line per line break. A long line runs past the margin, so break it yourself. Instructions and copyright beyond 8 lines are not drawn, and nothing warns you.
+- **Score text: no wrapping.** Each text is drawn on one line; only `instructions` and `copyright` start a new line at each line break (other fields turn a line break into a space). A long line runs past the margin, so shorten it or split instructions and copyright yourself. Instructions and copyright beyond 8 lines are not drawn, and nothing warns you.
 - **Score text: no sideways placement.** Beat text takes no horizontal room and never moves sideways; overlapping beat texts stack upward instead. Section markers move right only to keep a gap from the previous marker on the same system. Widths are estimated, so spacing is approximate.
 - **Capo is display only.** The capo line does not transpose the music, change the pitches, or move the fret numbers. Transposition is not supported.
 - **Tuning chart compares with usual tunings.** A bass-clef 6-string track that keeps the default guitar tuning lists every string, because that tuning is not its usual one. Any string count other than 4 to 8 lists every string.
