@@ -3707,6 +3707,68 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.7.0 verification audit: gaps left by the developer's tests ----------
+{
+  const { beatTapMark } = await imp('src/directions.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const byClass = (root, cls) => walk(root).filter((n) => (n.getAttribute('class') || '').split(' ').includes(cls));
+  const q = (notes, extra = {}) => ({ type: 'note', duration: 'quarter', notes, ...extra });
+  const one = (beats) => ({ tracks: [{ showTablature: true, measures: [{ beats }] }] });
+  const y = (n) => Number(n.getAttribute('y'));
+  const fill = [q([{ pitch: 'E4' }]), q([{ pitch: 'E4' }]), q([{ pitch: 'E4' }])];
+
+  test('audit: tap-letter priority ends slap > pop', () => {
+    eq(beatTapMark(q([{ pitch: 'E4', pop: true }, { pitch: 'G4', slap: true }])), 'slap');
+    eq(beatTapMark(q([{ pitch: 'E4', pop: true }])), 'pop');
+  });
+
+  test('audit: a leftHandTap on a tapped harmonic draws no left-hand-tap glyph (notation or TAB); on a plain note it does', () => {
+    const svg = render(one([q([{ pitch: 'E4', string: 4, fret: 2, leftHandTap: true, harmonic: 'tapped' }]), q([{ pitch: 'E4', string: 4, fret: 2, leftHandTap: true }]), ...fill.slice(1)]));
+    eq(byClass(svg, 'left-hand-tap').length, 2, 'only the second beat, once on notation and once on TAB');
+  });
+
+  test('audit: a chord with several ornaments draws only one glyph, from its first valid note (turn, not the later mordent)', () => {
+    const svg = render(one([q([{ pitch: 'E4', string: 4, fret: 2, ornament: 'nope' }, { pitch: 'G4', string: 3, fret: 0, ornament: 'turn' }, { pitch: 'B4', string: 2, fret: 0, ornament: 'mordent' }]), ...fill]));
+    eq(byClass(svg, 'ornament').map((g) => g.getAttribute('class')), ['ornament ornament-turn']);
+  });
+
+  test('audit: a grace note\'s finger is not drawn, a main note\'s finger is', () => {
+    const svg = render(one([{ type: 'grace', duration: '16th', notes: [{ pitch: 'D4', string: 4, fret: 0, finger: 3 }] }, q([{ pitch: 'E4', string: 4, fret: 2, finger: 2 }]), ...fill.slice(1)]));
+    eq(byClass(svg, 'fingering-left').map((g) => g.children.map((t) => t.textContent)), [['2']]);
+  });
+
+  test('audit: unusable finger values leave the layout identical to a score without the field (room only for drawn fingers)', () => {
+    const beats = (extra) => [q([{ pitch: 'F#4', ...extra }]), q([{ pitch: 'E4', ...extra }]), ...fill.slice(1)];
+    const lay = (score) => JSON.stringify(computeLayout(normalizeScore(score), resolveTheme({}), 900).systems.flatMap((sy) => sy.tracks.flatMap((t) => t.measures.flatMap((m) => [m.x, m.width, m.endX, ...m.elements.flatMap((e) => [e.x, e.width, e.chord.leftExt])]))));
+    const mk = (extra) => ({ tracks: [{ measures: [{ beats: beats(extra) }] }] });
+    eq(lay(mk({ finger: 9 })), lay(mk({})));
+    eq(lay(mk({ finger: 'x', rightFinger: 'z', ornament: 'bogus' })), lay(mk({})));
+    eq(lay(mk({ finger: 2 })) !== lay(mk({})), true, 'a drawn finger does change the spacing');
+  });
+
+  test('audit: the beat direction top (fermata) clears an ornament, right-hand letters and the left-hand tap glyph', () => {
+    const fermataY = (note) => {
+      const svg = render({ tracks: [{ measures: [{ beats: [q([{ pitch: 'E4', ...note }], { fermata: true }), ...fill] }] }] });
+      return { svg, f: y(byClass(svg, 'fermata')[0].children[0]) };
+    };
+    const orn = fermataY({ ornament: 'turn' });
+    const o = byClass(orn.svg, 'ornament')[0].children[0];
+    eq(orn.f <= y(o) - glyphBox(String.fromCodePoint(o.textContent.codePointAt(0))).top * 10 - 4 + 1e-9, true, 'above the turn');
+    const rh = fermataY({ rightFinger: 'm' });
+    eq(rh.f <= y(byClass(rh.svg, 'fingering-right')[0].children[0]) - 0.8 * 11 - 4 + 1e-9, true, 'above the letter');
+    const lh = fermataY({ leftHandTap: true });
+    const l = byClass(lh.svg, 'left-hand-tap')[0].children[0];
+    eq(lh.f <= y(l) - glyphBox(String.fromCodePoint(l.textContent.codePointAt(0))).top * 10 - 4 + 1e-9, true, 'above the left-hand tap glyph');
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
