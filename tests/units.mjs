@@ -2304,7 +2304,8 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   test('two-voice layout: clash shift for a second, a unison and crossed voices; none for a third or a rest', () => {
     const plain = (stemDxSp(NH, true) - stemDxSp(NH, false)) * S;
     const dx = (p1, p2) => col(quarters(p1), quarters(p2)).elements2[0].dx;
-    eq([near(dx('A4', 'G4'), plain), near(dx('G4', 'G4'), plain), near(dx('E4', 'G4'), plain), dx('B4', 'G4'), dx('C5', 'E4')], [true, true, true, 0, 0]);
+    // 1.8: an eligible unison (same pitch, head, dots) shares one head (dx 0); a unison that differs (here the accidental) still shifts
+    eq([near(dx('A4', 'G4'), plain), dx('G4', 'G4'), near(dx('G#4', 'G4'), plain), near(dx('E4', 'G4'), plain), dx('B4', 'G4'), dx('C5', 'E4')], [true, 0, true, true, 0, 0]);
     const m = col([nb(['A4']), rs(), rs('half')], [nb(['G4']), nb(['G4']), rs('half')]);
     eq([near(m.elements2[0].x - m.elements[0].x, plain), m.elements2[1].dx, m.elements2[1].x === m.elements[1].x], [true, 0, true]);
     const w = col([nb(['A4'], 'whole')], [nb(['G4'], 'whole')]);
@@ -4034,6 +4035,66 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const svg = renderTree({ tracks: [{ showStandardNotation: true, measures: [vm([nb(['C5'], 'half'), rs('half', { fermata: true })], [nb(['E4'], 'half'), rs('half', { fermata: 'long' })])] }] });
     const fs = nodes(svg, (nd) => nd.tag === 'g' && /^fermata( |$)/.test(nd.getAttribute('class') || ''));
     eq(fs.map((f) => f.getAttribute('class')), ['fermata']);
+  });
+}
+
+// ---------- 1.8.0: shared unison noteheads (R4, layout/voices.js sharedHead) ----------
+{
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { drawSystem } = await imp('src/draw/system.js');
+  const { stemDxSp } = await imp('src/layout/chord.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const nb = (ps, duration = 'quarter', x = {}) => ({ type: 'note', duration, notes: ps.map((p) => (typeof p === 'string' ? { pitch: p } : p)), ...x });
+  const rs = (duration = 'quarter', x = {}) => ({ type: 'rest', duration, ...x });
+  const vm = (b1, b2, x = {}) => ({ ...x, voices: [{ beats: b1 }, { beats: b2 }] });
+  const nodes = (g, pred) => [...walk(g)].filter(({ nd, cls }) => pred(nd, cls)).map(({ nd }) => nd);
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  const draw = (measures) => {
+    const sc = normalizeScore({ tracks: [{ showStandardNotation: true, measures }] });
+    const sys = computeLayout(sc, th, 900).systems[0];
+    const d = drawSystem(makeContainer(), sys, 0, sc, th);
+    return { ms: sys.tracks[0].measures, g: d.staves[0].g };
+  };
+  const heads = (g, x) => nodes(g, (nd) => nd.tag === 'text' && /[-]/u.test(nd.textContent) && Math.abs(+nd.getAttribute('x') - x) < 0.01);
+  test('R4: an eligible unison draws one head; voice 2 at the column x (dx 0) with its head flagged shared', () => {
+    const { ms, g } = draw([vm([nb(['G4']), nb(['C5']), rs('half')], [nb(['G4']), nb(['E4']), rs('half')])]);
+    const [v1, v2] = [ms[0].elements[0], ms[0].elements2[0]];
+    eq([v2.dx, v2.x === v1.x, v2.chord.heads[0].shared, v1.chord.heads[0].shared], [0, true, true, undefined]);
+    eq(heads(g, v1.x).length, 1);
+    eq([v2.rendered.noteheads.length, near(v2.rendered.noteheads[0].x, v1.x)], [1, true], 'voice 2 keeps its notehead record (ties)');
+  });
+  test('R4: two stems at the anchors of the shared head, voice 1 up on the right, voice 2 down on the left', () => {
+    const { ms } = draw([vm([nb(['G4']), nb(['C5']), rs('half')], [nb(['G4']), nb(['E4']), rs('half')])]);
+    const [r1, r2] = [ms[0].elements[0].rendered, ms[0].elements2[0].rendered];
+    const NH = String.fromCodePoint(0xE0A4);
+    eq([near(r1.stemAttachX, ms[0].elements[0].x + stemDxSp(NH, true) * S), near(r2.stemAttachX, ms[0].elements[0].x + stemDxSp(NH, false) * S), r1.stemUp, r2.stemUp], [true, true, true, false]);
+  });
+  test('R4: one accidental and one dot set for the shared head; voice 2 keeps the dots of its other heads', () => {
+    const { ms, g } = draw([vm([nb(['F#4'], 'half', { dots: 1 }), nb(['C5'])], [nb(['F#4', 'C4'], 'half', { dots: 1 }), nb(['E4'])])]);
+    const [v1, v2] = [ms[0].elements[0], ms[0].elements2[0]];
+    eq([v1.chord.accidentals.length, v2.chord.accidentals.length, v2.dx], [1, 0, 0]);
+    eq(nodes(g, (nd) => nd.tag === 'text' && nd.textContent === String.fromCodePoint(0xE262)).length, 1, 'one sharp');
+    // F#4 = pos 1 (space): voice 1 dot at 1; voice 2's own dot on 1 dropped, C4 (pos -2, line) keeps its dot at -3
+    eq([v1.chord.dots.positions, v2.chord.dots.positions], [[1], [-3]]);
+  });
+  test('R4: ties stay per voice on a shared head', () => {
+    const svg = renderTree({ tracks: [{ showStandardNotation: true, measures: [
+      vm([nb([{ pitch: 'G4', tieStart: true }], 'half'), nb(['C5'], 'half')], [nb([{ pitch: 'G4', tieStart: true }], 'half'), nb(['E4'], 'half')]),
+      vm([nb([{ pitch: 'G4', tieEnd: true }], 'whole')], [nb([{ pitch: 'G4', tieEnd: true }], 'whole')])] }] });
+    const ties = nodes(svg, (nd) => nd.tag === 'path' && nd.getAttribute('class') === 'tie');
+    eq(ties.length, 2);
+  });
+  test('R4: whole notes share one head and draw no stem', () => {
+    const { ms, g } = draw([vm([nb(['G4'], 'whole')], [nb(['G4'], 'whole')])]);
+    eq([ms[0].elements2[0].dx, heads(g, ms[0].elements[0].x).length, nodes(g, (nd) => nd.tag === 'line' && nd.getAttribute('stroke-width') === String(th.stemWidth)).length], [0, 1, 0]);
+  });
+  test('R4: non-eligible unisons keep the 1.4 clash shift (other second, crossing, displaced head)', () => {
+    const plain = (stemDxSp(String.fromCodePoint(0xE0A4), true) - stemDxSp(String.fromCodePoint(0xE0A4), false)) * S;
+    const dx = (b1, b2) => draw([vm([b1, nb(['C5']), rs('half')], [b2, nb(['E4']), rs('half')])]).ms[0].elements2[0].dx;
+    eq(dx(nb(['G4']), nb(['G4', 'F4'])) >= plain, true, 'voice-2 second below the unison');
+    eq(dx(nb(['G4', 'A4']), nb(['G4'])) > plain, true, 'voice-1 second (displaced head)');
+    eq(dx(nb(['G4']), nb(['G4', 'A4'])) > 0, true, 'crossing');
   });
 }
 

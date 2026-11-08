@@ -110,13 +110,17 @@ export function renderNotationElement(g, layoutEl, measure, track, theme, opts =
     // duration (matching how tab software always uses a solid x). Otherwise
     // the chord layout's head (a diamond for a natural harmonic).
     const glyph = note.mute ? Glyph.noteheadXBlack : chord.heads[i].glyph;
-    g.appendChild(glyphText(hx, y, glyph, theme.fontFamily, fontSize, {
-      fill: theme.noteColor, 'text-anchor': 'middle',
-    }));
+    // A voice-2 head shared with voice 1's (layout/voices.js) is drawn once, by voice 1.
+    const shared = !!chord.heads[i].shared;
+    if (!shared) {
+      g.appendChild(glyphText(hx, y, glyph, theme.fontFamily, fontSize, {
+        fill: theme.noteColor, 'text-anchor': 'middle',
+      }));
+    }
     // Ghost note: a note played very quietly/buried (as opposed to a
     // dead/muted note, which is silenced/percussive) — shown as the
     // notehead bracketed by a pair of parentheses, tight against its sides.
-    if (note.ghost) {
+    if (note.ghost && !shared) {
       const parenSize = spacing * GHOST_PAREN_SIZE_SP;
       const parenY = y + parenSize * GHOST_PAREN_BASELINE;
       const parenDx = spacing * GHOST_PAREN_DX_SP;

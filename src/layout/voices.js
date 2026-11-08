@@ -5,6 +5,13 @@
  * adjusts the events of both where they meet. Only two-voice measures get
  * here, so single-voice layout is untouched.
  *
+ * - Shared unison head (sharedHead): voice 1's lowest and voice 2's highest
+ *   note are the same written pitch with the same accidental (or none on
+ *   voice 2's, the carry being shared), head glyph,
+ *   mute / ghost and dots, every other head at least a third away and no
+ *   head displaced: voice 2 stays at the column x (`dx` 0), its head there
+ *   is `shared` (drawn once, by voice 1), its accidental and its dot on
+ *   that position dropped; the stems sit on either side of the one head.
  * - Notehead clash (both voices have notes at one onset and voice 2's top
  *   note is at most a second below voice 1's bottom note, a unison or
  *   crossed): voice 2's chord moves right (`ev.dx`, px) so its down-stem
@@ -35,6 +42,7 @@ import { accidentalGlyph, restForDuration } from '../glyphs.js';
 import { glyphBox } from '../glyphMetrics.js';
 import { R, ZERO, add, cmp, key } from '../rational.js';
 import { durationR, isHiddenRest } from '../duration.js';
+import { parsePitch } from '../pitch.js';
 
 const REST_CLEAR_POS = 1;          // rest ink -> other voice's notehead (staff positions; 0.5 sp)
 const REST_MAX_STEPS = 20;         // bound on the whole-space moves of one rest
@@ -93,13 +101,50 @@ function clashShift(c1, el1, c2, el2, s) {
   return shift;
 }
 
+/**
+ * Index of voice 2's note that shares voice 1's notehead (see the header),
+ * or -1. Both events are main note beats at one onset.
+ */
+function sharedHead(e1, el1, e2, el2) {
+  if ((el1.dots || 0) !== (el2.dots || 0)) return -1;
+  const n1 = el1.notes || []; const n2 = el2.notes || [];
+  const c1 = e1.chord; const c2 = e2.chord;
+  if (![e1.chord, e1.chordFirst, e2.chord, e2.chordFirst].every((c) => c.heads.every((h) => h.dx === 0))) return -1;
+  const lo = Math.min(...c1.heads.map((h) => h.pos));
+  const hi = Math.max(...c2.heads.map((h) => h.pos));
+  if (lo !== hi) return -1;
+  const i1 = c1.heads.findIndex((h) => h.pos === lo);
+  const i2 = c2.heads.findIndex((h) => h.pos === hi);
+  if (c1.heads.some((h, i) => i !== i1 && h.pos < lo + 2) || c2.heads.some((h, i) => i !== i2 && h.pos > hi - 2)) return -1;
+  const a = n1[c1.heads[i1].noteIndex] || {}; const b = n2[c2.heads[i2].noteIndex] || {};
+  if (a.pitch == null || b.pitch == null) return -1;
+  const p = parsePitch(a.pitch); const q = parsePitch(b.pitch);
+  if (p.step !== q.step || p.alter !== q.alter || p.octave !== q.octave) return -1;
+  if (c1.heads[i1].glyph !== c2.heads[i2].glyph || !!a.mute !== !!b.mute || !!a.ghost !== !!b.ghost) return -1;
+  // One carry for both voices (layout/accidentals.js): voice 2 shows no accidental voice 1 just showed at this onset.
+  const accOf = (c, i) => c.accidentals.find((x) => x.noteIndex === c.heads[i].noteIndex)?.name ?? null;
+  const sameAcc = (c1v, c2v) => accOf(c2v, i2) === null || accOf(c2v, i2) === accOf(c1v, i1);
+  if (!sameAcc(e1.chord, e2.chord) || !sameAcc(e1.chordFirst, e2.chordFirst)) return -1;
+  return c2.heads[i2].noteIndex;
+}
+
+/** Voice 2's chord with note `ni`'s head shared: flagged, its accidental and its own dot position dropped. */
+function withSharedHead(c, ni) {
+  const heads = c.heads.map((h) => (h.noteIndex === ni ? { ...h, shared: true } : h));
+  const dotPos = (h) => (onLine(h.pos) ? h.pos - 1 : h.pos);
+  const own = dotPos(c.heads.find((h) => h.noteIndex === ni));
+  const positions = c.dots.positions.filter((p) => p !== own || heads.some((h) => !h.shared && dotPos(h) === p));
+  return { ...c, heads, accidentals: c.accidentals.filter((x) => x.noteIndex !== ni), dots: { ...c.dots, positions } };
+}
+
 /** One column where both voices have notes: union accidentals, dots and extents, per variant. */
 function pairColumn(e1, el1, e2, el2, s) {
-  const shift = clashShift(e1.chord, el1, e2.chord, el2, s);
+  const shared = sharedHead(e1, el1, e2, el2);
+  const shift = shared === -1 ? clashShift(e1.chord, el1, e2.chord, el2, s) : 0;
   e2.dx = shift;
   VARIANTS.forEach((k) => {
     const a = { ...e1[k.chord] };
-    const b = { ...e2[k.chord] };
+    const b = shared === -1 ? { ...e2[k.chord] } : withSharedHead(e2[k.chord], shared);
     const items = [
       ...a.accidentals.map((x) => ({ key: `1:${x.noteIndex}`, name: x.name, pos: a.heads[x.noteIndex].pos, w: glyphBox(accidentalGlyph(x.name)).width })),
       ...b.accidentals.map((x) => ({ key: `2:${x.noteIndex}`, name: x.name, pos: b.heads[x.noteIndex].pos, w: glyphBox(accidentalGlyph(x.name)).width })),
