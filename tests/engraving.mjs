@@ -544,7 +544,9 @@ test('scaling', 'x2 scaling with fixed stroke widths (default staffLineWidth/ste
   // stem/beam ink, and the per-system drift accumulates into the SVG height (measured 2.01 px on an earlier, 6-system lead-riff example; the current corpus measures 1.50 px).
   // pathY raised 11 -> 16 with the lead-solo-f example's 32nd-note triplet: its third beam stacks another fixed beamWidth
   // (measured 15 px).
-  const TOL = { x: 2, y: 2.4, pathX: 0.8, pathY: 16 };
+  // pathY raised 16 -> 21 with the 1.8 voices-tab-rhythm fixtures' beamed 64ths on TAB: four beam levels stack three fixed
+  // beamWidths (measured 20 px).
+  const TOL = { x: 2, y: 2.4, pathX: 0.8, pathY: 21 };
   const mx = scaleDrift(SCALED, 'fixed-strokes');
   for (const [k, v] of Object.entries(mx)) ok(v <= TOL[k], `fixed-strokes max drift ${k} = ${v.toFixed(3)} > ${TOL[k]}`);
   results.push({ ok: true, name: `[scaling] info: fixed strokes, max drift x ${mx.x.toFixed(2)} y ${mx.y.toFixed(2)} path x ${mx.pathX.toFixed(2)} y ${mx.pathY.toFixed(2)} (tolerances ${JSON.stringify(TOL)})`, n: 0, info: true });
@@ -1684,7 +1686,7 @@ const dirLabelStaff = (m, si, tr) => staffOf(m, si, tr, tr.tab);
 test('directions', 'AC1: every pre-existing fixture/example emits no let-ring / pick-stroke / tap / whammy group and no U+E610 / U+E612 glyph', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams') || name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-legato-slides') || name.startsWith('char-note-effects') || name.startsWith('char-ornaments')) continue; // newer fixtures using directions on purpose
+    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams') || name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-legato-slides') || name.startsWith('char-note-effects') || name.startsWith('char-ornaments') || name === 'char-voices-marks') continue; // newer fixtures using directions on purpose
     for (const width of [600, 900]) {
       all(renderTree(score, width, options)).forEach(({ n }) => {
         const c = cls(n).split(' ');
@@ -3104,7 +3106,8 @@ test('tab-rhythm', 'AC8: generic over all SCORES: every authored rest and whole-
       ok(rests.length === want.length, `${tag}: ${rests.length} rests, expected ${want.length}`);
       rests.forEach((g, i) => {
         const glyph = g.children.find((k) => k.tag === 'text');
-        ok(cpOf(glyph) === REST_CP[want[i].d], `${tag}: rest ${i} glyph`);
+        // 1.8: a whole / half rest in a two-voice band row is the leger-line form (E4F4 / E4F5)
+        ok(cpOf(glyph) === REST_CP[want[i].d] || cpOf(glyph) === { whole: 0xE4F4, half: 0xE4F5 }[want[i].d], `${tag}: rest ${i} glyph`);
         near(num(glyph, 'x'), want[i].x, EPS, `${tag}: rest ${i} x`);
         ok(g.children.filter((k) => k.tag === 'circle').length === want[i].dots, `${tag}: rest ${i} dots`);
         nRests++; if (want[i].wm) wm++;
@@ -4681,7 +4684,7 @@ const T11_CLASSES = ['slap', 'pop', 'rake', 'trill'];
 test('techniques11', 'AC1: no pre-existing fixture / example emits a slap / pop / rake / trill group, a dive / hold / return / pre-dive line or a U+E566 glyph', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-note-effects') || name.startsWith('char-ornaments')) continue;
+    if (name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-note-effects') || name.startsWith('char-ornaments') || name === 'char-voices-marks') continue;
     for (const width of [600, 900]) {
       all(renderTree(score, width, options)).forEach(({ n }) => {
         const c = cls(n).split(' ');
@@ -5597,7 +5600,7 @@ test('releaseCap', 'release-adjacent fixture: m1, m2 (release note), m5 (16ths) 
 // ======================= two voices (1.4.0) =======================
 test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing or bad numbers, deterministically, input untouched', () => {
   const fixtures = characterizationCases.filter((c) => c.name.startsWith('voices'));
-  ok(fixtures.length === 3, `expected 3 voices fixtures, got ${fixtures.length}`);
+  ok(fixtures.length === 7, `expected 7 voices fixtures, got ${fixtures.length}`);
   for (const fx of fixtures) {
     const before = JSON.stringify(fx.score);
     for (const w of [600, 900, 1400]) {
@@ -5845,8 +5848,9 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
   });
 
   test('hands17', 'G2: every pre-1.7 case with every new field set to garbage renders byte-identical to its snapshot', () => {
-    const pre = cases.filter((c) => !/^char-ornaments-/.test(c.id));
-    const snaps = fs.readdirSync(path.join(root0, 'tests/snapshots')).filter((f) => f.endsWith('.svg') && !/^char-ornaments-/.test(f));
+    // 1.8: the voices-marks / voices-tab-rhythm(-break) / voices-tied-frets fixtures are not pre-1.7 either
+    const pre = cases.filter((c) => !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets)-/.test(c.id));
+    const snaps = fs.readdirSync(path.join(root0, 'tests/snapshots')).filter((f) => f.endsWith('.svg') && !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets)-/.test(f));
     ok(pre.length === 60 && snaps.length === 60, `${pre.length} pre-1.7 cases vs ${snaps.length} pre-1.7 snapshots`);
     const NOTE = [{ ornament: 'trill', finger: 9, rightFinger: 'q', leftHandTap: false }, { ornament: 5, finger: 'x', rightFinger: 1, leftHandTap: 0 },
       { ornament: {}, finger: -1, rightFinger: 'pi', leftHandTap: '' }, { ornament: '', finger: 1.5, rightFinger: null, leftHandTap: null }];
@@ -5876,7 +5880,7 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
   test('hands17', 'AC1: no pre-existing fixture / example emits a 1.7.0 class or glyph', () => {
     let checked = 0;
     for (const [name, score, options] of SCORES) {
-      if (name.startsWith('char-ornaments')) continue;
+      if (name.startsWith('char-ornaments') || name === 'char-voices-marks') continue;
       for (const width of [600, 900]) {
         all(renderTree(score, width, options)).forEach(({ n }) => {
           ok(!cls(n).split(' ').some((x) => NEW_CLASSES.test(x)), `${name}@${width}: class "${cls(n)}"`);
@@ -5885,7 +5889,7 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
         checked++;
       }
     }
-    ok(checked === (SCORES.length - 3) * 2, `${checked} renders`);
+    ok(checked === (SCORES.length - 4) * 2, `${checked} renders`);
   });
 
   test('hands17', 'O1-O4: ornament glyph and class per kind, centred on the beat above the staff; none on TAB, graces, rests, a trilled beat or tab-only', () => {
@@ -6064,6 +6068,97 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
     const out = serialize(renderTree(sc, 900));
     ok(!out.includes('<b>') && !out.includes('X</b>') && !out.includes('&lt;b&gt;'), 'no injected text');
     ok(groupsOf(renderTree(sc, 900), /^left-hand-tap$/).length === 1, 'a truthy leftHandTap still draws its glyph');
+  });
+}
+
+// ======================= voices18 (1.8.0 fixtures voices-marks / voices-tab-rhythm(-break) / voices-tied-frets) =======================
+{
+  const { fretLabelWidth: labelW } = await imp('src/textMetrics.js');
+  const fx = (name) => characterizationCases.find((c) => c.name === name);
+  const S = 10;
+  const groupsOf = (root, re) => all(root).filter(({ n }) => n.tag === 'g' && re.test(cls(n))).map(({ n }) => n);
+  const inV2 = (root) => all(root).filter(({ n, parents }) => n.tag === 'g' && parents.some((p) => cls(p) === 'voice-2')).map(({ n }) => n);
+  const staffOf = (sys, kind, ti) => staffGroups(sys).find((g) => cls(g) === `staff staff-${kind}` && g.getAttribute('data-track') === String(ti));
+
+  test('voices18', 'R1: every voice-2 mark of voices-marks sits below its notation staff in a voice-2 group; one inverted fermata (voice 1 draws the merged rest one)', () => {
+    for (const w of [900, 600]) {
+      const tree = renderTree(fx('voices-marks').score, w);
+      const nota = systemsOf(tree).map((s) => staffOf(s, 'notation', 0)).filter(Boolean);
+      const kinds = new Set();
+      nota.forEach((g) => inV2(g).forEach((m) => {
+        const c = cls(m).split(' ')[0];
+        if (!['ornament', 'fingering-right', 'golpe', 'pick-stroke', 'tap', 'left-hand-tap', 'slap', 'pop', 'trill', 'fermata'].includes(c)) return;
+        kinds.add(c);
+        ok(inkBounds(m, DEF).top >= 40 + S - EPS, `@${w} ${cls(m)} top ${inkBounds(m, DEF).top} below the staff`);
+      }));
+      ok(kinds.size === 10, `@${w}: voice-2 mark kinds ${[...kinds]}`);
+      const fs = nota.flatMap((g) => groupsOf(g, /^fermata( |$)/));
+      ok(fs.filter((f) => /fermata-below/.test(cls(f))).length === 1 && fs.filter((f) => !/fermata-below/.test(cls(f))).length === 1, `@${w}: fermatas ${fs.map(cls)}`);
+    }
+  });
+  test('voices18', 'R1: the dynamic of a system with voice-2 marks sits below them; TAB columns draw the voice-2 marks above the TAB; tab-only letters voice 1 wins', () => {
+    const tree = renderTree(fx('voices-marks').score, 900);
+    const sys = systemsOf(tree)[0];
+    const nota = staffOf(sys, 'notation', 0);
+    const dyn = all(nota).find(({ n }) => n.tag === 'text' && cls(n) === 'dynamic').n;
+    const marksBottom = Math.max(...inV2(nota).filter((g) => /^(ornament|fingering-right|golpe|pick-stroke)/.test(cls(g))).map((g) => inkBounds(g, DEF).bottom));
+    ok(num(dyn, 'y') - 0.8 * 18 > marksBottom, `dynamic ${num(dyn, 'y')} below the marks ${marksBottom}`);
+    const tab = staffOf(sys, 'tab', 0);
+    ['golpe', 'trill', 'tap', 'left-hand-tap', 'slap', 'pop', 'tab-vibrato', 'tab-tremolo'].forEach((c) => {
+      const gs = groupsOf(tab, new RegExp(`^${c}( |$)`));
+      ok(gs.length > 0, `TAB ${c}`);
+      if (!/^tab-/.test(c)) gs.forEach((g) => ok(inkBounds(g, DEF).bottom <= EPS, `TAB ${c} above the top line`)); // tremolo / vibrato: above the column's frets
+    });
+    ok(groupsOf(tab, /^fermata/).length === 0, 'no fermata on TAB');
+    const only = staffOf(sys, 'tab', 1);
+    ok(JSON.stringify(groupsOf(only, /^fingering-right$/).map((g) => g.children.map((t) => t._text))) === JSON.stringify([['p'], ['i']]), 'tab-only letters');
+    ok(JSON.stringify(groupsOf(only, /^pick-stroke/).map(cls)) === JSON.stringify(['pick-stroke pick-stroke-up', 'pick-stroke pick-stroke-down']), 'tab-only picks');
+  });
+
+  const rowsOf = (stv) => ({ r1: stv.children.filter((c) => cls(c) === 'tab-rhythm'), r2: stv.children.filter((c) => cls(c) === 'tab-rhythm voice-2') });
+  const stemTops = (gs) => [...new Set(gs.flatMap((g) => g.children.filter((c) => c.tag === 'line').map((l) => num(l, 'y1'))))];
+  test('voices18', 'R2/R3: one voice-2 row per two-voice band measure, one stem top per system staff, below the deepest voice-1 band ink; row rests without a knock-out', () => {
+    for (const [name, w] of [['voices-tab-rhythm', 900], ['voices-tab-rhythm', 600], ['voices-tab-rhythm-break', 600]]) {
+      const tree = renderTree(fx(name).score, w);
+      const tops = [];
+      systemsOf(tree).forEach((sys, si) => staffGroups(sys).filter((g) => cls(g) === 'staff staff-tab').forEach((stv) => {
+        const { r1, r2 } = rowsOf(stv);
+        if (!r2.length) return;
+        const t2 = stemTops(r2);
+        ok(t2.length === 1, `${name}@${w} sys${si}: row-2 stem tops ${t2}`);
+        const t1 = 75 + S;
+        const d1 = Math.max(0, ...r1.map((g) => inkBounds(g, DEF).bottom - t1));
+        near(t2[0], t1 + (Math.max(2.5 * S, d1) + 1.5 * S), 0.01, `${name}@${w} sys${si}: T2`);
+        r2.forEach((g) => groupsOf(g, /^tab-rest$/).forEach((r) => ok(!r.children.some((k) => k.tag === 'rect'), `${name}@${w}: row-2 rest knock-out`)));
+        tops.push(t2[0]);
+      }));
+      ok(tops.length >= 2, `${name}@${w}: ${tops.length} staves with rows`);
+      if (name === 'voices-tab-rhythm-break') ok(tops[0] > tops[1], `break: system 1 row 2 lower (${tops})`);
+    }
+  });
+  test('voices18', 'R5 on TAB: merged rests are drawn once in the staff with a knock-out (whole-measure without); one at the start of system 2', () => {
+    const tree = renderTree(fx('voices-tab-rhythm-break').score, 600);
+    const sys2 = staffOf(systemsOf(tree)[1], 'tab', 0);
+    const { r1, r2 } = rowsOf(sys2);
+    const first = groupsOf(r1[0], /^tab-rest$/)[0];
+    ok(first && first.children[0].tag === 'rect' && r2.every((g) => !groupsOf(g, /^tab-rest$/).length), 'merged quarter rest in the staff, none in row 2');
+    const t = renderTree(fx('voices-tab-rhythm').score, 900);
+    const restCps = systemsOf(t).flatMap((s) => staffGroups(s).filter((g) => cls(g) === 'staff staff-tab' && g.getAttribute('data-track') === '0'))
+      .flatMap((stv) => groupsOf(stv, /^tab-rest$/)).map((g) => cpOf(g.children.find((k) => k.tag === 'text')));
+    [0xE4F4, 0xE4F5, 0xE4E3, 0xE4E5, 0xE4E6, 0xE4E7, 0xE4E8, 0xE4E9].forEach((cp) => ok(restCps.includes(cp), `rest glyph ${cp.toString(16)}`));
+  });
+  test('voices18', 'R6: tied-to frets "(n)" on the opted-in track only, knock-outs as wide as the label', () => {
+    const tree = renderTree(fx('voices-tied-frets').score, 900);
+    const labels = (ti) => systemsOf(tree).flatMap((s) => staffGroups(s).filter((g) => cls(g) === 'staff staff-tab' && g.getAttribute('data-track') === String(ti)))
+      .flatMap((g) => g.children.filter((c) => c.tag === 'text' && num(c, 'font-size') === DEF.tabFontSize)).map((t) => t._text);
+    const a = labels(0); const b = labels(1);
+    ['(5)', '(12)', '(3)', 'x', '(7)', '(10)', '(2)'].forEach((l) => ok(a.includes(l), `Gt. shows ${l}`));
+    ok(!['(5)', '(12)', '(10)', '(2)'].some((l) => b.includes(l)) && b.includes('(3)') && b.includes('(7)'), `control: ${b}`);
+    ok(!a.some((l) => /^\(\(/.test(l)), 'never wrapped twice');
+    systemsOf(tree).forEach((s) => staffGroups(s).filter((g) => cls(g) === 'staff staff-tab').forEach((g) => {
+      const kids = g.children;
+      kids.forEach((c, i) => { if (c.tag === 'text' && num(c, 'font-size') === DEF.tabFontSize && kids[i - 1]?.tag === 'rect') near(num(kids[i - 1], 'width'), labelW(c._text, DEF), 0.01, `knock-out of ${c._text}`); });
+    }));
   });
 }
 

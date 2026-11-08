@@ -2658,7 +2658,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   const { group: svgGroup } = await imp('src/draw/svgUtil.js');
   // the 57 pre-1.6 cases (the 1.6.0 char-score-text-* fixtures use the new fields on purpose; the 1.7.0
   // char-ornaments-* came later)
-  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments)-/.test(c.id));
+  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets)-/.test(c.id));
   const thm = resolveTheme({});
   const s = thm.staffLineSpacing;
   const ok = (c, m) => { if (!c) throw new Error(m); };
@@ -3847,11 +3847,13 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     });
     return r;
   };
-  const scans = new Map(cases.map((c) => [c.id, scan(c)]));
+  // The pins describe the 63 pre-1.8 cases (the 1.8 fixtures exercise these triggers on purpose).
+  const pre18 = cases.filter((c) => !/^char-(voices-marks|voices-tab-rhythm|voices-tied-frets)-/.test(c.id));
+  const scans = new Map(pre18.map((c) => [c.id, scan(c)]));
   const twoVoiceIds = [...scans].filter(([, r]) => r.two.length).map(([id]) => id);
 
   test('pre-1.8 scan: the two-voice cases are exactly the six known fixtures', () => {
-    eq(cases.length, 63);
+    eq(pre18.length, 63);
     eq(twoVoiceIds, ['char-voices-w900', 'char-voices-break-w600', 'char-voices-tab-w900', 'char-note-effects-w900', 'char-score-text-w900', 'char-ornaments-w900']);
   });
   test('pre-1.8 scan: voices-break, score-text, ornaments and voices-tab have no R1 / R4 / R5 triggers; their other variants are single-voice', () => {
