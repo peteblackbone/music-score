@@ -5143,6 +5143,60 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.9.0: verification extras (rebend guard, string edges, slide kept as written) ----------
+{
+  const { bendOf } = await imp('src/directions.js');
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const cls = (n) => n.getAttribute('class') || '';
+  const plain = { type: 'bend', amount: 'full', release: false, hold: false };
+  test('1.9 rebend guard: only a non-blank string or a finite non-zero number makes a compound bend (trimmed, stringified)', () => {
+    const C = (rebend) => ({ type: 'bend', amount: 'full', release: true, hold: false, rebend });
+    eq(bendOf({ amount: 'full', rebend: ' 1/2 ' }), C('1/2'));
+    eq(bendOf({ amount: 'full', rebend: 0.5 }), C('0.5'));
+    eq(bendOf({ amount: 'full', rebend: 2 }), C('2'));
+    for (const bad of ['', '   ', '\t\n', 0, -0, NaN, Infinity, -Infinity, true, false, null, undefined, {}, [], ['full'], () => 'full']) {
+      const b = bendOf({ amount: 'full', rebend: bad });
+      eq(b, plain, `rebend ${String(bad)}`);
+      eq('rebend' in b, false);
+    }
+  });
+  test('1.9 rebend guard: a rejected rebend keeps the object bend flags (release / hold); the prebend type is kept', () => {
+    eq(bendOf({ amount: 'full', release: true, rebend: NaN }), { ...plain, release: true });
+    eq(bendOf({ amount: 'full', hold: true, rebend: {} }), { ...plain, hold: true });
+    eq(bendOf({ type: 'pb', rebend: ' ' }), { type: 'prebend', amount: 'full', release: false, hold: false });
+    eq(bendOf({ type: 'pb', rebend: 1 }), { type: 'prebend', amount: 'full', release: true, hold: false, rebend: '1' });
+  });
+  test('1.9 rebend guard: a non-string / blank rebend renders as the plain bend (no compound class); a string one as compound', () => {
+    const svgOf = (rebend) => {
+      const box = makeContainer();
+      new MusicScoreRenderer(box, { tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: [
+        { type: 'note', duration: 'half', notes: [{ string: 3, fret: 7, bend: { amount: 'full', rebend } }] }, { type: 'note', duration: 'half', notes: [{ string: 3, fret: 7 }] }] }] }] }, { width: 900 }).render();
+      return box.children[0];
+    };
+    for (const bad of [{}, true, NaN, 0, '  ']) {
+      eq(walk(svgOf(bad)).filter((n) => /^bend\b/.test(cls(n))).map(cls), ['bend'], String(bad));
+    }
+    eq(walk(svgOf('full')).filter((n) => /^bend\b/.test(cls(n))).map(cls), ['bend bend-rebend']);
+  });
+  test('1.9 compound bend string edges: release strictly inside, once, no hold after it; pb needs a word before release', () => {
+    const rb = (r) => ('rebend' in bendOf(r) ? bendOf(r).rebend : undefined);
+    eq(rb('full release full '), 'full');
+    eq(rb('full hold release full'), 'full');
+    eq(rb('full RELEASE'), undefined);
+    eq(rb('x release release'), undefined);
+    eq(rb('pb release full'), undefined);
+    eq(rb('pb  release  1/2'), undefined);
+    eq(rb('full release hold'), undefined);
+    eq(rb('prebendfull release full'), 'full');
+    eq(bendOf('full release hold'), { type: 'bend', amount: 'full release', release: false, hold: true });
+  });
+  test('1.9 legato slide: normalizeScore keeps note.slide exactly as written (not canonicalized)', () => {
+    const s = normalizeScore({ tracks: [{ showTablature: true, measures: [{ beats: [
+      { type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 5, slide: ' Legato ' }] }, { type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 7, slide: 'up' }] }] }] }] });
+    eq(s.tracks[0].measures[0].beats.map((b) => b.notes[0].slide), [' Legato ', 'up']);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
