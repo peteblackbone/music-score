@@ -14,6 +14,9 @@
  * - `beat.whammy` true | amount | `{ type, amount }`, type 'dip' (default),
  *   'dive', 'return' or 'predive': a whammy-bar mark on the TAB staff, its
  *   amount shown with a leading "-" (`true` and a missing amount mean '1/2');
+ * - `beat.whammyScoop` (truthy): a whammy scoop into the beat (beatScoop;
+ *   a pre-dive on the same beat wins); `beat.whammyBar` (truthy): a "w/bar"
+ *   label run on the TAB staff, like let ring;
  * - `beat.rake` (truthy, 'down' | 'up'): a "rake" label run over the beat
  *   and the grace notes right before it;
  * - `note.trill` true | fret | pitch | `{ fret, pitch }`: "tr" and a wavy
@@ -39,6 +42,8 @@ import { parsePitch, midiNumber } from './pitch.js';
 
 /** Label text of a let-ring run. */
 export const LET_RING_LABEL = 'let ring';
+/** Label text of a whammy-bar ("w/bar") run. */
+export const WHAMMY_BAR_LABEL = 'w/bar';
 /** Letter shown above a beat for each tap-style mark (class name = the key). */
 export const TAP_MARK_LETTERS = { tap: 'T', slap: 'S', pop: 'P' };
 const PICK_KINDS = ['down', 'up'];
@@ -319,6 +324,11 @@ export function beatWhammy(el) {
 /** Whammy mark of any type of a beat (whammyOf), or null (none, rest, grace). */
 export function beatWhammyAny(el) {
   return isMainNoteBeat(el) ? whammyOf(el.whammy) : null;
+}
+
+/** Whether a beat has a whammy scoop: a main note beat with `whammyScoop` and no pre-dive. */
+export function beatScoop(el) {
+  return isMainNoteBeat(el) && !!el.whammyScoop && whammyOf(el.whammy)?.type !== 'predive';
 }
 
 /** Whether a beat carries a rake. */

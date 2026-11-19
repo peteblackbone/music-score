@@ -16,7 +16,7 @@ import { beatTapMark, beatWhammy, beatTrill, trillTabFret } from '../../directio
 import { trillEndX, trillRunEndX, trillGeometry, trillRuns, renderTrill } from '../trill.js';
 import { renderGolpe, golpeHalf } from '../handMarks.js';
 import { beatGolpe } from '../../hands.js';
-import { planWhammyLines, renderWhammyLine } from '../whammy.js';
+import { planWhammyLines, renderWhammyLine, scoopSpans, scoopGeometry, renderWhammyScoop } from '../whammy.js';
 import { flattenRuns, flattenTabColumns, tabTopY, inkTopInSpan, breakEndX, breakStartX } from './common.js';
 import { tabMarkBeat, voiceOf } from '../../twoVoice.js';
 
@@ -70,7 +70,8 @@ const colX = (le) => le.x - (le.dx || 0);
  *   the trill / T ink in its span the same way;
  * - `whammy` draws a dip ("V" plus "-1/2") above the TAB staff, its width
  *   limited like a bend's, stacked above the beat's frets, marks, "T" / "S" /
- *   "P", golpe, trill and any bend under it;
+ *   "P", golpe, trill and any bend under it; a scoop (`whammyScoop`, voice 1
+ *   only; draw/whammy.js) is placed the same way, sharing the dip's level;
  * - after all beats, whammy dives, returns and pre-dives (draw/whammy.js):
  *   one line per system segment, each at one level above the frets, marks,
  *   letters, trills, bends and dips under it, 0.5 sp above the TAB top line.
@@ -95,6 +96,7 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
     // Consecutive trills on a system share one line: drawn together at the run's first beat, at the highest of their own bottoms.
     const runs = trillRuns(beats, (b) => !!beatTrill(tabMarkBeat(b.layoutEl, 'trill')), (b) => b.run.sysIdx, (b) => b.layoutEl.el.type === 'grace');
     const trillTops = new Map();
+    const scoops = scoopSpans(trackRuns.filter((r) => r.track === track), systems, theme);
     beats.forEach((beat) => {
       const { layoutEl, run, x } = beat;
       const el = layoutEl.el;
@@ -102,7 +104,8 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
       const dip = voiceOf(layoutEl) === 2 ? null : beatWhammy(el);
       const trilled = beatTrill(tabMarkBeat(layoutEl, 'trill'));
       const golpe = beatGolpe(tabMarkBeat(layoutEl, 'golpe'));
-      if (!mark && !dip && !trilled && !golpe) return;
+      const scoop = voiceOf(layoutEl) === 2 ? null : scoops.get(layoutEl);
+      if (!mark && !dip && !trilled && !golpe && !scoop) return;
       const tabTop = tabTopY(run, stringCount, theme);
       const fretTop = layoutEl.tabRendered?.fretTopY ?? Infinity;
       const marksTop = layoutEl.tabRendered?.marksTopY ?? Infinity;
@@ -145,11 +148,12 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
         const inkTop = inkTopInSpan(x - half, x + half, { boxLists: [run.tabInkBoxes, run.hpBoxes] });
         run.tabInkBoxes.push({ ...renderGolpe(run.tabG, x, Math.min(tapBase, inkTop - TAP_TRILL_CLEAR_SP * s), golpe, theme.tabFretColor, theme), noteX: x });
       }
-      if (dip) {
+      if (dip || scoop) {
         // Width limited like a bend's: the next note in the system, never past the last barline.
         const next = flat.find((c) => c.sysIdx === run.sysIdx && c.x > x)?.x;
         const nextX = Math.min(next ?? Infinity, systems[run.sysIdx].lastBarlineX);
-        const span = whammyDipGeometry(x, 0, dip, theme, nextX).boxes;
+        // A dip and a scoop on one beat share one level.
+        const span = [...(dip ? whammyDipGeometry(x, 0, dip, theme, nextX).boxes : []), ...(scoop ? scoopGeometry(scoop.x1, scoop.x2, 0, theme).boxes : [])];
         const sx1 = Math.min(...span.map((b) => b.x1));
         const sx2 = Math.max(...span.map((b) => b.x2));
         // Ink under the dip: this beat's frets and marks, nearby beats' frets, and every bend / T / dip box in its span.
@@ -160,8 +164,8 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
             .map((o) => o.layoutEl.tabRendered?.fretTopY ?? Infinity),
         );
         const bottomY = Math.min(tabTop - WHAMMY_STAFF_CLEAR_SP * s, inkTop - WHAMMY_CLEAR_SP * s);
-        renderWhammyDip(run.tabG, x, bottomY, dip, theme, nextX)
-          .forEach((b) => run.tabInkBoxes.push({ ...b, noteX: x }));
+        if (dip) renderWhammyDip(run.tabG, x, bottomY, dip, theme, nextX).forEach((b) => run.tabInkBoxes.push({ ...b, noteX: x }));
+        if (scoop) renderWhammyScoop(run.tabG, scoop.x1, scoop.x2, bottomY, theme).forEach((b) => run.tabInkBoxes.push({ ...b, noteX: x }));
       }
     });
 

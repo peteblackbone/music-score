@@ -4893,6 +4893,104 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.9.0: whammy scoop (draw/whammy.js, tabTechniques.js) and w/bar (techniqueLabels.js) ----------
+{
+  const D9 = await imp('src/directions.js');
+  const { scoopGeometry } = await imp('src/draw/whammy.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const thm = resolveTheme({});
+  const sp = thm.staffLineSpacing;
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const cls = (n) => n.getAttribute('class') || '';
+  const nums = (d) => d.match(/-?\d+(\.\d+)?/g).map(Number);
+  const r6 = (v) => Math.round(v * 1e6) / 1e6;
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const n = (fret, x = {}, duration = 'quarter', type = 'note') => ({ type, duration, ...x, notes: [{ string: 3, fret }] });
+  const rs = (x = {}) => ({ type: 'rest', duration: 'quarter', ...x });
+  const sc = (measures, track = {}) => ({ tracks: [{ showStandardNotation: true, showTablature: true, ...track, measures: measures.map((beats) => (Array.isArray(beats) ? { beats } : beats)) }] });
+  const groups = (svg, c) => walk(svg).filter((g) => g.tag === 'g' && cls(g) === c);
+  // Points of a group's first path.
+  const pts = (g) => { const v = nums(g.children.find((c) => c.tag === 'path').getAttribute('d')); return v.reduce((a, x, i) => (i % 2 ? a : [...a, [x, v[i + 1]]]), []); };
+  // TAB fret-number x positions (single-system scores: no measure numbers).
+  const fretXs = (svg) => walk(svg).filter((t) => t.tag === 'text' && /^\d+$/.test(t.textContent) && t.getAttribute('text-anchor') === 'middle').map((t) => Number(t.getAttribute('x')));
+
+  test('1.9 scoop: beatScoop on main note beats with whammyScoop, not on rests / graces / with a pre-dive; WHAMMY_BAR_LABEL', () => {
+    eq([n(5, { whammyScoop: true }), n(5, { whammyScoop: 1, whammy: true }), n(5, { whammyScoop: true, whammy: { type: 'dive' } })].map(D9.beatScoop), [true, true, true]);
+    eq([n(5), rs({ whammyScoop: true }), n(5, { whammyScoop: true }, '16th', 'grace'), n(5, { whammyScoop: true, whammy: { type: 'predive' } }),
+      n(5, { whammyScoop: false }), null].map(D9.beatScoop), [false, false, false, false, false, false]);
+    eq(D9.WHAMMY_BAR_LABEL, 'w/bar');
+  });
+  test('1.9 scoop: geometry is a V from (x1, top) to the middle at bottomY and back to (x2, top), 0.8 sp deep, one text box', () => {
+    const g = scoopGeometry(100, 115, 50, thm);
+    eq([g.x1, g.xm, g.x2, g.top, g.bottomY], [100, 107.5, 115, 50 - 0.8 * sp, 50]);
+    eq(g.boxes, [{ x1: 100, x2: 115, top: 42, bottom: 50, text: true }]);
+  });
+  test('1.9 scoop: drawn into the note (ends 0.3 sp right of it) with a 1.5 sp lead-in where there is room, path only, class whammy whammy-scoop', () => {
+    const svg = render(sc([[n(5), n(7), n(7, { whammyScoop: true }), n(5)]]));
+    const s = groups(svg, 'whammy whammy-scoop');
+    eq(s.length, 1);
+    eq(s[0].children.map((c) => c.tag), ['path']);
+    const p = pts(s[0]);
+    const x = fretXs(svg)[2];
+    eq([r6(p[2][0] - x), r6(p[2][0] - p[0][0]), r6(p[1][0] - (p[0][0] + p[2][0]) / 2), r6(p[1][1] - p[0][1]), p[0][1] === p[2][1]], [0.3 * sp, 1.5 * sp, 0, 0.8 * sp, true]);
+  });
+  test('1.9 scoop: the lead-in shrinks to stay 0.9 sp after the previous beat, never below 1 sp', () => {
+    const svg = render(sc([[...Array(15).fill(0).map(() => n(5, {}, '16th')), n(7, { whammyScoop: true }, '16th')]]), 600);
+    const p = pts(groups(svg, 'whammy whammy-scoop')[0]);
+    const xs = fretXs(svg);
+    const want = Math.max(1 * sp, Math.min(1.5 * sp, xs[15] + 0.3 * sp - (xs[14] + 0.9 * sp)));
+    eq(r6(p[2][0] - p[0][0]), r6(want));
+    eq(want < 1.5 * sp, true, 'the fixture is tight');
+  });
+  test('1.9 scoop: with a dip on the same beat both share one tip level; a pre-dive wins; nothing on rests, graces, voice 2 or without TAB', () => {
+    const svg = render(sc([[n(5), n(7, { whammyScoop: true, whammy: true }), n(5, { whammyScoop: true, whammy: { type: 'predive' } }), n(5)]]));
+    const [scoop] = groups(svg, 'whammy whammy-scoop');
+    const [dip] = groups(svg, 'whammy whammy-dip');
+    eq(pts(scoop)[1][1], pts(dip)[1][1]);
+    eq([groups(svg, 'whammy whammy-scoop').length, groups(svg, 'whammy whammy-predive').length], [1, 1]);
+    const none = [
+      sc([[n(5), rs({ whammyScoop: true }), n(5, { whammyScoop: true }, '16th', 'grace'), n(5), n(5)]]),
+      sc([{ voices: [{ beats: [n(5), n(5), n(5), n(5)] }, { beats: [{ type: 'note', duration: 'half', whammyScoop: true, notes: [{ string: 5, fret: 2 }] }, { type: 'note', duration: 'half', notes: [{ string: 5, fret: 3 }] }] }] }]),
+      sc([[n(5), n(5, { whammyScoop: true }), n(5), n(5)]], { showTablature: false }),
+    ];
+    none.forEach((s, k) => eq(groups(render(s), 'whammy whammy-scoop').length, 0, `case ${k}`));
+  });
+  test('1.9 scoop: a held dive ends 0.9 sp before the scoop starts, with no rise; a return on that beat is ignored', () => {
+    const svg = render(sc([[n(5, { whammy: { type: 'dive', amount: 'full' } }), n(7), n(7, { whammyScoop: true, whammy: { type: 'return' } }), n(5)]]));
+    const dive = walk(svg).filter((g) => g.tag === 'g' && /^whammy whammy-dive/.test(cls(g)));
+    eq(dive.map(cls), ['whammy whammy-dive']);
+    const sx1 = pts(groups(svg, 'whammy whammy-scoop')[0])[0][0];
+    eq(r6(sx1 - pts(dive[0]).at(-1)[0]), 0.9 * sp);
+  });
+  test('1.9 scoop: whammyOf({ type: "scoop" }) stays null (not a whammy type)', () => {
+    eq(D9.whammyOf({ type: 'scoop' }), null);
+    eq(groups(render(sc([[n(5, { whammy: { type: 'scoop' } }), n(5), n(5), n(5)]])), 'whammy whammy-scoop').length, 0);
+  });
+
+  const runY = (svg, c) => groups(svg, c).map((g) => Number(g.children[0].getAttribute('y')));
+  test('1.9 w/bar: a label run "w/bar" (class whammy-bar) in the lane after let ring and before P.S. on TAB', () => {
+    const all = { letRing: true, whammyBar: true, pickScrape: 'down' };
+    const svg = render(sc([[n(5, all), n(5, all), n(5, all), n(5)]]));
+    const [ring, bar, ps] = [runY(svg, 'let-ring'), runY(svg, 'whammy-bar'), runY(svg, 'pick-scrape pick-scrape-down')];
+    eq([ring.length, bar.length, ps.length], [1, 1, 1]);
+    eq([ring[0] > bar[0], bar[0] > ps[0]], [true, true], 'outward = up on TAB');
+    eq(groups(svg, 'whammy-bar')[0].children[0].textContent, 'w/bar');
+    const alone = render(sc([[n(5, { whammyBar: true }), n(5)]]));
+    eq(runY(alone, 'whammy-bar'), runY(render(sc([[n(5, { letRing: true }), n(5)]])), 'let-ring'), 'alone it takes lane 0');
+  });
+  test('1.9 w/bar: unmarked rests bridge a run; an unmarked note or grace ends it; never without TAB', () => {
+    const W = { whammyBar: true };
+    eq(groups(render(sc([[n(5, W), rs(), rs(), n(5, W)]])), 'whammy-bar').length, 1);
+    eq(groups(render(sc([[n(5, W), n(5), n(5, W), n(5)]])), 'whammy-bar').length, 2);
+    eq(groups(render(sc([[n(5, W), n(5, {}, '16th', 'grace'), n(5, W), n(5), n(5)]])), 'whammy-bar').length, 2);
+    eq(groups(render(sc([[n(5, W), rs(), n(5, W), n(5)]], { showTablature: false })), 'whammy-bar').length, 0);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
