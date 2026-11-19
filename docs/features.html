@@ -92,7 +92,7 @@
   <div class="tile"><b>JSON in, SVG out</b><span>Score → tracks → measures → beats → notes. Rendered into any container.</span></div>
   <div class="tile"><b>Notation, tab or both</b><span>Per track. Tab pitch is worked out from string, fret and tuning.</span></div>
   <div class="tile"><b>Real engraving layout</b><span>Justified systems, aligned beats across staves, content-aware spacing.</span></div>
-  <div class="tile"><b>Guitar conventions</b><span>8vb clefs, SMuFL TAB clef, hammer-ons and pull-offs (slurred on notation too), slides, slide-ins and slide-outs, bends, pre-bends and releases, palm mute, harmonics, let ring, pick strokes, strum arrows, arpeggios, tapping, slap and pop, whammy dips and dives, rakes, trills.</span></div>
+  <div class="tile"><b>Guitar conventions</b><span>8vb clefs, SMuFL TAB clef, hammer-ons and pull-offs (slurred on notation too), slides, slide-ins and slide-outs, bends, compound bends, pre-bends and releases, legato slides, palm mute, harmonics, let ring, pick strokes, strum arrows, arpeggios, tapping, slap and pop, whammy dips, dives and scoops, w/bar, rakes, trills.</span></div>
   <div class="tile"><b>Rhythm on tab</b><span>Tab-only tracks show stems, beams, flags, dots, tuplets and rests on the TAB staff.</span></div>
   <div class="tile"><b>Full notation basics</b><span>Keys, meters, tuplets, dots, ties, slurs, accidentals, chords.</span></div>
   <div class="tile"><b>Marks</b><span>Articulations, fermatas, dynamics, chord symbols, vibrato, tremolo.</span></div>
@@ -218,16 +218,17 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 <table>
   <tr><th>Field</th><th>Drawn as</th></tr>
   <tr><td><code>hammerPull</code></td><td>Slur with H or P to the next note on the string, on tab and on notation (<code>hammerPullSlurs: false</code> in the theme turns the notation slurs off)</td></tr>
-  <tr><td><code>slide</code></td><td>Diagonal stroke to the next note</td></tr>
+  <tr><td><code>slide</code></td><td>Diagonal stroke to the next note. <code>'legato'</code> adds a letterless arc on TAB and a slur on notation</td></tr>
   <tr><td><code>slideIn</code></td><td>Short slide into the note: <code>true</code>, <code>'up'</code> or <code>'below'</code> from below; <code>'down'</code> or <code>'above'</code> from above</td></tr>
   <tr><td><code>slideOut</code></td><td>Short slide off the note: <code>true</code> or <code>'down'</code> downward; <code>'up'</code> upward</td></tr>
   <tr><td><code>bend</code></td><td>Arrow with amount (<code>1/2</code>, <code>full</code>, <code>1 1/2</code>…), optional release or hold; <code>'prebend full'</code> (or <code>'pb 1/2'</code>) bends before the pick; <code>'release'</code> is a note that falls back to the unbent pitch</td></tr>
+  <tr><td><code>bend</code>, compound</td><td><code>'1/2 release full'</code> (or <code>'pb 1/2 release full'</code>, or <code>{ type: 'bend', amount, rebend }</code>): rise, fall back, and rise again, with both amounts labelled</td></tr>
   <tr><td><code>palmMute</code></td><td>"P.M." with a dashed line over consecutive beats</td></tr>
   <tr><td><code>vibrato</code></td><td>Wavy line on notation and TAB; <code>'wide'</code> draws a taller, heavier wave</td></tr>
   <tr><td><code>tremolo</code></td><td>Tremolo slashes: three for <code>true</code>; <code>'8th'</code>, <code>'16th'</code> or <code>'32nd'</code> draw one, two or three</td></tr>
   <tr><td><code>mute</code>, <code>ghost</code></td><td>x notehead / x on tab; parentheses</td></tr>
   <tr><td><code>type: 'grace'</code></td><td>Small slashed note slurred to the next beat</td></tr>
-  <tr><td><code>harmonic</code>, <code>harmonicFret</code></td><td>Natural: diamond and <code>&lt;12&gt;</code> on tab. Artificial, tapped, pinch, semi: <code>A.H.</code>, <code>T.H.</code>, <code>P.H.</code>, <code>S.H.</code> label; <code>harmonicFret</code> gives the touched fret, e.g. <code>5(17)</code></td></tr>
+  <tr><td><code>harmonic</code>, <code>harmonicFret</code></td><td>Natural: diamond and <code>&lt;12&gt;</code> on tab. Artificial, tapped, pinch, semi: <code>A.H.</code>, <code>T.H.</code>, <code>P.H.</code>, <code>S.H.</code> label; <code>harmonicFret</code> gives the touched fret, e.g. <code>5(17)</code>. Feedback (<code>'feedback'</code>): normal notehead, plain fret and an <code>Fdbk.</code> label</td></tr>
   <tr><td><code>letRing</code></td><td>Dashed "let ring" label over consecutive beats, like P.M.; a rest inside the run keeps it going</td></tr>
   <tr><td><code>pickStroke</code></td><td><code>'down'</code> or <code>'up'</code>: ⊓ or ∨ above the beat</td></tr>
   <tr><td><code>strum</code></td><td><code>'down'</code> or <code>'up'</code>: a strum arrow ↓ or ↑ above the TAB (above the notation staff on a track without TAB); replaces the pick stroke</td></tr>
@@ -236,7 +237,9 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <tr><td><code>slap</code>, <code>pop</code> (on a note)</td><td>"S" or "P" in the tap "T" place, on notation and TAB (tap wins over slap, slap over pop)</td></tr>
   <tr><td><code>whammy</code></td><td>Whammy-bar mark on TAB: <code>true</code>, a string or <code>{ type: 'dip' }</code> is a V with <code>-1/2</code> above it (<code>true</code> means <code>1/2</code>); <code>{ type: 'dive', amount }</code> slopes down and is held until a <code>{ type: 'return' }</code> beat rises again, across line breaks; <code>{ type: 'predive', amount }</code> is a level lead-in before the note, then the rise</td></tr>
   <tr><td><code>rake</code></td><td>Dashed "rake" label over the beat and the dead-note grace notes just before it</td></tr>
-  <tr><td><code>trill</code> (on a note)</td><td>"tr" with a wavy line on notation and TAB; <code>7</code> or <code>'B3'</code> adds <code>(7)</code> on TAB</td></tr>
+  <tr><td><code>trill</code> (on a note)</td><td>"tr" with a wavy line on notation and TAB; <code>7</code> or <code>'B3'</code> adds <code>(7)</code> on TAB. A note tied to it with <code>tieEnd</code> continues the wave, across line breaks too</td></tr>
+  <tr><td><code>whammyScoop</code> (beat)</td><td>Small V into the note on TAB, with no text; a pre-dive on the same beat wins</td></tr>
+  <tr><td><code>whammyBar</code> (beat)</td><td>"w/bar" label run on TAB, like let ring; set it on note beats</td></tr>
   <tr><td><code>tiedFrets: 'parens'</code> (track)</td><td>Parentheses around the fret of a tied-to note on TAB, such as <code>(5)</code>. Off by default; see the example after this table</td></tr>
   <tr><td><code>tabRhythm</code> (track)</td><td>Stems, beams, flags, dots, tuplets and rests under the TAB staff. On by default for tab-only tracks; <code>false</code> hides it, <code>true</code> adds it to a track that also shows notation. See <a href="#tab-rhythm">Rhythm on tab</a></td></tr>
 </table>
@@ -245,7 +248,9 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <li><code>slideIn</code> and <code>slideOut</code> draw a short slide on tab and notation. They take no horizontal room. A slide-in is left out when a slide or hammer-on already leads into the note, and a slide-out when the note has its own <code>slide</code> to another note or a <code>bend</code>.</li>
   <li>A pre-bend is bent before the note is picked. On tab it is a rising shaft with the amount and no landing fret. Add <code>release</code> to bend back down.</li>
   <li>A release note (<code>'release'</code>) falls back to the unbent pitch, with its fret in parentheses. Its amount is the last bend on that string, or a full step.</li>
-  <li>Pre-bends and releases are drawn on tab only.</li>
+  <li>Pre-bends, releases and compound bends are drawn on tab only.</li>
+  <li>A compound bend (<code>'1/2 release full'</code>) rises, falls back to the string's level and rises again, with both amounts labelled. A release note after it falls by the second amount.</li>
+  <li><code>slide: 'legato'</code> is a slide with a slur: a letterless arc on TAB and a slur on notation, even with <code>hammerPullSlurs: false</code>.</li>
 </ul>
 <div class="demo" data-demo="techniques"></div>
 <p>With <code>tiedFrets: 'parens'</code> on the track, each tied-to note shows its fret in parentheses on TAB. The note that starts the tie is unchanged.</p>
@@ -279,6 +284,8 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 <div class="demo" data-demo="techniques11" data-width="680"></div>
 <div class="demo" data-demo="strumArpeggio" data-width="680"></div>
 <div class="demo" data-demo="legatoSlides" data-width="680"></div>
+<p>1.9.0 additions: compound bends, a legato slide, a whammy scoop and a "w/bar" run on the TAB, a feedback harmonic, and a trill that runs over the note tied to it, onto the next system if needed.</p>
+<div class="demo" data-demo="bendsSlides" data-width="680"></div>
 
 <h2 id="hand-marks">Ornaments and hand marks</h2>
 <p>Note fields for ornaments and fingering, and beat fields for the hand marks: <code>ornament</code>, <code>finger</code> and <code>rightFinger</code> on a note, <code>leftHandTap</code> on a note, <code>golpe</code>, <code>pickScrape</code> and <code>barre</code> on a beat. Scores that use none of them draw as before.</p>
@@ -589,6 +596,16 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
       }],
     },
 
+    bendsSlides: {
+      tracks: [{
+        name: 'Gt.', showStandardNotation: true, showTablature: true,
+        measures: [
+          { beats: [t('quarter', 2, 7, { bend: '1/2 release full' }), t('quarter', 2, 7, { bend: 'release' }), t('quarter', 2, 5, { slide: 'legato' }), t('quarter', 2, 7)] },
+          { beats: [t('quarter', 3, 5, {}, { whammyScoop: true }), t('quarter', 3, 7, {}, { whammyBar: true }), t('quarter', 3, 5, {}, { whammyBar: true }), t('quarter', 3, 7, { harmonic: 'feedback' })] },
+          { beats: [t('half', 2, 5, { trill: 7, tieStart: true }), t('half', 2, 5, { tieEnd: true })] },
+        ],
+      }],
+    },
     handMarks: {
       tracks: [{
         name: 'Gt.', showStandardNotation: true, showTablature: true,
