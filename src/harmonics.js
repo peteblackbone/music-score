@@ -2,24 +2,25 @@
  * harmonics.js — guitar harmonics (`note.harmonic`), one place for the
  * questions normalize, layout and drawing ask about them:
  *
- * - kind: 'natural' | 'artificial' | 'pinch' | 'tapped' | 'semi'
+ * - kind: 'natural' | 'artificial' | 'pinch' | 'tapped' | 'semi' | 'feedback'
  *   (`true` or an unknown string → 'natural'); a muted note is never a
  *   harmonic (mute wins);
  * - natural → diamond notehead at the written (touch) pitch and "<12>" on
  *   the TAB staff, no text label;
  * - artificial / tapped → normal notehead, "5(17)" on the TAB staff when an
  *   integer `harmonicFret` (the touched fret) is given, label "A.H." / "T.H.";
- * - pinch / semi → normal notehead, plain fret, label "P.H." / "S.H.".
+ * - pinch / semi → normal notehead, plain fret, label "P.H." / "S.H.";
+ * - feedback → normal notehead, plain fret, label "Fdbk." (lowest priority).
  *
  * Pure functions, no DOM.
  */
 import { noteheadForDuration, diamondNoteheadForDuration } from './glyphs.js';
 
 /** Technique label per harmonic kind (natural has none). */
-export const HARMONIC_LABELS = { artificial: 'A.H.', tapped: 'T.H.', pinch: 'P.H.', semi: 'S.H.' };
-const KINDS = ['natural', 'artificial', 'pinch', 'tapped', 'semi'];
+export const HARMONIC_LABELS = { artificial: 'A.H.', tapped: 'T.H.', pinch: 'P.H.', semi: 'S.H.', feedback: 'Fdbk.' };
+const KINDS = ['natural', 'artificial', 'pinch', 'tapped', 'semi', 'feedback'];
 // One label per beat: the first of these among the beat's (non-muted) harmonics.
-const LABEL_PRIORITY = ['artificial', 'tapped', 'pinch', 'semi'];
+const LABEL_PRIORITY = ['artificial', 'tapped', 'pinch', 'semi', 'feedback'];
 
 /** Canonical kind of a raw `harmonic` value, or null (falsy). Idempotent. */
 export function harmonicKind(raw) {
@@ -56,7 +57,7 @@ export function layoutHeadGlyph(note, duration) {
   return isNaturalHarmonic(note) ? diamondNoteheadForDuration(duration) : noteheadForDuration(duration);
 }
 
-/** Label kind of a beat's notes (first of A.H. > T.H. > P.H. > S.H.), or null. */
+/** Label kind of a beat's notes (first of A.H. > T.H. > P.H. > S.H. > Fdbk.), or null. */
 export function beatHarmonicLabelKind(notes) {
   const kinds = new Set(notes.map(harmonicOf));
   return LABEL_PRIORITY.find((k) => kinds.has(k)) ?? null;

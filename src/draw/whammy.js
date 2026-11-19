@@ -4,6 +4,9 @@
  * return, and a pre-dive. planWhammyLines turns a track's beats into line
  * segments (one per system the line passes through); whammyLineGeometry /
  * renderWhammyLine draw one segment once the TAB pass has found its height.
+ * A scoop (`beat.whammyScoop`) is a small "V" into the note, planned by
+ * scoopSpans and drawn per beat with the dip (scoopGeometry /
+ * renderWhammyScoop).
  *
  * A line has two levels: "deep" (the held bar position, `bottomY`, the
  * lowest and nearest the staff) and "top" (`depth` higher, where the dive
@@ -11,7 +14,7 @@
  * segment is one polyline between points at those two levels.
  */
 import { whammySpanX, whammyTextSize, amountSemitones, WHAMMY_TEXT_GAP_SP, WHAMMY_STROKE_WIDTH } from './tab.js';
-import { beatWhammyAny, whammyLabel } from '../directions.js';
+import { beatWhammyAny, whammyLabel, beatScoop } from '../directions.js';
 import { breakEndX, breakStartX } from './passes/common.js';
 import { group, text, path, svgD } from './svgUtil.js';
 import { TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../layout/ink.js';
@@ -25,6 +28,7 @@ const PREDIVE_MIN_LEAD_SP = 1.0;
 const PREDIVE_PREV_CLEAR_SP = 0.9; // lead-in start -> the previous beat's x
 const HOLD_STOP_GAP_SP = 0.9;     // a hold ended by another whammy mark stops this far before it
 const START_SP = 0.3;             // slope / release start -> right of the note's x (as for the dip)
+const SCOOP_DEPTH_SP = 0.8;       // a scoop's fixed depth (as a dip's)
 
 /** Depth (sp) of a dive / pre-dive of `amount`: 1.2 sp per whole step, clamped to 0.8..2.4 ('1/2' .8, '1' / 'full' / unknown 1.2, '1 1/2' 1.8, '2' and up 2.4; a NaN amount such as '0/0' 1.2). */
 export function whammyDepthSp(amount) {
@@ -56,7 +60,10 @@ export function whammyDepthSp(amount) {
  *   of the track;
  * - pre-dive at x: self-contained lead-in at deep (PREDIVE_LEAD_SP, between
  *   1.0 and 1.5 sp, at least PREDIVE_PREV_CLEAR_SP after the previous
- *   element, never left of the system's header gap), the note, then the rise.
+ *   element, never left of the system's header gap), the note, then the rise;
+ * - a scoop (drawn per beat, scoopSpans) ends a held dive HOLD_STOP_GAP_SP
+ *   before the scoop starts, without a rise (a return on the beat is then
+ *   ignored).
  */
 export function planWhammyLines(runs, systems, theme) {
   const sp = theme.staffLineSpacing;
@@ -82,6 +89,8 @@ export function planWhammyLines(runs, systems, theme) {
       return { x1: s.x1, x2: Math.max(s.x1, Math.min(s.x2, sysEnd)) };
     };
     els.forEach((layoutEl, i) => {
+      const sx = beatScoop(layoutEl.el) ? preDiveStart(els, i, run, systems, theme) : null;
+      if (held && sx != null) { endHold(sx - HOLD_STOP_GAP_SP * sp); held = null; }
       const w = beatWhammyAny(layoutEl.el);
       if (!w) return;
       const x = layoutEl.x;
@@ -121,6 +130,46 @@ export function planWhammyLines(runs, systems, theme) {
   });
   if (held) endHold(breakEndX(systems, runs[runs.length - 1].sysIdx, theme));
   return segs;
+}
+
+/**
+ * Scoops of a track (`runs` as for planWhammyLines): a Map from each voice-1
+ * layout element with a scoop (directions.js beatScoop) to its `{ x1, x2 }`:
+ * from where a pre-dive's lead-in would start (preDiveStart) to START_SP
+ * right of the note.
+ */
+export function scoopSpans(runs, systems, theme) {
+  const sp = theme.staffLineSpacing;
+  const spans = new Map();
+  runs.forEach((run) => {
+    const els = run.measures.flatMap((m) => m.elements);
+    els.forEach((le, i) => {
+      if (beatScoop(le.el)) spans.set(le, { x1: preDiveStart(els, i, run, systems, theme), x2: le.x + START_SP * sp });
+    });
+  });
+  return spans;
+}
+
+/**
+ * Geometry of a scoop from `x1` to `x2` with its tip at `bottomY`: a "V"
+ * from (x1, top) down to the middle at `bottomY` and back up to (x2, top),
+ * top = bottomY - SCOOP_DEPTH_SP; no text. `boxes`: its ink box, `text: true`
+ * (as a dip's). Only the vertical values depend on `bottomY`.
+ */
+export function scoopGeometry(x1, x2, bottomY, theme) {
+  const top = bottomY - SCOOP_DEPTH_SP * theme.staffLineSpacing;
+  return { x1, xm: (x1 + x2) / 2, x2, top, bottomY, boxes: [{ x1, x2, top, bottom: bottomY, text: true }] };
+}
+
+/** Draw a scoop (scoopGeometry) into `g`: `<g class="whammy whammy-scoop">` with its path. Returns the ink boxes. */
+export function renderWhammyScoop(g, x1, x2, bottomY, theme) {
+  const geo = scoopGeometry(x1, x2, bottomY, theme);
+  const gEl = group({ class: 'whammy whammy-scoop' });
+  gEl.appendChild(path(svgD`M ${geo.x1} ${geo.top} L ${geo.xm} ${geo.bottomY} L ${geo.x2} ${geo.top}`, {
+    fill: 'none', stroke: theme.tabFretColor, 'stroke-width': WHAMMY_STROKE_WIDTH, 'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+  }));
+  g.appendChild(gEl);
+  return geo.boxes;
 }
 
 /** x where the lead-in of the pre-dive on element `i` of `els` starts. */

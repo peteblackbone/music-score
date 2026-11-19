@@ -1540,6 +1540,85 @@ export const characterizationCases = [
       })),
     },
   },
+  {
+    // 1.9.0 bends, whammy, slides, feedback, trill ties on notation + TAB. m1-m3 compound bends: bend-release-bend,
+    // pre-bend-release-bend, the object form and a 'Pb … Release …' spelling, a release note after one (defaults to the
+    // rebend), a narrow one with staggered labels (every note of these measures on string 2: no fret on the string above
+    // a release fall); m4-m5 scoops alone, with a dip, with a pre-dive (pre-dive wins), on a rest and a grace (nothing),
+    // and one ending a held dive (its return ignored); m6 w/bar with let ring and P.S., a rest bridging; m7-m8 legato
+    // slides up / down, with a hammer-on, into a grace; m9 feedback alone and with pinch; m10 a trill over a 3-note tie
+    // chain with T and pick on a tied beat; m11 a chain stopped by a trilled tie; m12 a voice-2 tied trill.
+    name: 'bends-slides', width: 900,
+    score: {
+      tracks: [{
+        name: 'Gt.', showTablature: true,
+        measures: [
+          { beats: [tabd('half', 2, 8, { bend: 'full release full' }), tabd('half', 2, 8, { bend: 'pb 1/2 release 1/2' })] },
+          { beats: [tabd('whole', 2, 8, { bend: { amount: '1/2', rebend: 'full' } })] },
+          { beats: [tabd('quarter', 2, 8, { bend: 'release' }), tabd('quarter', 2, 7, { bend: 'Pb Full Release 1 1/2' }), tabd('8th', 2, 9, { bend: 'full release full' }),
+            tabd('8th', 2, 9), tabd('quarter', 2, 7)] },
+          { beats: [tabd('quarter', 3, 5, {}, { whammyScoop: true }), tabd('quarter', 3, 7, {}, { whammyScoop: true, whammy: true }),
+            tabd('quarter', 3, 5, {}, { whammyScoop: true, whammy: { type: 'predive', amount: '1/2' } }), { type: 'rest', duration: 'quarter', whammyScoop: true }] },
+          { beats: [tabd('quarter', 3, 5, {}, { whammy: { type: 'dive', amount: 'full' } }), tabd('quarter', 3, 7),
+            { type: 'grace', duration: '16th', whammyScoop: true, notes: [{ string: 3, fret: 9 }] },
+            tabd('quarter', 3, 7, {}, { whammyScoop: true, whammy: { type: 'return' } }), tabd('quarter', 3, 5)] },
+          { beats: [tabd('quarter', 2, 5, {}, { letRing: true, whammyBar: true, pickScrape: 'down' }), { type: 'rest', duration: 'quarter' },
+            tabd('quarter', 2, 7, {}, { letRing: true, whammyBar: true, pickScrape: 'down' }), tabd('quarter', 2, 8, {}, { whammyBar: true })] },
+          { beats: [tabd('quarter', 3, 5, { slide: 'legato' }), tabd('quarter', 3, 7, { slide: ' Legato ' }), tabd('quarter', 3, 5, { slide: 'legato', hammerPull: true }), tabd('quarter', 3, 7)] },
+          { beats: [tabd('quarter', 3, 7, { slide: 'legato' }), { type: 'grace', duration: '16th', notes: [{ string: 3, fret: 9 }] }, tabd('quarter', 3, 7),
+            tabd('half', 3, 5)] },
+          { beats: [tabd('quarter', 2, 5, { harmonic: 'feedback' }), tabd('quarter', 2, 5, { harmonic: 'Feedback' }),
+            tabc([[2, 5, { harmonic: 'feedback' }], [3, 5, PH]]), tabd('quarter', 2, 7)] },
+          { beats: [tabd('quarter', 3, 5, { trill: 7, tieStart: true }), tabd('quarter', 3, 5, { tieStart: true, tieEnd: true, tap: true }, { pickStroke: 'down' }),
+            tabd('quarter', 3, 5, { tieEnd: true }), tabd('quarter', 3, 7)] },
+          { beats: [tabd('quarter', 3, 5, { trill: true, tieStart: true }), tabd('quarter', 3, 5, { tieEnd: true, trill: true }), tabd('half', 3, 7)] },
+          vm([tabq(1, 5), tabq(1, 5), tabq(1, 5), tabq(1, 5)],
+            [tabd('quarter', 4, 2, { trill: true, tieStart: true }), tabd('quarter', 4, 2, { tieEnd: true }, { pickStroke: 'up' }), { type: 'rest', duration: 'half' }]),
+        ],
+      }],
+    },
+  },
+  {
+    // 1.9.0 across system breaks at 600: a notation + TAB trill tied over three systems (two breaks), then on the next
+    // system's last beat a compound bend and a legato slide into the following system, w/bar running over that break and
+    // a scoop on its first note; a voice-2 trill tied across one break (two-voice measures on both sides).
+    name: 'bends-slides-break', width: 600,
+    score: {
+      tracks: [{
+        name: 'Gt.', showTablature: true,
+        measures: [
+          { beats: [tabd('half', 2, 5), tabd('half', 3, 5, { trill: true, tieStart: true })] },
+          ...[0, 1, 2, 3, 4, 5, 6, 7, 8].map(() => ({ beats: [tabd('whole', 3, 5, { tieStart: true, tieEnd: true })] })),
+          { beats: [tabd('half', 3, 5, { tieEnd: true }), tabd('half', 3, 9, {}, { whammyBar: true })] },
+          { beats: [tabd('half', 3, 9), tabd('half', 3, 7)] },
+          { beats: [tabd('half', 3, 9, {}, { whammyBar: true }), tabc([[2, 8, { bend: 'full release full' }], [3, 7, { slide: 'legato' }]], { whammyBar: true }, 'half')] },
+          { beats: [tabd('half', 3, 9, {}, { whammyScoop: true, whammyBar: true }), tabd('half', 3, 7)] },
+          vm([tabd('whole', 1, 5)], [tabd('whole', 4, 2, { trill: true, tieStart: true })]),
+          ...[0, 1, 2].map(() => vm([tabd('whole', 1, 5)], [tabd('whole', 4, 2, { tieStart: true, tieEnd: true })])),
+          vm([tabd('half', 1, 5), tabd('half', 1, 5)], [tabd('half', 4, 2, { tieEnd: true }), tabd('half', 4, 4)]),
+        ],
+      }],
+    },
+  },
+  {
+    // 1.9.0 on a tab-only track: a trill tied over pitchless string + fret notes, compound bends, a scoop, w/bar, a legato
+    // slide's arc and feedback harmonics.
+    name: 'bends-slides-tab-only', width: 900,
+    score: {
+      tracks: [{
+        name: 'TAB', showStandardNotation: false, showTablature: true,
+        measures: [
+          { beats: [tabd('quarter', 3, 5, { trill: true, tieStart: true }), tabd('quarter', 3, 5, { tieStart: true, tieEnd: true }, { pickStroke: 'down' }),
+            tabd('quarter', 3, 5, { tieEnd: true }), tabd('quarter', 3, 7)] },
+          { beats: [tabd('half', 2, 8, { bend: 'full release 1/2' }), tabd('half', 2, 8)] },
+          { beats: [tabd('quarter', 3, 5, {}, { whammyScoop: true, whammyBar: true }), tabd('quarter', 3, 7, { slide: 'legato' }, { whammyBar: true }),
+            tabd('quarter', 3, 9, {}, { whammyBar: true }), tabd('quarter', 3, 7)] },
+          { beats: [tabd('quarter', 2, 5, { harmonic: 'feedback' }), tabd('quarter', 2, 5, { harmonic: 'feedback' }), tabd('half', 2, 7)] },
+          { beats: [tabd('whole', 2, 8, { bend: 'pb full release full' })] },
+        ],
+      }],
+    },
+  },
 ];
 
 // Copy of a score with tabRhythm: false on every track (source untouched). Today the field is ignored, so

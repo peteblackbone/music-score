@@ -1,0 +1,481 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" class="music-score" style="font-synthesis: none; background:#ffffff" role="img" height="1285.55" viewBox="0 0 600 1285.55">
+  <title>Music score</title>
+  <desc>1 instrument: Gt.. 19 measures, 4/4.</desc>
+  <g class="system system-0">
+    <g class="staff staff-notation" data-track="0" transform="translate(0,56.26)">
+      <g class="staff-lines">
+        <line x1="57.28" y1="40" x2="570" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="57.28" y1="30" x2="570" y2="30" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="57.28" y1="20" x2="570" y2="20" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="57.28" y1="10" x2="570" y2="10" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="57.28" y1="0" x2="570" y2="0" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="67.28" y="30" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a"></text>
+      <g class="time-signature">
+        <text x="104.12" y="10" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a"></text>
+        <text x="104.12" y="30" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a"></text>
+      </g>
+      <text x="143.02" y="5" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="137.12" y1="6.72" x2="137.12" y2="40" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="204.56" y="15" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="198.66" y1="16.72" x2="198.66" y2="50" stroke="#1a1a1a" stroke-width="1.3"/>
+      <g class="barline">
+        <line x1="260.6" y1="0" x2="260.6" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="282.04" y="15" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <g class="barline">
+        <line x1="363.56" y1="0" x2="363.56" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="385" y="15" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <g class="barline">
+        <line x1="466.53" y1="0" x2="466.53" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="487.97" y="15" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <g class="barline">
+        <line x1="569.5" y1="0" x2="569.5" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <path d="M 212.96 12.5 C 229.24 3.2, 254.82 3.2, 271.1 12.5 C 254.82 4.94, 229.24 4.94, 212.96 12.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <path d="M 292.98 12.5 C 315.68 -0.47, 351.36 -0.47, 374.06 12.5 C 351.36 1.96, 315.68 1.96, 292.98 12.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <path d="M 395.94 12.5 C 418.65 -0.47, 454.33 -0.47, 477.03 12.5 C 454.33 1.96, 418.65 1.96, 395.94 12.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <path d="M 498.91 12.5 C 517.42 1.93, 546.5 1.93, 565 12.5 C 546.5 3.91, 517.42 3.91, 498.91 12.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <g class="trill">
+        <text x="204.56" y="-10.63" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+        <path d="M 217.68 -15.63 Q 219.43 -17.63 221.18 -15.63 Q 222.93 -13.63 224.68 -15.63 Q 226.43 -17.63 228.18 -15.63 Q 229.93 -13.63 231.68 -15.63 Q 233.43 -17.63 235.18 -15.63 Q 236.93 -13.63 238.68 -15.63 Q 240.43 -17.63 242.18 -15.63 Q 243.93 -13.63 245.68 -15.63 Q 247.43 -17.63 249.18 -15.63 Q 250.93 -13.63 252.68 -15.63 Q 254.43 -17.63 256.18 -15.63 Q 257.93 -13.63 259.68 -15.63 Q 261.43 -17.63 263.18 -15.63 Q 264.93 -13.63 266.68 -15.63 Q 268.43 -17.63 270.18 -15.63 Q 271.93 -13.63 273.68 -15.63 Q 275.43 -17.63 277.18 -15.63 Q 278.93 -13.63 280.68 -15.63 Q 282.43 -17.63 284.18 -15.63 Q 285.93 -13.63 287.68 -15.63 Q 289.43 -17.63 291.18 -15.63 Q 292.93 -13.63 294.68 -15.63 Q 296.43 -17.63 298.18 -15.63 Q 299.93 -13.63 301.68 -15.63 Q 303.43 -17.63 305.18 -15.63 Q 306.93 -13.63 308.68 -15.63 Q 310.43 -17.63 312.18 -15.63 Q 313.93 -13.63 315.68 -15.63 Q 317.43 -17.63 319.18 -15.63 Q 320.93 -13.63 322.68 -15.63 Q 324.43 -17.63 326.18 -15.63 Q 327.93 -13.63 329.68 -15.63 Q 331.43 -17.63 333.18 -15.63 Q 334.93 -13.63 336.68 -15.63 Q 338.43 -17.63 340.18 -15.63 Q 341.93 -13.63 343.68 -15.63 Q 345.43 -17.63 347.18 -15.63 Q 348.93 -13.63 350.68 -15.63 Q 352.43 -17.63 354.18 -15.63 Q 355.93 -13.63 357.68 -15.63 Q 359.43 -17.63 361.18 -15.63 Q 362.93 -13.63 364.68 -15.63 Q 366.43 -17.63 368.18 -15.63 Q 369.93 -13.63 371.68 -15.63 Q 373.43 -17.63 375.18 -15.63 Q 376.93 -13.63 378.68 -15.63 Q 380.43 -17.63 382.18 -15.63 Q 383.93 -13.63 385.68 -15.63 Q 387.43 -17.63 389.18 -15.63 Q 390.93 -13.63 392.68 -15.63 Q 394.43 -17.63 396.18 -15.63 Q 397.93 -13.63 399.68 -15.63 Q 401.43 -17.63 403.18 -15.63 Q 404.93 -13.63 406.68 -15.63 Q 408.43 -17.63 410.18 -15.63 Q 411.93 -13.63 413.68 -15.63 Q 415.43 -17.63 417.18 -15.63 Q 418.93 -13.63 420.68 -15.63 Q 422.43 -17.63 424.18 -15.63 Q 425.93 -13.63 427.68 -15.63 Q 429.43 -17.63 431.18 -15.63 Q 432.93 -13.63 434.68 -15.63 Q 436.43 -17.63 438.18 -15.63 Q 439.93 -13.63 441.68 -15.63 Q 443.43 -17.63 445.18 -15.63 Q 446.93 -13.63 448.68 -15.63 Q 450.43 -17.63 452.18 -15.63 Q 453.93 -13.63 455.68 -15.63 Q 457.43 -17.63 459.18 -15.63 Q 460.93 -13.63 462.68 -15.63 Q 464.43 -17.63 466.18 -15.63 Q 467.93 -13.63 469.68 -15.63 Q 471.43 -17.63 473.18 -15.63 Q 474.93 -13.63 476.68 -15.63 Q 478.43 -17.63 480.18 -15.63 Q 481.93 -13.63 483.68 -15.63 Q 485.43 -17.63 487.18 -15.63 Q 488.93 -13.63 490.68 -15.63 Q 492.43 -17.63 494.18 -15.63 Q 495.93 -13.63 497.68 -15.63 Q 499.43 -17.63 501.18 -15.63 Q 502.93 -13.63 504.68 -15.63 Q 506.43 -17.63 508.18 -15.63 Q 509.93 -13.63 511.68 -15.63 Q 513.43 -17.63 515.18 -15.63 Q 516.93 -13.63 518.68 -15.63 Q 520.43 -17.63 522.18 -15.63 Q 523.93 -13.63 525.68 -15.63 Q 527.43 -17.63 529.18 -15.63 Q 530.93 -13.63 532.68 -15.63 Q 534.43 -17.63 536.18 -15.63 Q 537.93 -13.63 539.68 -15.63 Q 541.43 -17.63 543.18 -15.63 Q 544.93 -13.63 546.68 -15.63 Q 548.43 -17.63 550.18 -15.63 Q 551.93 -13.63 553.68 -15.63 Q 555.43 -17.63 557.18 -15.63 Q 558.93 -13.63 560.68 -15.63 Q 562.43 -17.63 564.18 -15.63 Q 564.59 -13.63 565 -15.63" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+    </g>
+    <g class="staff staff-tab" data-track="0" transform="translate(0,149.62)">
+      <g class="tab-lines">
+        <line x1="57.28" y1="75" x2="570" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="57.28" y1="60" x2="570" y2="60" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="57.28" y1="45" x2="570" y2="45" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="57.28" y1="30" x2="570" y2="30" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="57.28" y1="15" x2="570" y2="15" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="57.28" y1="0" x2="570" y2="0" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <g class="tab-clef">
+        <text x="67.28" y="37.5" font-family="Bravura, BravuraFallback, serif" font-size="38.46" fill="#1a1a1a"></text>
+      </g>
+      <rect x="138.52" y="8" width="9" height="14" fill="#ffffff"/>
+      <text x="143.02" y="20" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <rect x="200.06" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="204.56" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <g class="barline">
+        <line x1="260.6" y1="0" x2="260.6" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <rect x="277.54" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="282.04" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <g class="barline">
+        <line x1="363.56" y1="0" x2="363.56" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <rect x="380.5" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="385" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <g class="barline">
+        <line x1="466.53" y1="0" x2="466.53" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <rect x="483.47" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="487.97" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <g class="barline">
+        <line x1="569.5" y1="0" x2="569.5" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <g class="trill">
+        <text x="204.56" y="-4.63" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+        <path d="M 217.68 -9.63 Q 219.43 -11.63 221.18 -9.63 Q 222.93 -7.63 224.68 -9.63 Q 226.43 -11.63 228.18 -9.63 Q 229.93 -7.63 231.68 -9.63 Q 233.43 -11.63 235.18 -9.63 Q 236.93 -7.63 238.68 -9.63 Q 240.43 -11.63 242.18 -9.63 Q 243.93 -7.63 245.68 -9.63 Q 247.43 -11.63 249.18 -9.63 Q 250.93 -7.63 252.68 -9.63 Q 254.43 -11.63 256.18 -9.63 Q 257.93 -7.63 259.68 -9.63 Q 261.43 -11.63 263.18 -9.63 Q 264.93 -7.63 266.68 -9.63 Q 268.43 -11.63 270.18 -9.63 Q 271.93 -7.63 273.68 -9.63 Q 275.43 -11.63 277.18 -9.63 Q 278.93 -7.63 280.68 -9.63 Q 282.43 -11.63 284.18 -9.63 Q 285.93 -7.63 287.68 -9.63 Q 289.43 -11.63 291.18 -9.63 Q 292.93 -7.63 294.68 -9.63 Q 296.43 -11.63 298.18 -9.63 Q 299.93 -7.63 301.68 -9.63 Q 303.43 -11.63 305.18 -9.63 Q 306.93 -7.63 308.68 -9.63 Q 310.43 -11.63 312.18 -9.63 Q 313.93 -7.63 315.68 -9.63 Q 317.43 -11.63 319.18 -9.63 Q 320.93 -7.63 322.68 -9.63 Q 324.43 -11.63 326.18 -9.63 Q 327.93 -7.63 329.68 -9.63 Q 331.43 -11.63 333.18 -9.63 Q 334.93 -7.63 336.68 -9.63 Q 338.43 -11.63 340.18 -9.63 Q 341.93 -7.63 343.68 -9.63 Q 345.43 -11.63 347.18 -9.63 Q 348.93 -7.63 350.68 -9.63 Q 352.43 -11.63 354.18 -9.63 Q 355.93 -7.63 357.68 -9.63 Q 359.43 -11.63 361.18 -9.63 Q 362.93 -7.63 364.68 -9.63 Q 366.43 -11.63 368.18 -9.63 Q 369.93 -7.63 371.68 -9.63 Q 373.43 -11.63 375.18 -9.63 Q 376.93 -7.63 378.68 -9.63 Q 380.43 -11.63 382.18 -9.63 Q 383.93 -7.63 385.68 -9.63 Q 387.43 -11.63 389.18 -9.63 Q 390.93 -7.63 392.68 -9.63 Q 394.43 -11.63 396.18 -9.63 Q 397.93 -7.63 399.68 -9.63 Q 401.43 -11.63 403.18 -9.63 Q 404.93 -7.63 406.68 -9.63 Q 408.43 -11.63 410.18 -9.63 Q 411.93 -7.63 413.68 -9.63 Q 415.43 -11.63 417.18 -9.63 Q 418.93 -7.63 420.68 -9.63 Q 422.43 -11.63 424.18 -9.63 Q 425.93 -7.63 427.68 -9.63 Q 429.43 -11.63 431.18 -9.63 Q 432.93 -7.63 434.68 -9.63 Q 436.43 -11.63 438.18 -9.63 Q 439.93 -7.63 441.68 -9.63 Q 443.43 -11.63 445.18 -9.63 Q 446.93 -7.63 448.68 -9.63 Q 450.43 -11.63 452.18 -9.63 Q 453.93 -7.63 455.68 -9.63 Q 457.43 -11.63 459.18 -9.63 Q 460.93 -7.63 462.68 -9.63 Q 464.43 -11.63 466.18 -9.63 Q 467.93 -7.63 469.68 -9.63 Q 471.43 -11.63 473.18 -9.63 Q 474.93 -7.63 476.68 -9.63 Q 478.43 -11.63 480.18 -9.63 Q 481.93 -7.63 483.68 -9.63 Q 485.43 -11.63 487.18 -9.63 Q 488.93 -7.63 490.68 -9.63 Q 492.43 -11.63 494.18 -9.63 Q 495.93 -7.63 497.68 -9.63 Q 499.43 -11.63 501.18 -9.63 Q 502.93 -7.63 504.68 -9.63 Q 506.43 -11.63 508.18 -9.63 Q 509.93 -7.63 511.68 -9.63 Q 513.43 -11.63 515.18 -9.63 Q 516.93 -7.63 518.68 -9.63 Q 520.43 -11.63 522.18 -9.63 Q 523.93 -7.63 525.68 -9.63 Q 527.43 -11.63 529.18 -9.63 Q 530.93 -7.63 532.68 -9.63 Q 534.43 -11.63 536.18 -9.63 Q 537.93 -7.63 539.68 -9.63 Q 541.43 -11.63 543.18 -9.63 Q 544.93 -7.63 546.68 -9.63 Q 548.43 -11.63 550.18 -9.63 Q 551.93 -7.63 553.68 -9.63 Q 555.43 -11.63 557.18 -9.63 Q 558.93 -7.63 560.68 -9.63 Q 562.43 -11.63 564.18 -9.63 Q 564.59 -7.63 565 -9.63" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+    </g>
+    <line x1="57.78" y1="56.26" x2="57.78" y2="224.62" class="system-join" stroke="#1a1a1a" stroke-width="1"/>
+    <text x="47.28" y="144.64" class="instrument-name" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="end" fill="#1a1a1a">Gt.</text>
+  </g>
+  <g class="system system-1">
+    <g class="staff staff-notation" data-track="0" transform="translate(0,304.62)">
+      <g class="staff-lines">
+        <line x1="30" y1="40" x2="570" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="30" x2="570" y2="30" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="20" x2="570" y2="20" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="10" x2="570" y2="10" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="0" x2="570" y2="0" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="40" y="30" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a"></text>
+      <text x="90.28" y="15" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <g class="barline">
+        <line x1="168.97" y1="0" x2="168.97" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="190.41" y="15" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <g class="barline">
+        <line x1="269.1" y1="0" x2="269.1" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="290.54" y="15" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <g class="barline">
+        <line x1="369.24" y1="0" x2="369.24" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="390.68" y="15" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <g class="barline">
+        <line x1="469.37" y1="0" x2="469.37" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="490.81" y="15" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <g class="barline">
+        <line x1="569.5" y1="0" x2="569.5" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="30" y="-20" class="measure-number" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" font-style="italic" fill="#1a1a1a">5</text>
+      <path d="M 71.84 12.5 C 73.94 3.5, 77.24 3.5, 79.34 12.5 C 77.24 4.9, 73.94 4.9, 71.84 12.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <path d="M 101.22 12.5 C 123.13 -0.02, 157.56 -0.02, 179.47 12.5 C 157.56 2.33, 123.13 2.33, 101.22 12.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <path d="M 201.35 12.5 C 223.26 -0.02, 257.69 -0.02, 279.6 12.5 C 257.69 2.33, 223.26 2.33, 201.35 12.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <path d="M 301.48 12.5 C 323.39 -0.02, 357.83 -0.02, 379.74 12.5 C 357.83 2.33, 323.39 2.33, 301.48 12.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <path d="M 401.62 12.5 C 423.53 -0.02, 457.96 -0.02, 479.87 12.5 C 457.96 2.33, 423.53 2.33, 401.62 12.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <path d="M 501.75 12.5 C 519.46 2.38, 547.29 2.38, 565 12.5 C 547.29 4.28, 519.46 4.28, 501.75 12.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <g class="trill trill-continued">
+        <path d="M 71.84 -12 Q 73.59 -14 75.34 -12 Q 77.09 -10 78.84 -12 Q 80.59 -14 82.34 -12 Q 84.09 -10 85.84 -12 Q 87.59 -14 89.34 -12 Q 91.09 -10 92.84 -12 Q 94.59 -14 96.34 -12 Q 98.09 -10 99.84 -12 Q 101.59 -14 103.34 -12 Q 105.09 -10 106.84 -12 Q 108.59 -14 110.34 -12 Q 112.09 -10 113.84 -12 Q 115.59 -14 117.34 -12 Q 119.09 -10 120.84 -12 Q 122.59 -14 124.34 -12 Q 126.09 -10 127.84 -12 Q 129.59 -14 131.34 -12 Q 133.09 -10 134.84 -12 Q 136.59 -14 138.34 -12 Q 140.09 -10 141.84 -12 Q 143.59 -14 145.34 -12 Q 147.09 -10 148.84 -12 Q 150.59 -14 152.34 -12 Q 154.09 -10 155.84 -12 Q 157.59 -14 159.34 -12 Q 161.09 -10 162.84 -12 Q 164.59 -14 166.34 -12 Q 168.09 -10 169.84 -12 Q 171.59 -14 173.34 -12 Q 175.09 -10 176.84 -12 Q 178.59 -14 180.34 -12 Q 182.09 -10 183.84 -12 Q 185.59 -14 187.34 -12 Q 189.09 -10 190.84 -12 Q 192.59 -14 194.34 -12 Q 196.09 -10 197.84 -12 Q 199.59 -14 201.34 -12 Q 203.09 -10 204.84 -12 Q 206.59 -14 208.34 -12 Q 210.09 -10 211.84 -12 Q 213.59 -14 215.34 -12 Q 217.09 -10 218.84 -12 Q 220.59 -14 222.34 -12 Q 224.09 -10 225.84 -12 Q 227.59 -14 229.34 -12 Q 231.09 -10 232.84 -12 Q 234.59 -14 236.34 -12 Q 238.09 -10 239.84 -12 Q 241.59 -14 243.34 -12 Q 245.09 -10 246.84 -12 Q 248.59 -14 250.34 -12 Q 252.09 -10 253.84 -12 Q 255.59 -14 257.34 -12 Q 259.09 -10 260.84 -12 Q 262.59 -14 264.34 -12 Q 266.09 -10 267.84 -12 Q 269.59 -14 271.34 -12 Q 273.09 -10 274.84 -12 Q 276.59 -14 278.34 -12 Q 280.09 -10 281.84 -12 Q 283.59 -14 285.34 -12 Q 287.09 -10 288.84 -12 Q 290.59 -14 292.34 -12 Q 294.09 -10 295.84 -12 Q 297.59 -14 299.34 -12 Q 301.09 -10 302.84 -12 Q 304.59 -14 306.34 -12 Q 308.09 -10 309.84 -12 Q 311.59 -14 313.34 -12 Q 315.09 -10 316.84 -12 Q 318.59 -14 320.34 -12 Q 322.09 -10 323.84 -12 Q 325.59 -14 327.34 -12 Q 329.09 -10 330.84 -12 Q 332.59 -14 334.34 -12 Q 336.09 -10 337.84 -12 Q 339.59 -14 341.34 -12 Q 343.09 -10 344.84 -12 Q 346.59 -14 348.34 -12 Q 350.09 -10 351.84 -12 Q 353.59 -14 355.34 -12 Q 357.09 -10 358.84 -12 Q 360.59 -14 362.34 -12 Q 364.09 -10 365.84 -12 Q 367.59 -14 369.34 -12 Q 371.09 -10 372.84 -12 Q 374.59 -14 376.34 -12 Q 378.09 -10 379.84 -12 Q 381.59 -14 383.34 -12 Q 385.09 -10 386.84 -12 Q 388.59 -14 390.34 -12 Q 392.09 -10 393.84 -12 Q 395.59 -14 397.34 -12 Q 399.09 -10 400.84 -12 Q 402.59 -14 404.34 -12 Q 406.09 -10 407.84 -12 Q 409.59 -14 411.34 -12 Q 413.09 -10 414.84 -12 Q 416.59 -14 418.34 -12 Q 420.09 -10 421.84 -12 Q 423.59 -14 425.34 -12 Q 427.09 -10 428.84 -12 Q 430.59 -14 432.34 -12 Q 434.09 -10 435.84 -12 Q 437.59 -14 439.34 -12 Q 441.09 -10 442.84 -12 Q 444.59 -14 446.34 -12 Q 448.09 -10 449.84 -12 Q 451.59 -14 453.34 -12 Q 455.09 -10 456.84 -12 Q 458.59 -14 460.34 -12 Q 462.09 -10 463.84 -12 Q 465.59 -14 467.34 -12 Q 469.09 -10 470.84 -12 Q 472.59 -14 474.34 -12 Q 476.09 -10 477.84 -12 Q 479.59 -14 481.34 -12 Q 483.09 -10 484.84 -12 Q 486.59 -14 488.34 -12 Q 490.09 -10 491.84 -12 Q 493.59 -14 495.34 -12 Q 497.09 -10 498.84 -12 Q 500.59 -14 502.34 -12 Q 504.09 -10 505.84 -12 Q 507.59 -14 509.34 -12 Q 511.09 -10 512.84 -12 Q 514.59 -14 516.34 -12 Q 518.09 -10 519.84 -12 Q 521.59 -14 523.34 -12 Q 525.09 -10 526.84 -12 Q 528.59 -14 530.34 -12 Q 532.09 -10 533.84 -12 Q 535.59 -14 537.34 -12 Q 539.09 -10 540.84 -12 Q 542.59 -14 544.34 -12 Q 546.09 -10 547.84 -12 Q 549.59 -14 551.34 -12 Q 553.09 -10 554.84 -12 Q 556.59 -14 558.34 -12 Q 560.09 -10 561.84 -12 Q 563.42 -14 565 -12" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+    </g>
+    <g class="staff staff-tab" data-track="0" transform="translate(0,385.72)">
+      <g class="tab-lines">
+        <line x1="30" y1="75" x2="570" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="60" x2="570" y2="60" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="45" x2="570" y2="45" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="30" x2="570" y2="30" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="15" x2="570" y2="15" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="0" x2="570" y2="0" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <g class="tab-clef">
+        <text x="40" y="37.5" font-family="Bravura, BravuraFallback, serif" font-size="38.46" fill="#1a1a1a"></text>
+      </g>
+      <rect x="85.78" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="90.28" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <g class="barline">
+        <line x1="168.97" y1="0" x2="168.97" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <rect x="185.91" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="190.41" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <g class="barline">
+        <line x1="269.1" y1="0" x2="269.1" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <rect x="286.04" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="290.54" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <g class="barline">
+        <line x1="369.24" y1="0" x2="369.24" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <rect x="386.18" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="390.68" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <g class="barline">
+        <line x1="469.37" y1="0" x2="469.37" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <rect x="486.31" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="490.81" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <g class="barline">
+        <line x1="569.5" y1="0" x2="569.5" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <g class="trill trill-continued">
+        <path d="M 71.84 -6 Q 73.59 -8 75.34 -6 Q 77.09 -4 78.84 -6 Q 80.59 -8 82.34 -6 Q 84.09 -4 85.84 -6 Q 87.59 -8 89.34 -6 Q 91.09 -4 92.84 -6 Q 94.59 -8 96.34 -6 Q 98.09 -4 99.84 -6 Q 101.59 -8 103.34 -6 Q 105.09 -4 106.84 -6 Q 108.59 -8 110.34 -6 Q 112.09 -4 113.84 -6 Q 115.59 -8 117.34 -6 Q 119.09 -4 120.84 -6 Q 122.59 -8 124.34 -6 Q 126.09 -4 127.84 -6 Q 129.59 -8 131.34 -6 Q 133.09 -4 134.84 -6 Q 136.59 -8 138.34 -6 Q 140.09 -4 141.84 -6 Q 143.59 -8 145.34 -6 Q 147.09 -4 148.84 -6 Q 150.59 -8 152.34 -6 Q 154.09 -4 155.84 -6 Q 157.59 -8 159.34 -6 Q 161.09 -4 162.84 -6 Q 164.59 -8 166.34 -6 Q 168.09 -4 169.84 -6 Q 171.59 -8 173.34 -6 Q 175.09 -4 176.84 -6 Q 178.59 -8 180.34 -6 Q 182.09 -4 183.84 -6 Q 185.59 -8 187.34 -6 Q 189.09 -4 190.84 -6 Q 192.59 -8 194.34 -6 Q 196.09 -4 197.84 -6 Q 199.59 -8 201.34 -6 Q 203.09 -4 204.84 -6 Q 206.59 -8 208.34 -6 Q 210.09 -4 211.84 -6 Q 213.59 -8 215.34 -6 Q 217.09 -4 218.84 -6 Q 220.59 -8 222.34 -6 Q 224.09 -4 225.84 -6 Q 227.59 -8 229.34 -6 Q 231.09 -4 232.84 -6 Q 234.59 -8 236.34 -6 Q 238.09 -4 239.84 -6 Q 241.59 -8 243.34 -6 Q 245.09 -4 246.84 -6 Q 248.59 -8 250.34 -6 Q 252.09 -4 253.84 -6 Q 255.59 -8 257.34 -6 Q 259.09 -4 260.84 -6 Q 262.59 -8 264.34 -6 Q 266.09 -4 267.84 -6 Q 269.59 -8 271.34 -6 Q 273.09 -4 274.84 -6 Q 276.59 -8 278.34 -6 Q 280.09 -4 281.84 -6 Q 283.59 -8 285.34 -6 Q 287.09 -4 288.84 -6 Q 290.59 -8 292.34 -6 Q 294.09 -4 295.84 -6 Q 297.59 -8 299.34 -6 Q 301.09 -4 302.84 -6 Q 304.59 -8 306.34 -6 Q 308.09 -4 309.84 -6 Q 311.59 -8 313.34 -6 Q 315.09 -4 316.84 -6 Q 318.59 -8 320.34 -6 Q 322.09 -4 323.84 -6 Q 325.59 -8 327.34 -6 Q 329.09 -4 330.84 -6 Q 332.59 -8 334.34 -6 Q 336.09 -4 337.84 -6 Q 339.59 -8 341.34 -6 Q 343.09 -4 344.84 -6 Q 346.59 -8 348.34 -6 Q 350.09 -4 351.84 -6 Q 353.59 -8 355.34 -6 Q 357.09 -4 358.84 -6 Q 360.59 -8 362.34 -6 Q 364.09 -4 365.84 -6 Q 367.59 -8 369.34 -6 Q 371.09 -4 372.84 -6 Q 374.59 -8 376.34 -6 Q 378.09 -4 379.84 -6 Q 381.59 -8 383.34 -6 Q 385.09 -4 386.84 -6 Q 388.59 -8 390.34 -6 Q 392.09 -4 393.84 -6 Q 395.59 -8 397.34 -6 Q 399.09 -4 400.84 -6 Q 402.59 -8 404.34 -6 Q 406.09 -4 407.84 -6 Q 409.59 -8 411.34 -6 Q 413.09 -4 414.84 -6 Q 416.59 -8 418.34 -6 Q 420.09 -4 421.84 -6 Q 423.59 -8 425.34 -6 Q 427.09 -4 428.84 -6 Q 430.59 -8 432.34 -6 Q 434.09 -4 435.84 -6 Q 437.59 -8 439.34 -6 Q 441.09 -4 442.84 -6 Q 444.59 -8 446.34 -6 Q 448.09 -4 449.84 -6 Q 451.59 -8 453.34 -6 Q 455.09 -4 456.84 -6 Q 458.59 -8 460.34 -6 Q 462.09 -4 463.84 -6 Q 465.59 -8 467.34 -6 Q 469.09 -4 470.84 -6 Q 472.59 -8 474.34 -6 Q 476.09 -4 477.84 -6 Q 479.59 -8 481.34 -6 Q 483.09 -4 484.84 -6 Q 486.59 -8 488.34 -6 Q 490.09 -4 491.84 -6 Q 493.59 -8 495.34 -6 Q 497.09 -4 498.84 -6 Q 500.59 -8 502.34 -6 Q 504.09 -4 505.84 -6 Q 507.59 -8 509.34 -6 Q 511.09 -4 512.84 -6 Q 514.59 -8 516.34 -6 Q 518.09 -4 519.84 -6 Q 521.59 -8 523.34 -6 Q 525.09 -4 526.84 -6 Q 528.59 -8 530.34 -6 Q 532.09 -4 533.84 -6 Q 535.59 -8 537.34 -6 Q 539.09 -4 540.84 -6 Q 542.59 -8 544.34 -6 Q 546.09 -4 547.84 -6 Q 549.59 -8 551.34 -6 Q 553.09 -4 554.84 -6 Q 556.59 -8 558.34 -6 Q 560.09 -4 561.84 -6 Q 563.42 -8 565 -6" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+    </g>
+    <line x1="30.5" y1="304.62" x2="30.5" y2="460.72" class="system-join" stroke="#1a1a1a" stroke-width="1"/>
+  </g>
+  <g class="system system-2">
+    <g class="staff staff-notation" data-track="0" transform="translate(0,540.72)">
+      <g class="staff-lines">
+        <line x1="30" y1="40" x2="570" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="30" x2="570" y2="30" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="20" x2="570" y2="20" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="10" x2="570" y2="10" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="0" x2="570" y2="0" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="40" y="30" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a"></text>
+      <text x="90.28" y="15" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <g class="barline">
+        <line x1="169.57" y1="0" x2="169.57" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="188.47" y="15" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="182.57" y1="16.72" x2="182.57" y2="50" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="248.42" y="5" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="242.52" y1="6.72" x2="242.52" y2="40" stroke="#1a1a1a" stroke-width="1.3"/>
+      <g class="barline">
+        <line x1="302.88" y1="0" x2="302.88" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="321.78" y="5" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="315.88" y1="6.72" x2="315.88" y2="40" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="381.73" y="10" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="375.83" y1="11.72" x2="375.83" y2="45" stroke="#1a1a1a" stroke-width="1.3"/>
+      <g class="barline">
+        <line x1="436.19" y1="0" x2="436.19" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="455.09" y="5" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="449.19" y1="6.72" x2="449.19" y2="40" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="515.04" y="-5" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <text x="515.04" y="10" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="509.14" y1="-3.28" x2="509.14" y2="45" stroke="#1a1a1a" stroke-width="1.3"/>
+      <g class="barline">
+        <line x1="569.5" y1="0" x2="569.5" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="30" y="-20" class="measure-number" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" font-style="italic" fill="#1a1a1a">10</text>
+      <path d="M 71.84 12.5 C 73.94 3.5, 77.24 3.5, 79.34 12.5 C 77.24 4.9, 73.94 4.9, 71.84 12.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <path d="M 101.22 12.5 C 123.3 -0.12, 157.99 -0.12, 180.07 12.5 C 157.99 2.25, 123.3 2.25, 101.22 12.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <path d="M 515.04 -16 C 529.03 -27.99, 551.01 -27.99, 565 -16 C 551.01 -26.49, 529.03 -26.49, 515.04 -16 Z" class="slur" fill="#1a1a1a" stroke="none"/>
+      <g class="trill trill-continued">
+        <path d="M 71.84 -12 Q 73.59 -14 75.34 -12 Q 77.09 -10 78.84 -12 Q 80.59 -14 82.34 -12 Q 84.09 -10 85.84 -12 Q 87.59 -14 89.34 -12 Q 91.09 -10 92.84 -12 Q 94.59 -14 96.34 -12 Q 98.09 -10 99.84 -12 Q 101.59 -14 103.34 -12 Q 105.09 -10 106.84 -12 Q 108.59 -14 110.34 -12 Q 112.09 -10 113.84 -12 Q 115.59 -14 117.34 -12 Q 119.09 -10 120.84 -12 Q 122.59 -14 124.34 -12 Q 126.09 -10 127.84 -12 Q 129.59 -14 131.34 -12 Q 133.09 -10 134.84 -12 Q 136.59 -14 138.34 -12 Q 140.09 -10 141.84 -12 Q 143.59 -14 145.34 -12 Q 147.09 -10 148.84 -12 Q 150.59 -14 152.34 -12 Q 154.09 -10 155.84 -12 Q 157.59 -14 159.34 -12 Q 161.09 -10 162.84 -12 Q 164.59 -14 166.34 -12 Q 168.09 -10 169.84 -12 Q 171.59 -14 173.34 -12 Q 175.09 -10 176.84 -12 Q 178.59 -14 180.34 -12 Q 182.09 -10 183.84 -12 Q 185.59 -14 187.34 -12 Q 189.09 -10 190.84 -12 Q 192.59 -14 194.34 -12 Q 196.09 -10 197.84 -12 Q 199.59 -14 201.34 -12 Q 203.09 -10 204.84 -12 Q 206.59 -14 208.34 -12 Q 210.09 -10 211.84 -12 Q 213.59 -14 215.34 -12 Q 217.09 -10 218.84 -12 Q 220.59 -14 222.34 -12 Q 224.09 -10 225.84 -12 Q 227.59 -14 229.34 -12 Q 231.09 -10 232.84 -12 Q 234.59 -14 236.34 -12 Q 238.09 -10 239.84 -12 Q 240.13 -14 240.42 -12" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+    </g>
+    <g class="staff staff-tab" data-track="0" transform="translate(0,648.82)">
+      <g class="tab-lines">
+        <line x1="30" y1="75" x2="570" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="60" x2="570" y2="60" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="45" x2="570" y2="45" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="30" x2="570" y2="30" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="15" x2="570" y2="15" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="0" x2="570" y2="0" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <g class="tab-clef">
+        <text x="40" y="37.5" font-family="Bravura, BravuraFallback, serif" font-size="38.46" fill="#1a1a1a"></text>
+      </g>
+      <rect x="85.78" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="90.28" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <g class="barline">
+        <line x1="169.57" y1="0" x2="169.57" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <rect x="183.97" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="188.47" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <rect x="243.92" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="248.42" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">9</text>
+      <g class="barline">
+        <line x1="302.88" y1="0" x2="302.88" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <rect x="317.28" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="321.78" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">9</text>
+      <rect x="377.23" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="381.73" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">7</text>
+      <g class="barline">
+        <line x1="436.19" y1="0" x2="436.19" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <rect x="450.59" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="455.09" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">9</text>
+      <rect x="510.54" y="8" width="9" height="14" fill="#ffffff"/>
+      <text x="515.04" y="20" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">8</text>
+      <rect x="510.54" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="515.04" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">7</text>
+      <g class="barline">
+        <line x1="569.5" y1="0" x2="569.5" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <g class="bend bend-rebend">
+        <path d="M 518.04 6 C 526.84 6, 528.04 -7.5, 528.04 -21" fill="none" stroke="#1a1a1a" stroke-width="1.1"/>
+        <path d="M 528.04 -21 L 530.44 -17 L 525.64 -17 Z" fill="#1a1a1a" stroke="none"/>
+        <path d="M 528.04 -21 Q 536.36 -18.3 548.84 6" fill="none" stroke="#1a1a1a" stroke-width="1.1"/>
+        <path d="M 548.84 6 L 544.88 3.54 L 549.15 1.35 Z" fill="#1a1a1a" stroke="none"/>
+        <path d="M 548.84 6 C 557.64 6, 558.84 -7.5, 558.84 -21" fill="none" stroke="#1a1a1a" stroke-width="1.1"/>
+        <path d="M 558.84 -21 L 561.24 -17 L 556.44 -17 Z" fill="#1a1a1a" stroke="none"/>
+        <rect x="514.64" y="-35" width="27.8" height="13" fill="#ffffff"/>
+        <text x="515.64" y="-25" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-style="italic" font-size="10" text-anchor="start" fill="#1a1a1a">Full</text>
+        <rect x="545.44" y="-35" width="27.8" height="13" fill="#ffffff"/>
+        <text x="546.44" y="-25" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-style="italic" font-size="10" text-anchor="start" fill="#1a1a1a">Full</text>
+      </g>
+      <rect x="520.04" y="25.6" width="24" height="8.8" fill="#ffffff"/>
+      <line x1="522.04" y1="32.4" x2="542.04" y2="27.6" stroke="#1a1a1a" stroke-width="1.3" stroke-linecap="round"/>
+      <g class="legato-slide">
+        <path d="M 518.04 21 Q 541.52 8 565 21" fill="none" stroke="#1a1a1a" stroke-width="1.1"/>
+      </g>
+      <g class="trill trill-continued">
+        <path d="M 71.84 -6 Q 73.59 -8 75.34 -6 Q 77.09 -4 78.84 -6 Q 80.59 -8 82.34 -6 Q 84.09 -4 85.84 -6 Q 87.59 -8 89.34 -6 Q 91.09 -4 92.84 -6 Q 94.59 -8 96.34 -6 Q 98.09 -4 99.84 -6 Q 101.59 -8 103.34 -6 Q 105.09 -4 106.84 -6 Q 108.59 -8 110.34 -6 Q 112.09 -4 113.84 -6 Q 115.59 -8 117.34 -6 Q 119.09 -4 120.84 -6 Q 122.59 -8 124.34 -6 Q 126.09 -4 127.84 -6 Q 129.59 -8 131.34 -6 Q 133.09 -4 134.84 -6 Q 136.59 -8 138.34 -6 Q 140.09 -4 141.84 -6 Q 143.59 -8 145.34 -6 Q 147.09 -4 148.84 -6 Q 150.59 -8 152.34 -6 Q 154.09 -4 155.84 -6 Q 157.59 -8 159.34 -6 Q 161.09 -4 162.84 -6 Q 164.59 -8 166.34 -6 Q 168.09 -4 169.84 -6 Q 171.59 -8 173.34 -6 Q 175.09 -4 176.84 -6 Q 178.59 -8 180.34 -6 Q 182.09 -4 183.84 -6 Q 185.59 -8 187.34 -6 Q 189.09 -4 190.84 -6 Q 192.59 -8 194.34 -6 Q 196.09 -4 197.84 -6 Q 199.59 -8 201.34 -6 Q 203.09 -4 204.84 -6 Q 206.59 -8 208.34 -6 Q 210.09 -4 211.84 -6 Q 213.59 -8 215.34 -6 Q 217.09 -4 218.84 -6 Q 220.59 -8 222.34 -6 Q 224.09 -4 225.84 -6 Q 227.59 -8 229.34 -6 Q 231.09 -4 232.84 -6 Q 234.59 -8 236.34 -6 Q 238.09 -4 239.84 -6 Q 240.13 -8 240.42 -6" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+      <g class="whammy-bar">
+        <text x="248.42" y="-6" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-style="italic" font-weight="bold" font-size="11" text-anchor="start" fill="#1a1a1a">w/bar</text>
+        <path d="M 284.84 -9.52 L 315.78 -9.52" fill="none" stroke="#1a1a1a" stroke-width="1" stroke-dasharray="2,2"/>
+        <line x1="315.78" y1="-12.27" x2="315.78" y2="-6.77" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <g class="whammy-bar">
+        <text x="455.09" y="-6" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-style="italic" font-weight="bold" font-size="11" text-anchor="start" fill="#1a1a1a">w/bar</text>
+        <path d="M 491.5 -9.52 L 537.04 -9.52" fill="none" stroke="#1a1a1a" stroke-width="1" stroke-dasharray="2,2"/>
+        <line x1="537.04" y1="-12.27" x2="537.04" y2="-6.77" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+    </g>
+    <line x1="30.5" y1="540.72" x2="30.5" y2="723.82" class="system-join" stroke="#1a1a1a" stroke-width="1"/>
+  </g>
+  <g class="system system-3">
+    <g class="staff staff-notation" data-track="0" transform="translate(0,803.82)">
+      <g class="staff-lines">
+        <line x1="30" y1="40" x2="570" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="30" x2="570" y2="30" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="20" x2="570" y2="20" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="10" x2="570" y2="10" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="0" x2="570" y2="0" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="40" y="30" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a"></text>
+      <text x="87.74" y="5" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="81.84" y1="6.72" x2="81.84" y2="40" stroke="#1a1a1a" stroke-width="1.3"/>
+      <text x="143.05" y="10" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="137.15" y1="11.72" x2="137.15" y2="45" stroke="#1a1a1a" stroke-width="1.3"/>
+      <g class="barline">
+        <line x1="192.86" y1="0" x2="192.86" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <line x1="202.86" y1="-10" x2="225.74" y2="-10" stroke="#1a1a1a" stroke-width="1"/>
+      <text x="214.3" y="-10" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <g class="voice-2">
+        <text x="214.3" y="40" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      </g>
+      <g class="barline">
+        <line x1="287.02" y1="0" x2="287.02" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <line x1="297.02" y1="-10" x2="319.9" y2="-10" stroke="#1a1a1a" stroke-width="1"/>
+      <text x="308.46" y="-10" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <g class="voice-2">
+        <text x="308.46" y="40" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      </g>
+      <g class="barline">
+        <line x1="381.18" y1="0" x2="381.18" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <line x1="391.18" y1="-10" x2="414.06" y2="-10" stroke="#1a1a1a" stroke-width="1"/>
+      <text x="402.62" y="-10" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <g class="voice-2">
+        <text x="402.62" y="40" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      </g>
+      <g class="barline">
+        <line x1="475.34" y1="0" x2="475.34" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <line x1="485.34" y1="-10" x2="508.22" y2="-10" stroke="#1a1a1a" stroke-width="1"/>
+      <text x="496.78" y="-10" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <g class="voice-2">
+        <text x="496.78" y="40" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      </g>
+      <g class="barline">
+        <line x1="569.5" y1="0" x2="569.5" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="30" y="-20" class="measure-number" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" font-style="italic" fill="#1a1a1a">14</text>
+      <path d="M 71.84 -6 C 76.29 -15, 83.29 -15, 87.74 -6 C 83.29 -13.6, 76.29 -13.6, 71.84 -6 Z" class="slur" fill="#1a1a1a" stroke="none"/>
+      <path d="M 225.24 42.5 C 245.48 54.06, 277.28 54.06, 297.52 42.5 C 277.28 51.9, 245.48 51.9, 225.24 42.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <path d="M 319.4 42.5 C 339.64 54.06, 371.44 54.06, 391.68 42.5 C 371.44 51.9, 339.64 51.9, 319.4 42.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <path d="M 413.56 42.5 C 433.8 54.06, 465.6 54.06, 485.84 42.5 C 465.6 51.9, 433.8 51.9, 413.56 42.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <path d="M 507.72 42.5 C 523.76 51.66, 548.96 51.66, 565 42.5 C 548.96 49.95, 523.76 49.95, 507.72 42.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <g class="voice-2">
+        <g class="trill">
+          <text x="214.3" y="71.8" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+          <path d="M 227.42 66.8 Q 229.17 64.8 230.92 66.8 Q 232.67 68.8 234.42 66.8 Q 236.17 64.8 237.92 66.8 Q 239.67 68.8 241.42 66.8 Q 243.17 64.8 244.92 66.8 Q 246.67 68.8 248.42 66.8 Q 250.17 64.8 251.92 66.8 Q 253.67 68.8 255.42 66.8 Q 257.17 64.8 258.92 66.8 Q 260.67 68.8 262.42 66.8 Q 264.17 64.8 265.92 66.8 Q 267.67 68.8 269.42 66.8 Q 271.17 64.8 272.92 66.8 Q 274.67 68.8 276.42 66.8 Q 278.17 64.8 279.92 66.8 Q 281.67 68.8 283.42 66.8 Q 285.17 64.8 286.92 66.8 Q 288.67 68.8 290.42 66.8 Q 292.17 64.8 293.92 66.8 Q 295.67 68.8 297.42 66.8 Q 299.17 64.8 300.92 66.8 Q 302.67 68.8 304.42 66.8 Q 306.17 64.8 307.92 66.8 Q 309.67 68.8 311.42 66.8 Q 313.17 64.8 314.92 66.8 Q 316.67 68.8 318.42 66.8 Q 320.17 64.8 321.92 66.8 Q 323.67 68.8 325.42 66.8 Q 327.17 64.8 328.92 66.8 Q 330.67 68.8 332.42 66.8 Q 334.17 64.8 335.92 66.8 Q 337.67 68.8 339.42 66.8 Q 341.17 64.8 342.92 66.8 Q 344.67 68.8 346.42 66.8 Q 348.17 64.8 349.92 66.8 Q 351.67 68.8 353.42 66.8 Q 355.17 64.8 356.92 66.8 Q 358.67 68.8 360.42 66.8 Q 362.17 64.8 363.92 66.8 Q 365.67 68.8 367.42 66.8 Q 369.17 64.8 370.92 66.8 Q 372.67 68.8 374.42 66.8 Q 376.17 64.8 377.92 66.8 Q 379.67 68.8 381.42 66.8 Q 383.17 64.8 384.92 66.8 Q 386.67 68.8 388.42 66.8 Q 390.17 64.8 391.92 66.8 Q 393.67 68.8 395.42 66.8 Q 397.17 64.8 398.92 66.8 Q 400.67 68.8 402.42 66.8 Q 404.17 64.8 405.92 66.8 Q 407.67 68.8 409.42 66.8 Q 411.17 64.8 412.92 66.8 Q 414.67 68.8 416.42 66.8 Q 418.17 64.8 419.92 66.8 Q 421.67 68.8 423.42 66.8 Q 425.17 64.8 426.92 66.8 Q 428.67 68.8 430.42 66.8 Q 432.17 64.8 433.92 66.8 Q 435.67 68.8 437.42 66.8 Q 439.17 64.8 440.92 66.8 Q 442.67 68.8 444.42 66.8 Q 446.17 64.8 447.92 66.8 Q 449.67 68.8 451.42 66.8 Q 453.17 64.8 454.92 66.8 Q 456.67 68.8 458.42 66.8 Q 460.17 64.8 461.92 66.8 Q 463.67 68.8 465.42 66.8 Q 467.17 64.8 468.92 66.8 Q 470.67 68.8 472.42 66.8 Q 474.17 64.8 475.92 66.8 Q 477.67 68.8 479.42 66.8 Q 481.17 64.8 482.92 66.8 Q 484.67 68.8 486.42 66.8 Q 488.17 64.8 489.92 66.8 Q 491.67 68.8 493.42 66.8 Q 495.17 64.8 496.92 66.8 Q 498.67 68.8 500.42 66.8 Q 502.17 64.8 503.92 66.8 Q 505.67 68.8 507.42 66.8 Q 509.17 64.8 510.92 66.8 Q 512.67 68.8 514.42 66.8 Q 516.17 64.8 517.92 66.8 Q 519.67 68.8 521.42 66.8 Q 523.17 64.8 524.92 66.8 Q 526.67 68.8 528.42 66.8 Q 530.17 64.8 531.92 66.8 Q 533.67 68.8 535.42 66.8 Q 537.17 64.8 538.92 66.8 Q 540.67 68.8 542.42 66.8 Q 544.17 64.8 545.92 66.8 Q 547.67 68.8 549.42 66.8 Q 551.17 64.8 552.92 66.8 Q 554.67 68.8 556.42 66.8 Q 558.17 64.8 559.92 66.8 Q 561.67 68.8 563.42 66.8 Q 564.21 64.8 565 66.8" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+        </g>
+      </g>
+    </g>
+    <g class="staff staff-tab" data-track="0" transform="translate(0,913.55)">
+      <g class="tab-lines">
+        <line x1="30" y1="75" x2="570" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="60" x2="570" y2="60" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="45" x2="570" y2="45" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="30" x2="570" y2="30" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="15" x2="570" y2="15" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="0" x2="570" y2="0" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <g class="tab-clef">
+        <text x="40" y="37.5" font-family="Bravura, BravuraFallback, serif" font-size="38.46" fill="#1a1a1a"></text>
+      </g>
+      <rect x="83.24" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="87.74" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">9</text>
+      <rect x="138.55" y="23" width="9" height="14" fill="#ffffff"/>
+      <text x="143.05" y="35" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">7</text>
+      <g class="barline">
+        <line x1="192.86" y1="0" x2="192.86" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <rect x="209.8" y="-7" width="9" height="14" fill="#ffffff"/>
+      <text x="214.3" y="5" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <rect x="209.8" y="38" width="9" height="14" fill="#ffffff"/>
+      <text x="214.3" y="50" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">2</text>
+      <g class="barline">
+        <line x1="287.02" y1="0" x2="287.02" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <rect x="303.96" y="-7" width="9" height="14" fill="#ffffff"/>
+      <text x="308.46" y="5" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <rect x="303.96" y="38" width="9" height="14" fill="#ffffff"/>
+      <text x="308.46" y="50" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">2</text>
+      <g class="barline">
+        <line x1="381.18" y1="0" x2="381.18" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <rect x="398.12" y="-7" width="9" height="14" fill="#ffffff"/>
+      <text x="402.62" y="5" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <rect x="398.12" y="38" width="9" height="14" fill="#ffffff"/>
+      <text x="402.62" y="50" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">2</text>
+      <g class="barline">
+        <line x1="475.34" y1="0" x2="475.34" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <rect x="492.28" y="-7" width="9" height="14" fill="#ffffff"/>
+      <text x="496.78" y="5" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <rect x="492.28" y="38" width="9" height="14" fill="#ffffff"/>
+      <text x="496.78" y="50" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">2</text>
+      <g class="barline">
+        <line x1="569.5" y1="0" x2="569.5" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <g class="legato-slide">
+        <path d="M 71.84 21 Q 78.29 14 84.74 21" fill="none" stroke="#1a1a1a" stroke-width="1.1"/>
+      </g>
+      <g class="whammy whammy-scoop">
+        <path d="M 75.74 -13 L 83.24 -5 L 90.74 -13" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linejoin="round" stroke-linecap="round"/>
+      </g>
+      <g class="trill">
+        <text x="214.3" y="-11.63" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+        <path d="M 227.42 -16.63 Q 229.17 -18.63 230.92 -16.63 Q 232.67 -14.63 234.42 -16.63 Q 236.17 -18.63 237.92 -16.63 Q 239.67 -14.63 241.42 -16.63 Q 243.17 -18.63 244.92 -16.63 Q 246.67 -14.63 248.42 -16.63 Q 250.17 -18.63 251.92 -16.63 Q 253.67 -14.63 255.42 -16.63 Q 257.17 -18.63 258.92 -16.63 Q 260.67 -14.63 262.42 -16.63 Q 264.17 -18.63 265.92 -16.63 Q 267.67 -14.63 269.42 -16.63 Q 271.17 -18.63 272.92 -16.63 Q 274.67 -14.63 276.42 -16.63 Q 278.17 -18.63 279.92 -16.63 Q 281.67 -14.63 283.42 -16.63 Q 285.17 -18.63 286.92 -16.63 Q 288.67 -14.63 290.42 -16.63 Q 292.17 -18.63 293.92 -16.63 Q 295.67 -14.63 297.42 -16.63 Q 299.17 -18.63 300.92 -16.63 Q 302.67 -14.63 304.42 -16.63 Q 306.17 -18.63 307.92 -16.63 Q 309.67 -14.63 311.42 -16.63 Q 313.17 -18.63 314.92 -16.63 Q 316.67 -14.63 318.42 -16.63 Q 320.17 -18.63 321.92 -16.63 Q 323.67 -14.63 325.42 -16.63 Q 327.17 -18.63 328.92 -16.63 Q 330.67 -14.63 332.42 -16.63 Q 334.17 -18.63 335.92 -16.63 Q 337.67 -14.63 339.42 -16.63 Q 341.17 -18.63 342.92 -16.63 Q 344.67 -14.63 346.42 -16.63 Q 348.17 -18.63 349.92 -16.63 Q 351.67 -14.63 353.42 -16.63 Q 355.17 -18.63 356.92 -16.63 Q 358.67 -14.63 360.42 -16.63 Q 362.17 -18.63 363.92 -16.63 Q 365.67 -14.63 367.42 -16.63 Q 369.17 -18.63 370.92 -16.63 Q 372.67 -14.63 374.42 -16.63 Q 376.17 -18.63 377.92 -16.63 Q 379.67 -14.63 381.42 -16.63 Q 383.17 -18.63 384.92 -16.63 Q 386.67 -14.63 388.42 -16.63 Q 390.17 -18.63 391.92 -16.63 Q 393.67 -14.63 395.42 -16.63 Q 397.17 -18.63 398.92 -16.63 Q 400.67 -14.63 402.42 -16.63 Q 404.17 -18.63 405.92 -16.63 Q 407.67 -14.63 409.42 -16.63 Q 411.17 -18.63 412.92 -16.63 Q 414.67 -14.63 416.42 -16.63 Q 418.17 -18.63 419.92 -16.63 Q 421.67 -14.63 423.42 -16.63 Q 425.17 -18.63 426.92 -16.63 Q 428.67 -14.63 430.42 -16.63 Q 432.17 -18.63 433.92 -16.63 Q 435.67 -14.63 437.42 -16.63 Q 439.17 -18.63 440.92 -16.63 Q 442.67 -14.63 444.42 -16.63 Q 446.17 -18.63 447.92 -16.63 Q 449.67 -14.63 451.42 -16.63 Q 453.17 -18.63 454.92 -16.63 Q 456.67 -14.63 458.42 -16.63 Q 460.17 -18.63 461.92 -16.63 Q 463.67 -14.63 465.42 -16.63 Q 467.17 -18.63 468.92 -16.63 Q 470.67 -14.63 472.42 -16.63 Q 474.17 -18.63 475.92 -16.63 Q 477.67 -14.63 479.42 -16.63 Q 481.17 -18.63 482.92 -16.63 Q 484.67 -14.63 486.42 -16.63 Q 488.17 -18.63 489.92 -16.63 Q 491.67 -14.63 493.42 -16.63 Q 495.17 -18.63 496.92 -16.63 Q 498.67 -14.63 500.42 -16.63 Q 502.17 -18.63 503.92 -16.63 Q 505.67 -14.63 507.42 -16.63 Q 509.17 -18.63 510.92 -16.63 Q 512.67 -14.63 514.42 -16.63 Q 516.17 -18.63 517.92 -16.63 Q 519.67 -14.63 521.42 -16.63 Q 523.17 -18.63 524.92 -16.63 Q 526.67 -14.63 528.42 -16.63 Q 530.17 -18.63 531.92 -16.63 Q 533.67 -14.63 535.42 -16.63 Q 537.17 -18.63 538.92 -16.63 Q 540.67 -14.63 542.42 -16.63 Q 544.17 -18.63 545.92 -16.63 Q 547.67 -14.63 549.42 -16.63 Q 551.17 -18.63 552.92 -16.63 Q 554.67 -14.63 556.42 -16.63 Q 558.17 -18.63 559.92 -16.63 Q 561.67 -14.63 563.42 -16.63 Q 564.21 -18.63 565 -16.63" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+      <g class="whammy-bar">
+        <text x="87.74" y="-21" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-style="italic" font-weight="bold" font-size="11" text-anchor="start" fill="#1a1a1a">w/bar</text>
+        <path d="M 124.15 -24.52 L 137.05 -24.52" fill="none" stroke="#1a1a1a" stroke-width="1" stroke-dasharray="2,2"/>
+        <line x1="137.05" y1="-27.27" x2="137.05" y2="-21.77" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+    </g>
+    <line x1="30.5" y1="803.82" x2="30.5" y2="988.55" class="system-join" stroke="#1a1a1a" stroke-width="1"/>
+  </g>
+  <g class="system system-4">
+    <g class="staff staff-notation" data-track="0" transform="translate(0,1068.55)">
+      <g class="staff-lines">
+        <line x1="30" y1="40" x2="181.73" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="30" x2="181.73" y2="30" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="20" x2="181.73" y2="20" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="10" x2="181.73" y2="10" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="0" x2="181.73" y2="0" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="40" y="30" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a"></text>
+      <line x1="78.84" y1="-10" x2="96.64" y2="-10" stroke="#1a1a1a" stroke-width="1"/>
+      <text x="87.74" y="-10" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="93.64" y1="-11.72" x2="93.64" y2="-45" stroke="#1a1a1a" stroke-width="1.3"/>
+      <line x1="128.34" y1="-10" x2="146.14" y2="-10" stroke="#1a1a1a" stroke-width="1"/>
+      <text x="137.24" y="-10" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+      <line x1="143.14" y1="-11.72" x2="143.14" y2="-45" stroke="#1a1a1a" stroke-width="1.3"/>
+      <g class="voice-2">
+        <text x="87.74" y="40" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+        <line x1="81.84" y1="41.72" x2="81.84" y2="75" stroke="#1a1a1a" stroke-width="1.3"/>
+        <text x="137.24" y="35" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a" text-anchor="middle"></text>
+        <text x="118.88" y="35" font-family="Bravura, BravuraFallback, serif" font-size="40" fill="#1a1a1a"></text>
+        <line x1="131.34" y1="36.72" x2="131.34" y2="70" stroke="#1a1a1a" stroke-width="1.3"/>
+      </g>
+      <g class="barline">
+        <line x1="179.23" y1="0" x2="179.23" y2="40" stroke="#1a1a1a" stroke-width="5"/>
+        <line x1="172.23" y1="0" x2="172.23" y2="40" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <text x="30" y="-20" class="measure-number" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="10" font-style="italic" fill="#1a1a1a">19</text>
+      <path d="M 71.84 42.5 C 73.94 51.5, 77.24 51.5, 79.34 42.5 C 77.24 50.1, 73.94 50.1, 71.84 42.5 Z" class="tie" fill="#1a1a1a" stroke="none"/>
+      <g class="voice-2">
+        <g class="trill trill-continued">
+          <path d="M 71.84 87 Q 73.59 85 75.34 87 Q 77.09 89 78.84 87 Q 80.59 85 82.34 87 Q 84.09 89 85.84 87 Q 87.59 85 89.34 87 Q 91.09 89 92.84 87 Q 94.59 85 96.34 87 Q 98.09 89 99.84 87 Q 101.59 85 103.34 87 Q 105.09 89 106.84 87 Q 108.59 85 110.34 87 Q 112.09 89 113.84 87 Q 115.59 85 117.34 87 Q 119.09 89 120.84 87 Q 122.59 85 124.34 87 Q 126.09 89 127.84 87 Q 128.54 85 129.24 87" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+        </g>
+      </g>
+    </g>
+    <g class="staff staff-tab" data-track="0" transform="translate(0,1180.05)">
+      <g class="tab-lines">
+        <line x1="30" y1="75" x2="181.73" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="60" x2="181.73" y2="60" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="45" x2="181.73" y2="45" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="30" x2="181.73" y2="30" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="15" x2="181.73" y2="15" stroke="#1a1a1a" stroke-width="1"/>
+        <line x1="30" y1="0" x2="181.73" y2="0" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <g class="tab-clef">
+        <text x="40" y="37.5" font-family="Bravura, BravuraFallback, serif" font-size="38.46" fill="#1a1a1a"></text>
+      </g>
+      <rect x="83.24" y="-7" width="9" height="14" fill="#ffffff"/>
+      <text x="87.74" y="5" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <rect x="132.74" y="-7" width="9" height="14" fill="#ffffff"/>
+      <text x="137.24" y="5" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">5</text>
+      <rect x="83.24" y="38" width="9" height="14" fill="#ffffff"/>
+      <text x="87.74" y="50" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">2</text>
+      <rect x="132.74" y="38" width="9" height="14" fill="#ffffff"/>
+      <text x="137.24" y="50" font-family="&quot;Times New Roman&quot;, Georgia, serif" font-size="12" text-anchor="middle" fill="#1a1a1a">4</text>
+      <g class="barline">
+        <line x1="179.23" y1="0" x2="179.23" y2="75" stroke="#1a1a1a" stroke-width="5"/>
+        <line x1="172.23" y1="0" x2="172.23" y2="75" stroke="#1a1a1a" stroke-width="1"/>
+      </g>
+      <g class="trill trill-continued">
+        <path d="M 71.84 -13 Q 73.59 -15 75.34 -13 Q 77.09 -11 78.84 -13 Q 80.59 -15 82.34 -13 Q 84.09 -11 85.84 -13 Q 87.59 -15 89.34 -13 Q 91.09 -11 92.84 -13 Q 94.59 -15 96.34 -13 Q 98.09 -11 99.84 -13 Q 101.59 -15 103.34 -13 Q 105.09 -11 106.84 -13 Q 108.59 -15 110.34 -13 Q 112.09 -11 113.84 -13 Q 115.59 -15 117.34 -13 Q 119.09 -11 120.84 -13 Q 122.59 -15 124.34 -13 Q 126.09 -11 127.84 -13 Q 128.54 -15 129.24 -13" fill="none" stroke="#1a1a1a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+    </g>
+    <line x1="30.5" y1="1068.55" x2="30.5" y2="1255.05" class="system-join" stroke="#1a1a1a" stroke-width="1"/>
+  </g>
+</svg>

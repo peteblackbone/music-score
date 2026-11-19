@@ -12,11 +12,12 @@ import {
 } from '../tab.js';
 import { renderTabLinks } from '../tabLinks.js';
 import { TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../../layout/ink.js';
-import { beatTapMark, beatWhammy, beatTrill, trillTabFret } from '../../directions.js';
-import { trillEndX, trillRunEndX, trillGeometry, trillRuns, renderTrill } from '../trill.js';
+import { beatTapMark, beatWhammy, beatTrill } from '../../directions.js';
+import { trillRuns } from '../trill.js';
+import { renderTabTrillRun } from '../tabTrill.js';
 import { renderGolpe, golpeHalf } from '../handMarks.js';
 import { beatGolpe } from '../../hands.js';
-import { planWhammyLines, renderWhammyLine } from '../whammy.js';
+import { planWhammyLines, renderWhammyLine, scoopSpans, scoopGeometry, renderWhammyScoop } from '../whammy.js';
 import { flattenRuns, flattenTabColumns, tabTopY, inkTopInSpan, breakEndX, breakStartX } from './common.js';
 import { tabMarkBeat, voiceOf } from '../../twoVoice.js';
 
@@ -24,13 +25,8 @@ import { tabMarkBeat, voiceOf } from '../../twoVoice.js';
 const TAP_STAFF_CLEAR_SP = 0.4;
 const TAP_FRET_CLEAR_SP = 0.4;
 const TAP_MARK_CLEAR_SP = 0.3;
-// Trill "tr": bottom at least this far above the TAB top line and above the ink under it; the T / S / P above it clears it by TAP_TRILL_CLEAR_SP.
-const TRILL_TAB_STAFF_CLEAR_SP = 0.4;
-const TRILL_TAB_CLEAR_SP = 0.4;
+// The T / S / P above a trill (draw/tabTrill.js) clears it by TAP_TRILL_CLEAR_SP.
 const TAP_TRILL_CLEAR_SP = 0.4;
-// A neighbouring beat's tremolo / vibrato spans from this far left to this far right of its x (vibrato: 0.5 + up to 3.4 sp right).
-const TRILL_MARKS_LEFT_SP = 0.5;
-const TRILL_MARKS_REACH_SP = 4;
 // ...and raised clear of a nearby hammer-on/pull-off letter: its box at least this far from the letter's knock-out (sideways, or above it).
 const TAP_HP_CLEAR_SP = 0.5;
 // Whammy dip: its tip at least WHAMMY_STAFF_CLEAR_SP above the TAB top line and WHAMMY_CLEAR_SP above the ink under it.
@@ -49,13 +45,15 @@ const colX = (le) => le.x - (le.dx || 0);
  * in a two-voice measure (voice 1 wins each mark it has, voice 2 fills the
  * rest at the column x; the whammy dip stays voice 1's):
  *
- * - a trill (`note.trill`) draws "tr" and a wavy line (draw/trill.js) above
+ * - a trill (`note.trill`) draws "tr" and a wavy line (draw/tabTrill.js) above
  *   the beat's frets and marks and the TAB top line, "(n)" after the glyph
  *   when the fret it alternates with is known; the wave ends 0.8 sp before
  *   the next beat and never past the system's last barline; consecutive
  *   trills on a system (graces between them allowed; trillRuns) share one
  *   line, the highest of their own, each wave ending before the next "tr",
- *   drawn before the run's T / S / P and dips;
+ *   drawn before the run's T / S / P and dips; a trill tied forward runs
+ *   over its tied notes' columns (and on later systems), whose marks stack
+ *   above it;
  * - a tapped note (`note.tap`, not a tapped harmonic) puts one bold "T"
  *   above the beat, above the TAB top line, the beat's topmost fret label
  *   and its tab tremolo / vibrato, raised above any hammer-on/pull-off
@@ -70,7 +68,8 @@ const colX = (le) => le.x - (le.dx || 0);
  *   the trill / T ink in its span the same way;
  * - `whammy` draws a dip ("V" plus "-1/2") above the TAB staff, its width
  *   limited like a bend's, stacked above the beat's frets, marks, "T" / "S" /
- *   "P", golpe, trill and any bend under it;
+ *   "P", golpe, trill and any bend under it; a scoop (`whammyScoop`, voice 1
+ *   only; draw/whammy.js) is placed the same way, sharing the dip's level;
  * - after all beats, whammy dives, returns and pre-dives (draw/whammy.js):
  *   one line per system segment, each at one level above the frets, marks,
  *   letters, trills, bends and dips under it, 0.5 sp above the TAB top line.
@@ -95,6 +94,8 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
     // Consecutive trills on a system share one line: drawn together at the run's first beat, at the highest of their own bottoms.
     const runs = trillRuns(beats, (b) => !!beatTrill(tabMarkBeat(b.layoutEl, 'trill')), (b) => b.run.sysIdx, (b) => b.layoutEl.el.type === 'grace');
     const trillTops = new Map();
+    const trillCtx = { runs, beats, flat, stringCount, systems, theme, trillTops, track, trackRuns };
+    const scoops = scoopSpans(trackRuns.filter((r) => r.track === track), systems, theme);
     beats.forEach((beat) => {
       const { layoutEl, run, x } = beat;
       const el = layoutEl.el;
@@ -102,20 +103,13 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
       const dip = voiceOf(layoutEl) === 2 ? null : beatWhammy(el);
       const trilled = beatTrill(tabMarkBeat(layoutEl, 'trill'));
       const golpe = beatGolpe(tabMarkBeat(layoutEl, 'golpe'));
-      if (!mark && !dip && !trilled && !golpe) return;
+      const scoop = voiceOf(layoutEl) === 2 ? null : scoops.get(layoutEl);
+      if (!mark && !dip && !trilled && !golpe && !scoop) return;
       const tabTop = tabTopY(run, stringCount, theme);
       const fretTop = layoutEl.tabRendered?.fretTopY ?? Infinity;
       const marksTop = layoutEl.tabRendered?.marksTopY ?? Infinity;
-      if (trilled && !trillTops.has(beat)) {
-        const plans = runs.get(beat).map((m, i, all) => trillPlan(m, all[i + 1], beats, flat, stringCount, systems, theme));
-        const bottomY = Math.min(...plans.map((pl) => pl.bottomY));
-        plans.forEach((pl) => {
-          const drawn = renderTrill(pl.run.tabG, pl.x, bottomY, pl.endX, theme.tabFretColor, theme, pl.suffix);
-          drawn.boxes.forEach((b) => pl.run.tabInkBoxes.push({ ...b, noteX: pl.x }));
-          trillTops.set(pl.beat, drawn.top);
-        });
-      }
-      const trillTop = trilled ? trillTops.get(beat) : Infinity;
+      if (trilled && !trillTops.has(beat)) renderTabTrillRun(beat, trillCtx);
+      const trillTop = trillTops.get(beat) ?? Infinity;
       const size = techniqueLabelSize(theme);
       // The T's baseline on the beat's own ink (frets, marks, trill).
       const tapBase = Math.min(tabTop - TAP_STAFF_CLEAR_SP * s, fretTop - TAP_FRET_CLEAR_SP * s, marksTop - TAP_MARK_CLEAR_SP * s,
@@ -145,11 +139,12 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
         const inkTop = inkTopInSpan(x - half, x + half, { boxLists: [run.tabInkBoxes, run.hpBoxes] });
         run.tabInkBoxes.push({ ...renderGolpe(run.tabG, x, Math.min(tapBase, inkTop - TAP_TRILL_CLEAR_SP * s), golpe, theme.tabFretColor, theme), noteX: x });
       }
-      if (dip) {
+      if (dip || scoop) {
         // Width limited like a bend's: the next note in the system, never past the last barline.
         const next = flat.find((c) => c.sysIdx === run.sysIdx && c.x > x)?.x;
         const nextX = Math.min(next ?? Infinity, systems[run.sysIdx].lastBarlineX);
-        const span = whammyDipGeometry(x, 0, dip, theme, nextX).boxes;
+        // A dip and a scoop on one beat share one level.
+        const span = [...(dip ? whammyDipGeometry(x, 0, dip, theme, nextX).boxes : []), ...(scoop ? scoopGeometry(scoop.x1, scoop.x2, 0, theme).boxes : [])];
         const sx1 = Math.min(...span.map((b) => b.x1));
         const sx2 = Math.max(...span.map((b) => b.x2));
         // Ink under the dip: this beat's frets and marks, nearby beats' frets, and every bend / T / dip box in its span.
@@ -160,8 +155,8 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
             .map((o) => o.layoutEl.tabRendered?.fretTopY ?? Infinity),
         );
         const bottomY = Math.min(tabTop - WHAMMY_STAFF_CLEAR_SP * s, inkTop - WHAMMY_CLEAR_SP * s);
-        renderWhammyDip(run.tabG, x, bottomY, dip, theme, nextX)
-          .forEach((b) => run.tabInkBoxes.push({ ...b, noteX: x }));
+        if (dip) renderWhammyDip(run.tabG, x, bottomY, dip, theme, nextX).forEach((b) => run.tabInkBoxes.push({ ...b, noteX: x }));
+        if (scoop) renderWhammyScoop(run.tabG, scoop.x1, scoop.x2, bottomY, theme).forEach((b) => run.tabInkBoxes.push({ ...b, noteX: x }));
       }
     });
 
@@ -179,36 +174,4 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
       renderWhammyLine(run.tabG, seg, bottomY, theme).forEach((b) => run.tabInkBoxes.push(b));
     });
   });
-}
-
-/**
- * A trill on TAB beat `beat` (from renderTabArticulations' `beats`) as it
- * would sit alone: `{ beat, run, x, endX, suffix, bottomY }`. The wave runs
- * to just before the next note on the system (and the run's next trill,
- * `nextTrill`, when there is one); "(n)" follows "tr" when the
- * other fret is known; `bottomY` clears the TAB top line and the ink under
- * the trill - the beat's frets and marks, nearby beats' frets and marks,
- * and every bend / T / dip / H-P box drawn so far in its span.
- */
-function trillPlan(beat, nextTrill, beats, flat, stringCount, systems, theme) {
-  const s = theme.staffLineSpacing;
-  const { layoutEl, run, x } = beat;
-  const trilled = beatTrill(tabMarkBeat(layoutEl, 'trill'));
-  const next = flat.find((c) => c.sysIdx === run.sysIdx && c.x > x)?.x;
-  const endX = trillRunEndX(trillEndX(x, next ?? Infinity, breakEndX(systems, run.sysIdx, theme), theme), nextTrill?.x, theme);
-  const fret = trillTabFret(trilled.note, trilled.trill);
-  const suffix = fret != null ? `(${fret})` : null;
-  const span = trillGeometry(x, 0, endX, theme, suffix);
-  const inkTop = Math.min(
-    inkTopInSpan(span.x1, span.x2, {
-      fretTopY: layoutEl.tabRendered?.fretTopY ?? Infinity, marksTopY: layoutEl.tabRendered?.marksTopY ?? Infinity,
-      boxLists: [run.tabInkBoxes, run.hpBoxes],
-    }),
-    ...beats.filter((o) => o.run === run && o.layoutEl !== layoutEl).flatMap(({ layoutEl: ol, x: ox }) => [
-      ox - WHAMMY_FRET_HALF_SP * s < span.x2 && ox + WHAMMY_FRET_HALF_SP * s > span.x1 ? (ol.tabRendered?.fretTopY ?? Infinity) : Infinity,
-      ox - TRILL_MARKS_LEFT_SP * s < span.x2 && ox + TRILL_MARKS_REACH_SP * s > span.x1 ? (ol.tabRendered?.marksTopY ?? Infinity) : Infinity,
-    ]),
-  );
-  const bottomY = Math.min(tabTopY(run, stringCount, theme) - TRILL_TAB_STAFF_CLEAR_SP * s, inkTop - TRILL_TAB_CLEAR_SP * s);
-  return { beat, run, x, endX, suffix, bottomY };
 }

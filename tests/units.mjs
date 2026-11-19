@@ -520,7 +520,7 @@ test('decoratesFretLabel / layoutHeadGlyph / beatHarmonicLabelKind', () => {
     [{ harmonic: 'pinch' }, { harmonic: 'artificial' }], [{ harmonic: 'semi' }, { harmonic: 'tapped' }],
     [{ harmonic: 'semi' }, { harmonic: 'pinch' }], [{ harmonic: true }, {}], [{ harmonic: 'artificial', mute: true }], [],
   ].map(H.beatHarmonicLabelKind), ['artificial', 'tapped', 'pinch', null, null, null]);
-  eq(H.HARMONIC_LABELS, { artificial: 'A.H.', tapped: 'T.H.', pinch: 'P.H.', semi: 'S.H.' });
+  eq(H.HARMONIC_LABELS, { artificial: 'A.H.', tapped: 'T.H.', pinch: 'P.H.', semi: 'S.H.', feedback: 'Fdbk.' }); // feedback: 1.9.0
 });
 test('diamond glyphs: code points E0D8/E0D9/E0DB with metrics (widths 1.08 / 1.004 / 1.0 sp)', () => {
   eq([Glyph.noteheadDiamondWhole, Glyph.noteheadDiamondHalf, Glyph.noteheadDiamondBlack].map((c) => c.codePointAt(0).toString(16)),
@@ -2038,9 +2038,9 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
 {
   const { createHash } = await import('node:crypto');
   // the 52 pre-1.4 cases (the 1.4.0 two-voice fixtures char-voices-*, the 1.5.0 char-note-effects-*, the 1.6.0
-  // char-score-text-* and the 1.7.0 char-ornaments-* came later)
+  // char-score-text-*, the 1.7.0 char-ornaments-* and the 1.9.0 char-bends-slides-* came later)
   const isVoices = (id) => id.startsWith('char-voices-');
-  const isPost14 = (id) => /^char-(voices|note-effects|score-text|ornaments)-/.test(id);
+  const isPost14 = (id) => /^char-(voices|note-effects|score-text|ornaments|bends-slides)-/.test(id);
   const cases = (await import('./cases.mjs')).cases.filter((c) => !isPost14(c.id));
   const { computeLayout } = await imp('src/layout/index.js');
   const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
@@ -2657,8 +2657,8 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   const { drawScoreHeader } = await imp('src/draw/header.js');
   const { group: svgGroup } = await imp('src/draw/svgUtil.js');
   // the 57 pre-1.6 cases (the 1.6.0 char-score-text-* fixtures use the new fields on purpose; the 1.7.0
-  // char-ornaments-* came later)
-  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets)-/.test(c.id));
+  // char-ornaments-* and the 1.9.0 char-bends-slides-* came later)
+  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides)-/.test(c.id));
   const thm = resolveTheme({});
   const s = thm.staffLineSpacing;
   const ok = (c, m) => { if (!c) throw new Error(m); };
@@ -3847,8 +3847,8 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     });
     return r;
   };
-  // The pins describe the 63 pre-1.8 cases (the 1.8 fixtures exercise these triggers on purpose).
-  const pre18 = cases.filter((c) => !/^char-(voices-marks|voices-tab-rhythm|voices-tied-frets)-/.test(c.id));
+  // The pins describe the 63 pre-1.8 cases (the 1.8 fixtures exercise these triggers on purpose; the 1.9 char-bends-slides-* came later).
+  const pre18 = cases.filter((c) => !/^char-(voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides)-/.test(c.id));
   const scans = new Map(pre18.map((c) => [c.id, scan(c)]));
   const twoVoiceIds = [...scans].filter(([, r]) => r.two.length).map(([id]) => id);
 
@@ -4524,6 +4524,676 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const n = (n) => ({ type: 'note', duration: 'half', notes: [n] });
     const svg = renderTree(tiedScore([vm([n({ string: 2, fret: 3, tieEnd: true }), n({ string: 3, fret: 1 })], [n({ string: 2, fret: 5, tieEnd: true }), n({ string: 4, fret: 2 })])]));
     eq(labels(svg), ['(3)', '1', '2']);
+  });
+}
+
+// ---------- pre-1.9 characterization: bends, slides, harmonics, whammy, trill ties (pins taken before the 1.9.0 change) ----------
+// Pins marked FLIPS describe inputs whose behavior the named 1.9 feature commit changes on purpose.
+{
+  const { cases } = await import('./cases.mjs');
+  const D = await imp('src/directions.js');
+  const { harmonicKind } = await imp('src/harmonics.js');
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const byClass = (svg, c) => walk(svg).filter((n) => (n.getAttribute('class') || '').split(/\s+/).includes(c));
+  const numsOf = (d) => d.match(/-?\d+(\.\d+)?/g).map(Number);
+
+  // Inline copy of the 1.9 isLegatoSlide predicate (the exported one does not exist yet).
+  const legatoSlide = (raw) => typeof raw === 'string' && raw.trim().toLowerCase() === 'legato';
+  // Compound bend: a string with a 'release' token strictly inside (after an optional pb prefix), or an object rebend.
+  const compoundBend = (raw) => {
+    if (raw && typeof raw === 'object') return !!raw.rebend;
+    if (typeof raw !== 'string') return false;
+    const toks = raw.trim().replace(/^(prebend|pre-bend|pb)\b/i, '').trim().split(/\s+/).map((t) => t.toLowerCase());
+    const i = toks.indexOf('release');
+    return i > 0 && i < toks.length - 1;
+  };
+  const deepKeys = (v, keys, hits = []) => {
+    if (Array.isArray(v)) v.forEach((x) => deepKeys(x, keys, hits));
+    else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { if (keys.includes(k)) hits.push(k); deepKeys(x, keys, hits); }
+    return hits;
+  };
+  // Beat streams (one per track voice, measures concatenated) of a raw or normalized score.
+  const streams = (sc) => (sc.tracks || []).flatMap((t) => {
+    const out = [[], []];
+    for (const m of t.measures || []) {
+      if (m.voices) m.voices.forEach((v, i) => out[Math.min(i, 1)].push(...(v.beats || [])));
+      else { out[0].push(...(m.beats || [])); out[1].push(...(m.voice2Beats || [])); }
+    }
+    return out;
+  });
+  const scan = (sc) => {
+    const r = { compound: 0, legato: 0, feedback: 0, trillTie: 0, whammyKeys: 0 };
+    r.whammyKeys = deepKeys(sc, ['whammyScoop', 'whammyBar']).length;
+    for (const beats of streams(sc)) {
+      beats.forEach((b, i) => {
+        for (const n of b.notes || []) {
+          if (compoundBend(n.bend)) r.compound++;
+          if (legatoSlide(n.slide)) r.legato++;
+          if (typeof n.harmonic === 'string' && n.harmonic.trim().toLowerCase() === 'feedback') r.feedback++;
+          if (n.trill) {
+            const next = beats.slice(i + 1).find((x) => x.type !== 'grace');
+            if (next && (next.notes || []).some((m) => m.tieEnd)) r.trillTie++;
+          }
+        }
+      });
+    }
+    return r;
+  };
+
+  test('pre-1.9 scan: none of the 67 cases (raw or normalized) uses a compound bend, legato slide, feedback harmonic, trill tied forward, whammyScoop / whammyBar key', () => {
+    // the 1.9.0 char-bends-slides-* fixtures use them on purpose
+    const pre19 = cases.filter((c) => !/^char-bends-slides-/.test(c.id));
+    eq(pre19.length, 67);
+    const zero = { compound: 0, legato: 0, feedback: 0, trillTie: 0, whammyKeys: 0 };
+    for (const c of pre19) {
+      eq([c.id, 'raw', scan(c.score)], [c.id, 'raw', zero]);
+      eq([c.id, 'normalized', scan(normalizeScore(c.score))], [c.id, 'normalized', zero]);
+    }
+  });
+  test('pre-1.9 scan: the predicates fire on constructed inputs (the scan is not vacuous)', () => {
+    const sc = { tracks: [{ measures: [{ beats: [
+      { type: 'note', duration: 'half', whammyBar: true, notes: [{ pitch: 'E4', trill: true, bend: 'full release full', slide: ' Legato ', harmonic: 'FeedBack' }] },
+      { type: 'note', duration: 'half', notes: [{ pitch: 'E4', tieEnd: true, bend: { type: 'bend', rebend: 'full' } }] },
+    ] }] }] };
+    eq(scan(sc), { compound: 2, legato: 1, feedback: 1, trillTie: 1, whammyKeys: 1 });
+    eq([compoundBend('pb full release 1/2'), compoundBend('full release'), compoundBend('release full'), compoundBend('full')], [true, false, false, false]);
+  });
+
+  // ---- value pins ----
+  test('pre-1.9 pin (FLIPPED in the compound-bends commit): bendOf("full release full") is a bend-release-bend', () => {
+    eq(D.bendOf('full release full'), { type: 'bend', amount: 'full', release: true, hold: false, rebend: 'full' });
+  });
+  test('pre-1.9 pin (FLIPPED in the compound-bends commit): bendOf("pb full release 1/2") is a pre-bend-release-bend', () => {
+    eq(D.bendOf('pb full release 1/2'), { type: 'prebend', amount: 'full', release: true, hold: false, rebend: '1/2' });
+  });
+  test('pre-1.9 pin (FLIPPED in the compound-bends commit): an object bend with rebend is a compound full bend', () => {
+    eq(D.bendOf({ type: 'bend', rebend: 'full' }), { type: 'bend', amount: 'full', release: true, hold: false, rebend: 'full' });
+  });
+  test('pre-1.9 pin (stays): single-suffix bend grammar is unchanged', () => {
+    eq(D.bendOf('full release'), { type: 'bend', amount: 'full', release: true, hold: false });
+    eq(D.bendOf('1/2 hold'), { type: 'bend', amount: '1/2', release: false, hold: true });
+    eq(D.bendOf('release full'), { type: 'release', amount: 'full', release: true, hold: false });
+    eq(D.bendOf('pb full release'), { type: 'prebend', amount: 'full', release: true, hold: false });
+  });
+  test('pre-1.9 pin (FLIPPED in the feedback commit): harmonicKind("feedback") is "feedback"; unknown strings stay natural', () => {
+    eq(harmonicKind('feedback'), 'feedback');
+    eq(harmonicKind('Feedback'), 'feedback');
+    eq([harmonicKind('pinch'), harmonicKind('nonsense'), harmonicKind(null)], ['pinch', 'natural', null]);
+  });
+  test('pre-1.9 pin (stays, even after the scoop commit): whammyOf({ type: "scoop" }) is null', () => {
+    eq(D.whammyOf({ type: 'scoop' }), null);
+    eq(D.whammyOf({ type: 'dive' }), { type: 'dive', amount: '1/2' });
+  });
+
+  const tabOnly = (slide) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: [3, 5, 5, 5].map((fret, i) => ({
+    type: 'note', duration: 'quarter', notes: [{ string: 2, fret, ...(i === 0 ? { slide } : {}) }],
+  })) }] }] });
+  test('pre-1.9 pin (FLIPPED in the legato-slide commit): TAB slide "up" draws only the single diagonal <line>; "legato" adds one letterless legato-slide arc', () => {
+    const stroke = '<line x1="110.19" y1="17.4" x2="131.19" y2="12.6" stroke="#1a1a1a" stroke-width="1.3" stroke-linecap="round"/>';
+    const [up, legato] = ['up', 'legato'].map((s) => serialize(render(tabOnly(s))));
+    eq(up.split(stroke).length - 1, 1);
+    eq(legato.split(stroke).length - 1, 1);
+    eq([up.includes('<path'), up.includes('hammer-pull'), up.includes('legato-slide')], [false, false, false]);
+    eq([(legato.match(/<path/g) || []).length, legato.includes('hammer-pull'), (legato.match(/class="legato-slide"/g) || []).length], [1, false, 1]);
+    eq((up.match(/<line/g) || []).length, 13);
+    eq((legato.match(/<line/g) || []).length, 13);
+    eq(serialize(render(tabOnly(undefined))).includes(stroke), false);
+  });
+
+  const trillScore = (tied) => ({ tracks: [{ measures: [{ beats: [
+    { type: 'note', duration: 'half', notes: [{ pitch: 'E4', trill: true, ...(tied ? { tieStart: true } : {}) }] },
+    { type: 'note', duration: 'half', notes: [{ pitch: 'E4', ...(tied ? { tieEnd: true } : {}) }] },
+  ] }] }] });
+  test('pre-1.9 pin (FLIPPED in the trill-continuation commit): an untied trill wave ends at 156.87, before the next beat at 165.24; tied forward it runs over the tied note to the system end (204.73)', () => {
+    for (const tied of [true, false]) {
+      const svg = render(trillScore(tied));
+      const tr = byClass(svg, 'trill');
+      eq(tr.length, 1);
+      const wave = numsOf(tr[0].children.find((c) => c.tag === 'path').getAttribute('d'));
+      eq([wave[0], wave.slice(-2)], [128.87, [tied ? 204.73 : 156.87, -15.63]]);
+      eq(tr[0].children[0].getAttribute('x'), '115.74');
+      const heads = walk(svg).filter((n) => n.tag === 'text' && n.getAttribute('text-anchor') === 'middle' && n.getAttribute('y') === '40').map((n) => n.getAttribute('x'));
+      eq(heads, ['115.74', '165.24']);
+    }
+  });
+}
+
+// ---------- 1.9.0: compound bends (directions.js bendOf, draw/bend.js) ----------
+{
+  const { bendOf } = await imp('src/directions.js');
+  const { compoundBendGeometry, renderCompoundBend, bendHeightFrac } = await imp('src/draw/bend.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const thm = resolveTheme({});
+  const sp = thm.staffLineSpacing;
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const cls = (n) => n.getAttribute('class') || '';
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const tabScore = (beats) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: beats.map(([string, fret, bend]) => ({
+    type: 'note', duration: 'half', notes: [{ string, fret, ...(bend ? { bend } : {}) }],
+  })) }] }] });
+  const C = (type, amount, rebend) => ({ type, amount, release: true, hold: false, rebend });
+
+  test('1.9 compound bends: string grammar (bend and pb forms, any case, inner spaces, mixed amounts)', () => {
+    const table = [
+      ['full release full', C('bend', 'full', 'full')],
+      ['1/2 release full', C('bend', '1/2', 'full')],
+      ['  1 1/2   RELEASE   1/2 ', C('bend', '1 1/2', '1/2')],
+      ['Full Release Full', C('bend', 'Full', 'Full')],
+      ['pb full release 1/2', C('prebend', 'full', '1/2')],
+      ['PB 1/2 release 1 1/2', C('prebend', '1/2', '1 1/2')],
+      ['pre-bend full release full', C('prebend', 'full', 'full')],
+      ['prebend 1/4 release 1/4', C('prebend', '1/4', '1/4')],
+    ];
+    for (const [raw, want] of table) eq(bendOf(raw), want, raw);
+  });
+  test('1.9 compound bends: anything else keeps the single-bend grammar (no rebend key)', () => {
+    const table = [
+      ['full release', { type: 'bend', amount: 'full', release: true, hold: false }],
+      ['release full', { type: 'release', amount: 'full', release: true, hold: false }],
+      ['release', { type: 'release', amount: null, release: true, hold: false }],
+      ['pb full release', { type: 'prebend', amount: 'full', release: true, hold: false }],
+      ['pb release', { type: 'prebend', amount: 'full', release: true, hold: false }],
+      ['full release full release', { type: 'bend', amount: 'full release full', release: true, hold: false }],
+      ['full release full hold', { type: 'bend', amount: 'full release full', release: false, hold: true }],
+      ['full hold', { type: 'bend', amount: 'full', release: false, hold: true }],
+      ['1/2', { type: 'bend', amount: '1/2', release: false, hold: false }],
+      ['full releasefull', { type: 'bend', amount: 'full releasefull', release: false, hold: false }],
+    ];
+    for (const [raw, want] of table) {
+      const b = bendOf(raw);
+      eq(b, want, raw);
+      eq('rebend' in b, false, raw);
+    }
+  });
+  test('1.9 compound bends: object form (rebend as a string; a release note never rebends; no rebend -> no key)', () => {
+    eq(bendOf({ amount: '1/2', rebend: 'full' }), C('bend', '1/2', 'full'));
+    eq(bendOf({ type: 'pb', rebend: 1 }), C('prebend', 'full', '1'));
+    eq(bendOf({ type: 'bend', amount: 'full', rebend: 'full', hold: true }), C('bend', 'full', 'full'));
+    eq(bendOf({ type: 'release', amount: 'full', rebend: 'full' }), { type: 'release', amount: 'full', release: true, hold: false });
+    eq('rebend' in bendOf({ amount: 'full', release: true, rebend: '' }), false);
+    eq('rebend' in bendOf({ amount: 'full' }), false);
+  });
+  test('1.9 compound bends: idempotent and pure; a 1e5-space string parses in < 50 ms', () => {
+    for (const raw of ['full release full', 'pb 1/2 release 1/2', { amount: 'full', rebend: '1/2' }, 'full release', 'release', '1/2 hold']) {
+      const copy = JSON.stringify(raw);
+      const b = bendOf(raw);
+      eq(bendOf(b), b, copy);
+      eq(JSON.stringify(raw), copy, 'input untouched');
+    }
+    const long = `full${' '.repeat(1e5)}release${' '.repeat(1e5)}full`;
+    const t0 = Date.now();
+    eq(bendOf(long), C('bend', 'full', 'full'));
+    bendOf(`pb ${' '.repeat(1e5)}x`);
+    bendOf(`full${' '.repeat(1e5)}`);
+    const ms = Date.now() - t0;
+    if (ms >= 50) throw new Error(`took ${ms} ms`);
+  });
+
+  const overlap = (a, b) => a.x1 < b.x2 && b.x1 < a.x2 && a.top < b.bottom && b.top < a.bottom;
+  test('1.9 compound bends: the two label boxes never intersect for nextX 1..6 sp (all forms and amounts); D < sep staggers label 2 above label 1', () => {
+    let staggered = 0; let side = 0;
+    for (const type of ['bend', 'prebend']) for (const [a, r] of [['full', 'full'], ['1/2', '1 1/2'], ['1 1/2', '1/4'], ['1/4', '1/4']]) {
+      for (let k = 10; k <= 60; k++) {
+        const g = compoundBendGeometry(100, 50, C(type, a, r), thm, 100 + (k / 10) * sp);
+        const [b1, b2] = g.boxes.filter((b) => b.text);
+        if (overlap(b1, b2)) throw new Error(`${type} ${a}/${r} nextX ${k / 10} sp: labels overlap`);
+        if (b2.bottom <= b1.top - 0.2 * sp + 1e-9) staggered++;
+        else side++;
+        if (g.peak2X - g.peak1X < 1.6 * sp - 1e-9) throw new Error('fall + rise below the minimum');
+      }
+    }
+    eq([staggered > 20, side > 20], [true, true], `${staggered} staggered, ${side} side by side`);
+  });
+  test('1.9 compound bends: geometry without nextX (bend: start x+0.3, peak 1 one sp later, fall 1.2 sp + rise 1 sp, or the label separation; pre-bend: shaft over the note)', () => {
+    const g = compoundBendGeometry(100, 50, C('bend', '1', '1'), thm);
+    eq([g.startX, g.peak1X, g.fallX, g.peak2X], [103, 113, 125, 135]);
+    eq(g.peak1Y, g.baseY - thm.tabStaffLineSpacing * 1.8 * bendHeightFrac('1'));
+    const f = compoundBendGeometry(100, 50, C('bend', 'full', 'full'), thm);
+    eq(+(f.peak2X - f.peak1X).toFixed(6), +(f.labels[0].rw + 0.3 * sp).toFixed(6), 'widened to the label separation');
+    eq(+(f.peak2X - f.fallX).toFixed(6), sp, 'rise 2 keeps 1 sp');
+    const p = compoundBendGeometry(100, 50, C('prebend', 'full', '1 1/2'), thm);
+    eq(p.peak1X, 100);
+    eq(p.peak2Y < p.peak1Y, true, 'a larger rebend peaks higher');
+    eq([bendHeightFrac('1/4'), bendHeightFrac('full'), bendHeightFrac('2')], [0.55, 1, 1.3]);
+  });
+  test('1.9 compound bends: drawn rise, fall (Q), rise, each with an arrowhead, then label 1 and label 2; classes bend bend-rebend (+ bend-prebend); boxes returned', () => {
+    for (const type of ['bend', 'prebend']) {
+      const g = makeContainer();
+      const boxes = renderCompoundBend(g, 100, 50, C(type, 'full', '1/2'), thm, 160);
+      const gEl = g.children[0];
+      eq(cls(gEl), type === 'prebend' ? 'bend bend-rebend bend-prebend' : 'bend bend-rebend');
+      eq(gEl.children.map((c) => c.tag), ['path', 'path', 'path', 'path', 'path', 'path', 'rect', 'text', 'rect', 'text']);
+      const ds = gEl.children.filter((c) => c.tag === 'path').map((c) => c.getAttribute('d'));
+      eq([/ L /.test(ds[0]), / C /.test(ds[0]), / Q /.test(ds[2]), / C /.test(ds[4])], [type === 'prebend', type !== 'prebend', true, true]);
+      eq(gEl.children.filter((c) => c.tag === 'text').map((c) => c.textContent), ['Full', '1/2']);
+      eq([boxes.length, boxes.filter((b) => b.text).length], [5, 2]);
+    }
+  });
+  test('1.9 compound bends: on TAB no landing fret or hold dash; a later release note defaults to the rebend amount', () => {
+    const texts = (n) => walk(n).filter((c) => c.tag === 'text').map((c) => c.textContent);
+    const svg = render(tabScore([[3, 7, 'full release 1/2'], [3, 7, 'release']]));
+    const bends = walk(svg).filter((n) => /^bend\b/.test(cls(n)));
+    eq(bends.map(cls), ['bend bend-rebend', 'bend bend-release']);
+    eq(texts(bends[0]), ['Full', '1/2']);
+    eq(texts(bends[1]), ['1/2']);
+    eq(texts(svg).includes('(9)') || serialize(svg).includes('stroke-dasharray="3,2"'), false);
+    const plain = render(tabScore([[3, 7, 'full'], [3, 7, 'release']]));
+    eq(texts(walk(plain).filter((n) => cls(n) === 'bend bend-release')[0]), ['Full']);
+  });
+}
+
+// ---------- 1.9.0: feedback harmonic (harmonics.js) ----------
+{
+  const H9 = await imp('src/harmonics.js');
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const cls = (n) => n.getAttribute('class') || '';
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const score = (harmonics) => ({ tracks: [{ showTablature: true, measures: [{ beats: harmonics.map((h) => ({
+    type: 'note', duration: 'quarter', notes: [{ string: 2, fret: 5, ...(h ? { harmonic: h } : {}) }],
+  })) }] }] });
+  test('1.9 feedback: kind (trim, any case, idempotent), not natural, plain fret, normal notehead', () => {
+    eq(['feedback', ' FeedBack ', 'fdbk', 'feed back'].map(H9.harmonicKind), ['feedback', 'feedback', 'natural', 'natural']);
+    eq(H9.harmonicKind(H9.harmonicKind('Feedback')), 'feedback');
+    const n = { fret: 5, harmonic: 'feedback', harmonicFret: 17 };
+    eq([H9.isNaturalHarmonic(n), H9.touchFret(n), H9.decoratesFretLabel(n), fretLabel(n)], [false, null, false, '5']);
+    eq(H9.layoutHeadGlyph(n, 'quarter'), Glyph.noteheadBlack);
+    eq(H9.harmonicOf({ harmonic: 'feedback', mute: true }), null);
+    eq(normalizeScore(score(['Feedback'])).tracks[0].measures[0].beats[0].notes[0].harmonic, 'feedback');
+  });
+  test('1.9 feedback: label "Fdbk." with class harmonic harmonic-feedback, lowest priority (A.H. > T.H. > P.H. > S.H. > Fdbk.)', () => {
+    eq(H9.HARMONIC_LABELS.feedback, 'Fdbk.');
+    eq([
+      [{ harmonic: 'feedback' }], [{ harmonic: 'feedback' }, { harmonic: 'semi' }], [{ harmonic: 'pinch' }, { harmonic: 'feedback' }],
+      [{ harmonic: 'feedback', mute: true }], [{ harmonic: true }, { harmonic: 'feedback' }],
+    ].map(H9.beatHarmonicLabelKind), ['feedback', 'semi', 'pinch', null, 'feedback']);
+    const svg = render(score(['feedback', 'feedback', null, 'pinch']));
+    const runs = walk(svg).filter((n) => cls(n).startsWith('harmonic '));
+    eq(runs.map(cls), ['harmonic harmonic-feedback', 'harmonic harmonic-pinch']);
+    eq(walk(runs[0]).filter((c) => c.tag === 'text').map((c) => c.textContent), ['Fdbk.']);
+    const frets = walk(svg).filter((c) => c.tag === 'text' && /^[<\d]/.test(c.textContent)).map((c) => c.textContent);
+    eq(frets.includes('<5>'), false);
+  });
+}
+
+// ---------- 1.9.0: legato slide (directions.js isLegatoSlide, tabLinks.js arc, notationBeats.js slur) ----------
+{
+  const { isLegatoSlide } = await imp('src/directions.js');
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const cls = (n) => n.getAttribute('class') || '';
+  const render = (score, width = 900, theme = {}) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width, theme }).render();
+    return box.children[0];
+  };
+  const fr = (string, fret, x = {}, type = 'note', duration = 'quarter') => ({ type, duration, notes: [{ string, fret, ...x }] });
+  const sc = (measures, track = {}) => ({ tracks: [{ showStandardNotation: true, showTablature: true, ...track, measures: measures.map((b) => (Array.isArray(b) ? { beats: b } : b)) }] });
+  const arcs = (svg) => walk(svg).filter((n) => n.tag === 'g' && cls(n) === 'legato-slide');
+  const hps = (svg) => walk(svg).filter((n) => n.tag === 'g' && /^hammer-pull /.test(cls(n)));
+  const slurs = (svg) => walk(svg).filter((n) => n.tag === 'path' && cls(n) === 'slur').map((n) => {
+    const v = n.getAttribute('d').match(/-?\d+(\.\d+)?/g).map(Number);
+    return { x1: v[0], y1: v[1], x2: v[6], above: v[3] < v[1] };
+  });
+
+  test('1.9 legato slide: isLegatoSlide is the string "legato" only (trimmed, any case)', () => {
+    eq([' Legato ', 'LEGATO', 'legato'].map(isLegatoSlide), [true, true, true]);
+    eq([true, 'up', 'down', 'legato up', '', null, undefined, { legato: true }, 1].map(isLegatoSlide), Array(9).fill(false));
+  });
+  test('1.9 legato slide: TAB shift line plus a letterless arc (class legato-slide, one path); one notation slur, also with hammerPullSlurs false', () => {
+    const s = sc([[fr(3, 5, { slide: 'legato' }), fr(3, 7), fr(3, 7, { slide: 'up' }), fr(3, 9)]]);
+    for (const theme of [{}, { hammerPullSlurs: false }]) {
+      const svg = render(s, 900, theme);
+      const a = arcs(svg);
+      eq([a.length, a[0].children.map((c) => c.tag)], [1, ['path']]);
+      eq(walk(a[0]).some((c) => c.tag === 'text'), false);
+      eq(slurs(svg).length, 1);
+      eq(slurs(svg)[0].x2 < 300, true, 'the shift slide gets no slur');
+    }
+  });
+  test('1.9 legato slide: split into two letterless halves across a system break (TAB) and a split slur (notation)', () => {
+    // Every measure ends on a legato slide into the next one: 4 links, each break splits one.
+    const m = () => [fr(3, 5), fr(3, 5), fr(3, 5), fr(3, 7, { slide: 'legato' })];
+    const svg = render(sc([m(), m(), m(), m(), [fr(3, 9, {}, 'note', 'whole')]]), 400);
+    const breaks = walk(svg).filter((n) => /^system system-/.test(cls(n))).length - 1;
+    eq(breaks >= 2, true);
+    const a = arcs(svg);
+    eq(a.length, 4 + breaks);
+    eq(a.every((g) => walk(g).filter((c) => c.tag === 'path').length === 1 && !walk(g).some((c) => c.tag === 'text')), true);
+    eq(slurs(svg).length, 4 + breaks);
+  });
+  test('1.9 legato slide: into a grace note -> TAB arc only, no extra notation slur; with a hammerPull on the same note -> only the H/P arc', () => {
+    const grace = (x) => sc([[fr(3, 5, x), fr(3, 7, {}, 'grace', '16th'), fr(3, 5), fr(3, 7), fr(3, 5, {}, 'note', 'half')]]);
+    const g = render(grace({ slide: 'legato' }), 900, { hammerPullSlurs: false });
+    eq(arcs(g).length, 1);
+    eq(slurs(g), slurs(render(grace({}), 900, { hammerPullSlurs: false })), 'only the grace note slur');
+    const both = render(sc([[fr(3, 5, { slide: 'legato', hammerPull: true }), fr(3, 7, { slide: 'legato' }), fr(3, 9), fr(3, 9)]]));
+    eq([arcs(both).length, hps(both).length], [1, 1]);
+    eq(slurs(both).length, 1, 'H/P and legato links that touch merge into one slur');
+  });
+  test('1.9 legato slide: voice 2 links within its voice, slur below', () => {
+    const rs = { type: 'rest', duration: 'quarter' };
+    const svg = render(sc([{ voices: [{ beats: [fr(2, 5), fr(2, 5), fr(2, 5), fr(2, 5)] }, { beats: [fr(4, 2, { slide: 'legato' }), fr(4, 4), rs, rs] }] }]));
+    eq(arcs(svg).length, 1);
+    eq(slurs(svg).map((s) => s.above), [false]);
+  });
+  test('1.9 legato slide: without a legato slide hammerPullSlurs:false output is unchanged (the opt-out path adds nothing)', () => {
+    const s = sc([[fr(3, 5, { slide: true }), fr(3, 7), fr(3, 7, { hammerPull: true }), fr(3, 9)]]);
+    eq(slurs(render(s, 900, { hammerPullSlurs: false })).length, 0);
+    eq(slurs(render(s)).length, 1);
+  });
+}
+
+// ---------- 1.9.0: whammy scoop (draw/whammy.js, tabTechniques.js) and w/bar (techniqueLabels.js) ----------
+{
+  const D9 = await imp('src/directions.js');
+  const { scoopGeometry } = await imp('src/draw/whammy.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const thm = resolveTheme({});
+  const sp = thm.staffLineSpacing;
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const cls = (n) => n.getAttribute('class') || '';
+  const nums = (d) => d.match(/-?\d+(\.\d+)?/g).map(Number);
+  const r6 = (v) => Math.round(v * 1e6) / 1e6;
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const n = (fret, x = {}, duration = 'quarter', type = 'note') => ({ type, duration, ...x, notes: [{ string: 3, fret }] });
+  const rs = (x = {}) => ({ type: 'rest', duration: 'quarter', ...x });
+  const sc = (measures, track = {}) => ({ tracks: [{ showStandardNotation: true, showTablature: true, ...track, measures: measures.map((beats) => (Array.isArray(beats) ? { beats } : beats)) }] });
+  const groups = (svg, c) => walk(svg).filter((g) => g.tag === 'g' && cls(g) === c);
+  // Points of a group's first path.
+  const pts = (g) => { const v = nums(g.children.find((c) => c.tag === 'path').getAttribute('d')); return v.reduce((a, x, i) => (i % 2 ? a : [...a, [x, v[i + 1]]]), []); };
+  // TAB fret-number x positions (single-system scores: no measure numbers).
+  const fretXs = (svg) => walk(svg).filter((t) => t.tag === 'text' && /^\d+$/.test(t.textContent) && t.getAttribute('text-anchor') === 'middle').map((t) => Number(t.getAttribute('x')));
+
+  test('1.9 scoop: beatScoop on main note beats with whammyScoop, not on rests / graces / with a pre-dive; WHAMMY_BAR_LABEL', () => {
+    eq([n(5, { whammyScoop: true }), n(5, { whammyScoop: 1, whammy: true }), n(5, { whammyScoop: true, whammy: { type: 'dive' } })].map(D9.beatScoop), [true, true, true]);
+    eq([n(5), rs({ whammyScoop: true }), n(5, { whammyScoop: true }, '16th', 'grace'), n(5, { whammyScoop: true, whammy: { type: 'predive' } }),
+      n(5, { whammyScoop: false }), null].map(D9.beatScoop), [false, false, false, false, false, false]);
+    eq(D9.WHAMMY_BAR_LABEL, 'w/bar');
+  });
+  test('1.9 scoop: geometry is a V from (x1, top) to the middle at bottomY and back to (x2, top), 0.8 sp deep, one text box', () => {
+    const g = scoopGeometry(100, 115, 50, thm);
+    eq([g.x1, g.xm, g.x2, g.top, g.bottomY], [100, 107.5, 115, 50 - 0.8 * sp, 50]);
+    eq(g.boxes, [{ x1: 100, x2: 115, top: 42, bottom: 50, text: true }]);
+  });
+  test('1.9 scoop: drawn into the note (ends 0.3 sp right of it) with a 1.5 sp lead-in where there is room, path only, class whammy whammy-scoop', () => {
+    const svg = render(sc([[n(5), n(7), n(7, { whammyScoop: true }), n(5)]]));
+    const s = groups(svg, 'whammy whammy-scoop');
+    eq(s.length, 1);
+    eq(s[0].children.map((c) => c.tag), ['path']);
+    const p = pts(s[0]);
+    const x = fretXs(svg)[2];
+    eq([r6(p[2][0] - x), r6(p[2][0] - p[0][0]), r6(p[1][0] - (p[0][0] + p[2][0]) / 2), r6(p[1][1] - p[0][1]), p[0][1] === p[2][1]], [0.3 * sp, 1.5 * sp, 0, 0.8 * sp, true]);
+  });
+  test('1.9 scoop: the lead-in shrinks to stay 0.9 sp after the previous beat, never below 1 sp', () => {
+    const svg = render(sc([[...Array(15).fill(0).map(() => n(5, {}, '16th')), n(7, { whammyScoop: true }, '16th')]]), 600);
+    const p = pts(groups(svg, 'whammy whammy-scoop')[0]);
+    const xs = fretXs(svg);
+    const want = Math.max(1 * sp, Math.min(1.5 * sp, xs[15] + 0.3 * sp - (xs[14] + 0.9 * sp)));
+    eq(r6(p[2][0] - p[0][0]), r6(want));
+    eq(want < 1.5 * sp, true, 'the fixture is tight');
+  });
+  test('1.9 scoop: with a dip on the same beat both share one tip level; a pre-dive wins; nothing on rests, graces, voice 2 or without TAB', () => {
+    const svg = render(sc([[n(5), n(7, { whammyScoop: true, whammy: true }), n(5, { whammyScoop: true, whammy: { type: 'predive' } }), n(5)]]));
+    const [scoop] = groups(svg, 'whammy whammy-scoop');
+    const [dip] = groups(svg, 'whammy whammy-dip');
+    eq(pts(scoop)[1][1], pts(dip)[1][1]);
+    eq([groups(svg, 'whammy whammy-scoop').length, groups(svg, 'whammy whammy-predive').length], [1, 1]);
+    const none = [
+      sc([[n(5), rs({ whammyScoop: true }), n(5, { whammyScoop: true }, '16th', 'grace'), n(5), n(5)]]),
+      sc([{ voices: [{ beats: [n(5), n(5), n(5), n(5)] }, { beats: [{ type: 'note', duration: 'half', whammyScoop: true, notes: [{ string: 5, fret: 2 }] }, { type: 'note', duration: 'half', notes: [{ string: 5, fret: 3 }] }] }] }]),
+      sc([[n(5), n(5, { whammyScoop: true }), n(5), n(5)]], { showTablature: false }),
+    ];
+    none.forEach((s, k) => eq(groups(render(s), 'whammy whammy-scoop').length, 0, `case ${k}`));
+  });
+  test('1.9 scoop: a held dive ends 0.9 sp before the scoop starts, with no rise; a return on that beat is ignored', () => {
+    const svg = render(sc([[n(5, { whammy: { type: 'dive', amount: 'full' } }), n(7), n(7, { whammyScoop: true, whammy: { type: 'return' } }), n(5)]]));
+    const dive = walk(svg).filter((g) => g.tag === 'g' && /^whammy whammy-dive/.test(cls(g)));
+    eq(dive.map(cls), ['whammy whammy-dive']);
+    const sx1 = pts(groups(svg, 'whammy whammy-scoop')[0])[0][0];
+    eq(r6(sx1 - pts(dive[0]).at(-1)[0]), 0.9 * sp);
+  });
+  test('1.9 scoop: whammyOf({ type: "scoop" }) stays null (not a whammy type)', () => {
+    eq(D9.whammyOf({ type: 'scoop' }), null);
+    eq(groups(render(sc([[n(5, { whammy: { type: 'scoop' } }), n(5), n(5), n(5)]])), 'whammy whammy-scoop').length, 0);
+  });
+
+  const runY = (svg, c) => groups(svg, c).map((g) => Number(g.children[0].getAttribute('y')));
+  test('1.9 w/bar: a label run "w/bar" (class whammy-bar) in the lane after let ring and before P.S. on TAB', () => {
+    const all = { letRing: true, whammyBar: true, pickScrape: 'down' };
+    const svg = render(sc([[n(5, all), n(5, all), n(5, all), n(5)]]));
+    const [ring, bar, ps] = [runY(svg, 'let-ring'), runY(svg, 'whammy-bar'), runY(svg, 'pick-scrape pick-scrape-down')];
+    eq([ring.length, bar.length, ps.length], [1, 1, 1]);
+    eq([ring[0] > bar[0], bar[0] > ps[0]], [true, true], 'outward = up on TAB');
+    eq(groups(svg, 'whammy-bar')[0].children[0].textContent, 'w/bar');
+    const alone = render(sc([[n(5, { whammyBar: true }), n(5)]]));
+    eq(runY(alone, 'whammy-bar'), runY(render(sc([[n(5, { letRing: true }), n(5)]])), 'let-ring'), 'alone it takes lane 0');
+  });
+  test('1.9 w/bar: unmarked rests bridge a run; an unmarked note or grace ends it; never without TAB', () => {
+    const W = { whammyBar: true };
+    eq(groups(render(sc([[n(5, W), rs(), rs(), n(5, W)]])), 'whammy-bar').length, 1);
+    eq(groups(render(sc([[n(5, W), n(5), n(5, W), n(5)]])), 'whammy-bar').length, 2);
+    eq(groups(render(sc([[n(5, W), n(5, {}, '16th', 'grace'), n(5, W), n(5), n(5)]])), 'whammy-bar').length, 2);
+    eq(groups(render(sc([[n(5, W), rs(), n(5, W), n(5)]], { showTablature: false })), 'whammy-bar').length, 0);
+  });
+}
+
+// ---------- 1.9.0: trill continuation over ties (directions.js trillChain, trill.js, playingDirections, voice2Marks, tabTrill) ----------
+{
+  const { trillChain } = await imp('src/directions.js');
+  const { trillChainWaves, trillContinuationGeometry, trillRuns } = await imp('src/draw/trill.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const { pickStrokeGlyph, Glyph: G9 } = await imp('src/glyphs.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const thm = resolveTheme({});
+  const sp = thm.staffLineSpacing;
+  const r6 = (v) => Math.round(v * 1e6) / 1e6;
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const cls = (n) => n.getAttribute('class') || '';
+  const nums = (d) => d.match(/-?\d+(\.\d+)?/g).map(Number);
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const parents = (root) => { const m = new Map(); walk(root).forEach((p) => p.children.forEach((c) => m.set(c, p))); return m; };
+  const waveYs = (g) => { const v = nums(g.children.find((c) => c.tag === 'path').getAttribute('d')); return v.filter((_, i) => i % 2 === 1); };
+  const waveXs = (g) => { const v = nums(g.children.find((c) => c.tag === 'path').getAttribute('d')); return v.filter((_, i) => i % 2 === 0); };
+  // y of the first glyph / text of every group with class `c` under `g`.
+  const ys = (g, c) => walk(g).filter((n) => n.tag === 'g' && (cls(n) === c || cls(n).startsWith(`${c} `))).map((n) => Number(walk(n).find((t) => t.tag === 'text').getAttribute('y')));
+
+  const nb = (notes, x = {}, type = 'note', duration = 'quarter') => ({ type, duration, ...x, notes });
+  const P = (pitch, x = {}) => ({ pitch, ...x });
+  test('1.9 trillChain: tied notes continue a trill (same written MIDI incl. enharmonics, or same string + fret); graces skipped', () => {
+    eq(trillChain([nb([P('E4', { trill: true })]), nb([P('E4', { tieEnd: true })]), nb([P('E4', { tieEnd: true })]), nb([P('E4')])], 0), [1, 2]);
+    eq(trillChain([nb([P('C#4', { trill: true })]), nb([P('Db4', { tieEnd: true })])], 0), [1]);
+    eq(trillChain([nb([{ string: 3, fret: 5, trill: true }]), nb([{ string: 3, fret: 5, tieEnd: true }])], 0), [1]);
+    eq(trillChain([nb([P('E4', { trill: true })]), nb([P('E4')], {}, 'grace', '16th'), nb([P('E4', { tieEnd: true })])], 0), [2]);
+    eq(trillChain([nb([P('G4'), P('E4', { trill: true })]), nb([P('G4', { tieEnd: true }), P('E4', { tieEnd: true })])], 0), [1]);
+    eq(trillChain([nb([P('E4', { trill: true })]), nb([P('E4', { tieEnd: true })]), nb([P('E4')]), nb([P('E4', { tieEnd: true })])], 0), [1], 'an untied note ends it');
+  });
+  test('1.9 trillChain: [] or a stop on another pitch / fret, a missing tieEnd, a rest, a beat with its own trill, a null entry, no trill, bad pitches', () => {
+    const tr = nb([P('E4', { trill: true })]);
+    eq([
+      [tr, nb([P('F4', { tieEnd: true })])],
+      [tr, nb([P('E4')])],
+      [tr, { type: 'rest', duration: 'quarter' }, nb([P('E4', { tieEnd: true })])],
+      [tr, nb([P('E4', { tieEnd: true, trill: true })])],
+      [tr, null, nb([P('E4', { tieEnd: true })])],
+      [nb([P('E4')]), nb([P('E4', { tieEnd: true })])],
+      [nb([{ string: 3, fret: 5, trill: true }]), nb([{ string: 3, fret: 6, tieEnd: true }])],
+      [nb([{ string: 3, fret: 5, trill: true }]), nb([{ string: 2, fret: 5, tieEnd: true }])],
+      [nb([P('H9', { trill: true, string: 3, fret: 5 })]), nb([P('E4', { tieEnd: true, string: 3, fret: 5 })])],
+      [tr],
+    ].map((els) => trillChain(els, 0)), Array(10).fill([]));
+    eq(trillChain([tr, nb([P('E4', { tieEnd: true })]), nb([P('E4', { tieEnd: true, trill: true })])], 0), [1], 'stops before a tied note with its own trill');
+  });
+
+  // trillChainWaves on plain items { s: system, x }.
+  const systems = [0, 1, 2].map(() => ({ lastBarlineX: 500, contentStartX: 50 }));
+  const waves = (spec, els, at = 0) => {
+    const items = spec.map(([s, x]) => ({ s, x }));
+    const nextX = (it) => items.find((c) => c.s === it.s && c.x > it.x)?.x ?? Infinity;
+    return trillChainWaves(items, at, els, { sysOf: (it) => it.s, xOf: (it) => it.x, nextX }, systems, thm);
+  };
+  const tr = nb([P('E4', { trill: true })]);
+  const tie = nb([P('E4', { tieEnd: true })]);
+  const plain = nb([P('E4')]);
+  const half = (glyphBox(G9.ornamentTrill).width / 2 + 0.25) * sp;
+  test('1.9 trillChainWaves: null without a chain; on one system the wave ends 0.8 sp before the beat after the chain, before its "tr" when trilled', () => {
+    eq(waves([[0, 100], [0, 150]], [tr, plain]), null);
+    const w = waves([[0, 100], [0, 150], [0, 200], [0, 250]], [tr, tie, tie, plain]);
+    eq([w.covered.map((c) => c.x), w.endX, w.conts], [[150, 200], 250 - 0.8 * sp, []]);
+    eq(r6(waves([[0, 100], [0, 150], [0, 250]], [tr, tie, tr]).endX), r6(250 - half), 'stopper trill clamps');
+    eq(r6(waves([[0, 100], [0, 150], [0, 230], [0, 250]], [tr, tie, nb([P('E4')], {}, 'grace', '16th'), tr]).endX), r6(230 - 0.8 * sp), 'grace in between: the next beat, then the trill');
+    eq(waves([[0, 100], [0, 150]], [tr, tie]).endX, 495, 'nothing after: the system break');
+  });
+  test('1.9 trillChainWaves: across breaks the wave ends at the break and continues from 0.5 sp after each later header', () => {
+    const w = waves([[0, 100], [0, 300], [1, 100], [1, 300], [2, 100], [2, 200]], [tr, tie, tie, tie, tie, plain]);
+    eq(w.endX, 495);
+    eq(w.conts.map((c) => [c.sysIdx, c.items.map((it) => it.x), c.x1, c.x2]), [[1, [100, 300], 55, 495], [2, [100], 55, 200 - 0.8 * sp]]);
+    const w2 = waves([[0, 100], [1, 100], [1, 140]], [tr, tie, tr]);
+    eq([w2.endX, w2.conts.map((c) => r6(c.x2))], [495, [r6(Math.min(140 - 0.8 * sp, 140 - half))]]);
+    eq(trillContinuationGeometry(55, 60, 100, thm), null, 'shorter than 0.7 sp: nothing');
+    eq(trillContinuationGeometry(55, 95, 100, thm), { x1: 55, x2: 95, y: 98, top: 96, boxes: [{ x1: 55, x2: 95, top: 96, bottom: 100, text: true }] });
+  });
+  test('1.9 trillRuns unchanged by ties: a tied note ends the run like any untrilled beat', () => {
+    const bs = [tr, tie, tr, tr].map((el, i) => ({ el, i }));
+    const r = trillRuns(bs, (b) => !!b.el.notes[0].trill, () => 0, () => false);
+    eq([r.get(bs[0]).map((b) => b.i), r.get(bs[2]).map((b) => b.i), r.has(bs[1])], [[0], [2, 3], false]);
+  });
+
+  const q = (pitch, x = {}, b = {}, duration = 'quarter') => ({ type: 'note', duration, ...b, notes: [{ pitch, ...x }] });
+  const tstr = { tieStart: true };
+  const tmid = { tieStart: true, tieEnd: true };
+  test('1.9 trill continuation (notation): one wave over a 3-note chain; T and pick on a tied beat and a fermata on another stack above it', () => {
+    const svg = render({ tracks: [{ measures: [{ beats: [
+      q('E4', { trill: true, ...tstr }), q('E4', { ...tmid, tap: true }, { pickStroke: 'down' }), q('E4', { tieEnd: true }, { fermata: true }), q('G4'),
+    ] }] }] });
+    const [t] = walk(svg).filter((n) => n.tag === 'g' && cls(n) === 'trill');
+    eq(walk(svg).filter((n) => cls(n).startsWith('trill')).length, 1);
+    const top = Math.min(...waveYs(t));
+    const above = [...ys(svg, 'tap'), ...ys(svg, 'pick-stroke'), ...ys(svg, 'fermata')];
+    eq([above.length, above.every((y) => y < top)], [3, true]);
+  });
+  test('1.9 trill continuation (notation): a chain across two breaks draws one "tr" and a glyph-less wave on each later system, clear of the staff', () => {
+    const W = (b = {}) => q('E4', tmid, b, 'whole');
+    const svg = render({ tracks: [{ measures: [
+      { beats: [q('C4', {}, {}, 'half'), q('E4', { trill: true, ...tstr }, {}, 'half')] },
+      ...[0, 1, 2, 3, 4, 5, 6].map(() => ({ beats: [W()] })),
+      { beats: [q('E4', { tieEnd: true }, {}, 'half'), q('G4', {}, {}, 'half')] },
+    ] }] }, 400);
+    const sysCount = walk(svg).filter((n) => /^system system-/.test(cls(n))).length;
+    const conts = walk(svg).filter((n) => n.tag === 'g' && cls(n) === 'trill trill-continued');
+    eq(sysCount >= 3, true);
+    eq([walk(svg).filter((n) => n.tag === 'g' && cls(n) === 'trill').length, conts.length], [1, sysCount - 1]);
+    eq(conts.every((g) => g.children.length === 1 && g.children[0].tag === 'path'), true);
+    // Each continuation lies at least 1 sp above its staff's top line (beatClearTop).
+    const par = parents(svg);
+    conts.forEach((g) => {
+      const staff = walk(par.get(g)).filter((n) => n.tag === 'line' && n.getAttribute('y1') === n.getAttribute('y2') && Number(n.getAttribute('x2')) - Number(n.getAttribute('x1')) > 100);
+      const topLine = Math.min(...staff.map((n) => Number(n.getAttribute('y1'))));
+      if (!(Math.max(...waveYs(g)) <= topLine - sp + 1e-6)) throw new Error(`continuation too low: ${Math.max(...waveYs(g))} vs ${topLine}`);
+    });
+  });
+  test('1.9 trill continuation (voice 2): the wave runs over the tied voice-2 note below the staff; its pick stroke stacks below the wave', () => {
+    const rs = { type: 'rest', duration: 'half' };
+    const svg = render({ tracks: [{ measures: [{ voices: [
+      { beats: ['C5', 'C5', 'C5', 'C5'].map((p) => q(p)) },
+      { beats: [q('E4', { trill: true, ...tstr }), q('E4', { tieEnd: true }, { pickStroke: 'up' }), rs] },
+    ] }] }] });
+    const [t] = walk(svg).filter((n) => n.tag === 'g' && cls(n) === 'trill');
+    const bottom = Math.max(...waveYs(t));
+    const picks = walk(svg).filter((n) => n.tag === 'g' && cls(n) === 'pick-stroke pick-stroke-up');
+    eq(picks.length, 1);
+    // renderPickStroke's text y is the glyph's bottom edge; its top edge lies below the wave.
+    eq(Number(picks[0].children[0].getAttribute('y')) - glyphBox(pickStrokeGlyph('up')).top * sp > bottom, true);
+    const xs = waveXs(t);
+    eq(Math.max(...xs) > Number(picks[0].children[0].getAttribute('x')), true, 'the wave passes the tied note');
+  });
+  test('1.9 trill continuation (TAB): T, golpe and dip on a covered column stack above the wave; a later system gets a continued wave', () => {
+    const f = (fret, x = {}, b = {}, duration = 'quarter') => ({ type: 'note', duration, ...b, notes: [{ string: 3, fret, ...x }] });
+    const tabOnly = (measures) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures }] });
+    const svg = render(tabOnly([{ beats: [f(5, { trill: true, ...tstr }), f(5, { ...tmid, tap: true }, { golpe: true }), f(5, { tieEnd: true }, { whammy: true }), f(7)] }]));
+    const [t] = walk(svg).filter((n) => n.tag === 'g' && cls(n) === 'trill');
+    const top = Math.min(...waveYs(t));
+    const dip = walk(svg).filter((n) => n.tag === 'g' && cls(n) === 'whammy whammy-dip');
+    const marks = [...ys(svg, 'tap'), ...walk(svg).filter((n) => n.tag === 'g' && /^golpe/.test(cls(n))).map((g) => Number(g.children[0].getAttribute('y'))), Math.max(...waveYs(dip[0]))];
+    eq([marks.length, marks.every((y) => y < top)], [3, true]);
+    const W = () => ({ beats: [f(5, tmid, {}, 'whole')] });
+    const br = render(tabOnly([{ beats: [f(3, {}, {}, 'half'), f(5, { trill: true, ...tstr }, {}, 'half')] }, W(), W(), W(), W(), W(), W(), { beats: [f(5, { tieEnd: true }, {}, 'half'), f(7, {}, {}, 'half')] }]), 400);
+    const sysCount = walk(br).filter((n) => /^system system-/.test(cls(n))).length;
+    eq(sysCount >= 2, true);
+    eq(walk(br).filter((n) => n.tag === 'g' && cls(n) === 'trill trill-continued').length, sysCount - 1);
+  });
+}
+
+// ---------- 1.9.0: verification extras (rebend guard, string edges, slide kept as written) ----------
+{
+  const { bendOf } = await imp('src/directions.js');
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const cls = (n) => n.getAttribute('class') || '';
+  const plain = { type: 'bend', amount: 'full', release: false, hold: false };
+  test('1.9 rebend guard: only a non-blank string or a finite non-zero number makes a compound bend (trimmed, stringified)', () => {
+    const C = (rebend) => ({ type: 'bend', amount: 'full', release: true, hold: false, rebend });
+    eq(bendOf({ amount: 'full', rebend: ' 1/2 ' }), C('1/2'));
+    eq(bendOf({ amount: 'full', rebend: 0.5 }), C('0.5'));
+    eq(bendOf({ amount: 'full', rebend: 2 }), C('2'));
+    for (const bad of ['', '   ', '\t\n', 0, -0, NaN, Infinity, -Infinity, true, false, null, undefined, {}, [], ['full'], () => 'full']) {
+      const b = bendOf({ amount: 'full', rebend: bad });
+      eq(b, plain, `rebend ${String(bad)}`);
+      eq('rebend' in b, false);
+    }
+  });
+  test('1.9 rebend guard: a rejected rebend keeps the object bend flags (release / hold); the prebend type is kept', () => {
+    eq(bendOf({ amount: 'full', release: true, rebend: NaN }), { ...plain, release: true });
+    eq(bendOf({ amount: 'full', hold: true, rebend: {} }), { ...plain, hold: true });
+    eq(bendOf({ type: 'pb', rebend: ' ' }), { type: 'prebend', amount: 'full', release: false, hold: false });
+    eq(bendOf({ type: 'pb', rebend: 1 }), { type: 'prebend', amount: 'full', release: true, hold: false, rebend: '1' });
+  });
+  test('1.9 rebend guard: a non-string / blank rebend renders as the plain bend (no compound class); a string one as compound', () => {
+    const svgOf = (rebend) => {
+      const box = makeContainer();
+      new MusicScoreRenderer(box, { tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: [
+        { type: 'note', duration: 'half', notes: [{ string: 3, fret: 7, bend: { amount: 'full', rebend } }] }, { type: 'note', duration: 'half', notes: [{ string: 3, fret: 7 }] }] }] }] }, { width: 900 }).render();
+      return box.children[0];
+    };
+    for (const bad of [{}, true, NaN, 0, '  ']) {
+      eq(walk(svgOf(bad)).filter((n) => /^bend\b/.test(cls(n))).map(cls), ['bend'], String(bad));
+    }
+    eq(walk(svgOf('full')).filter((n) => /^bend\b/.test(cls(n))).map(cls), ['bend bend-rebend']);
+  });
+  test('1.9 compound bend string edges: release strictly inside, once, no hold after it; pb needs a word before release', () => {
+    const rb = (r) => ('rebend' in bendOf(r) ? bendOf(r).rebend : undefined);
+    eq(rb('full release full '), 'full');
+    eq(rb('full hold release full'), 'full');
+    eq(rb('full RELEASE'), undefined);
+    eq(rb('x release release'), undefined);
+    eq(rb('pb release full'), undefined);
+    eq(rb('pb  release  1/2'), undefined);
+    eq(rb('full release hold'), undefined);
+    eq(rb('prebendfull release full'), 'full');
+    eq(bendOf('full release hold'), { type: 'bend', amount: 'full release', release: false, hold: true });
+  });
+  test('1.9 legato slide: normalizeScore keeps note.slide exactly as written (not canonicalized)', () => {
+    const s = normalizeScore({ tracks: [{ showTablature: true, measures: [{ beats: [
+      { type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 5, slide: ' Legato ' }] }, { type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 7, slide: 'up' }] }] }] }] });
+    eq(s.tracks[0].measures[0].beats.map((b) => b.notes[0].slide), [' Legato ', 'up']);
   });
 }
 

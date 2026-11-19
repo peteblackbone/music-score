@@ -14,10 +14,13 @@
  * - `beat.whammy` true | amount | `{ type, amount }`, type 'dip' (default),
  *   'dive', 'return' or 'predive': a whammy-bar mark on the TAB staff, its
  *   amount shown with a leading "-" (`true` and a missing amount mean '1/2');
+ * - `beat.whammyScoop` (truthy): a whammy scoop into the beat (beatScoop;
+ *   a pre-dive on the same beat wins); `beat.whammyBar` (truthy): a "w/bar"
+ *   label run on the TAB staff, like let ring;
  * - `beat.rake` (truthy, 'down' | 'up'): a "rake" label run over the beat
  *   and the grace notes right before it;
  * - `note.trill` true | fret | pitch | `{ fret, pitch }`: "tr" and a wavy
- *   line above the beat;
+ *   line above the beat, continued over the notes it is tied to (trillChain);
  * - `beat.arpeggio` true | 'up' | 'down': a vertical wavy line left of a
  *   chord of two or more notes ('up' / 'down' add an arrowhead);
  * - `beat.strum` 'down' | 'up': a strum arrow above the beat; it replaces
@@ -26,7 +29,8 @@
  *   'above') and `note.slideOut` 'down' | 'up' (true = 'down'): a short
  *   slide into the note from below / above, or off it downward / upward
  *   (slideMarks decides which are drawn; withNoteSlides canonicalizes);
- * - `note.bend`: a bend, pre-bend or release note (bendOf).
+ * - `note.bend`: a bend, pre-bend, release note or compound bend (bendOf);
+ * - `note.slide` 'legato' (isLegatoSlide): a slide with a slur, not re-picked.
  *
  * Rests and grace notes carry no pick stroke, tap, whammy, rake, arpeggio
  * or strum. Every
@@ -38,6 +42,8 @@ import { parsePitch, midiNumber } from './pitch.js';
 
 /** Label text of a let-ring run. */
 export const LET_RING_LABEL = 'let ring';
+/** Label text of a whammy-bar ("w/bar") run. */
+export const WHAMMY_BAR_LABEL = 'w/bar';
 /** Letter shown above a beat for each tap-style mark (class name = the key). */
 export const TAP_MARK_LETTERS = { tap: 'T', slap: 'S', pop: 'P' };
 const PICK_KINDS = ['down', 'up'];
@@ -56,6 +62,11 @@ export function linkTarget(items, i) {
   if (string == null) return -1;
   for (let k = i + 1; k < items.length; k++) if (items[k].string === string) return k;
   return -1;
+}
+
+/** Whether a raw `note.slide` is a legato slide: the string 'legato' (trimmed, any case). Any other truthy slide is a shift slide. */
+export function isLegatoSlide(raw) {
+  return typeof raw === 'string' && raw.trim().toLowerCase() === 'legato';
 }
 
 /** Canonical slide-in ('below' | 'above') of a raw `note.slideIn`: true / 'up' / 'below' → 'below', 'down' / 'above' → 'above' (trimmed, any case), else null. Idempotent. */
@@ -117,6 +128,10 @@ export function slideMarks(items) {
  * 'release'; trimmed, any case; else 'bend'), `amount` (as a string; else
  * 'full', or null for a release) and `release` / `hold` flags (`hold`
  * only on a plain bend that doesn't release).
+ * A compound bend (bend-release-bend, or with a 'pb' prefix
+ * pre-bend-release-bend), '<a> release <b>' or an object's `rebend`
+ * (not on a release note), also has `rebend` (the second bend's amount)
+ * with `release: true`, `hold: false`; other bends have no `rebend` key.
  */
 /**
  * Split a trailing ' release' / ' hold' word (any case) off a bend string:
@@ -132,17 +147,34 @@ function splitBendSuffix(str, whole) {
   return [str.trim(), null];
 }
 
+/**
+ * A compound bend string's `{ amount, release: true, hold: false, rebend }`
+ * ('<a> release <b>': exactly one 'release' word (any case) with words on
+ * both sides and no 'hold' after it), or null. One linear split.
+ */
+function splitCompoundBend(str) {
+  const tokens = str.split(/\s+/);
+  const lower = tokens.map((t) => t.toLowerCase());
+  const i = lower.indexOf('release');
+  if (i <= 0 || i >= tokens.length - 1 || lower.indexOf('release', i + 1) >= 0 || lower.indexOf('hold', i + 1) >= 0) return null;
+  return { amount: tokens.slice(0, i).join(' '), release: true, hold: false, rebend: tokens.slice(i + 1).join(' ') };
+}
+
 export function bendOf(raw) {
   if (!raw) return null;
   if (typeof raw === 'string') {
     const trimmed = raw.trim();
     const pre = /^(prebend|pre-bend|pb)\b\s*(.*)$/i.exec(trimmed);
     if (pre) {
+      const compound = splitCompoundBend(pre[2]);
+      if (compound) return { type: 'prebend', ...compound };
       const [rest, word] = splitBendSuffix(pre[2], true);
       return { type: 'prebend', amount: rest || 'full', release: word === 'release', hold: false };
     }
     const rel = /^release\b\s*(.*)$/i.exec(trimmed);
     if (rel) return { type: 'release', amount: rel[1] || null, release: true, hold: false };
+    const compound = splitCompoundBend(trimmed);
+    if (compound) return { type: 'bend', ...compound };
     const [rest, word] = splitBendSuffix(trimmed, false);
     return { type: 'bend', amount: rest || 'full', release: word === 'release', hold: word === 'hold' };
   }
@@ -150,9 +182,13 @@ export function bendOf(raw) {
     const t = typeof raw.type === 'string' ? raw.type.trim().toLowerCase() : '';
     const type = ['prebend', 'pb', 'pre-bend'].includes(t) ? 'prebend' : (t === 'release' ? 'release' : 'bend');
     const release = type === 'release' || !!raw.release;
+    const amount = raw.amount ? String(raw.amount) : (type === 'release' ? null : 'full');
+    // Only a string or a finite number counts as a second bend; anything else (or blank) is no rebend.
+    const rebend = (typeof raw.rebend === 'string' || Number.isFinite(raw.rebend)) && raw.rebend !== 0 ? String(raw.rebend).trim() : '';
+    if (rebend && type !== 'release') return { type, amount, release: true, hold: false, rebend };
     return {
       type,
-      amount: raw.amount ? String(raw.amount) : (type === 'release' ? null : 'full'),
+      amount,
       release,
       hold: type === 'bend' && !release && !!raw.hold,
     };
@@ -292,6 +328,11 @@ export function beatWhammyAny(el) {
   return isMainNoteBeat(el) ? whammyOf(el.whammy) : null;
 }
 
+/** Whether a beat has a whammy scoop: a main note beat with `whammyScoop` and no pre-dive. */
+export function beatScoop(el) {
+  return isMainNoteBeat(el) && !!el.whammyScoop && whammyOf(el.whammy)?.type !== 'predive';
+}
+
 /** Whether a beat carries a rake. */
 export function beatRake(el) {
   return isMainNoteBeat(el) && rakeOf(el.rake) != null;
@@ -305,6 +346,41 @@ export function beatTrill(el) {
     if (trill) return { note, trill };
   }
   return null;
+}
+
+/** Whether tied-to note `b` continues note `a`: the same written MIDI number when both have a pitch, else the same string and fret. */
+function continuesNote(a, b) {
+  if (a.pitch != null && b.pitch != null) {
+    try { return midiNumber(parsePitch(a.pitch)) === midiNumber(parsePitch(b.pitch)); } catch { return false; }
+  }
+  return a.string != null && a.string === b.string && a.fret === b.fret;
+}
+
+/**
+ * Indices of the beats of one voice stream `els` (beat elements in score
+ * order; null where the stream leaves the voice) that the trill on
+ * `els[i]` continues over: from its trilled note (beatTrill), each later
+ * beat with a `tieEnd` note continuing the current one (same written MIDI
+ * number, or same string and fret without pitches), which then becomes
+ * current. Grace notes are skipped; a null entry, a beat that isn't a main
+ * note beat, a beat with its own trill or one with no such note ends the
+ * chain. [] when `els[i]` has no trill or nothing is tied to it.
+ */
+export function trillChain(els, i) {
+  const t = beatTrill(els[i]);
+  if (!t) return [];
+  const out = [];
+  let cur = t.note;
+  for (let k = i + 1; k < els.length; k++) {
+    const el = els[k];
+    if (el && el.type === 'grace') continue;
+    if (!isMainNoteBeat(el) || beatTrill(el)) break;
+    const next = el.notes.find((n) => n.tieEnd && continuesNote(cur, n));
+    if (!next) break;
+    out.push(k);
+    cur = next;
+  }
+  return out;
 }
 
 /**

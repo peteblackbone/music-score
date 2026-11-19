@@ -1,6 +1,6 @@
 /**
  * draw/passes/techniqueLabels.js — pass 4 (draw/passes.js): palm mute,
- * harmonic, let-ring, pick-scrape, barre and rake label runs, stacked in
+ * harmonic, let-ring, w/bar, pick-scrape, barre and rake label runs, stacked in
  * lanes beside the staff.
  * Reads `run.tabInkBoxes` (pass 3); writes `run.labelBoxes` for pass 5.
  */
@@ -8,7 +8,7 @@ import { renderTechniqueLabel, techniqueLabelSize, techniqueLabelDash } from '..
 import { TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../../layout/ink.js';
 import { estimateTextWidth } from '../../textMetrics.js';
 import { HARMONIC_LABELS, beatHarmonicLabelKind } from '../../harmonics.js';
-import { LET_RING_LABEL, RAKE_LABEL, beatRake } from '../../directions.js';
+import { LET_RING_LABEL, RAKE_LABEL, WHAMMY_BAR_LABEL, beatRake } from '../../directions.js';
 import { beatPickScrape, beatBarre, barreLabel } from '../../hands.js';
 import { flattenRuns, breakEndX } from './common.js';
 
@@ -20,7 +20,7 @@ const BEND_LABEL_MIN_DASH_SP = 1; // min dash length left for a label moved righ
 /**
  * Technique-label runs of every track — six kinds, each a label plus a
  * dashed line over consecutive beats (renderTechniqueLabel): palm mute
- * ("P.M."), harmonics ("A.H." / "T.H." / "P.H." / "S.H."), let ring
+ * ("P.M."), harmonics ("A.H." / "T.H." / "P.H." / "S.H." / "Fdbk."), let ring
  * ("let ring"), pick scrape ("P.S."), barre ("C II", "½C V") and rake
  * ("rake"), stacked in lanes in that order outward from the staff.
  *
@@ -34,9 +34,9 @@ const BEND_LABEL_MIN_DASH_SP = 1; // min dash length left for a label moved righ
  * between it and the notation staff above) when the track has one — the
  * conventional place — otherwise below the notation staff.
  *
- * Harmonics (artificial / tapped / pinch / semi; natural harmonics have no
- * label) get the same kind of run, one label per beat by priority
- * A.H. > T.H. > P.H. > S.H. (harmonics.js): consecutive beats with the same
+ * Harmonics (artificial / tapped / pinch / semi / feedback; natural harmonics
+ * have no label) get the same kind of run, one label per beat by priority
+ * A.H. > T.H. > P.H. > S.H. > Fdbk. (harmonics.js): consecutive beats with the same
  * label kind form a run; rests, grace notes and other beats end it. P.M.
  * runs are drawn first, in the lane nearest the staff; a harmonic run moves
  * one lane further out (techniqueLabelSize + 0.4 sp) than every P.M. run of
@@ -59,10 +59,14 @@ const BEND_LABEL_MIN_DASH_SP = 1; // min dash length left for a label moved righ
  * note ends it. Tap "T" and whammy-dip ink (recorded with the bends by
  * renderTabArticulations) is avoided the same way as bend ink.
  *
+ * Whammy bar (`whammyBar` on a beat, TAB only): a "w/bar" run (class
+ * whammy-bar) like let ring, rests bridging the same way, drawn outside
+ * every P.M. / harmonic / let-ring run it overlaps.
+ *
  * Pick scrape (`pickScrape` on a beat; hands.js) runs like let ring, rests
  * bridging the same way; scrapes of either direction merge, the run's class
  * (`pick-scrape-down` / `-up`) taken from its first beat. Drawn outside
- * every P.M. / harmonic / let-ring run it overlaps.
+ * every P.M. / harmonic / let-ring / w/bar run it overlaps.
  *
  * Barre (`barre` on a beat; hands.js barreLabel): consecutive beats with
  * the same barre (fret and half) form a run; unmarked rests and grace notes
@@ -100,10 +104,11 @@ export function renderTechniqueLabelRuns(score, trackRuns, theme, systems) {
         run, sysIdx: run.sysIdx, g: run.tabG || run.notationG, x: layoutEl.x, labelY, palmMute: !!layoutEl.el.palmMute, harmonic,
         letRing: !!layoutEl.el.letRing, bridge: layoutEl.el.type === 'rest', tabInkBoxes: run.tabInkBoxes || [],
         grace: layoutEl.el.type === 'grace', rake: beatRake(layoutEl.el),
-        pickScrape: beatPickScrape(layoutEl.el), barre: beatBarre(layoutEl.el),
+        pickScrape: beatPickScrape(layoutEl.el), barre: beatBarre(layoutEl.el), whammyBar: !!track.showTablature && !!layoutEl.el.whammyBar,
       });
     });
     markBridged(flat, (it) => (it.letRing ? 'let-ring' : null), (it) => it.bridge, 'ringing');
+    markBridged(flat, (it) => (it.whammyBar ? 'w-bar' : null), (it) => it.bridge, 'barring');
     markBridged(flat, (it) => (it.pickScrape ? 'pick-scrape' : null), (it) => it.bridge, 'scraping');
     markBridged(flat, (it) => (it.barre ? `${it.barre.fret}${it.barre.half ? 'h' : ''}` : null), (it) => it.bridge || it.grace, 'barreKey');
     markRakes(flat);
@@ -156,8 +161,10 @@ export function renderTechniqueLabelRuns(score, trackRuns, theme, systems) {
     const placed = [...pmBoxes, ...harmonicBoxes];
     const ringBoxes = labelRuns(flat, (it) => it.ringing, systems, theme)
       .map((r) => draw(r, LET_RING_LABEL, 'let-ring', placed));
-    // Pick scrape outside those, then barre outside every run so far.
-    const inner = [...placed, ...ringBoxes];
+    // w/bar (TAB only) outside those, pick scrape outside them, then barre outside every run so far.
+    const barBoxes = labelRuns(flat, (it) => it.barring, systems, theme)
+      .map((r) => draw(r, WHAMMY_BAR_LABEL, 'whammy-bar', [...placed, ...ringBoxes]));
+    const inner = [...placed, ...ringBoxes, ...barBoxes];
     const psBoxes = labelRuns(flat, (it) => it.scraping, systems, theme)
       .map((r) => draw(r, 'P.S.', r.start.pickScrape === true ? 'pick-scrape' : `pick-scrape pick-scrape-${r.start.pickScrape}`, inner));
     const outer = [...inner, ...psBoxes];
