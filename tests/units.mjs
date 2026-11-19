@@ -4367,6 +4367,166 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.8.0 verification gap-fill: R1 / R2 / R4 / R5 / R6 edge cases (independent oracles) ----------
+{
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { drawSystem } = await imp('src/draw/system.js');
+  const P = await imp('src/draw/passes.js');
+  const { elementBottom } = await imp('src/draw/notation.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const { mergedRestPairs } = await imp('src/layout/voices.js');
+  const { stemDxSp } = await imp('src/layout/chord.js');
+  const TR = await imp('src/layout/tabRhythm.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing; const BL = 4 * S;
+  const LB = 5 * th.tabStaffLineSpacing; const T1 = TR.tabStemTopY(LB, th);
+  const nb = (ps, duration = 'quarter', x = {}) => ({ type: 'note', duration, notes: ps.map((p) => (typeof p === 'string' ? { pitch: p } : p)), ...x });
+  const rs = (duration = 'quarter', x = {}) => ({ type: 'rest', duration, ...x });
+  const fr = (string, fret, d = 'quarter', x = {}, n = {}) => ({ type: 'note', duration: d, notes: [{ string, fret, ...n }], ...x });
+  const vm = (b1, b2) => ({ voices: [{ beats: b1 }, { beats: b2 }] });
+  const nodes = (g, pred) => [...walk(g)].filter(({ nd, cls }) => pred(nd, cls)).map(({ nd }) => nd);
+  const near = (a, b, e = 1e-6) => Math.abs(a - b) < e;
+  const ofClass = (g, c) => nodes(g, (nd) => nd.tag === 'g' && (nd.getAttribute('class') || '').split(' ').includes(c));
+  const draw = (measures, track = {}) => {
+    const sc = normalizeScore({ tracks: [{ showStandardNotation: true, ...track, measures }] });
+    const { systems } = computeLayout(sc, th, 900);
+    const d = drawSystem(makeContainer(), systems[0], 0, sc, th);
+    P.renderTiesAndSlurs(sc, d.runs, th, systems); P.renderGraceSlurs(sc, d.runs, th);
+    P.renderTabArticulations(sc, d.runs, th, systems); P.renderTechniqueLabelRuns(sc, d.runs, th, systems);
+    P.renderPlayingDirections(sc, d.runs, th, systems);
+    return { ms: systems[0].tracks[0].measures, staff: (kind) => d.staves.find((st) => st.kind === kind)?.g };
+  };
+  const glyphTop = (gEl, name) => +gEl.children[0].getAttribute('y') - glyphBox(name).top * S;
+  const ornTop = (g) => glyphTop(ofClass(g, 'ornament')[0], 'ornamentTurn');
+  const code = (t) => t.textContent.codePointAt(0).toString(16);
+
+  test('gap R1 notation: inverted fermata classes and glyphs per kind (E4C1 / E4C5 / E4C7); voice 1 keeps the upright ones', () => {
+    const of = (v1f, v2f) => {
+      const svg = renderTree({ tracks: [{ showStandardNotation: true, measures: [vm([nb(['C5'], 'half', v1f ? { fermata: v1f } : {}), rs('half')], [nb(['E4'], 'half', v2f ? { fermata: v2f } : {}), rs('half')])] }] });
+      return ofClass(svg, 'fermata').map((g) => [g.getAttribute('class'), code(g.children[0])]).sort();
+    };
+    eq(of(null, true), [['fermata fermata-below', 'e4c1']]);
+    eq(of(null, 'short'), [['fermata fermata-short fermata-below', 'e4c5']]);
+    eq(of(null, 'long'), [['fermata fermata-long fermata-below', 'e4c7']]);
+    eq(of('short', null), [['fermata fermata-short', 'e4c4']]);
+    eq(of('long', 'long'), [['fermata fermata-long fermata-below', 'e4c7'], ['fermata fermata-long', 'e4c6']]);
+  });
+  test('gap R1 notation: clearBottom floor (staff bottom + 1 sp) and wide vibrato (+2.3 sp)', () => {
+    const turn = (p, x = {}) => nb([{ pitch: p, ornament: 'turn' }], 'quarter', x);
+    let r = draw([vm([nb(['C6'], 'whole')], [turn('G5'), rs(), rs('half')])]);
+    eq(elementBottom(r.ms[0].elements2[0].rendered) + S < BL + S, true, 'own ink is above the staff bottom, so the floor binds');
+    eq(near(ornTop(r.staff('notation')), BL + S), true, 'B + 1');
+    r = draw([vm([nb(['C5'], 'whole')], [turn('E4', { vibrato: 'wide' }), rs(), rs('half')])]);
+    eq(near(ornTop(r.staff('notation')), elementBottom(r.ms[0].elements2[0].rendered) + 2.3 * S), true, 'wide vibrato + 2.3');
+  });
+  test('gap R1 notation: an absent layer is skipped (pick stroke 0.4 sp under the letters, letters 1 sp under the own ink)', () => {
+    const { staff, ms } = draw([vm([nb(['C5'], 'whole')], [nb([{ pitch: 'E4', rightFinger: 'm' }], 'quarter', { pickStroke: 'up' }), rs(), rs('half')])]);
+    const g = staff('notation');
+    const ly = +ofClass(g, 'fingering-right')[0].children[0].getAttribute('y');
+    const size = 1.1 * S;
+    eq(near(glyphTop(ofClass(g, 'pick-stroke')[0], 'stringsUpBow') - (ly + 0.25 * size), 0.4 * S), true, 'pick under the letters');
+    eq(near(ly - 0.8 * size, elementBottom(ms[0].elements2[0].rendered) + S), true, 'letters under the own ink');
+  });
+  test('gap R1 TAB: trill and vibrato - voice 1 wins (same output as without the voice-2 mark); a voice-2-only trill is drawn; a v1 rest makes the voice-2 column its own', () => {
+    const tab = (b1, b2) => serialize(draw([vm(b1, b2)], { showTablature: true }).staff('tab'));
+    const t7 = fr(2, 5, 'half', {}, { trill: { fret: 7 } });
+    eq(tab([t7, fr(2, 7, 'half')], [fr(4, 2, 'half', {}, { trill: { fret: 9 } }), fr(4, 3, 'half')]) === tab([t7, fr(2, 7, 'half')], [fr(4, 2, 'half'), fr(4, 3, 'half')]), true, 'trill');
+    const vib = fr(2, 5, 'half', { vibrato: true });
+    eq(tab([vib, fr(2, 7, 'half')], [fr(4, 2, 'half', { vibrato: true }), fr(4, 3, 'half')]) === tab([vib, fr(2, 7, 'half')], [fr(4, 2, 'half'), fr(4, 3, 'half')]), true, 'vibrato: one wave per column');
+    eq(ofClass(draw([vm([fr(2, 5, 'half'), fr(2, 7, 'half')], [fr(4, 2, 'half', { vibrato: true }), fr(4, 3, 'half')])], { showTablature: true }).staff('tab'), 'tab-vibrato').length, 1, 'voice-2-only vibrato');
+    const only = draw([vm([fr(2, 5, 'half'), fr(2, 7, 'half')], [fr(4, 2, 'half', {}, { trill: { fret: 9 } }), fr(4, 3, 'half')])], { showTablature: true }).staff('tab');
+    eq(ofClass(only, 'trill').map((t) => t.children.filter((c) => c.tag === 'text')[1].textContent), ['(9)'], 'voice-2-only trill suffix');
+    const own = draw([vm([rs('half'), fr(2, 7, 'half')], [fr(4, 2, 'half', { tremolo: '8th' }), fr(4, 3, 'half')])], { showTablature: true });
+    eq([own.ms[0].elements2[0].tabOwn, ofClass(own.staff('tab'), 'tab-tremolo').map((t) => t.getAttribute('class'))], [true, ['tab-tremolo tab-tremolo-8th']], 'v1 rest at the onset');
+  });
+  test('gap R1: voice-1-only marks on a voice-2 beat (LH finger, barre, pick scrape) draw nothing', () => {
+    const mk = (n, b) => serialize(draw([vm([nb(['C5'], 'whole')], [nb([{ pitch: 'E4', ...n }], 'quarter', b), rs(), rs('half')])]).staff('notation'));
+    eq(mk({ finger: 2 }, { barre: 3, pickScrape: true }) === mk({}, {}), true);
+    const v1 = (n, b) => serialize(draw([vm([nb([{ pitch: 'C5', ...n }], 'whole', b)], [nb(['E4'], 'whole')])]).staff('notation'));
+    eq([v1({ finger: 2 }, {}) === v1({}, {}), v1({}, { barre: 3 }) === v1({}, {})], [false, false], 'voice 1 does draw them (not vacuous)');
+  });
+
+  const tabScore = (measures) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures }] });
+  const row2 = (svg) => nodes(svg, (nd) => nd.tag === 'g' && nd.getAttribute('class') === 'tab-rhythm voice-2');
+  const vlines = (gs) => gs.flatMap((g) => nodes(g, (nd) => nd.tag === 'line')).map((l) => [+l.getAttribute('y1'), +l.getAttribute('y2')]);
+  const q4 = (st) => [fr(st, 1), fr(st, 2), fr(st, 3), fr(st, 4)];
+  test('gap R2: row-2 stems hang down by tabStemLengthSp (half 1.25, quarter 2.5, 32nd 3.25, whole none); beams flush at the stem ends, levels beamWidth + 0.2 sp apart', () => {
+    const svg = renderTree(tabScore([vm([fr(1, 1, 'half'), fr(1, 2, 'half')], [fr(5, 1, 'half'), fr(5, 2), ...Array(8).fill(0).map(() => fr(5, 3, '32nd'))]), vm([fr(1, 1, 'whole')], [fr(5, 1, 'whole')])]));
+    const T2 = LB + 5 * S;
+    const ls = vlines(row2(svg));
+    eq(ls.length, 10, 'the whole note draws no stem');
+    eq(ls.map(([a]) => a), Array(10).fill(T2));
+    eq(ls.map(([, b]) => +((b - T2) / S).toFixed(4)), [1.25, 2.5, ...Array(8).fill(3.25)]);
+    const beams = nodes(row2(svg)[0], (nd) => nd.tag === 'path').map((p) => p.getAttribute('d').match(/-?\d+(\.\d+)?/g).map(Number).filter((_, i) => i % 2 === 1));
+    const end = T2 + 3.25 * S; const step = th.beamWidth + 0.2 * S;
+    eq(beams.map((ys) => [+Math.max(...ys).toFixed(6), +Math.min(...ys).toFixed(6)]), [0, 1, 2].map((k) => [+(end - k * step).toFixed(6), +(end - k * step - th.beamWidth).toFixed(6)]));
+  });
+  test('gap R2: a deep voice-1 band in a single-voice measure of the same system does not push T2', () => {
+    const deep = { beats: [...Array(16)].map(() => fr(1, 1, '64th')).concat([fr(1, 2, 'half', { dots: 1 })]) };
+    const svg = renderTree(tabScore([deep, vm(q4(1), q4(5))]), 1600);
+    eq(nodes(svg, (nd) => nd.tag === 'g' && /^system /.test(nd.getAttribute('class') || '')).length, 1, 'one system');
+    eq([...new Set(vlines(row2(svg)).map(([a]) => a))], [LB + 5 * S]);
+  });
+  test('gap R3: a voice-1 rest over a voice-2 fret sits in row 1 and a voice-2 rest in row 2, neither knocked out; the fret under the rest is drawn', () => {
+    const svg = renderTree(tabScore([vm([rs(), fr(1, 3), fr(1, 4, 'half')], [fr(5, 2), rs(), fr(5, 5, 'half')])]));
+    const rests = nodes(svg, (nd) => nd.tag === 'g' && nd.getAttribute('class') === 'tab-rest');
+    eq(rests.map((g) => g.children.map((c) => c.tag)), [['text'], ['text']]);
+    const { box } = TR.tabBandRest('quarter', th);
+    const ys = rests.map((g) => +g.children[0].getAttribute('y'));
+    eq([near(ys[0], TR.tabBandRestY(T1, box, S)), near(ys[1], TR.tabBandRestY(LB + 5 * S, box, S))], [true, true]);
+    const frets = nodes(svg, (nd) => nd.tag === 'text' && +nd.getAttribute('font-size') === th.tabFontSize).map((nd) => nd.textContent);
+    eq([...frets].sort(), ['2', '3', '4', '5']);
+  });
+
+  test('gap R4: a unison with other heads a third away shares (both sides); a later onset and a second below do not', () => {
+    const plain = (stemDxSp(String.fromCodePoint(0xE0A4), true) - stemDxSp(String.fromCodePoint(0xE0A4), false)) * S;
+    const col = (b1, b2) => draw([vm([b1, nb(['C5']), rs('half')], [b2, nb(['E4']), rs('half')])]).ms[0];
+    let m = col(nb(['G4', 'B4']), nb(['G4', 'E4']));
+    eq([m.elements2[0].dx, m.elements2[0].chord.heads.find((h) => h.shared)?.noteIndex], [0, 0]);
+    m = col(nb(['G4']), nb(['G4', 'F4']));
+    eq([m.elements2[0].dx, m.elements2[0].chord.heads.some((h) => h.shared)], [plain + m.elements2[0].chord.headWidth, false], 'a displaced second head adds a head width');
+    m = col(nb(['A4']), nb(['G4']));
+    eq([m.elements2[0].dx, m.elements2[0].chord.heads.some((h) => h.shared)], [plain, false], 'a second apart is the plain clash shift');
+    m = draw([vm([rs(), nb(['G4']), rs('half')], [nb(['G4']), rs(), rs('half')])]).ms[0];
+    eq([m.elements2[0].dx, m.elements2[0].chord.heads.some((h) => h.shared)], [0, false], 'different onsets');
+  });
+  test('gap R4: whole notes with different accidentals clash by a head width; a voice-2 note without an accidental of its own still shares (one carry)', () => {
+    const w = draw([vm([nb(['G#4'], 'whole')], [nb(['G4'], 'whole')])]).ms[0];
+    eq(near(w.elements2[0].dx, w.elements[0].chord.headWidth), true);
+    // voice 1 F#4 then F4 shows a natural at beat 2; voice 2's F4 there shows none and still shares the head
+    const r = draw([vm([nb(['F#4']), nb(['F4']), rs('half')], [rs(), nb(['F4']), rs('half')])]);
+    const [e1, e2] = [r.ms[0].elements[1], r.ms[0].elements2[1]];
+    eq([e2.dx, e2.chord.heads[0].shared, e2.chord.accidentals.length, e1.chord.accidentals.map((a) => a.name)], [0, true, 0, ['natural']]);
+    eq(nodes(r.staff('notation'), (nd) => nd.tag === 'text' && nd.textContent === String.fromCodePoint(0xE261)).length, 1, 'one natural sign');
+  });
+
+  test('gap R5: merge conditions - duration, hidden on either voice, equal tuplet ratio merges, a different one does not, equal dots merge', () => {
+    const ts44 = { beats: 4, beatType: 4 }; const ts14 = { beats: 1, beatType: 4 };
+    const sets = (r) => [[...r.v1], [...r.v2]];
+    eq(sets(mergedRestPairs([rs('half'), rs('half')], [rs('quarter'), rs('quarter'), rs('half')], ts44)), [[1], [2]], 'only the onset at 1/2 has equal durations');
+    eq(sets(mergedRestPairs([rs('half'), rs('half')], [rs('half'), rs('half', { hidden: true })], ts44)), [[0], [0]], 'hidden voice-2 rest');
+    const t3 = (d = '8th') => rs(d, { tuplet: 3 });
+    eq(sets(mergedRestPairs([t3(), t3(), t3()], [t3(), t3(), t3()], ts14)), [[0, 1, 2], [0, 1, 2]], 'equal ratio');
+    eq(sets(mergedRestPairs([t3(), t3(), t3()], [rs('8th', { tuplet: 5 }), rs('8th', { tuplet: 5 })], ts14)), [[], []], 'ratio 3 vs 5');
+    eq(sets(mergedRestPairs([rs('half', { dots: 1 })], [rs('half', { dots: 1 }), rs()], ts44)), [[0], [0]], 'equal dots merge');
+  });
+
+  const tiedScore = (measures, extra = {}) => ({ tracks: [{ showStandardNotation: true, showTablature: true, tabRhythm: false, tiedFrets: 'parens', ...extra, measures }] });
+  const labels = (svg) => nodes(svg, (nd, cls) => nd.tag === 'text' && cls.some((c) => /staff-tab/.test(c)) && +nd.getAttribute('font-size') === th.tabFontSize).map((nd) => nd.textContent);
+  test('gap R6: the notation staff is byte-identical with and without tiedFrets', () => {
+    const measures = [{ beats: [nb([{ pitch: 'E4', string: 2, fret: 5, tieStart: true }], 'half'), nb([{ pitch: 'E4', string: 2, fret: 5, tieEnd: true }], 'half')] }];
+    const notation = (extra) => nodes(renderTree(tiedScore(measures, extra)), (nd) => nd.tag === 'g' && nd.getAttribute('class') === 'staff staff-notation').map(serialize).join('');
+    eq(notation({}) === notation({ tiedFrets: undefined }), true);
+    eq(notation({}).length > 100, true);
+    eq(labels(renderTree(tiedScore(measures))), ['5', '(5)'], 'the TAB does change');
+  });
+  test('gap R6: a voice-2 note dropped from TAB (voice 1 frets the string at the onset) shows no label', () => {
+    const n = (n) => ({ type: 'note', duration: 'half', notes: [n] });
+    const svg = renderTree(tiedScore([vm([n({ string: 2, fret: 3, tieEnd: true }), n({ string: 3, fret: 1 })], [n({ string: 2, fret: 5, tieEnd: true }), n({ string: 4, fret: 2 })])]));
+    eq(labels(svg), ['(3)', '1', '2']);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
