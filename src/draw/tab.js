@@ -484,8 +484,8 @@ export function arrowheadDir(x, y, dx, dy, size, color) {
   return path(d, { fill: color, stroke: 'none' });
 }
 
-const BEND_STROKE_WIDTH = 1.1;    // bend rise / release / hold stroke width (px)
-const ARROWHEAD_HALF_WIDTH = 0.6; // arrowheadDir's half base width, as a fraction of its size
+export const BEND_STROKE_WIDTH = 1.1;    // bend rise / release / hold stroke width (px)
+export const ARROWHEAD_HALF_WIDTH = 0.6; // arrowheadDir's half base width, as a fraction of its size
 export const RELEASE_CLEAR_SP = 0.2;     // capped release arrow tip -> obstacle (fret knock-out) left edge
 export const RELEASE_MIN_FALL_SP = 0.6;  // a capped release fall still ends at least this far right of its peak
 

@@ -26,7 +26,7 @@
  *   'above') and `note.slideOut` 'down' | 'up' (true = 'down'): a short
  *   slide into the note from below / above, or off it downward / upward
  *   (slideMarks decides which are drawn; withNoteSlides canonicalizes);
- * - `note.bend`: a bend, pre-bend or release note (bendOf).
+ * - `note.bend`: a bend, pre-bend, release note or compound bend (bendOf).
  *
  * Rests and grace notes carry no pick stroke, tap, whammy, rake, arpeggio
  * or strum. Every
@@ -117,6 +117,10 @@ export function slideMarks(items) {
  * 'release'; trimmed, any case; else 'bend'), `amount` (as a string; else
  * 'full', or null for a release) and `release` / `hold` flags (`hold`
  * only on a plain bend that doesn't release).
+ * A compound bend (bend-release-bend, or with a 'pb' prefix
+ * pre-bend-release-bend), '<a> release <b>' or an object's `rebend`
+ * (not on a release note), also has `rebend` (the second bend's amount)
+ * with `release: true`, `hold: false`; other bends have no `rebend` key.
  */
 /**
  * Split a trailing ' release' / ' hold' word (any case) off a bend string:
@@ -132,17 +136,34 @@ function splitBendSuffix(str, whole) {
   return [str.trim(), null];
 }
 
+/**
+ * A compound bend string's `{ amount, release: true, hold: false, rebend }`
+ * ('<a> release <b>': exactly one 'release' word (any case) with words on
+ * both sides and no 'hold' after it), or null. One linear split.
+ */
+function splitCompoundBend(str) {
+  const tokens = str.split(/\s+/);
+  const lower = tokens.map((t) => t.toLowerCase());
+  const i = lower.indexOf('release');
+  if (i <= 0 || i >= tokens.length - 1 || lower.indexOf('release', i + 1) >= 0 || lower.indexOf('hold', i + 1) >= 0) return null;
+  return { amount: tokens.slice(0, i).join(' '), release: true, hold: false, rebend: tokens.slice(i + 1).join(' ') };
+}
+
 export function bendOf(raw) {
   if (!raw) return null;
   if (typeof raw === 'string') {
     const trimmed = raw.trim();
     const pre = /^(prebend|pre-bend|pb)\b\s*(.*)$/i.exec(trimmed);
     if (pre) {
+      const compound = splitCompoundBend(pre[2]);
+      if (compound) return { type: 'prebend', ...compound };
       const [rest, word] = splitBendSuffix(pre[2], true);
       return { type: 'prebend', amount: rest || 'full', release: word === 'release', hold: false };
     }
     const rel = /^release\b\s*(.*)$/i.exec(trimmed);
     if (rel) return { type: 'release', amount: rel[1] || null, release: true, hold: false };
+    const compound = splitCompoundBend(trimmed);
+    if (compound) return { type: 'bend', ...compound };
     const [rest, word] = splitBendSuffix(trimmed, false);
     return { type: 'bend', amount: rest || 'full', release: word === 'release', hold: word === 'hold' };
   }
@@ -150,9 +171,11 @@ export function bendOf(raw) {
     const t = typeof raw.type === 'string' ? raw.type.trim().toLowerCase() : '';
     const type = ['prebend', 'pb', 'pre-bend'].includes(t) ? 'prebend' : (t === 'release' ? 'release' : 'bend');
     const release = type === 'release' || !!raw.release;
+    const amount = raw.amount ? String(raw.amount) : (type === 'release' ? null : 'full');
+    if (raw.rebend && type !== 'release') return { type, amount, release: true, hold: false, rebend: String(raw.rebend) };
     return {
       type,
-      amount: raw.amount ? String(raw.amount) : (type === 'release' ? null : 'full'),
+      amount,
       release,
       hold: type === 'bend' && !release && !!raw.hold,
     };

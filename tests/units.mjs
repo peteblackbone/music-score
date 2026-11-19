@@ -4603,16 +4603,14 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 
   // ---- value pins ----
-  test('pre-1.9 pin (FLIPS in the compound-bends commit): bendOf("full release full") is one plain bend whose amount is the whole string', () => {
-    eq(D.bendOf('full release full'), { type: 'bend', amount: 'full release full', release: false, hold: false });
+  test('pre-1.9 pin (FLIPPED in the compound-bends commit): bendOf("full release full") is a bend-release-bend', () => {
+    eq(D.bendOf('full release full'), { type: 'bend', amount: 'full', release: true, hold: false, rebend: 'full' });
   });
-  test('pre-1.9 pin (FLIPS in the compound-bends commit): bendOf("pb full release 1/2") is a prebend with the whole tail as its amount', () => {
-    eq(D.bendOf('pb full release 1/2'), { type: 'prebend', amount: 'full release 1/2', release: false, hold: false });
+  test('pre-1.9 pin (FLIPPED in the compound-bends commit): bendOf("pb full release 1/2") is a pre-bend-release-bend', () => {
+    eq(D.bendOf('pb full release 1/2'), { type: 'prebend', amount: 'full', release: true, hold: false, rebend: '1/2' });
   });
-  test('pre-1.9 pin (FLIPS in the compound-bends commit): an object bend with rebend has no rebend key and is a plain full bend', () => {
-    const b = D.bendOf({ type: 'bend', rebend: 'full' });
-    eq(b, { type: 'bend', amount: 'full', release: false, hold: false });
-    eq('rebend' in b, false);
+  test('pre-1.9 pin (FLIPPED in the compound-bends commit): an object bend with rebend is a compound full bend', () => {
+    eq(D.bendOf({ type: 'bend', rebend: 'full' }), { type: 'bend', amount: 'full', release: true, hold: false, rebend: 'full' });
   });
   test('pre-1.9 pin (stays): single-suffix bend grammar is unchanged', () => {
     eq(D.bendOf('full release'), { type: 'bend', amount: 'full', release: true, hold: false });
@@ -4658,6 +4656,134 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
       const heads = walk(svg).filter((n) => n.tag === 'text' && n.getAttribute('text-anchor') === 'middle' && n.getAttribute('y') === '40').map((n) => n.getAttribute('x'));
       eq(heads, ['115.74', '165.24']);
     }
+  });
+}
+
+// ---------- 1.9.0: compound bends (directions.js bendOf, draw/bend.js) ----------
+{
+  const { bendOf } = await imp('src/directions.js');
+  const { compoundBendGeometry, renderCompoundBend, bendHeightFrac } = await imp('src/draw/bend.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const thm = resolveTheme({});
+  const sp = thm.staffLineSpacing;
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const cls = (n) => n.getAttribute('class') || '';
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const tabScore = (beats) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: beats.map(([string, fret, bend]) => ({
+    type: 'note', duration: 'half', notes: [{ string, fret, ...(bend ? { bend } : {}) }],
+  })) }] }] });
+  const C = (type, amount, rebend) => ({ type, amount, release: true, hold: false, rebend });
+
+  test('1.9 compound bends: string grammar (bend and pb forms, any case, inner spaces, mixed amounts)', () => {
+    const table = [
+      ['full release full', C('bend', 'full', 'full')],
+      ['1/2 release full', C('bend', '1/2', 'full')],
+      ['  1 1/2   RELEASE   1/2 ', C('bend', '1 1/2', '1/2')],
+      ['Full Release Full', C('bend', 'Full', 'Full')],
+      ['pb full release 1/2', C('prebend', 'full', '1/2')],
+      ['PB 1/2 release 1 1/2', C('prebend', '1/2', '1 1/2')],
+      ['pre-bend full release full', C('prebend', 'full', 'full')],
+      ['prebend 1/4 release 1/4', C('prebend', '1/4', '1/4')],
+    ];
+    for (const [raw, want] of table) eq(bendOf(raw), want, raw);
+  });
+  test('1.9 compound bends: anything else keeps the single-bend grammar (no rebend key)', () => {
+    const table = [
+      ['full release', { type: 'bend', amount: 'full', release: true, hold: false }],
+      ['release full', { type: 'release', amount: 'full', release: true, hold: false }],
+      ['release', { type: 'release', amount: null, release: true, hold: false }],
+      ['pb full release', { type: 'prebend', amount: 'full', release: true, hold: false }],
+      ['pb release', { type: 'prebend', amount: 'full', release: true, hold: false }],
+      ['full release full release', { type: 'bend', amount: 'full release full', release: true, hold: false }],
+      ['full release full hold', { type: 'bend', amount: 'full release full', release: false, hold: true }],
+      ['full hold', { type: 'bend', amount: 'full', release: false, hold: true }],
+      ['1/2', { type: 'bend', amount: '1/2', release: false, hold: false }],
+      ['full releasefull', { type: 'bend', amount: 'full releasefull', release: false, hold: false }],
+    ];
+    for (const [raw, want] of table) {
+      const b = bendOf(raw);
+      eq(b, want, raw);
+      eq('rebend' in b, false, raw);
+    }
+  });
+  test('1.9 compound bends: object form (rebend as a string; a release note never rebends; no rebend -> no key)', () => {
+    eq(bendOf({ amount: '1/2', rebend: 'full' }), C('bend', '1/2', 'full'));
+    eq(bendOf({ type: 'pb', rebend: 1 }), C('prebend', 'full', '1'));
+    eq(bendOf({ type: 'bend', amount: 'full', rebend: 'full', hold: true }), C('bend', 'full', 'full'));
+    eq(bendOf({ type: 'release', amount: 'full', rebend: 'full' }), { type: 'release', amount: 'full', release: true, hold: false });
+    eq('rebend' in bendOf({ amount: 'full', release: true, rebend: '' }), false);
+    eq('rebend' in bendOf({ amount: 'full' }), false);
+  });
+  test('1.9 compound bends: idempotent and pure; a 1e5-space string parses in < 50 ms', () => {
+    for (const raw of ['full release full', 'pb 1/2 release 1/2', { amount: 'full', rebend: '1/2' }, 'full release', 'release', '1/2 hold']) {
+      const copy = JSON.stringify(raw);
+      const b = bendOf(raw);
+      eq(bendOf(b), b, copy);
+      eq(JSON.stringify(raw), copy, 'input untouched');
+    }
+    const long = `full${' '.repeat(1e5)}release${' '.repeat(1e5)}full`;
+    const t0 = Date.now();
+    eq(bendOf(long), C('bend', 'full', 'full'));
+    bendOf(`pb ${' '.repeat(1e5)}x`);
+    bendOf(`full${' '.repeat(1e5)}`);
+    const ms = Date.now() - t0;
+    if (ms >= 50) throw new Error(`took ${ms} ms`);
+  });
+
+  const overlap = (a, b) => a.x1 < b.x2 && b.x1 < a.x2 && a.top < b.bottom && b.top < a.bottom;
+  test('1.9 compound bends: the two label boxes never intersect for nextX 1..6 sp (all forms and amounts); D < sep staggers label 2 above label 1', () => {
+    let staggered = 0; let side = 0;
+    for (const type of ['bend', 'prebend']) for (const [a, r] of [['full', 'full'], ['1/2', '1 1/2'], ['1 1/2', '1/4'], ['1/4', '1/4']]) {
+      for (let k = 10; k <= 60; k++) {
+        const g = compoundBendGeometry(100, 50, C(type, a, r), thm, 100 + (k / 10) * sp);
+        const [b1, b2] = g.boxes.filter((b) => b.text);
+        if (overlap(b1, b2)) throw new Error(`${type} ${a}/${r} nextX ${k / 10} sp: labels overlap`);
+        if (b2.bottom <= b1.top - 0.2 * sp + 1e-9) staggered++;
+        else side++;
+        if (g.peak2X - g.peak1X < 1.6 * sp - 1e-9) throw new Error('fall + rise below the minimum');
+      }
+    }
+    eq([staggered > 20, side > 20], [true, true], `${staggered} staggered, ${side} side by side`);
+  });
+  test('1.9 compound bends: geometry without nextX (bend: start x+0.3, peak 1 one sp later, fall 1.2 sp + rise 1 sp, or the label separation; pre-bend: shaft over the note)', () => {
+    const g = compoundBendGeometry(100, 50, C('bend', '1', '1'), thm);
+    eq([g.startX, g.peak1X, g.fallX, g.peak2X], [103, 113, 125, 135]);
+    eq(g.peak1Y, g.baseY - thm.tabStaffLineSpacing * 1.8 * bendHeightFrac('1'));
+    const f = compoundBendGeometry(100, 50, C('bend', 'full', 'full'), thm);
+    eq(+(f.peak2X - f.peak1X).toFixed(6), +(f.labels[0].rw + 0.3 * sp).toFixed(6), 'widened to the label separation');
+    eq(+(f.peak2X - f.fallX).toFixed(6), sp, 'rise 2 keeps 1 sp');
+    const p = compoundBendGeometry(100, 50, C('prebend', 'full', '1 1/2'), thm);
+    eq(p.peak1X, 100);
+    eq(p.peak2Y < p.peak1Y, true, 'a larger rebend peaks higher');
+    eq([bendHeightFrac('1/4'), bendHeightFrac('full'), bendHeightFrac('2')], [0.55, 1, 1.3]);
+  });
+  test('1.9 compound bends: drawn rise, fall (Q), rise, each with an arrowhead, then label 1 and label 2; classes bend bend-rebend (+ bend-prebend); boxes returned', () => {
+    for (const type of ['bend', 'prebend']) {
+      const g = makeContainer();
+      const boxes = renderCompoundBend(g, 100, 50, C(type, 'full', '1/2'), thm, 160);
+      const gEl = g.children[0];
+      eq(cls(gEl), type === 'prebend' ? 'bend bend-rebend bend-prebend' : 'bend bend-rebend');
+      eq(gEl.children.map((c) => c.tag), ['path', 'path', 'path', 'path', 'path', 'path', 'rect', 'text', 'rect', 'text']);
+      const ds = gEl.children.filter((c) => c.tag === 'path').map((c) => c.getAttribute('d'));
+      eq([/ L /.test(ds[0]), / C /.test(ds[0]), / Q /.test(ds[2]), / C /.test(ds[4])], [type === 'prebend', type !== 'prebend', true, true]);
+      eq(gEl.children.filter((c) => c.tag === 'text').map((c) => c.textContent), ['Full', '1/2']);
+      eq([boxes.length, boxes.filter((b) => b.text).length], [5, 2]);
+    }
+  });
+  test('1.9 compound bends: on TAB no landing fret or hold dash; a later release note defaults to the rebend amount', () => {
+    const texts = (n) => walk(n).filter((c) => c.tag === 'text').map((c) => c.textContent);
+    const svg = render(tabScore([[3, 7, 'full release 1/2'], [3, 7, 'release']]));
+    const bends = walk(svg).filter((n) => /^bend\b/.test(cls(n)));
+    eq(bends.map(cls), ['bend bend-rebend', 'bend bend-release']);
+    eq(texts(bends[0]), ['Full', '1/2']);
+    eq(texts(bends[1]), ['1/2']);
+    eq(texts(svg).includes('(9)') || serialize(svg).includes('stroke-dasharray="3,2"'), false);
+    const plain = render(tabScore([[3, 7, 'full'], [3, 7, 'release']]));
+    eq(texts(walk(plain).filter((n) => cls(n) === 'bend bend-release')[0]), ['Full']);
   });
 }
 

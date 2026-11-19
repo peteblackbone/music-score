@@ -8,6 +8,7 @@
 import {
   renderHammerPull, renderSlide, renderSlideMark, renderBend, normalizeBend, bendSemitones, SLIDE_END_INSET_SP,
 } from './tab.js';
+import { renderCompoundBend } from './bend.js';
 import { fretLabel, fretLabelWidth, tiedFretOpts } from '../textMetrics.js';
 import { isNaturalHarmonic, decoratesFretLabel } from '../harmonics.js';
 import { linkTarget, slideMarks, bendOf } from '../directions.js';
@@ -55,6 +56,9 @@ const SLIDE_MARK_MIN_SP = 0.4;   // ...and skipped when clamping leaves less tha
  *   release note) also ends short of the fret knock-out of a later note
  *   on the same system whose band its arrowhead would reach (in practice
  *   the string just above; tab.js bendGeometry).
+ *   A compound bend ('full release full', 'pb 1/2 release 1/2' or
+ *   `{ amount, rebend }`) rises, falls back and rises again, both amounts
+ *   labelled (draw/bend.js); a release note after it defaults to the rebend.
  *   A pre-bend ('prebend …' / 'pb …' or
  *   `type: 'prebend'`) is a straight vertical arrow over the fret; a release
  *   note ('release [amount]' or `type: 'release'`) is only the falling
@@ -137,6 +141,14 @@ function drawTabLinks(flat, other, startFilter, systems, theme, { breakEndX, bre
   const neighbourX = (item, dir) => (dir < 0 ? Math.max : Math.min)(
     dir * Infinity, ...all.filter((c) => c.sysIdx === item.sysIdx && dir * (c.x - item.x) > 0).map((c) => c.x));
   const later = (item) => (c) => c.sysIdx === item.sysIdx && c.x > item.x;
+  // A bend's width limit: the next note on the system, never past the system's
+  // last barline (nor the other voice's next note).
+  const bendNextX = (item, i) => {
+    const next = flat.slice(i + 1).find(later(item))?.x;
+    return other.length
+      ? Math.min(next ?? Infinity, ...other.filter(later(item)).map((c) => c.x), systems[item.sysIdx].lastBarlineX)
+      : Math.min(next ?? Infinity, systems[item.sysIdx].lastBarlineX);
+  };
 
   flat.forEach((item, i) => {
     const { slideIn, slideOut } = marks[i];
@@ -197,6 +209,13 @@ function drawTabLinks(flat, other, startFilter, systems, theme, { breakEndX, bre
 
     if (item.bend) {
       const bendInfo = normalizeBend(item.bend);
+      if (bendInfo.rebend != null) {
+        // A compound bend ends at its second bend: a later release note defaults to that amount.
+        lastBendAmount.set(item.string, bendInfo.rebend);
+        renderCompoundBend(item.g, item.x, item.y, bendInfo, theme, bendNextX(item, i))
+          .forEach((b) => item.run.tabInkBoxes.push({ ...b, noteX: item.x }));
+        return;
+      }
       if (bendInfo.type === 'release' && bendInfo.amount == null) bendInfo.amount = lastBendAmount.get(item.string) ?? 'full';
       else if (bendInfo.type !== 'release') lastBendAmount.set(item.string, bendInfo.amount);
       const semitones = bendSemitones(bendInfo.amount);
@@ -204,11 +223,7 @@ function drawTabLinks(flat, other, startFilter, systems, theme, { breakEndX, bre
       // 1.0 baseline) so a half bend visibly reads as smaller than a
       // full one, instead of every amount drawing the same size arc.
       bendInfo.heightFrac = Math.max(0.55, Math.min(1.3, semitones / 2));
-      const next = flat.slice(i + 1).find(later(item))?.x;
-      // Never past the system's last barline (nor the other voice's next note).
-      const nextX = other.length
-        ? Math.min(next ?? Infinity, ...other.filter(later(item)).map((c) => c.x), systems[item.sysIdx].lastBarlineX)
-        : Math.min(next ?? Infinity, systems[item.sysIdx].lastBarlineX);
+      const nextX = bendNextX(item, i);
       // The landing fret in parentheses is only meaningful for a bend
       // that's held at pitch with nothing else going on. A release
       // returns to the original pitch, and a "hold" bend sustains into
