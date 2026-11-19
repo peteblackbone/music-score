@@ -4527,6 +4527,140 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- pre-1.9 characterization: bends, slides, harmonics, whammy, trill ties (pins taken before the 1.9.0 change) ----------
+// Pins marked FLIPS describe inputs whose behavior the named 1.9 feature commit changes on purpose.
+{
+  const { cases } = await import('./cases.mjs');
+  const D = await imp('src/directions.js');
+  const { harmonicKind } = await imp('src/harmonics.js');
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const byClass = (svg, c) => walk(svg).filter((n) => (n.getAttribute('class') || '').split(/\s+/).includes(c));
+  const numsOf = (d) => d.match(/-?\d+(\.\d+)?/g).map(Number);
+
+  // Inline copy of the 1.9 isLegatoSlide predicate (the exported one does not exist yet).
+  const legatoSlide = (raw) => typeof raw === 'string' && raw.trim().toLowerCase() === 'legato';
+  // Compound bend: a string with a 'release' token strictly inside (after an optional pb prefix), or an object rebend.
+  const compoundBend = (raw) => {
+    if (raw && typeof raw === 'object') return !!raw.rebend;
+    if (typeof raw !== 'string') return false;
+    const toks = raw.trim().replace(/^(prebend|pre-bend|pb)\b/i, '').trim().split(/\s+/).map((t) => t.toLowerCase());
+    const i = toks.indexOf('release');
+    return i > 0 && i < toks.length - 1;
+  };
+  const deepKeys = (v, keys, hits = []) => {
+    if (Array.isArray(v)) v.forEach((x) => deepKeys(x, keys, hits));
+    else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { if (keys.includes(k)) hits.push(k); deepKeys(x, keys, hits); }
+    return hits;
+  };
+  // Beat streams (one per track voice, measures concatenated) of a raw or normalized score.
+  const streams = (sc) => (sc.tracks || []).flatMap((t) => {
+    const out = [[], []];
+    for (const m of t.measures || []) {
+      if (m.voices) m.voices.forEach((v, i) => out[Math.min(i, 1)].push(...(v.beats || [])));
+      else { out[0].push(...(m.beats || [])); out[1].push(...(m.voice2Beats || [])); }
+    }
+    return out;
+  });
+  const scan = (sc) => {
+    const r = { compound: 0, legato: 0, feedback: 0, trillTie: 0, whammyKeys: 0 };
+    r.whammyKeys = deepKeys(sc, ['whammyScoop', 'whammyBar']).length;
+    for (const beats of streams(sc)) {
+      beats.forEach((b, i) => {
+        for (const n of b.notes || []) {
+          if (compoundBend(n.bend)) r.compound++;
+          if (legatoSlide(n.slide)) r.legato++;
+          if (typeof n.harmonic === 'string' && n.harmonic.trim().toLowerCase() === 'feedback') r.feedback++;
+          if (n.trill) {
+            const next = beats.slice(i + 1).find((x) => x.type !== 'grace');
+            if (next && (next.notes || []).some((m) => m.tieEnd)) r.trillTie++;
+          }
+        }
+      });
+    }
+    return r;
+  };
+
+  test('pre-1.9 scan: none of the 67 cases (raw or normalized) uses a compound bend, legato slide, feedback harmonic, trill tied forward, whammyScoop / whammyBar key', () => {
+    eq(cases.length, 67);
+    const zero = { compound: 0, legato: 0, feedback: 0, trillTie: 0, whammyKeys: 0 };
+    for (const c of cases) {
+      eq([c.id, 'raw', scan(c.score)], [c.id, 'raw', zero]);
+      eq([c.id, 'normalized', scan(normalizeScore(c.score))], [c.id, 'normalized', zero]);
+    }
+  });
+  test('pre-1.9 scan: the predicates fire on constructed inputs (the scan is not vacuous)', () => {
+    const sc = { tracks: [{ measures: [{ beats: [
+      { type: 'note', duration: 'half', whammyBar: true, notes: [{ pitch: 'E4', trill: true, bend: 'full release full', slide: ' Legato ', harmonic: 'FeedBack' }] },
+      { type: 'note', duration: 'half', notes: [{ pitch: 'E4', tieEnd: true, bend: { type: 'bend', rebend: 'full' } }] },
+    ] }] }] };
+    eq(scan(sc), { compound: 2, legato: 1, feedback: 1, trillTie: 1, whammyKeys: 1 });
+    eq([compoundBend('pb full release 1/2'), compoundBend('full release'), compoundBend('release full'), compoundBend('full')], [true, false, false, false]);
+  });
+
+  // ---- value pins ----
+  test('pre-1.9 pin (FLIPS in the compound-bends commit): bendOf("full release full") is one plain bend whose amount is the whole string', () => {
+    eq(D.bendOf('full release full'), { type: 'bend', amount: 'full release full', release: false, hold: false });
+  });
+  test('pre-1.9 pin (FLIPS in the compound-bends commit): bendOf("pb full release 1/2") is a prebend with the whole tail as its amount', () => {
+    eq(D.bendOf('pb full release 1/2'), { type: 'prebend', amount: 'full release 1/2', release: false, hold: false });
+  });
+  test('pre-1.9 pin (FLIPS in the compound-bends commit): an object bend with rebend has no rebend key and is a plain full bend', () => {
+    const b = D.bendOf({ type: 'bend', rebend: 'full' });
+    eq(b, { type: 'bend', amount: 'full', release: false, hold: false });
+    eq('rebend' in b, false);
+  });
+  test('pre-1.9 pin (stays): single-suffix bend grammar is unchanged', () => {
+    eq(D.bendOf('full release'), { type: 'bend', amount: 'full', release: true, hold: false });
+    eq(D.bendOf('1/2 hold'), { type: 'bend', amount: '1/2', release: false, hold: true });
+    eq(D.bendOf('release full'), { type: 'release', amount: 'full', release: true, hold: false });
+    eq(D.bendOf('pb full release'), { type: 'prebend', amount: 'full', release: true, hold: false });
+  });
+  test('pre-1.9 pin (FLIPS in the feedback commit): harmonicKind("feedback") is "natural"; unknown strings too', () => {
+    eq(harmonicKind('feedback'), 'natural');
+    eq(harmonicKind('Feedback'), 'natural');
+    eq([harmonicKind('pinch'), harmonicKind('nonsense'), harmonicKind(null)], ['pinch', 'natural', null]);
+  });
+  test('pre-1.9 pin (stays, even after the scoop commit): whammyOf({ type: "scoop" }) is null', () => {
+    eq(D.whammyOf({ type: 'scoop' }), null);
+    eq(D.whammyOf({ type: 'dive' }), { type: 'dive', amount: '1/2' });
+  });
+
+  const tabOnly = (slide) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: [3, 5, 5, 5].map((fret, i) => ({
+    type: 'note', duration: 'quarter', notes: [{ string: 2, fret, ...(i === 0 ? { slide } : {}) }],
+  })) }] }] });
+  test('pre-1.9 pin (FLIPS in the legato-slide commit): TAB slide "up" and "legato" both draw only the single diagonal <line>, no arc, no hammer-pull group', () => {
+    const stroke = '<line x1="110.19" y1="17.4" x2="131.19" y2="12.6" stroke="#1a1a1a" stroke-width="1.3" stroke-linecap="round"/>';
+    const [up, legato] = ['up', 'legato'].map((s) => serialize(render(tabOnly(s))));
+    eq(up, legato);
+    eq(up.split(stroke).length - 1, 1);
+    eq([up.includes('<path'), up.includes('hammer-pull'), up.includes('legato-slide')], [false, false, false]);
+    eq((up.match(/<line/g) || []).length, 13);
+    eq(serialize(render(tabOnly(undefined))).includes(stroke), false);
+  });
+
+  const trillScore = (tied) => ({ tracks: [{ measures: [{ beats: [
+    { type: 'note', duration: 'half', notes: [{ pitch: 'E4', trill: true, ...(tied ? { tieStart: true } : {}) }] },
+    { type: 'note', duration: 'half', notes: [{ pitch: 'E4', ...(tied ? { tieEnd: true } : {}) }] },
+  ] }] }] });
+  test('pre-1.9 pin (FLIPS in the trill-continuation commit): a trill tied forward equals an untied one; its wave ends at 156.87, before the next beat at 165.24', () => {
+    for (const tied of [true, false]) {
+      const svg = render(trillScore(tied));
+      const tr = byClass(svg, 'trill');
+      eq(tr.length, 1);
+      const wave = numsOf(tr[0].children.find((c) => c.tag === 'path').getAttribute('d'));
+      eq([wave[0], wave.slice(-2)], [128.87, [156.87, -15.63]]);
+      eq(tr[0].children[0].getAttribute('x'), '115.74');
+      const heads = walk(svg).filter((n) => n.tag === 'text' && n.getAttribute('text-anchor') === 'middle' && n.getAttribute('y') === '40').map((n) => n.getAttribute('x'));
+      eq(heads, ['115.74', '165.24']);
+    }
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
