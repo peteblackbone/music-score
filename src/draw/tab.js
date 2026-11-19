@@ -178,12 +178,13 @@ function renderTabVibrato(g, x1, y, span, theme, kind = true) {
  * hugging the two fret numbers on the same string, with the letter
  * centered above its peak. `kind` is 'h' or 'p'. `showLabel: false` omits
  * the letter (the second half of an arc split across a system break).
+ * `cls` replaces the group's class (a legato slide's letterless arc).
  * Returns its box `{ x1, x2, top, bottom }` (arc centre line incl. its
  * control point, and the letter's knock-out when drawn), plus that
  * knock-out alone as `letter` (same shape) when the letter is drawn.
  */
-export function renderHammerPull(g, x1, x2, y, kind, theme, showLabel = true) {
-  const gEl = group({ class: `hammer-pull hammer-pull-${kind}` });
+export function renderHammerPull(g, x1, x2, y, kind, theme, showLabel = true, cls) {
+  const gEl = group({ class: cls ?? `hammer-pull hammer-pull-${kind}` });
   const spacing = theme.staffLineSpacing;
   const midX = (x1 + x2) / 2;
   const baseY = y - theme.tabFontSize / 2 - 0.3 * spacing;

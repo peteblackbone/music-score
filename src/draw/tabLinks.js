@@ -11,7 +11,7 @@ import {
 import { renderCompoundBend } from './bend.js';
 import { fretLabel, fretLabelWidth, tiedFretOpts } from '../textMetrics.js';
 import { isNaturalHarmonic, decoratesFretLabel } from '../harmonics.js';
-import { linkTarget, slideMarks, bendOf } from '../directions.js';
+import { linkTarget, slideMarks, bendOf, isLegatoSlide } from '../directions.js';
 import { tabFretKnockoutHalf } from '../layout/tabRhythm.js';
 import { trackHasTwoVoices, isTwoVoiceMeasure, voiceOf } from '../twoVoice.js';
 
@@ -34,7 +34,10 @@ const SLIDE_MARK_MIN_SP = 0.4;   // ...and skipped when clamping leaves less tha
  * - `slide` (true | 'up' | 'down'): a diagonal slide stroke. `true`
  *   infers the direction the same way (ascending fret = slide up). Across
  *   a system break only a short outgoing stub (SLIDE_STUB_SP long) is
- *   drawn, never past 0.5 sp before the last barline.
+ *   drawn, never past 0.5 sp before the last barline. A legato slide
+ *   ('legato', direction inferred) adds a letterless arc (class
+ *   legato-slide), split across a break like a hammer-on's, unless the
+ *   note also has a `hammerPull`.
  *
  * `slideIn` / `slideOut` (directions.js slideMarks) are drawn on the note
  * itself: a TAB_SLIDE_MARK_SP diagonal rising into the fret label from
@@ -197,6 +200,15 @@ function drawTabLinks(flat, other, startFilter, systems, theme, { breakEndX, bre
         endX + SLIDE_END_INSET_SP * s);
       renderSlide(item.g, item.x, sameSystem ? target.x : stubEnd, item.y, direction, theme,
         item.slideInset, sameSystem ? target.slideInset : undefined);
+      // A legato slide also gets a letterless arc (an H/P on the note already draws one).
+      if (isLegatoSlide(item.slide) && !item.hammerPull) {
+        if (sameSystem) {
+          item.run.hpBoxes.push(renderHammerPull(item.g, item.x, target.x, item.y, 'h', theme, false, 'legato-slide'));
+        } else {
+          item.run.hpBoxes.push(renderHammerPull(item.g, item.x, endX + 0.3 * s, item.y, 'h', theme, false, 'legato-slide'));
+          target.run.hpBoxes.push(renderHammerPull(target.g, breakStartX(systems, target.sysIdx, theme) - 0.3 * s, target.x, target.y, 'h', theme, false, 'legato-slide'));
+        }
+      }
     }
 
     if (slideOut) {

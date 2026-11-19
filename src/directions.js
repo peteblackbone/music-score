@@ -26,7 +26,8 @@
  *   'above') and `note.slideOut` 'down' | 'up' (true = 'down'): a short
  *   slide into the note from below / above, or off it downward / upward
  *   (slideMarks decides which are drawn; withNoteSlides canonicalizes);
- * - `note.bend`: a bend, pre-bend, release note or compound bend (bendOf).
+ * - `note.bend`: a bend, pre-bend, release note or compound bend (bendOf);
+ * - `note.slide` 'legato' (isLegatoSlide): a slide with a slur, not re-picked.
  *
  * Rests and grace notes carry no pick stroke, tap, whammy, rake, arpeggio
  * or strum. Every
@@ -56,6 +57,11 @@ export function linkTarget(items, i) {
   if (string == null) return -1;
   for (let k = i + 1; k < items.length; k++) if (items[k].string === string) return k;
   return -1;
+}
+
+/** Whether a raw `note.slide` is a legato slide: the string 'legato' (trimmed, any case). Any other truthy slide is a shift slide. */
+export function isLegatoSlide(raw) {
+  return typeof raw === 'string' && raw.trim().toLowerCase() === 'legato';
 }
 
 /** Canonical slide-in ('below' | 'above') of a raw `note.slideIn`: true / 'up' / 'below' → 'below', 'down' / 'above' → 'above' (trimmed, any case), else null. Idempotent. */

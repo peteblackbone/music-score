@@ -12,7 +12,7 @@
 import { elementTop, elementBottom, curveOuterPoints } from '../notation.js';
 import { vibratoClearSp } from '../noteMarks.js';
 import { vibratoOf } from '../../noteEffects.js';
-import { linkTarget } from '../../directions.js';
+import { linkTarget, isLegatoSlide } from '../../directions.js';
 import { flattenRuns, breakEndX, breakStartX } from './common.js';
 import { voiceOf } from '../../twoVoice.js';
 
@@ -49,7 +49,7 @@ export function collectBeats(trackRuns, track, theme, voice = 1) {
 /**
  * Slurs of a track: each `slurStart` beat to the next `slurEnd` beat and,
  * with `auto` (theme `hammerPullSlurs`, default on), one slur per run of
- * hammer-ons / pull-offs (hammerPullSpans). Returns `[{ i, j, above, y1,
+ * hammer-ons / pull-offs, plus (always) legato slides (hammerPullSpans). Returns `[{ i, j, above, y1,
  * y2 }]` (indices into `beats`; end heights, slurEnds), explicit slurs
  * first. With `voice` 2 (`beats` from collectBeats' voice-2 stream) only
  * slurs starting on a voice-2 beat count.
@@ -64,7 +64,7 @@ export function findSlurs(beats, { auto = false, voice = 1 } = {}) {
     out.push({ i, j, above: slurSide(beats, i, j) });
   });
   const explicit = out.map((sl) => ({ ...sl, ...slurEnds(beats, sl, false) }));
-  return auto ? explicit.concat(hammerPullSpans(beats, out).filter((sl) => starts(sl.i)).map((sl) => ({ ...sl, ...slurEnds(beats, sl, true) }))) : explicit;
+  return explicit.concat(hammerPullSpans(beats, out, auto).filter((sl) => starts(sl.i)).map((sl) => ({ ...sl, ...slurEnds(beats, sl, true) })));
 }
 
 /**
@@ -100,21 +100,23 @@ function slurSide(beats, i, j) {
 }
 
 /**
- * Automatic slurs for hammer-ons / pull-offs: each `note.hammerPull` links
- * its beat to the beat of the next note on the same `string` (linkTarget,
- * as the TAB arc does; notes without a string never link). Links from or to
+ * Automatic slurs for hammer-ons / pull-offs: with `auto`, each
+ * `note.hammerPull` links its beat to the beat of the next note on the same
+ * `string` (linkTarget, as the TAB arc does; notes without a string never
+ * link); a legato slide (`slide: 'legato'`) links the same way even without
+ * `auto`. Links from or to
  * a grace note, or to a beat that isn't drawn as notes, are dropped;
  * overlapping links merge into one span; a span sharing a beat with an
  * explicit slur (`explicit`) is dropped. Returns `[{ i, j, above }]`.
  */
-function hammerPullSpans(beats, explicit) {
+function hammerPullSpans(beats, explicit, auto) {
   const items = [];
   beats.forEach((b, bi) => (b.el.notes || []).forEach((n) => {
-    if (n.string != null) items.push({ bi, string: n.string, hammerPull: n.hammerPull, grace: b.el.type === 'grace' });
+    if (n.string != null) items.push({ bi, string: n.string, hammerPull: n.hammerPull, legato: isLegatoSlide(n.slide), grace: b.el.type === 'grace' });
   }));
   const links = [];
   items.forEach((item, k) => {
-    if (!item.hammerPull) return;
+    if (!((auto && item.hammerPull) || item.legato)) return;
     const t = linkTarget(items, k);
     if (t < 0 || item.grace || items[t].grace || items[t].bi === item.bi) return;
     const info = beats[items[t].bi].info;

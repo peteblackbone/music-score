@@ -4631,13 +4631,15 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   const tabOnly = (slide) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: [3, 5, 5, 5].map((fret, i) => ({
     type: 'note', duration: 'quarter', notes: [{ string: 2, fret, ...(i === 0 ? { slide } : {}) }],
   })) }] }] });
-  test('pre-1.9 pin (FLIPS in the legato-slide commit): TAB slide "up" and "legato" both draw only the single diagonal <line>, no arc, no hammer-pull group', () => {
+  test('pre-1.9 pin (FLIPPED in the legato-slide commit): TAB slide "up" draws only the single diagonal <line>; "legato" adds one letterless legato-slide arc', () => {
     const stroke = '<line x1="110.19" y1="17.4" x2="131.19" y2="12.6" stroke="#1a1a1a" stroke-width="1.3" stroke-linecap="round"/>';
     const [up, legato] = ['up', 'legato'].map((s) => serialize(render(tabOnly(s))));
-    eq(up, legato);
     eq(up.split(stroke).length - 1, 1);
+    eq(legato.split(stroke).length - 1, 1);
     eq([up.includes('<path'), up.includes('hammer-pull'), up.includes('legato-slide')], [false, false, false]);
+    eq([(legato.match(/<path/g) || []).length, legato.includes('hammer-pull'), (legato.match(/class="legato-slide"/g) || []).length], [1, false, 1]);
     eq((up.match(/<line/g) || []).length, 13);
+    eq((legato.match(/<line/g) || []).length, 13);
     eq(serialize(render(tabOnly(undefined))).includes(stroke), false);
   });
 
@@ -4821,6 +4823,73 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(walk(runs[0]).filter((c) => c.tag === 'text').map((c) => c.textContent), ['Fdbk.']);
     const frets = walk(svg).filter((c) => c.tag === 'text' && /^[<\d]/.test(c.textContent)).map((c) => c.textContent);
     eq(frets.includes('<5>'), false);
+  });
+}
+
+// ---------- 1.9.0: legato slide (directions.js isLegatoSlide, tabLinks.js arc, notationBeats.js slur) ----------
+{
+  const { isLegatoSlide } = await imp('src/directions.js');
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const cls = (n) => n.getAttribute('class') || '';
+  const render = (score, width = 900, theme = {}) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width, theme }).render();
+    return box.children[0];
+  };
+  const fr = (string, fret, x = {}, type = 'note', duration = 'quarter') => ({ type, duration, notes: [{ string, fret, ...x }] });
+  const sc = (measures, track = {}) => ({ tracks: [{ showStandardNotation: true, showTablature: true, ...track, measures: measures.map((b) => (Array.isArray(b) ? { beats: b } : b)) }] });
+  const arcs = (svg) => walk(svg).filter((n) => n.tag === 'g' && cls(n) === 'legato-slide');
+  const hps = (svg) => walk(svg).filter((n) => n.tag === 'g' && /^hammer-pull /.test(cls(n)));
+  const slurs = (svg) => walk(svg).filter((n) => n.tag === 'path' && cls(n) === 'slur').map((n) => {
+    const v = n.getAttribute('d').match(/-?\d+(\.\d+)?/g).map(Number);
+    return { x1: v[0], y1: v[1], x2: v[6], above: v[3] < v[1] };
+  });
+
+  test('1.9 legato slide: isLegatoSlide is the string "legato" only (trimmed, any case)', () => {
+    eq([' Legato ', 'LEGATO', 'legato'].map(isLegatoSlide), [true, true, true]);
+    eq([true, 'up', 'down', 'legato up', '', null, undefined, { legato: true }, 1].map(isLegatoSlide), Array(9).fill(false));
+  });
+  test('1.9 legato slide: TAB shift line plus a letterless arc (class legato-slide, one path); one notation slur, also with hammerPullSlurs false', () => {
+    const s = sc([[fr(3, 5, { slide: 'legato' }), fr(3, 7), fr(3, 7, { slide: 'up' }), fr(3, 9)]]);
+    for (const theme of [{}, { hammerPullSlurs: false }]) {
+      const svg = render(s, 900, theme);
+      const a = arcs(svg);
+      eq([a.length, a[0].children.map((c) => c.tag)], [1, ['path']]);
+      eq(walk(a[0]).some((c) => c.tag === 'text'), false);
+      eq(slurs(svg).length, 1);
+      eq(slurs(svg)[0].x2 < 300, true, 'the shift slide gets no slur');
+    }
+  });
+  test('1.9 legato slide: split into two letterless halves across a system break (TAB) and a split slur (notation)', () => {
+    // Every measure ends on a legato slide into the next one: 4 links, each break splits one.
+    const m = () => [fr(3, 5), fr(3, 5), fr(3, 5), fr(3, 7, { slide: 'legato' })];
+    const svg = render(sc([m(), m(), m(), m(), [fr(3, 9, {}, 'note', 'whole')]]), 400);
+    const breaks = walk(svg).filter((n) => /^system system-/.test(cls(n))).length - 1;
+    eq(breaks >= 2, true);
+    const a = arcs(svg);
+    eq(a.length, 4 + breaks);
+    eq(a.every((g) => walk(g).filter((c) => c.tag === 'path').length === 1 && !walk(g).some((c) => c.tag === 'text')), true);
+    eq(slurs(svg).length, 4 + breaks);
+  });
+  test('1.9 legato slide: into a grace note -> TAB arc only, no extra notation slur; with a hammerPull on the same note -> only the H/P arc', () => {
+    const grace = (x) => sc([[fr(3, 5, x), fr(3, 7, {}, 'grace', '16th'), fr(3, 5), fr(3, 7), fr(3, 5, {}, 'note', 'half')]]);
+    const g = render(grace({ slide: 'legato' }), 900, { hammerPullSlurs: false });
+    eq(arcs(g).length, 1);
+    eq(slurs(g), slurs(render(grace({}), 900, { hammerPullSlurs: false })), 'only the grace note slur');
+    const both = render(sc([[fr(3, 5, { slide: 'legato', hammerPull: true }), fr(3, 7, { slide: 'legato' }), fr(3, 9), fr(3, 9)]]));
+    eq([arcs(both).length, hps(both).length], [1, 1]);
+    eq(slurs(both).length, 1, 'H/P and legato links that touch merge into one slur');
+  });
+  test('1.9 legato slide: voice 2 links within its voice, slur below', () => {
+    const rs = { type: 'rest', duration: 'quarter' };
+    const svg = render(sc([{ voices: [{ beats: [fr(2, 5), fr(2, 5), fr(2, 5), fr(2, 5)] }, { beats: [fr(4, 2, { slide: 'legato' }), fr(4, 4), rs, rs] }] }]));
+    eq(arcs(svg).length, 1);
+    eq(slurs(svg).map((s) => s.above), [false]);
+  });
+  test('1.9 legato slide: without a legato slide hammerPullSlurs:false output is unchanged (the opt-out path adds nothing)', () => {
+    const s = sc([[fr(3, 5, { slide: true }), fr(3, 7), fr(3, 7, { hammerPull: true }), fr(3, 9)]]);
+    eq(slurs(render(s, 900, { hammerPullSlurs: false })).length, 0);
+    eq(slurs(render(s)).length, 1);
   });
 }
 
