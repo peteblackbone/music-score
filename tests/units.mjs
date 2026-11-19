@@ -4647,13 +4647,13 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     { type: 'note', duration: 'half', notes: [{ pitch: 'E4', trill: true, ...(tied ? { tieStart: true } : {}) }] },
     { type: 'note', duration: 'half', notes: [{ pitch: 'E4', ...(tied ? { tieEnd: true } : {}) }] },
   ] }] }] });
-  test('pre-1.9 pin (FLIPS in the trill-continuation commit): a trill tied forward equals an untied one; its wave ends at 156.87, before the next beat at 165.24', () => {
+  test('pre-1.9 pin (FLIPPED in the trill-continuation commit): an untied trill wave ends at 156.87, before the next beat at 165.24; tied forward it runs over the tied note to the system end (204.73)', () => {
     for (const tied of [true, false]) {
       const svg = render(trillScore(tied));
       const tr = byClass(svg, 'trill');
       eq(tr.length, 1);
       const wave = numsOf(tr[0].children.find((c) => c.tag === 'path').getAttribute('d'));
-      eq([wave[0], wave.slice(-2)], [128.87, [156.87, -15.63]]);
+      eq([wave[0], wave.slice(-2)], [128.87, [tied ? 204.73 : 156.87, -15.63]]);
       eq(tr[0].children[0].getAttribute('x'), '115.74');
       const heads = walk(svg).filter((n) => n.tag === 'text' && n.getAttribute('text-anchor') === 'middle' && n.getAttribute('y') === '40').map((n) => n.getAttribute('x'));
       eq(heads, ['115.74', '165.24']);
@@ -4988,6 +4988,156 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(groups(render(sc([[n(5, W), n(5), n(5, W), n(5)]])), 'whammy-bar').length, 2);
     eq(groups(render(sc([[n(5, W), n(5, {}, '16th', 'grace'), n(5, W), n(5), n(5)]])), 'whammy-bar').length, 2);
     eq(groups(render(sc([[n(5, W), rs(), n(5, W), n(5)]], { showTablature: false })), 'whammy-bar').length, 0);
+  });
+}
+
+// ---------- 1.9.0: trill continuation over ties (directions.js trillChain, trill.js, playingDirections, voice2Marks, tabTrill) ----------
+{
+  const { trillChain } = await imp('src/directions.js');
+  const { trillChainWaves, trillContinuationGeometry, trillRuns } = await imp('src/draw/trill.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const { pickStrokeGlyph, Glyph: G9 } = await imp('src/glyphs.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const thm = resolveTheme({});
+  const sp = thm.staffLineSpacing;
+  const r6 = (v) => Math.round(v * 1e6) / 1e6;
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const cls = (n) => n.getAttribute('class') || '';
+  const nums = (d) => d.match(/-?\d+(\.\d+)?/g).map(Number);
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const parents = (root) => { const m = new Map(); walk(root).forEach((p) => p.children.forEach((c) => m.set(c, p))); return m; };
+  const waveYs = (g) => { const v = nums(g.children.find((c) => c.tag === 'path').getAttribute('d')); return v.filter((_, i) => i % 2 === 1); };
+  const waveXs = (g) => { const v = nums(g.children.find((c) => c.tag === 'path').getAttribute('d')); return v.filter((_, i) => i % 2 === 0); };
+  // y of the first glyph / text of every group with class `c` under `g`.
+  const ys = (g, c) => walk(g).filter((n) => n.tag === 'g' && (cls(n) === c || cls(n).startsWith(`${c} `))).map((n) => Number(walk(n).find((t) => t.tag === 'text').getAttribute('y')));
+
+  const nb = (notes, x = {}, type = 'note', duration = 'quarter') => ({ type, duration, ...x, notes });
+  const P = (pitch, x = {}) => ({ pitch, ...x });
+  test('1.9 trillChain: tied notes continue a trill (same written MIDI incl. enharmonics, or same string + fret); graces skipped', () => {
+    eq(trillChain([nb([P('E4', { trill: true })]), nb([P('E4', { tieEnd: true })]), nb([P('E4', { tieEnd: true })]), nb([P('E4')])], 0), [1, 2]);
+    eq(trillChain([nb([P('C#4', { trill: true })]), nb([P('Db4', { tieEnd: true })])], 0), [1]);
+    eq(trillChain([nb([{ string: 3, fret: 5, trill: true }]), nb([{ string: 3, fret: 5, tieEnd: true }])], 0), [1]);
+    eq(trillChain([nb([P('E4', { trill: true })]), nb([P('E4')], {}, 'grace', '16th'), nb([P('E4', { tieEnd: true })])], 0), [2]);
+    eq(trillChain([nb([P('G4'), P('E4', { trill: true })]), nb([P('G4', { tieEnd: true }), P('E4', { tieEnd: true })])], 0), [1]);
+    eq(trillChain([nb([P('E4', { trill: true })]), nb([P('E4', { tieEnd: true })]), nb([P('E4')]), nb([P('E4', { tieEnd: true })])], 0), [1], 'an untied note ends it');
+  });
+  test('1.9 trillChain: [] or a stop on another pitch / fret, a missing tieEnd, a rest, a beat with its own trill, a null entry, no trill, bad pitches', () => {
+    const tr = nb([P('E4', { trill: true })]);
+    eq([
+      [tr, nb([P('F4', { tieEnd: true })])],
+      [tr, nb([P('E4')])],
+      [tr, { type: 'rest', duration: 'quarter' }, nb([P('E4', { tieEnd: true })])],
+      [tr, nb([P('E4', { tieEnd: true, trill: true })])],
+      [tr, null, nb([P('E4', { tieEnd: true })])],
+      [nb([P('E4')]), nb([P('E4', { tieEnd: true })])],
+      [nb([{ string: 3, fret: 5, trill: true }]), nb([{ string: 3, fret: 6, tieEnd: true }])],
+      [nb([{ string: 3, fret: 5, trill: true }]), nb([{ string: 2, fret: 5, tieEnd: true }])],
+      [nb([P('H9', { trill: true, string: 3, fret: 5 })]), nb([P('E4', { tieEnd: true, string: 3, fret: 5 })])],
+      [tr],
+    ].map((els) => trillChain(els, 0)), Array(10).fill([]));
+    eq(trillChain([tr, nb([P('E4', { tieEnd: true })]), nb([P('E4', { tieEnd: true, trill: true })])], 0), [1], 'stops before a tied note with its own trill');
+  });
+
+  // trillChainWaves on plain items { s: system, x }.
+  const systems = [0, 1, 2].map(() => ({ lastBarlineX: 500, contentStartX: 50 }));
+  const waves = (spec, els, at = 0) => {
+    const items = spec.map(([s, x]) => ({ s, x }));
+    const nextX = (it) => items.find((c) => c.s === it.s && c.x > it.x)?.x ?? Infinity;
+    return trillChainWaves(items, at, els, { sysOf: (it) => it.s, xOf: (it) => it.x, nextX }, systems, thm);
+  };
+  const tr = nb([P('E4', { trill: true })]);
+  const tie = nb([P('E4', { tieEnd: true })]);
+  const plain = nb([P('E4')]);
+  const half = (glyphBox(G9.ornamentTrill).width / 2 + 0.25) * sp;
+  test('1.9 trillChainWaves: null without a chain; on one system the wave ends 0.8 sp before the beat after the chain, before its "tr" when trilled', () => {
+    eq(waves([[0, 100], [0, 150]], [tr, plain]), null);
+    const w = waves([[0, 100], [0, 150], [0, 200], [0, 250]], [tr, tie, tie, plain]);
+    eq([w.covered.map((c) => c.x), w.endX, w.conts], [[150, 200], 250 - 0.8 * sp, []]);
+    eq(r6(waves([[0, 100], [0, 150], [0, 250]], [tr, tie, tr]).endX), r6(250 - half), 'stopper trill clamps');
+    eq(r6(waves([[0, 100], [0, 150], [0, 230], [0, 250]], [tr, tie, nb([P('E4')], {}, 'grace', '16th'), tr]).endX), r6(230 - 0.8 * sp), 'grace in between: the next beat, then the trill');
+    eq(waves([[0, 100], [0, 150]], [tr, tie]).endX, 495, 'nothing after: the system break');
+  });
+  test('1.9 trillChainWaves: across breaks the wave ends at the break and continues from 0.5 sp after each later header', () => {
+    const w = waves([[0, 100], [0, 300], [1, 100], [1, 300], [2, 100], [2, 200]], [tr, tie, tie, tie, tie, plain]);
+    eq(w.endX, 495);
+    eq(w.conts.map((c) => [c.sysIdx, c.items.map((it) => it.x), c.x1, c.x2]), [[1, [100, 300], 55, 495], [2, [100], 55, 200 - 0.8 * sp]]);
+    const w2 = waves([[0, 100], [1, 100], [1, 140]], [tr, tie, tr]);
+    eq([w2.endX, w2.conts.map((c) => r6(c.x2))], [495, [r6(Math.min(140 - 0.8 * sp, 140 - half))]]);
+    eq(trillContinuationGeometry(55, 60, 100, thm), null, 'shorter than 0.7 sp: nothing');
+    eq(trillContinuationGeometry(55, 95, 100, thm), { x1: 55, x2: 95, y: 98, top: 96, boxes: [{ x1: 55, x2: 95, top: 96, bottom: 100, text: true }] });
+  });
+  test('1.9 trillRuns unchanged by ties: a tied note ends the run like any untrilled beat', () => {
+    const bs = [tr, tie, tr, tr].map((el, i) => ({ el, i }));
+    const r = trillRuns(bs, (b) => !!b.el.notes[0].trill, () => 0, () => false);
+    eq([r.get(bs[0]).map((b) => b.i), r.get(bs[2]).map((b) => b.i), r.has(bs[1])], [[0], [2, 3], false]);
+  });
+
+  const q = (pitch, x = {}, b = {}, duration = 'quarter') => ({ type: 'note', duration, ...b, notes: [{ pitch, ...x }] });
+  const tstr = { tieStart: true };
+  const tmid = { tieStart: true, tieEnd: true };
+  test('1.9 trill continuation (notation): one wave over a 3-note chain; T and pick on a tied beat and a fermata on another stack above it', () => {
+    const svg = render({ tracks: [{ measures: [{ beats: [
+      q('E4', { trill: true, ...tstr }), q('E4', { ...tmid, tap: true }, { pickStroke: 'down' }), q('E4', { tieEnd: true }, { fermata: true }), q('G4'),
+    ] }] }] });
+    const [t] = walk(svg).filter((n) => n.tag === 'g' && cls(n) === 'trill');
+    eq(walk(svg).filter((n) => cls(n).startsWith('trill')).length, 1);
+    const top = Math.min(...waveYs(t));
+    const above = [...ys(svg, 'tap'), ...ys(svg, 'pick-stroke'), ...ys(svg, 'fermata')];
+    eq([above.length, above.every((y) => y < top)], [3, true]);
+  });
+  test('1.9 trill continuation (notation): a chain across two breaks draws one "tr" and a glyph-less wave on each later system, clear of the staff', () => {
+    const W = (b = {}) => q('E4', tmid, b, 'whole');
+    const svg = render({ tracks: [{ measures: [
+      { beats: [q('C4', {}, {}, 'half'), q('E4', { trill: true, ...tstr }, {}, 'half')] },
+      ...[0, 1, 2, 3, 4, 5, 6].map(() => ({ beats: [W()] })),
+      { beats: [q('E4', { tieEnd: true }, {}, 'half'), q('G4', {}, {}, 'half')] },
+    ] }] }, 400);
+    const sysCount = walk(svg).filter((n) => /^system system-/.test(cls(n))).length;
+    const conts = walk(svg).filter((n) => n.tag === 'g' && cls(n) === 'trill trill-continued');
+    eq(sysCount >= 3, true);
+    eq([walk(svg).filter((n) => n.tag === 'g' && cls(n) === 'trill').length, conts.length], [1, sysCount - 1]);
+    eq(conts.every((g) => g.children.length === 1 && g.children[0].tag === 'path'), true);
+    // Each continuation lies at least 1 sp above its staff's top line (beatClearTop).
+    const par = parents(svg);
+    conts.forEach((g) => {
+      const staff = walk(par.get(g)).filter((n) => n.tag === 'line' && n.getAttribute('y1') === n.getAttribute('y2') && Number(n.getAttribute('x2')) - Number(n.getAttribute('x1')) > 100);
+      const topLine = Math.min(...staff.map((n) => Number(n.getAttribute('y1'))));
+      if (!(Math.max(...waveYs(g)) <= topLine - sp + 1e-6)) throw new Error(`continuation too low: ${Math.max(...waveYs(g))} vs ${topLine}`);
+    });
+  });
+  test('1.9 trill continuation (voice 2): the wave runs over the tied voice-2 note below the staff; its pick stroke stacks below the wave', () => {
+    const rs = { type: 'rest', duration: 'half' };
+    const svg = render({ tracks: [{ measures: [{ voices: [
+      { beats: ['C5', 'C5', 'C5', 'C5'].map((p) => q(p)) },
+      { beats: [q('E4', { trill: true, ...tstr }), q('E4', { tieEnd: true }, { pickStroke: 'up' }), rs] },
+    ] }] }] });
+    const [t] = walk(svg).filter((n) => n.tag === 'g' && cls(n) === 'trill');
+    const bottom = Math.max(...waveYs(t));
+    const picks = walk(svg).filter((n) => n.tag === 'g' && cls(n) === 'pick-stroke pick-stroke-up');
+    eq(picks.length, 1);
+    // renderPickStroke's text y is the glyph's bottom edge; its top edge lies below the wave.
+    eq(Number(picks[0].children[0].getAttribute('y')) - glyphBox(pickStrokeGlyph('up')).top * sp > bottom, true);
+    const xs = waveXs(t);
+    eq(Math.max(...xs) > Number(picks[0].children[0].getAttribute('x')), true, 'the wave passes the tied note');
+  });
+  test('1.9 trill continuation (TAB): T, golpe and dip on a covered column stack above the wave; a later system gets a continued wave', () => {
+    const f = (fret, x = {}, b = {}, duration = 'quarter') => ({ type: 'note', duration, ...b, notes: [{ string: 3, fret, ...x }] });
+    const tabOnly = (measures) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures }] });
+    const svg = render(tabOnly([{ beats: [f(5, { trill: true, ...tstr }), f(5, { ...tmid, tap: true }, { golpe: true }), f(5, { tieEnd: true }, { whammy: true }), f(7)] }]));
+    const [t] = walk(svg).filter((n) => n.tag === 'g' && cls(n) === 'trill');
+    const top = Math.min(...waveYs(t));
+    const dip = walk(svg).filter((n) => n.tag === 'g' && cls(n) === 'whammy whammy-dip');
+    const marks = [...ys(svg, 'tap'), ...walk(svg).filter((n) => n.tag === 'g' && /^golpe/.test(cls(n))).map((g) => Number(g.children[0].getAttribute('y'))), Math.max(...waveYs(dip[0]))];
+    eq([marks.length, marks.every((y) => y < top)], [3, true]);
+    const W = () => ({ beats: [f(5, tmid, {}, 'whole')] });
+    const br = render(tabOnly([{ beats: [f(3, {}, {}, 'half'), f(5, { trill: true, ...tstr }, {}, 'half')] }, W(), W(), W(), W(), W(), W(), { beats: [f(5, { tieEnd: true }, {}, 'half'), f(7, {}, {}, 'half')] }]), 400);
+    const sysCount = walk(br).filter((n) => /^system system-/.test(cls(n))).length;
+    eq(sysCount >= 2, true);
+    eq(walk(br).filter((n) => n.tag === 'g' && cls(n) === 'trill trill-continued').length, sysCount - 1);
   });
 }
 

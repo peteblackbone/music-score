@@ -18,7 +18,9 @@
  * (run.curvesBelow2, pass 1), label runs below a notation-only staff
  * (run.labelBoxes, pass 4) and a rest's own glyph. Consecutive trills on a
  * system share one line (the lowest of their own), each "tr" also clear of
- * the next note's bottom; pick strokes of one voice-2 beam group share the
+ * the next note's bottom; a trill tied forward runs over the voice-2 notes
+ * it is tied to (trill.js trillChainWaves; continued, wave only, on later
+ * systems), whose marks stack below it; pick strokes of one voice-2 beam group share the
  * lowest top. The fermata's top sits below the stack's bottom too. Marks
  * are upright (only the fermata flips) and centred on the voice-2 head x.
  *
@@ -31,7 +33,9 @@ import { renderFermata, fermataGlyph, renderPickStroke, elementBottom } from './
 import { vibratoClearSp, vibratoBelowSp } from './noteMarks.js';
 import { renderOrnament, renderRightFingering, rightFingeringHalf, rightFingeringHeight, renderGolpe, golpeHalf } from './handMarks.js';
 import { renderTapMark, tapMarkHalf, tapMarkBox } from './tab.js';
-import { trillEndX, trillRunEndX, trillRuns, trillGeometry, renderTrill } from './trill.js';
+import {
+  trillEndX, trillRunEndX, trillRuns, trillGeometry, renderTrill, trillChainWaves, trillContinuationGeometry, renderTrillContinuation,
+} from './trill.js';
 import { collectBeats, curveEdgeOver, beamGroupsOf } from './passes/notationBeats.js';
 import { breakEndX } from './passes/common.js';
 import { voiceOf } from '../twoVoice.js';
@@ -114,20 +118,30 @@ export function renderVoice2Directions(track, trackRuns, theme, systems) {
   const trillHalf = (glyphBox(Glyph.ornamentTrill).width / 2) * sp;
   const trilled = marked.filter((it) => it.trill);
   const runs = trillRuns(stream, (b) => trilled.includes(b), (b) => b.sysIdx, (b) => !!b.info?.isGrace);
+  const els = stream.map((b) => (voiceOf(b) === 2 ? b.el : null));
+  const nextX = (b) => { const bi = stream.indexOf(b); return stream.find((c, ci) => ci > bi && c.sysIdx === b.sysIdx)?.x ?? Infinity; };
+  // The first note after stream index `from` on system `sysIdx`, as a bound for a trill's top.
+  const nextNoteTop = (from, sysIdx) => {
+    const nextNote = stream.find((b, bi) => bi > from && b.sysIdx === sysIdx && b.info && !b.info.isRest);
+    return nextNote ? elementBottom(nextNote.info) + TRILL_NEXT_CLEAR_SP * sp : -Infinity;
+  };
   trilled.forEach((item) => {
     const at = stream.indexOf(item);
     const later = stream.filter((b, bi) => bi > at && b.sysIdx === item.sysIdx);
     const run = runs.get(item);
-    item.trillEndX = trillRunEndX(trillEndX(item.x, later[0] ? later[0].x : Infinity, breakEndX(systems, item.sysIdx, theme), theme),
+    const wv = trillChainWaves(stream, at, els, { sysOf: (b) => b.sysIdx, xOf: (b) => b.x, nextX }, systems, theme);
+    item.trillWaves = wv;
+    item.trillEndX = wv ? wv.endX : trillRunEndX(trillEndX(item.x, later[0] ? later[0].x : Infinity, breakEndX(systems, item.sysIdx, theme), theme),
       run[run.indexOf(item) + 1]?.x, theme);
-    const nextNote = later.find((b) => b.info && !b.info.isRest);
+    const own = wv ? wv.covered.filter((c) => c.sysIdx === item.sysIdx) : [];
     item.trillOwnTop = Math.max(clearBottom(item, item.x - trillHalf, item.trillEndX, ctx),
-      nextNote ? elementBottom(nextNote.info) + TRILL_NEXT_CLEAR_SP * sp : -Infinity);
+      nextNoteTop(own.length ? stream.indexOf(own[own.length - 1]) : at, item.sysIdx),
+      ...own.map((c) => clearBottom(c, item.x - trillHalf, item.trillEndX, ctx)));
   });
 
   // Each beat's stack, nearest first: every layer's top below its own clearance and the layer above it.
   marked.forEach((item) => {
-    let next = -Infinity;
+    let next = item.coverBottom != null ? item.coverBottom + gap : -Infinity;
     const place = (half, height) => {
       const top = Math.max(clearBottom(item, item.x - half, item.x + half, ctx), next);
       next = top + height + gap;
@@ -137,6 +151,17 @@ export function renderVoice2Directions(track, trackRuns, theme, systems) {
       const top = Math.max(...runs.get(item).map((m) => m.trillOwnTop));
       item.trillBottomY = top - trillGeometry(item.x, 0, item.trillEndX, theme).top;
       next = item.trillBottomY + gap;
+      if (item.trillWaves) {
+        // Covered beats stack below the trill; each later system gets a continued wave clear of its covered beats.
+        item.trillWaves.covered.filter((c) => c.sysIdx === item.sysIdx).forEach((c) => { c.coverBottom = item.trillBottomY; });
+        item.trillConts = item.trillWaves.conts.map(({ items: cov, x1, x2 }) => {
+          const contTop = Math.max(...cov.map((c) => clearBottom(c, x1, x2, ctx)), nextNoteTop(stream.indexOf(cov[cov.length - 1]), cov[0].sysIdx));
+          const geo = trillContinuationGeometry(x1, x2, 0, theme);
+          const bottomY = geo ? contTop - geo.top : contTop;
+          if (geo) cov.forEach((c) => { c.coverBottom = bottomY; });
+          return { g: cov[0].g, x1, x2, bottomY };
+        });
+      }
     } else if (item.ornament) {
       const { half, height } = glyphSize(Glyph[ORNAMENT_GLYPH[item.ornament]], sp);
       item.ornamentBottomY = place(half, height) + height;
@@ -180,6 +205,7 @@ export function renderVoice2Directions(track, trackRuns, theme, systems) {
     const g = layerOf(item.g);
     if (item.trill) renderTrill(g, x, item.trillBottomY, item.trillEndX, color, theme, null);
     else if (item.ornament) renderOrnament(g, x, item.ornamentBottomY, item.ornament, color, theme);
+    (item.trillConts || []).forEach((ct) => renderTrillContinuation(layerOf(ct.g), ct.x1, ct.x2, ct.bottomY, color, theme));
     if (item.rightLetters) renderRightFingering(g, x, item.rightBottomY, item.rightLetters, color, theme);
     if (item.tapMark) renderTapMark(g, x, item.tapBaselineY, color, theme, item.tapMark);
     if (item.golpe) renderGolpe(g, x, item.golpeBottomY, item.golpe, color, theme);

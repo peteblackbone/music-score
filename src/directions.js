@@ -20,7 +20,7 @@
  * - `beat.rake` (truthy, 'down' | 'up'): a "rake" label run over the beat
  *   and the grace notes right before it;
  * - `note.trill` true | fret | pitch | `{ fret, pitch }`: "tr" and a wavy
- *   line above the beat;
+ *   line above the beat, continued over the notes it is tied to (trillChain);
  * - `beat.arpeggio` true | 'up' | 'down': a vertical wavy line left of a
  *   chord of two or more notes ('up' / 'down' add an arrowhead);
  * - `beat.strum` 'down' | 'up': a strum arrow above the beat; it replaces
@@ -344,6 +344,41 @@ export function beatTrill(el) {
     if (trill) return { note, trill };
   }
   return null;
+}
+
+/** Whether tied-to note `b` continues note `a`: the same written MIDI number when both have a pitch, else the same string and fret. */
+function continuesNote(a, b) {
+  if (a.pitch != null && b.pitch != null) {
+    try { return midiNumber(parsePitch(a.pitch)) === midiNumber(parsePitch(b.pitch)); } catch { return false; }
+  }
+  return a.string != null && a.string === b.string && a.fret === b.fret;
+}
+
+/**
+ * Indices of the beats of one voice stream `els` (beat elements in score
+ * order; null where the stream leaves the voice) that the trill on
+ * `els[i]` continues over: from its trilled note (beatTrill), each later
+ * beat with a `tieEnd` note continuing the current one (same written MIDI
+ * number, or same string and fret without pitches), which then becomes
+ * current. Grace notes are skipped; a null entry, a beat that isn't a main
+ * note beat, a beat with its own trill or one with no such note ends the
+ * chain. [] when `els[i]` has no trill or nothing is tied to it.
+ */
+export function trillChain(els, i) {
+  const t = beatTrill(els[i]);
+  if (!t) return [];
+  const out = [];
+  let cur = t.note;
+  for (let k = i + 1; k < els.length; k++) {
+    const el = els[k];
+    if (el && el.type === 'grace') continue;
+    if (!isMainNoteBeat(el) || beatTrill(el)) break;
+    const next = el.notes.find((n) => n.tieEnd && continuesNote(cur, n));
+    if (!next) break;
+    out.push(k);
+    cur = next;
+  }
+  return out;
 }
 
 /**

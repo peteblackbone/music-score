@@ -51,7 +51,9 @@ const colX = (le) => le.x - (le.dx || 0);
  *   the next beat and never past the system's last barline; consecutive
  *   trills on a system (graces between them allowed; trillRuns) share one
  *   line, the highest of their own, each wave ending before the next "tr",
- *   drawn before the run's T / S / P and dips;
+ *   drawn before the run's T / S / P and dips; a trill tied forward runs
+ *   over its tied notes' columns (and on later systems), whose marks stack
+ *   above it;
  * - a tapped note (`note.tap`, not a tapped harmonic) puts one bold "T"
  *   above the beat, above the TAB top line, the beat's topmost fret label
  *   and its tab tremolo / vibrato, raised above any hammer-on/pull-off
@@ -92,7 +94,7 @@ export function renderTabArticulations(score, trackRuns, theme, systems) {
     // Consecutive trills on a system share one line: drawn together at the run's first beat, at the highest of their own bottoms.
     const runs = trillRuns(beats, (b) => !!beatTrill(tabMarkBeat(b.layoutEl, 'trill')), (b) => b.run.sysIdx, (b) => b.layoutEl.el.type === 'grace');
     const trillTops = new Map();
-    const trillCtx = { runs, beats, flat, stringCount, systems, theme, trillTops };
+    const trillCtx = { runs, beats, flat, stringCount, systems, theme, trillTops, track, trackRuns };
     const scoops = scoopSpans(trackRuns.filter((r) => r.track === track), systems, theme);
     beats.forEach((beat) => {
       const { layoutEl, run, x } = beat;

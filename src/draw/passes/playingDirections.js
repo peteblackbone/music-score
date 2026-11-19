@@ -15,7 +15,7 @@ import { beatTapMark, beatPickStroke, beatTrill, beatStrum } from '../../directi
 import { beatOrnament, beatGolpe, rightFingerStack } from '../../hands.js';
 import { glyphBox } from '../../glyphMetrics.js';
 import { pickStrokeGlyph, Glyph } from '../../glyphs.js';
-import { trillEndX, trillRunEndX, trillRuns, renderTrill } from '../trill.js';
+import { trillEndX, trillRunEndX, trillRuns, renderTrill, trillChainWaves, renderTrillContinuation } from '../trill.js';
 import { renderStrum, renderTabStrums, STRUM_HALF_SP } from '../strum.js';
 import { renderVoice2Directions } from '../voice2Marks.js';
 import { trackHasTwoVoices, tabMarkBeat } from '../../twoVoice.js';
@@ -51,7 +51,10 @@ const PICK_TAB_CLEAR_SP = 0.4;
  *   beat (never past the last barline), sits above the vibrato / tremolo and
  *   below the next rendered note's top by TRILL_NEXT_CLEAR_SP; consecutive
  *   trills on a system (graces between them allowed; trillRuns) share one
- *   line, the highest of their own, each wave ending before the next "tr". The top of the stack is recorded as
+ *   line, the highest of their own, each wave ending before the next "tr".
+ *   A trill tied forward (trillChainWaves) runs over the tied notes instead,
+ *   clear of them too, continuing (wave only) on each later system the ties
+ *   reach; marks on a covered beat stack above the wave. The top of the stack is recorded as
  *   `info.directionTopY` for renderFermatas. A track with a notation staff
  *   shows pick strokes there only. A strum arrow (`strum`; draw/strum.js)
  *   takes the pick stroke's place on a track without a TAB staff; runs of
@@ -122,29 +125,39 @@ function renderNotationStack(track, trackRuns, theme, systems) {
   // Each trill's own bottom (the other trills' ink never counts), then one shared line per run of trills.
   const trilled = marked.filter((item) => item.trill);
   const runs = trillRuns(beats, (b) => trilled.includes(b), (b) => b.sysIdx, (b) => !!b.info?.isGrace);
+  const els = beats.map((b) => b.el);
+  const nextX = (b) => { const bi = beats.indexOf(b); return beats.find((c, ci) => ci > bi && c.sysIdx === b.sysIdx)?.x ?? Infinity; };
   trilled.forEach((item) => {
     const at = beats.indexOf(item);
     const later = beats.filter((b, bi) => bi > at && b.sysIdx === item.sysIdx);
     const nextOn = later[0];
     const run = runs.get(item);
-    item.trillEndX = trillRunEndX(trillEndX(item.x, nextOn ? nextOn.x : Infinity, breakEndX(systems, item.sysIdx, theme), theme),
+    const wv = trillChainWaves(beats, at, els, { sysOf: (b) => b.sysIdx, xOf: (b) => b.x, nextX }, systems, theme);
+    item.trillWaves = wv;
+    item.trillEndX = wv ? wv.endX : trillRunEndX(trillEndX(item.x, nextOn ? nextOn.x : Infinity, breakEndX(systems, item.sysIdx, theme), theme),
       run[run.indexOf(item) + 1]?.x, theme);
-    const nextNote = later.find((b) => b.info && !b.info.isRest);
+    // Tied forward: also clear of the covered beats on this system, and of the first note after them.
+    const own = wv ? wv.covered.filter((c) => c.sysIdx === item.sysIdx) : [];
+    const from = own.length ? beats.indexOf(own[own.length - 1]) : at;
+    const nextNote = later.find((b) => beats.indexOf(b) > from && b.info && !b.info.isRest);
     item.trillBottomY = Math.min(
       beatClearTop(item, sp, slurClearSpan(item, item.x - trillHalf, item.trillEndX, sp)),
       nextNote ? nextNote.topY - TRILL_NEXT_CLEAR_SP * sp : Infinity,
+      ...own.map((c) => beatClearTop(c, sp, slurClearSpan(c, item.x - trillHalf, item.trillEndX, sp))),
     );
   });
   // Each beat's own stack, bottom up, each layer on the ink under it and the gap above the layer below:
   // trill / ornament, right-hand letters, T / LH tap / S / P, golpe, then the pick stroke's or strum's own bottom.
   const gap = DIRECTION_STACK_GAP_SP * sp;
   marked.forEach((item) => {
-    let above = Infinity;
+    let above = item.coverTop != null ? item.coverTop - gap : Infinity;
     const clear = (half) => Math.min(beatClearTop(item, sp, slurClearTop(item, half, sp)), above);
     if (item.trill) {
       const bottomY = Math.min(...runs.get(item).map((m) => m.trillBottomY));
-      item.trillTop = renderTrill(item.g, item.x, bottomY, item.trillEndX, theme.noteColor, theme, null).top;
+      const drawn = renderTrill(item.g, item.x, bottomY, item.trillEndX, theme.noteColor, theme, null);
+      item.trillTop = drawn.top;
       above = item.trillTop - gap;
+      if (item.trillWaves) coverTrillChain(item, drawn, beats, theme);
     } else if (item.ornament) {
       item.ornamentTop = renderOrnament(item.g, item.x, clear(ornamentHalf(item.ornament, theme)), item.ornament, theme.noteColor, theme).top;
       above = item.ornamentTop - gap;
@@ -189,5 +202,28 @@ function renderNotationStack(track, trackRuns, theme, systems) {
       top = renderStrum(item.g, item.x, bottomY, item.strum, theme.noteColor, theme).top;
     }
     item.info.directionTopY = top;
+  });
+  // A covered beat without marks of its own: a fermata goes above the wave.
+  beats.forEach((b) => { if (b.coverTop != null && !marked.includes(b)) b.info.directionTopY = b.coverTop; });
+}
+
+/**
+ * Covered beats of the tied-forward trill on `item` (its `trillWaves`,
+ * just drawn as `drawn`): those on its system stack above its wave; each
+ * later system gets a continued wave clear of its covered beats (as the
+ * trill's own bottom: beatClearTop, slurs, the next note's top), which they
+ * then stack above (`coverTop`).
+ */
+function coverTrillChain(item, drawn, beats, theme) {
+  const sp = theme.staffLineSpacing;
+  const { covered, conts } = item.trillWaves;
+  covered.filter((c) => c.sysIdx === item.sysIdx).forEach((c) => { c.coverTop = drawn.waveTop ?? drawn.top; });
+  conts.forEach(({ items, x1, x2 }) => {
+    const last = beats.indexOf(items[items.length - 1]);
+    const nextNote = beats.find((b, bi) => bi > last && b.sysIdx === items[0].sysIdx && b.info && !b.info.isRest);
+    const bottomY = Math.min(...items.map((c) => beatClearTop(c, sp, slurClearSpan(c, x1, x2, sp))),
+      nextNote ? nextNote.topY - TRILL_NEXT_CLEAR_SP * sp : Infinity);
+    const wave = renderTrillContinuation(items[0].g, x1, x2, bottomY, theme.noteColor, theme);
+    if (wave) items.forEach((c) => { c.coverTop = wave.top; });
   });
 }
