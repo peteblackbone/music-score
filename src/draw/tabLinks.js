@@ -8,7 +8,7 @@
 import {
   renderHammerPull, renderSlide, renderSlideMark, renderBend, normalizeBend, bendSemitones, SLIDE_END_INSET_SP,
 } from './tab.js';
-import { renderCompoundBend } from './bend.js';
+import { renderCompoundBend, bendHeightFrac } from './bend.js';
 import { fretLabel, fretLabelWidth, tiedFretOpts } from '../textMetrics.js';
 import { isNaturalHarmonic, decoratesFretLabel } from '../harmonics.js';
 import { linkTarget, slideMarks, bendOf, isLegatoSlide } from '../directions.js';
@@ -234,7 +234,7 @@ function drawTabLinks(flat, other, startFilter, systems, theme, { breakEndX, bre
       // Scale the arc's height to the bend amount (a "full" step is the
       // 1.0 baseline) so a half bend visibly reads as smaller than a
       // full one, instead of every amount drawing the same size arc.
-      bendInfo.heightFrac = Math.max(0.55, Math.min(1.3, semitones / 2));
+      bendInfo.heightFrac = bendHeightFrac(bendInfo.amount);
       const nextX = bendNextX(item, i);
       // The landing fret in parentheses is only meaningful for a bend
       // that's held at pitch with nothing else going on. A release

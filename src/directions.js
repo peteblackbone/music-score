@@ -183,7 +183,9 @@ export function bendOf(raw) {
     const type = ['prebend', 'pb', 'pre-bend'].includes(t) ? 'prebend' : (t === 'release' ? 'release' : 'bend');
     const release = type === 'release' || !!raw.release;
     const amount = raw.amount ? String(raw.amount) : (type === 'release' ? null : 'full');
-    if (raw.rebend && type !== 'release') return { type, amount, release: true, hold: false, rebend: String(raw.rebend) };
+    // Only a string or a finite number counts as a second bend; anything else (or blank) is no rebend.
+    const rebend = (typeof raw.rebend === 'string' || Number.isFinite(raw.rebend)) && raw.rebend !== 0 ? String(raw.rebend).trim() : '';
+    if (rebend && type !== 'release') return { type, amount, release: true, hold: false, rebend };
     return {
       type,
       amount,
