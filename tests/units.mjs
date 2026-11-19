@@ -2038,9 +2038,9 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
 {
   const { createHash } = await import('node:crypto');
   // the 52 pre-1.4 cases (the 1.4.0 two-voice fixtures char-voices-*, the 1.5.0 char-note-effects-*, the 1.6.0
-  // char-score-text-* and the 1.7.0 char-ornaments-* came later)
+  // char-score-text-*, the 1.7.0 char-ornaments-* and the 1.9.0 char-bends-slides-* came later)
   const isVoices = (id) => id.startsWith('char-voices-');
-  const isPost14 = (id) => /^char-(voices|note-effects|score-text|ornaments)-/.test(id);
+  const isPost14 = (id) => /^char-(voices|note-effects|score-text|ornaments|bends-slides)-/.test(id);
   const cases = (await import('./cases.mjs')).cases.filter((c) => !isPost14(c.id));
   const { computeLayout } = await imp('src/layout/index.js');
   const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
@@ -2657,8 +2657,8 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   const { drawScoreHeader } = await imp('src/draw/header.js');
   const { group: svgGroup } = await imp('src/draw/svgUtil.js');
   // the 57 pre-1.6 cases (the 1.6.0 char-score-text-* fixtures use the new fields on purpose; the 1.7.0
-  // char-ornaments-* came later)
-  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets)-/.test(c.id));
+  // char-ornaments-* and the 1.9.0 char-bends-slides-* came later)
+  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides)-/.test(c.id));
   const thm = resolveTheme({});
   const s = thm.staffLineSpacing;
   const ok = (c, m) => { if (!c) throw new Error(m); };
@@ -3847,8 +3847,8 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     });
     return r;
   };
-  // The pins describe the 63 pre-1.8 cases (the 1.8 fixtures exercise these triggers on purpose).
-  const pre18 = cases.filter((c) => !/^char-(voices-marks|voices-tab-rhythm|voices-tied-frets)-/.test(c.id));
+  // The pins describe the 63 pre-1.8 cases (the 1.8 fixtures exercise these triggers on purpose; the 1.9 char-bends-slides-* came later).
+  const pre18 = cases.filter((c) => !/^char-(voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides)-/.test(c.id));
   const scans = new Map(pre18.map((c) => [c.id, scan(c)]));
   const twoVoiceIds = [...scans].filter(([, r]) => r.two.length).map(([id]) => id);
 
@@ -4586,9 +4586,11 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   };
 
   test('pre-1.9 scan: none of the 67 cases (raw or normalized) uses a compound bend, legato slide, feedback harmonic, trill tied forward, whammyScoop / whammyBar key', () => {
-    eq(cases.length, 67);
+    // the 1.9.0 char-bends-slides-* fixtures use them on purpose
+    const pre19 = cases.filter((c) => !/^char-bends-slides-/.test(c.id));
+    eq(pre19.length, 67);
     const zero = { compound: 0, legato: 0, feedback: 0, trillTie: 0, whammyKeys: 0 };
-    for (const c of cases) {
+    for (const c of pre19) {
       eq([c.id, 'raw', scan(c.score)], [c.id, 'raw', zero]);
       eq([c.id, 'normalized', scan(normalizeScore(c.score))], [c.id, 'normalized', zero]);
     }

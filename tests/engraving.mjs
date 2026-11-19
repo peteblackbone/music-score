@@ -1097,7 +1097,7 @@ function renderedLabels(svg, score) {
 test('harmonics', 'AC1: rendering every pre-existing fixture/example emits no diamond glyph, no harmonic group, no <n> TAB label, no A.H./T.H./P.H./S.H. text', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-harmonics')) continue;
+    if (name.startsWith('char-harmonics') || name.startsWith('char-bends-slides')) continue;
     for (const width of [600, 900]) {
       const svg = renderTree(score, width, options);
       all(svg).forEach(({ n }) => {
@@ -1686,7 +1686,7 @@ const dirLabelStaff = (m, si, tr) => staffOf(m, si, tr, tr.tab);
 test('directions', 'AC1: every pre-existing fixture/example emits no let-ring / pick-stroke / tap / whammy group and no U+E610 / U+E612 glyph', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams') || name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-legato-slides') || name.startsWith('char-note-effects') || name.startsWith('char-ornaments') || name === 'char-voices-marks') continue; // newer fixtures using directions on purpose
+    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams') || name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-legato-slides') || name.startsWith('char-note-effects') || name.startsWith('char-ornaments') || name === 'char-voices-marks' || name.startsWith('char-bends-slides')) continue; // newer fixtures using directions on purpose
     for (const width of [600, 900]) {
       all(renderTree(score, width, options)).forEach(({ n }) => {
         const c = cls(n).split(' ');
@@ -4684,7 +4684,7 @@ const T11_CLASSES = ['slap', 'pop', 'rake', 'trill'];
 test('techniques11', 'AC1: no pre-existing fixture / example emits a slap / pop / rake / trill group, a dive / hold / return / pre-dive line or a U+E566 glyph', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-note-effects') || name.startsWith('char-ornaments') || name === 'char-voices-marks') continue;
+    if (name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-note-effects') || name.startsWith('char-ornaments') || name === 'char-voices-marks' || name.startsWith('char-bends-slides')) continue;
     for (const width of [600, 900]) {
       all(renderTree(score, width, options)).forEach(({ n }) => {
         const c = cls(n).split(' ');
@@ -5848,9 +5848,9 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
   });
 
   test('hands17', 'G2: every pre-1.7 case with every new field set to garbage renders byte-identical to its snapshot', () => {
-    // 1.8: the voices-marks / voices-tab-rhythm(-break) / voices-tied-frets fixtures are not pre-1.7 either
-    const pre = cases.filter((c) => !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets)-/.test(c.id));
-    const snaps = fs.readdirSync(path.join(root0, 'tests/snapshots')).filter((f) => f.endsWith('.svg') && !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets)-/.test(f));
+    // 1.8: the voices-marks / voices-tab-rhythm(-break) / voices-tied-frets fixtures are not pre-1.7 either; 1.9: nor bends-slides-*
+    const pre = cases.filter((c) => !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides)-/.test(c.id));
+    const snaps = fs.readdirSync(path.join(root0, 'tests/snapshots')).filter((f) => f.endsWith('.svg') && !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides)-/.test(f));
     ok(pre.length === 60 && snaps.length === 60, `${pre.length} pre-1.7 cases vs ${snaps.length} pre-1.7 snapshots`);
     const NOTE = [{ ornament: 'trill', finger: 9, rightFinger: 'q', leftHandTap: false }, { ornament: 5, finger: 'x', rightFinger: 1, leftHandTap: 0 },
       { ornament: {}, finger: -1, rightFinger: 'pi', leftHandTap: '' }, { ornament: '', finger: 1.5, rightFinger: null, leftHandTap: null }];
@@ -5880,7 +5880,7 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
   test('hands17', 'AC1: no pre-existing fixture / example emits a 1.7.0 class or glyph', () => {
     let checked = 0;
     for (const [name, score, options] of SCORES) {
-      if (name.startsWith('char-ornaments') || name === 'char-voices-marks') continue;
+      if (name.startsWith('char-ornaments') || name === 'char-voices-marks' || name === 'char-bends-slides') continue; // 1.9: w/bar next to P.S.
       for (const width of [600, 900]) {
         all(renderTree(score, width, options)).forEach(({ n }) => {
           ok(!cls(n).split(' ').some((x) => NEW_CLASSES.test(x)), `${name}@${width}: class "${cls(n)}"`);
@@ -5889,7 +5889,7 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
         checked++;
       }
     }
-    ok(checked === (SCORES.length - 4) * 2, `${checked} renders`);
+    ok(checked === (SCORES.length - 5) * 2, `${checked} renders`);
   });
 
   test('hands17', 'O1-O4: ornament glyph and class per kind, centred on the beat above the staff; none on TAB, graces, rests, a trilled beat or tab-only', () => {
@@ -6159,6 +6159,137 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
       const kids = g.children;
       kids.forEach((c, i) => { if (c.tag === 'text' && num(c, 'font-size') === DEF.tabFontSize && kids[i - 1]?.tag === 'rect') near(num(kids[i - 1], 'width'), labelW(c._text, DEF), 0.01, `knock-out of ${c._text}`); });
     }));
+  });
+}
+
+// ======================= bends, whammy, slides, feedback, trill ties (1.9.0) =======================
+// Fixtures bends-slides (w900), bends-slides-break (w600) and bends-slides-tab-only (w900); the expected counts follow
+// from the fixture comments (characterization.js), the geometry from design.md (compound bend labels, scoop + dip level,
+// w/bar lane, continued trill waves).
+{
+  const fx = (name) => characterizationCases.find((c) => c.name === name);
+  const BS = ['bends-slides', 'bends-slides-break', 'bends-slides-tab-only'].map(fx);
+  const groupsOf = (tree, c) => all(tree).filter(({ n }) => n.tag === 'g' && cls(n) === c).map(({ n }) => n);
+  const pts = (g) => { const v = (g.children.find((c) => c.tag === 'path').getAttribute('d').match(/-?\d+(?:\.\d+)?/g) || []).map(Number); return v.reduce((a, x, i) => (i % 2 ? a : [...a, [x, v[i + 1]]]), []); };
+  const S9 = DEF.staffLineSpacing;
+
+  test('bends19', 'fixture counts: compound bends, scoops, w/bar runs, legato arcs, Fdbk. runs, trills and continued waves', () => {
+    const want = {
+      'bends-slides': { rebend: 5, prebend: 2, scoop: 3, bar: 1, legato: 3, feedback: 1, trill: 8, cont: 0 },
+      'bends-slides-break': { rebend: 1, prebend: 0, scoop: 1, bar: 3, legato: 2, feedback: 0, trill: 4, cont: 6 },
+      'bends-slides-tab-only': { rebend: 2, prebend: 1, scoop: 1, bar: 1, legato: 1, feedback: 1, trill: 1, cont: 0 },
+    };
+    for (const f of BS) {
+      const t = renderTree(f.score, f.width);
+      const got = {
+        rebend: all(t).filter(({ n }) => /^bend bend-rebend/.test(cls(n))).length,
+        prebend: groupsOf(t, 'bend bend-rebend bend-prebend').length,
+        scoop: groupsOf(t, 'whammy whammy-scoop').length,
+        bar: groupsOf(t, 'whammy-bar').length,
+        legato: groupsOf(t, 'legato-slide').length,
+        feedback: groupsOf(t, 'harmonic harmonic-feedback').length,
+        trill: groupsOf(t, 'trill').length,
+        cont: groupsOf(t, 'trill trill-continued').length,
+      };
+      ok(JSON.stringify(got) === JSON.stringify(want[f.name]), `${f.name}: ${JSON.stringify(got)}`);
+    }
+  });
+
+  test('bends19', 'compound bends: two italic labels whose knock-outs never intersect, three arrowheads, the fall a Q arc, no landing fret (all fixtures, 600 / 900)', () => {
+    for (const f of BS) for (const width of [600, 900]) {
+      all(renderTree(f.score, width)).filter(({ n }) => /^bend bend-rebend/.test(cls(n))).forEach(({ n: g }) => {
+        const rects = g.children.filter((c) => c.tag === 'rect').map((r) => ({ x1: num(r, 'x'), x2: num(r, 'x') + num(r, 'width'), top: num(r, 'y'), bottom: num(r, 'y') + num(r, 'height') }));
+        ok(rects.length === 2, `${f.name}@${width}: ${rects.length} label knock-outs`);
+        const [a, b] = rects;
+        ok(!(a.x1 < b.x2 && b.x1 < a.x2 && a.top < b.bottom && b.top < a.bottom), `${f.name}@${width}: compound labels overlap`);
+        const paths = g.children.filter((c) => c.tag === 'path');
+        ok(paths.length === 6 && / Q /.test(paths[2].getAttribute('d')), `${f.name}@${width}: rise, fall, rise with arrowheads`);
+        ok(g.children.filter((c) => c.tag === 'text').every((t) => t.getAttribute('font-style') === 'italic' && !/^\(/.test(t._text)), `${f.name}@${width}: labels only`);
+      });
+    }
+  });
+
+  test('bends19', 'a release note after a compound bend takes the rebend amount; the release note in bends-slides m3 reads "Full"', () => {
+    const t = renderTree(fx('bends-slides').score, 900);
+    const rel = groupsOf(t, 'bend bend-release');
+    ok(rel.length === 1 && rel[0].children.find((c) => c.tag === 'text')._text === 'Full', 'release label');
+  });
+
+  test('bends19', 'scoop: a "V" 0.8 sp deep into the note, no text; with a dip on the same beat it shares the dip\'s tip level', () => {
+    const t = renderTree(fx('bends-slides').score, 900);
+    const scoops = groupsOf(t, 'whammy whammy-scoop');
+    scoops.forEach((g) => {
+      const p = pts(g);
+      ok(g.children.length === 1 && p.length === 3, 'path only, three points');
+      near(p[1][1] - p[0][1], 0.8 * S9, EPS, 'depth');
+      near(p[0][1], p[2][1], EPS, 'both ends on the top level');
+    });
+    const [dip] = groupsOf(t, 'whammy whammy-dip');
+    near(pts(scoops[1])[1][1], pts(dip)[1][1], EPS, 'scoop + dip share the tip level');
+    near(pts(scoops[1])[2][0], pts(dip)[0][0], EPS, 'the scoop ends where the dip starts (x + 0.3 sp)');
+  });
+
+  test('bends19', 'w/bar: lane after let ring and before P.S. (TAB, outward = up); label "w/bar"; runs repeat on the next system', () => {
+    const t = renderTree(fx('bends-slides').score, 900);
+    const y = (c) => num(groupsOf(t, c)[0].children[0], 'y');
+    ok(y('let-ring') > y('whammy-bar') && y('whammy-bar') > y('pick-scrape pick-scrape-down'), 'lane order');
+    ok(groupsOf(t, 'whammy-bar')[0].children[0]._text === 'w/bar', 'label');
+    const br = renderTree(fx('bends-slides-break').score, 600);
+    const sysOfBar = systemsOf(br).map((s) => groupsOf(s, 'whammy-bar').length);
+    ok(JSON.stringify(sysOfBar) === JSON.stringify([0, 0, 2, 1, 0]), `w/bar runs per system ${sysOfBar}`);
+  });
+
+  test('bends19', 'legato slide: letterless arcs (one path each), split across the break into two halves; notation slurs drawn with hammerPullSlurs on and off', () => {
+    for (const f of BS) {
+      const t = renderTree(f.score, f.width);
+      groupsOf(t, 'legato-slide').forEach((g) => ok(g.children.length === 1 && g.children[0].tag === 'path', `${f.name}: arc only`));
+    }
+    const br = renderTree(fx('bends-slides-break').score, 600);
+    ok(JSON.stringify(systemsOf(br).map((s) => groupsOf(s, 'legato-slide').length)) === JSON.stringify([0, 0, 1, 1, 0]), 'split across sys 3 / 4');
+    const slurs = (tree) => all(tree).filter(({ n }) => n.tag === 'path' && cls(n) === 'slur').length;
+    const main = fx('bends-slides');
+    ok(slurs(renderTree(main.score, 900)) >= 1 && slurs(renderTree(main.score, 900, { theme: { hammerPullSlurs: false } })) >= 1, 'legato slurs stay without H/P slurs');
+  });
+
+  test('bends19', 'feedback harmonic: "Fdbk." run in the harmonic lane, P.H. wins on the chord, plain fret labels', () => {
+    for (const name of ['bends-slides', 'bends-slides-tab-only']) {
+      const t = renderTree(fx(name).score, 900);
+      const fb = groupsOf(t, 'harmonic harmonic-feedback');
+      ok(fb.length === 1 && fb[0].children[0]._text === 'Fdbk.', `${name}: label`);
+      ok(!all(t).some(({ n }) => n.tag === 'text' && /^<\d+>$/.test(n._text || '')), `${name}: no <n> label`);
+    }
+    ok(groupsOf(renderTree(fx('bends-slides').score, 900), 'harmonic harmonic-pinch').length === 1, 'P.H. on the chord');
+  });
+
+  test('bends19', 'trill continuation: one wave per later system the ties reach (notation and TAB), wave only, from 0.5 sp after the header; marks on covered beats sit above the wave', () => {
+    const br = renderTree(fx('bends-slides-break').score, 600);
+    const L = layoutOf(fx('bends-slides-break').score, 600);
+    const perSys = systemsOf(br).map((s) => groupsOf(s, 'trill trill-continued').length);
+    ok(JSON.stringify(perSys) === JSON.stringify([0, 2, 2, 0, 2]), `continued waves per system ${perSys}`);
+    systemsOf(br).forEach((s, si) => groupsOf(s, 'trill trill-continued').forEach((g) => {
+      ok(g.children.length === 1 && g.children[0].tag === 'path', 'wave only');
+      near(Math.min(...pts(g).map((p) => p[0])), L.systems[si].contentStartX + 0.5 * S9, EPS, `sys ${si}: starts 0.5 sp after the header`);
+      ok(Math.max(...pts(g).map((p) => p[0])) <= L.systems[si].lastBarlineX - 0.5 * S9 + EPS, `sys ${si}: ends before the last barline`);
+    }));
+    const t = renderTree(fx('bends-slides').score, 900);
+    const sys = systemsOf(t)[1];
+    staffGroups(sys).forEach((stg) => {
+      const tr = stg.children.filter((c) => cls(c) === 'trill');
+      if (!tr.length) return;
+      const waveTop = Math.min(...pts(tr[0]).map((p) => p[1]));
+      const marks = stg.children.filter((c) => cls(c) === 'tap' || /^pick-stroke/.test(cls(c))).map((g) => num(g.children[0], 'y'));
+      ok(marks.length >= 1 && marks.every((y) => y < waveTop), `${cls(stg)}: T / pick above the wave`);
+    });
+  });
+
+  test('bends19', 'determinism and clean numbers at 400 / 600 / 900; input untouched', () => {
+    for (const f of BS) for (const width of [400, 600, 900]) {
+      const before = JSON.stringify(f.score);
+      const out = serialize(renderTree(f.score, width));
+      ok(!/NaN|Infinity|undefined/.test(out), `${f.name}@${width}: bad number`);
+      ok(out === serialize(renderTree(f.score, width)), `${f.name}@${width}: two renders differ`);
+      ok(JSON.stringify(f.score) === before, `${f.name}: input mutated`);
+    }
   });
 }
 
