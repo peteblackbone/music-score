@@ -20,7 +20,7 @@ const BEND_LABEL_MIN_DASH_SP = 1; // min dash length left for a label moved righ
 /**
  * Technique-label runs of every track — six kinds, each a label plus a
  * dashed line over consecutive beats (renderTechniqueLabel): palm mute
- * ("P.M."), harmonics ("A.H." / "T.H." / "P.H." / "S.H."), let ring
+ * ("P.M."), harmonics ("A.H." / "T.H." / "P.H." / "S.H." / "Fdbk."), let ring
  * ("let ring"), pick scrape ("P.S."), barre ("C II", "½C V") and rake
  * ("rake"), stacked in lanes in that order outward from the staff.
  *
@@ -34,9 +34,9 @@ const BEND_LABEL_MIN_DASH_SP = 1; // min dash length left for a label moved righ
  * between it and the notation staff above) when the track has one — the
  * conventional place — otherwise below the notation staff.
  *
- * Harmonics (artificial / tapped / pinch / semi; natural harmonics have no
- * label) get the same kind of run, one label per beat by priority
- * A.H. > T.H. > P.H. > S.H. (harmonics.js): consecutive beats with the same
+ * Harmonics (artificial / tapped / pinch / semi / feedback; natural harmonics
+ * have no label) get the same kind of run, one label per beat by priority
+ * A.H. > T.H. > P.H. > S.H. > Fdbk. (harmonics.js): consecutive beats with the same
  * label kind form a run; rests, grace notes and other beats end it. P.M.
  * runs are drawn first, in the lane nearest the staff; a harmonic run moves
  * one lane further out (techniqueLabelSize + 0.4 sp) than every P.M. run of

@@ -520,7 +520,7 @@ test('decoratesFretLabel / layoutHeadGlyph / beatHarmonicLabelKind', () => {
     [{ harmonic: 'pinch' }, { harmonic: 'artificial' }], [{ harmonic: 'semi' }, { harmonic: 'tapped' }],
     [{ harmonic: 'semi' }, { harmonic: 'pinch' }], [{ harmonic: true }, {}], [{ harmonic: 'artificial', mute: true }], [],
   ].map(H.beatHarmonicLabelKind), ['artificial', 'tapped', 'pinch', null, null, null]);
-  eq(H.HARMONIC_LABELS, { artificial: 'A.H.', tapped: 'T.H.', pinch: 'P.H.', semi: 'S.H.' });
+  eq(H.HARMONIC_LABELS, { artificial: 'A.H.', tapped: 'T.H.', pinch: 'P.H.', semi: 'S.H.', feedback: 'Fdbk.' }); // feedback: 1.9.0
 });
 test('diamond glyphs: code points E0D8/E0D9/E0DB with metrics (widths 1.08 / 1.004 / 1.0 sp)', () => {
   eq([Glyph.noteheadDiamondWhole, Glyph.noteheadDiamondHalf, Glyph.noteheadDiamondBlack].map((c) => c.codePointAt(0).toString(16)),
@@ -4618,9 +4618,9 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(D.bendOf('release full'), { type: 'release', amount: 'full', release: true, hold: false });
     eq(D.bendOf('pb full release'), { type: 'prebend', amount: 'full', release: true, hold: false });
   });
-  test('pre-1.9 pin (FLIPS in the feedback commit): harmonicKind("feedback") is "natural"; unknown strings too', () => {
-    eq(harmonicKind('feedback'), 'natural');
-    eq(harmonicKind('Feedback'), 'natural');
+  test('pre-1.9 pin (FLIPPED in the feedback commit): harmonicKind("feedback") is "feedback"; unknown strings stay natural', () => {
+    eq(harmonicKind('feedback'), 'feedback');
+    eq(harmonicKind('Feedback'), 'feedback');
     eq([harmonicKind('pinch'), harmonicKind('nonsense'), harmonicKind(null)], ['pinch', 'natural', null]);
   });
   test('pre-1.9 pin (stays, even after the scoop commit): whammyOf({ type: "scoop" }) is null', () => {
@@ -4784,6 +4784,43 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(texts(svg).includes('(9)') || serialize(svg).includes('stroke-dasharray="3,2"'), false);
     const plain = render(tabScore([[3, 7, 'full'], [3, 7, 'release']]));
     eq(texts(walk(plain).filter((n) => cls(n) === 'bend bend-release')[0]), ['Full']);
+  });
+}
+
+// ---------- 1.9.0: feedback harmonic (harmonics.js) ----------
+{
+  const H9 = await imp('src/harmonics.js');
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const cls = (n) => n.getAttribute('class') || '';
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const score = (harmonics) => ({ tracks: [{ showTablature: true, measures: [{ beats: harmonics.map((h) => ({
+    type: 'note', duration: 'quarter', notes: [{ string: 2, fret: 5, ...(h ? { harmonic: h } : {}) }],
+  })) }] }] });
+  test('1.9 feedback: kind (trim, any case, idempotent), not natural, plain fret, normal notehead', () => {
+    eq(['feedback', ' FeedBack ', 'fdbk', 'feed back'].map(H9.harmonicKind), ['feedback', 'feedback', 'natural', 'natural']);
+    eq(H9.harmonicKind(H9.harmonicKind('Feedback')), 'feedback');
+    const n = { fret: 5, harmonic: 'feedback', harmonicFret: 17 };
+    eq([H9.isNaturalHarmonic(n), H9.touchFret(n), H9.decoratesFretLabel(n), fretLabel(n)], [false, null, false, '5']);
+    eq(H9.layoutHeadGlyph(n, 'quarter'), Glyph.noteheadBlack);
+    eq(H9.harmonicOf({ harmonic: 'feedback', mute: true }), null);
+    eq(normalizeScore(score(['Feedback'])).tracks[0].measures[0].beats[0].notes[0].harmonic, 'feedback');
+  });
+  test('1.9 feedback: label "Fdbk." with class harmonic harmonic-feedback, lowest priority (A.H. > T.H. > P.H. > S.H. > Fdbk.)', () => {
+    eq(H9.HARMONIC_LABELS.feedback, 'Fdbk.');
+    eq([
+      [{ harmonic: 'feedback' }], [{ harmonic: 'feedback' }, { harmonic: 'semi' }], [{ harmonic: 'pinch' }, { harmonic: 'feedback' }],
+      [{ harmonic: 'feedback', mute: true }], [{ harmonic: true }, { harmonic: 'feedback' }],
+    ].map(H9.beatHarmonicLabelKind), ['feedback', 'semi', 'pinch', null, 'feedback']);
+    const svg = render(score(['feedback', 'feedback', null, 'pinch']));
+    const runs = walk(svg).filter((n) => cls(n).startsWith('harmonic '));
+    eq(runs.map(cls), ['harmonic harmonic-feedback', 'harmonic harmonic-pinch']);
+    eq(walk(runs[0]).filter((c) => c.tag === 'text').map((c) => c.textContent), ['Fdbk.']);
+    const frets = walk(svg).filter((c) => c.tag === 'text' && /^[<\d]/.test(c.textContent)).map((c) => c.textContent);
+    eq(frets.includes('<5>'), false);
   });
 }
 

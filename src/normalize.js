@@ -25,7 +25,7 @@
  * signature, else a sharp (pitchFromFret).
  *
  * A note's `harmonic` is canonicalized to its kind ('natural' | 'artificial'
- * | 'pinch' | 'tapped' | 'semi'; see harmonics.js); falsy values are left as
+ * | 'pinch' | 'tapped' | 'semi' | 'feedback'; see harmonics.js); falsy values are left as
  * they are.
  *
  * A beat's `pickStroke` and `whammy` are canonicalized when present (see
