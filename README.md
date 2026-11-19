@@ -654,7 +654,7 @@ A measure can hold two rhythms on one staff, for example a melody over a held ba
 
 - **Stems, beams and tuplets.** Voice 1's stems always point up and voice 2's always point down, even for a single note. Each voice beams and groups its own notes, so a beam never joins the two. Voice 2's tuplet brackets go below the staff.
 - **Notes that sound together.** Where both voices have notes at the same time, they share one column.
-  - **Shared unison.** When both voices play the same note at the same time, one notehead is drawn for both. This needs the same note value, the same pitch and accidental (voice 2 may show none, since voice 1's carries), the same mute and ghost marking, the same dots, and no other note in either voice's chord within a third of it. Neither chord may have a notehead moved sideways. Each voice keeps its own stem, on either side of the shared head. Whole notes can share a head too.
+  - **Shared unison.** When both voices play the same note at the same time, one notehead is drawn for both. This needs the same note value, the same pitch and accidental (voice 2 may show none, since voice 1's carries), the same mute and ghost marking, the same dots, and no other note in either voice's chord closer than a third to it. Neither chord may have a notehead moved sideways. Each voice keeps its own stem, on either side of the shared head. Whole notes can share a head too.
   - **Otherwise.** If voice 2's notes form a unison, second or crossed with voice 1's, voice 2 moves right. In the usual case its stem then lines up with voice 1's stem.
 - **Accidentals.** An accidental carries to later notes in the measure in either voice, as it does within one voice. Accidentals in a shared column are drawn as one stack.
 - **Dots.** A dot on a voice 2 note that sits on a line goes in the space below the line. A voice 1 dot on a line goes in the space above. A shared unison head has one set of dots.
@@ -785,7 +785,7 @@ Voices and TAB rhythm. Scores with no `voices` are unchanged. Two-voice scores l
 Changes to existing two-voice scores:
 
 - Voice 2's beat marks are drawn: vibrato, trills, ornaments, right-hand letters, tap marks, golpe, pick strokes and fermatas. On the notation staff they go below the staff, and the fermata is inverted. Before 1.8.0 voice 2 drew none of these.
-- On TAB, voice 2's tremolo, vibrato, trill, tap, golpe, right-hand letters and pick strokes are drawn above the staff in their column when voice 1 has no such mark there. Voice 1's mark wins when both have one.
+- On TAB, voice 2's tremolo, vibrato, trill, tap and golpe (and, on tab-only tracks, right-hand letters and pick strokes) are drawn above the staff in their column when voice 1 has no such mark there. Voice 1's mark wins when both have one.
 - TAB rhythm: voice 2 has its own row of stems, beams, flags, dots, tuplets and rests, below voice 1's row. The rhythm band is taller.
 - Rests on TAB: a rest that is not merged moves out of the staff into its voice's row, so a voice 1 rest no longer covers voice 2's frets.
 - Unisons: where both voices play the same note in the same way, they share one notehead. Other unisons move voice 2 right, as before.
