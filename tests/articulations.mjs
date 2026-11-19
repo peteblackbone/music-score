@@ -743,17 +743,20 @@ test('[W3] TAB: tap T, trill and strum clear a wide wave; with a tremolo the wav
   const tremTop = Math.min(...trem.children.flatMap((l) => [num(l, 'y1'), num(l, 'y2')]));
   ok(tabWaves[3].bottom < tremTop, `wave bottom ${tabWaves[3].bottom} above tremolo top ${tremTop}`);
 });
-test('[W4] voice 2: vibrato "wide" draws nothing on notation or TAB', () => {
+test('[W4] voice 2 (1.8): vibrato "wide" draws the wide wave below the notation staff and in the TAB column', () => {
   const mk = (v2) => {
     const s = pinBoth([]);
     s.tracks[0].measures = [{ voices: [{ beats: [pinNote('whole')] },
       { beats: [{ type: 'note', duration: 'whole', ...v2, notes: [{ string: 4, fret: 2 }] }] }] }];
     return s;
   };
-  const a = render(mk({}));
-  const b = render(mk({ vibrato: 'wide' }));
-  ok(!/vibrato/.test(b), 'no vibrato group');
-  ok(a === b, 'differs from unmarked');
+  ok(!/vibrato/.test(render(mk({}))), 'no vibrato unmarked');
+  const tree = renderTree(mk({ vibrato: 'wide' }));
+  const groups = all(tree).filter((x) => x.n.tag === 'g' && /vibrato-wide/.test(x.n.getAttribute('class') || '')).map((x) => x.n.getAttribute('class'));
+  deepEq(groups.sort(), ['tab-vibrato tab-vibrato-wide', 'vibrato vibrato-wide']);
+  const wave = all(tree).find((x) => x.n.tag === 'g' && x.n.getAttribute('class') === 'vibrato vibrato-wide').n.children[0];
+  const ys = (wave.getAttribute('d').match(/-?[\d.]+/g) || []).map(Number).filter((_, i) => i % 2);
+  ok(Math.min(...ys) > 40, `wave below the bottom line: ${Math.min(...ys)}`);
 });
 
 // ---------- 1.5 fermata kinds (F1-F2) ----------
@@ -783,7 +786,7 @@ test('[F1] short / long sit where the normal one does: over a chord symbol, unde
     }
   });
 });
-test('[F2] "true", 1, false, null, garbage draw nothing; graces and voice 2 draw nothing', () => {
+test('[F2] "true", 1, false, null, garbage draw nothing; graces draw nothing; voice 2 draws the inverted fermata (1.8)', () => {
   const base = render(oneTrack([q('E4'), q('G4')]));
   ['true', 1, false, null, 'x', 'wide', 0, [], {}].forEach((v) =>
     ok(render(oneTrack([q('E4', { fermata: v }), q('G4')])) === base, `fermata ${JSON.stringify(v)}`));
@@ -794,7 +797,12 @@ test('[F2] "true", 1, false, null, garbage draw nothing; graces and voice 2 draw
     s.tracks[0].measures = [{ voices: [{ beats: [whole(['D5'])] }, { beats: [whole(['E4'], extra)] }] }];
     return s;
   };
-  ['short', 'long', 'normal', true].forEach((v) => ok(render(two({ fermata: v })) === render(two({})), `voice 2 ${v}`));
+  [['short', 'fermata fermata-short fermata-below', 'E4C5'], ['long', 'fermata fermata-long fermata-below', 'E4C7'],
+    ['normal', 'fermata fermata-below', 'E4C1'], [true, 'fermata fermata-below', 'E4C1']].forEach(([v, cls, code]) => {
+    const fs = fermatas(renderTree(two({ fermata: v })));
+    deepEq(fs.map((f) => [f.cls, f.code]), [[cls, code]], `voice 2 ${v}`);
+    ok(fs[0].y > 40, `voice 2 ${v}: below the staff`);
+  });
 });
 
 // ---------- 1.5 regressions: step-out cap and vibrato clearance ----------

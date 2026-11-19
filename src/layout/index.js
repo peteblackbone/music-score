@@ -21,18 +21,22 @@
  * Two-voice measures (normalize.js `voice2Beats`) also get `elements2`,
  * `beamGroups2`, `tupletGroups2` (voice 2, indices into `voice2Beats`) and
  * `wholeRest: null`; every element of such a measure has `voice` (1 | 2),
- * rests their `restPos` (`restLedger`), voice-2 elements `dx` (clash shift,
+ * rests their `restPos` (`restLedger`) or, merged with the other voice's
+ * rest (layout/voices.js), `restMerged: true`, voice-2 elements `dx` (clash shift,
  * already in `x`) and `tabEl` (the beat as drawn on TAB: no beat marks,
- * no note on a string voice 1 frets at the same onset).
+ * no note on a string voice 1 frets at the same onset), TAB columns their
+ * `tabMarks` / `tabOwn` (layout/voices.js tabColumnMarks).
  */
 import { groupBeams, tupletGroups } from './beams.js';
-import { cmp, key } from '../rational.js';
+import { cmp } from '../rational.js';
 import { buildColumn } from './timeline.js';
 import {
   breakSystems, justifySystem, openingLayout, courtesyWidth, courtesyLayout, trackSignatureChange,
   REPEAT_START_WIDTH_SP,
 } from './systems.js';
 import { navigationLayout } from './navigation.js';
+import { isTwoVoiceMeasure } from '../twoVoice.js';
+import { tabColumnMarks } from './voices.js';
 
 /** Closing barline type of track `track`'s measure `mi` within a system. */
 function closingBarline(track, mi, nextOpening) {
@@ -91,23 +95,8 @@ function tagVoice(elements, events, voice) {
     le.voice = voice;
     if (ev.restPos != null) le.restPos = ev.restPos;
     if (ev.restLedger != null) le.restLedger = ev.restLedger;
+    if (ev.restMerged) le.restMerged = true;
     if (voice === 2) { le.dx = ev.dx || 0; le.x += le.dx; }
-  });
-}
-
-/** Voice 2's beat as drawn on TAB: no beat-level marks, no note on a string voice 1 frets at the same onset. */
-function tabElements(elements, elements2) {
-  const fretted = new Map();
-  elements.forEach((le) => {
-    if (!le.t) return;
-    const set = fretted.get(key(le.t)) || new Set();
-    (le.el.notes || []).forEach((n) => { if (n.string != null && n.fret != null) set.add(n.string); });
-    fretted.set(key(le.t), set);
-  });
-  elements2.forEach((le) => {
-    const { type, duration, dots, tuplet } = le.el;
-    const taken = le.t && !le.wholeMeasureRest ? fretted.get(key(le.t)) : null;
-    le.tabEl = { type, duration, dots, tuplet, notes: (le.el.notes || []).filter((n) => !taken || !taken.has(n.string)) };
   });
 }
 
@@ -164,11 +153,11 @@ export function computeLayout(score, theme, containerWidth) {
         const tev = p.col.tracks[ti];
         const elements = placeElements(measure.beats, tev.events, p, li, pad, graceW);
         let voice2 = null;
-        if (tev.events2) {
+        if (isTwoVoiceMeasure(measure)) {
           voice2 = { elements2: placeElements(measure.voice2Beats, tev.events2, p, li, pad, graceW) };
           tagVoice(elements, tev.events, 1);
           tagVoice(voice2.elements2, tev.events2, 2);
-          tabElements(elements, voice2.elements2);
+          tabColumnMarks(elements, voice2.elements2);
           voice2.beamGroups2 = groupBeams(measure.voice2Beats, measure.timeSignature);
           voice2.tupletGroups2 = tupletGroups(measure.voice2Beats, measure.timeSignature);
         }

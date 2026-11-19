@@ -35,14 +35,32 @@ export function estimateTextWidth(str, fontSizePx, opts = {}) {
  * Text shown on the tab staff for a note: the fret number, "x" for a
  * dead/muted note, "<12>" for a natural harmonic, "5(17)" for an
  * artificial/tapped harmonic with a touched fret, wrapped in parentheses
- * for a ghost note and a release note (`bend` of type 'release').
+ * for a ghost note and a release note (`bend` of type 'release') and, with
+ * `opts.tiedParens` (tiedFretOpts), a tied-to note (`tieEnd`); never twice.
  */
-export function fretLabel(note) {
+export function fretLabel(note, opts = {}) {
   if (note.mute) return note.ghost ? '(x)' : 'x';
   const tf = touchFret(note);
   const core = isNaturalHarmonic(note) ? `<${note.fret}>` : (tf != null ? `${note.fret}(${tf})` : String(note.fret));
-  const paren = note.ghost || bendOf(note.bend)?.type === 'release';
+  const paren = note.ghost || bendOf(note.bend)?.type === 'release' || (opts?.tiedParens && note.tieEnd);
   return paren ? `(${core})` : core;
+}
+
+/** Canonical `track.tiedFrets`: 'parens' (any case, trimmed) or null. */
+export function tiedFretsMode(raw) {
+  return typeof raw === 'string' && raw.trim().toLowerCase() === 'parens' ? 'parens' : null;
+}
+
+const TIED_PARENS = Object.freeze({ tiedParens: true });
+
+/**
+ * fretLabel options for beat `el` of `track` (normalized): tied-to frets in
+ * parentheses when the track opts in (`tiedFrets: 'parens'`), main notes
+ * only; undefined otherwise. Every caller that measures or draws a label
+ * passes the same options.
+ */
+export function tiedFretOpts(track, el) {
+  return track.tiedFrets === 'parens' && el.type !== 'grace' ? TIED_PARENS : undefined;
 }
 
 /** Width in px of a fret label's knock-out (estimated text width + 0.15 sp each side). */

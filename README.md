@@ -1,6 +1,6 @@
 # music-score
 
-Version 1.7.0 · MIT licence
+Version 1.8.0 · MIT licence
 
 A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL).
 
@@ -175,6 +175,7 @@ A score is nested: score, then tracks, then measures, then beats, then notes. Fi
 | `label` | string | Short name (abbreviation), drawn to the left of the systems after the first. See [Instrument names](#instrument-names). |
 | `writtenOctaveUp` | boolean | Default `false`. Set to `true` when the `pitch` values you give are sounding pitches and the part is written an octave higher (typical for bass and guitar). |
 | `capo` | integer, 1 to 30 | Optional. Adds "Capo fret N" to this track's line in the header. Display only: the music is not transposed. A numeric string such as `'2'` counts. See [Capo and tuning chart](#capo-and-tuning-chart). |
+| `tiedFrets` | `'parens'` | Optional. On the TAB staff, puts parentheses around the fret number of a note that is tied to the one before, such as `(5)`. Any case, spaces ignored. Other values do nothing. Off by default. See [Tied fret numbers](#tied-fret-numbers). |
 
 The examples also set `instrument`. The renderer does not draw it.
 
@@ -346,7 +347,7 @@ Example: the note is fretted at the 5th fret on string 5, and the harmonic is to
 Optional fields draw playing marks: `letRing`, `pickStroke`, `strum`, `arpeggio`, `whammy` and `rake` on a beat, and `tap`, `slap`, `pop` and `trill` on a note. None of them change the rhythm; only `arpeggio` adds room left of its chord. The ornament, fingering, golpe, left-hand tap, pick scrape and barre fields are described in [Ornaments, fingering and hand marks](#ornaments-fingering-and-hand-marks).
 
 - **Let ring** (`letRing`): consecutive beats with `letRing` share one dashed "let ring" label, drawn like the P.M. line. An unmarked rest between two let-ring beats of the same system continues the run. A note or grace note without `letRing` ends it, and so does a line break. On a track with TAB, the label sits in the outermost lane, outside any P.M. or harmonic label it overlaps. On a notation-only staff it sits below the staff.
-- **Pick strokes** (`pickStroke`): `'down'` draws ⊓ and `'up'` draws ∨, one per beat. Values are case-insensitive, and other values are ignored. On a track with a notation staff, the stroke sits above the staff. It stacks above stems, articulations, slurs (just above the slur at that beat), tuplet brackets and any tap "T". Chord symbols and fermatas sit above it. Strokes on the beats of one beam group share one height. On a tab-only track, the stroke sits above the TAB staff. Pick strokes are not drawn on the TAB staff when the track also shows notation. A beat with a `strum` shows the strum arrow instead.
+- **Pick strokes** (`pickStroke`): `'down'` draws ⊓ and `'up'` draws ∨, one per beat. Values are case-insensitive, and other values are ignored. On a track with a notation staff, the stroke sits above the staff (in a two-voice measure, voice 2's sit below it, see [Voices](#voices)). It stacks above stems, articulations, slurs (just above the slur at that beat), tuplet brackets and any tap "T". Chord symbols and fermatas sit above it. Strokes on the beats of one beam group share one height. On a tab-only track, the stroke sits above the TAB staff. Pick strokes are not drawn on the TAB staff when the track also shows notation. A beat with a `strum` shows the strum arrow instead.
 - **Strum** (`strum` on a beat): `'down'` draws a down arrow ↓ and `'up'` an up arrow ↑, 1.5 sp tall, one per beat, for strummed chords and rasgueado-style repeated strokes. On a track with TAB, the arrow sits above the TAB staff, in the pick stroke's place: at least 1 sp above the top line and 0.4 sp above the frets, bends, letters, trills, dips, whammy lines, technique labels and H / P under it. On a notation-only track it sits above the staff like a pick stroke, above any trill and tap / slap / pop letter. Consecutive strummed beats on a system (a rest or an unstrummed note ends the run, grace notes do not) share one height, the highest any of them needs. A strum takes no horizontal room. A `rake` on the same beat is drawn too.
 - **Arpeggio** (`arpeggio` on a beat): a vertical wavy line just left of a chord of two or more notes. On notation it reaches from 0.5 sp above the highest notehead to 0.5 sp below the lowest, 0.4 sp clear of the chord's accidentals, parentheses, noteheads and ledger lines. On TAB it spans the strings of the fretted notes, 0.4 sp left of the fret numbers. `'up'` (low to high) adds an arrowhead at the top, `'down'` at the bottom, and `true` none. The chord keeps room for the line, 1 sp beyond its leftmost notation or TAB ink, so the note spacing changes for these chords only; grace notes before the chord sit left of the line.
 - **Tapping** (`tap` on a note): draws a bold "T" once per beat, above the note on notation and above the fret on TAB. On TAB it is raised above an H or P letter when they would touch. A tapped harmonic already shows `T.H.`, so it gets no extra "T".
@@ -354,7 +355,7 @@ Optional fields draw playing marks: `letRing`, `pickStroke`, `strum`, `arpeggio`
 - **Whammy dive, return and pre-dive** (`whammy: { type: 'dive' | 'return' | 'predive', amount }`): TAB staff only. A dive slopes down from just right of its note, as a dip starts, to a held level and is held until a `'return'` beat: the line runs level to the return beat and rises again. The depth follows the amount, 1.2 sp per whole step, from 0.8 sp (`'1/2'`) to 2.4 sp (`'2'` or more). A dip, another dive or a pre-dive ends the hold early, 0.9 sp before it, with no rise. A `'return'` with nothing held is ignored. A dive with no return is held to the end of the track. A held line crosses a line break: it stops 0.5 sp before the last barline and starts again 0.5 sp after the next system's header, without the text, on every system up to the return. A pre-dive is self-contained: a short level lead-in before the note (1.0 to 1.5 sp, kept 0.9 sp from the previous beat and clear of the header), then the rise. Each line sits at one height, 0.5 sp above the TAB top line and 0.4 sp above the frets, marks, letters, trills, bends and dips under it, so a tall bend lifts the whole line. Technique labels move out a lane if a line is in their way.
 - **Slap and pop** (`slap`, `pop` on a note): a bold "S" or "P" once per beat, above the note on notation and above the fret on TAB, in the same place as the tap "T" and stacked the same way. One letter per beat: tap wins over slap, and slap over pop (a tapped harmonic shows `T.H.` and gives way to a slap). Rests and grace notes ignore them. Letters are drawn above the staff only.
 - **Rake** (`rake` on a beat): a dashed "rake" label over the beat and the grace notes directly before it in the same system. Write the dead-note grace notes (`mute: true`) yourself; none are generated. The label sits in a lane outside any P.M., harmonic or let-ring label it overlaps, and in the lane next to the staff when nothing else is there. Two rakes in a row stay two labels, and a rake never reaches across a line break. `'down'` and `'up'` draw the same; the direction is not shown.
-- **Trill** (`trill` on a note): the "tr" glyph and a wavy line, centred on the beat, above the notation and TAB staves. It sits above vibrato and tremolo and below a tap, slap or pop letter, a pick stroke, a dip and a fermata. On notation its bottom also stays 1 sp above the next note's top. On TAB, `(7)` after the "tr" shows the other fret. A fret is used as given. A pitch is placed at the nearest interval (up to a fourth down or a tritone up) from the note's fret: A3 at fret 5 with `trill: 'B3'` or `'B4'` shows `(7)`. A plain `true`, a pitch without a fret, or a result below fret 0 shows no `(n)`. The wave ends 0.8 sp before the next beat and never passes the last barline. It is not continued on the next system. Consecutive trilled beats on a system (a plain note or rest ends the run, grace notes do not) share one height, the highest any of them needs, and each wave then stops 0.25 sp before the next "tr". When a beat has several trilled notes, the first one decides.
+- **Trill** (`trill` on a note): the "tr" glyph and a wavy line, centred on the beat, above the notation and TAB staves (voice 2's sit below the notation staff in a two-voice measure). It sits above vibrato and tremolo and below a tap, slap or pop letter, a pick stroke, a dip and a fermata. On notation its bottom also stays 1 sp above the next note's top. On TAB, `(7)` after the "tr" shows the other fret. A fret is used as given. A pitch is placed at the nearest interval (up to a fourth down or a tritone up) from the note's fret: A3 at fret 5 with `trill: 'B3'` or `'B4'` shows `(7)`. A plain `true`, a pitch without a fret, or a result below fret 0 shows no `(n)`. The wave ends 0.8 sp before the next beat and never passes the last barline. It is not continued on the next system. Consecutive trilled beats on a system (a plain note or rest ends the run, grace notes do not) share one height, the highest any of them needs, and each wave then stops 0.25 sp before the next "tr". When a beat has several trilled notes, the first one decides.
 - Rests and grace notes ignore `pickStroke`, `strum`, `arpeggio`, `tap`, `slap`, `pop`, `trill`, `whammy`, `rake`, `ornament`, `finger`, `rightFinger`, `leftHandTap` and `golpe`. They draw no `pickScrape` or `barre` label either, though a rest can sit inside one of those runs (and a grace note can sit inside a `barre` run). A single note ignores `arpeggio`.
 
 ```json
@@ -388,7 +389,7 @@ Placement:
 - **Above the notation staff**, the marks stack outward from the staff, each about 0.4 sp above the one below. Below them are the existing clearances (stems, articulations, vibrato, tremolo, tuplet brackets and slurs). From the bottom up: the trill or ornament, the right-hand letters, the tap "T" (or left-hand tap, "S" or "P"), the golpe, and the pick stroke or strum.
 - **Above the TAB staff**, golpe and left-hand tap sit in the tap "T" place: the golpe above it, and the left-hand tap glyph in the letter's place. The golpe clears a trill, "T" or H / P letter in its span. Ornaments are not drawn on TAB.
 - **Technique labels** stack outward from the staff in this order: P.M., harmonic, let ring, P.S., barre, rake. Above the TAB staff they go over the TAB. On a notation-only staff they go below the staff, in the same order.
-- **Voice 2** draws none of these marks. See [Voices](#voices).
+- **Voice 2** draws its ornaments, trills, right-hand letters, tap marks, golpe and pick strokes below the notation staff in a two-voice measure, not above it. Left-hand fingering, strums and the other marks stay voice 1 only. See [Voices](#voices).
 
 ```json
 { "type": "note", "duration": "quarter", "golpe": "thumb", "notes": [{ "string": 3, "fret": 5, "ornament": "turn", "finger": 1, "rightFinger": "p" }] }
@@ -425,15 +426,28 @@ A tab-only track (`showStandardNotation: false`, `showTablature: true`) shows it
 - **Flags** are drawn on unbeamed 8th to 64th notes, smaller than notation flags (`tabFlagScale`).
 - **Augmentation dots** sit on one row just below the stem tops, right of the stem (or the flag).
 - **Tuplets** show their number under the beam when one beam group covers exactly the tuplet. Otherwise a bracket with upward ticks is drawn below the stems.
-- **Rests** are drawn inside the TAB staff. A whole rest hangs from a string near the middle of the staff and a half rest sits on one. Shorter rests are centred on the staff, over a backing that hides the string lines.
+- **Rests** are drawn inside the TAB staff, except that in a two-voice measure a rest that is not merged sits in its voice's row of the band. A whole rest hangs from a string near the middle of the staff and a half rest sits on one. Shorter rests are centred on the staff, over a backing that hides the string lines.
 - **Empty measures.** A measure with `beats: []` shows a whole-measure rest. Measures added to pad a shorter track stay blank.
 - Grace notes get no stem, flag or beam. Ties are not drawn. The tied fret number is shown as usual.
-- Marks above the TAB staff (H/P, bends, P.M., vibrato and the others) do not move. The band adds about 3.5 staff spaces below the TAB staff, and more with tuplet numbers or 32nd/64th notes. Flags, dots and rests can also need extra horizontal room.
+- Marks above the TAB staff (H/P, bends, P.M., vibrato and the others) do not move. The band adds about 3.5 staff spaces below the TAB staff, and more with tuplet numbers or 32nd/64th notes. Flags, dots and rests can also need extra horizontal room. In a two-voice measure the band has a second row for voice 2, below voice 1's, so it is taller (see [Voices](#voices)).
 - On a track that shows notation and TAB with `tabRhythm: true`, the notation staff is unchanged. Only the TAB staff gets the band, which sits between the TAB staff and the next instrument or system.
 - SVG classes: `tab-rhythm` (one group per measure), `tab-rest` (each rest) and `tab-tuplet` (each tuplet number or bracket).
 
 ```json
 { "name": "Gtr", "showStandardNotation": false, "showTablature": true, "tabRhythm": false, "measures": [] }
+```
+
+### Tied fret numbers
+
+Set `tiedFrets: 'parens'` on a track that shows TAB to put parentheses around the fret number of each note that is tied to the note before it, such as `(5)` or `(12)`. The note that starts the tie is unchanged. This is off by default, so existing scores draw as before.
+
+- The value is read without regard to case or surrounding spaces, so `'parens'` and `' Parens '` both work. Any other value does nothing.
+- Both voices are affected, and so is a tied note that starts a system. Grace notes and the notation staff are not changed.
+- The parentheses take up room on the TAB staff, so the spacing around the note grows to fit them.
+- A note that already has parentheses keeps one pair. A ghost note or a release note is not wrapped twice. A muted tied-to note still shows `x`. A natural harmonic shows `(<12>)`, and a touched fret shows `(5(17))`.
+
+```json
+{ "name": "Gtr.", "showTablature": true, "tiedFrets": "parens", "measures": [] }
 ```
 
 ### Chord diagrams
@@ -591,7 +605,7 @@ An array of strings on a `note` beat. Allowed values: `'staccato'`, `'staccatiss
 
 - `true` and `'normal'` draw the usual fermata. `'short'` and `'long'` draw the short and long forms. These values are trimmed and case-insensitive, so `' Long '` works.
 - Other values draw nothing: the string `'true'`, the number `1`, and `false`.
-- The fermata sits above everything else on that beat: the staff, stem, noteheads, articulation marks, slurs, tuplet brackets, vibrato or tremolo marks, and any chord symbol or chord diagram.
+- The fermata sits above everything else on that beat: the staff, stem, noteheads, articulation marks, slurs, tuplet brackets, vibrato or tremolo marks, and any chord symbol or chord diagram. In a two-voice measure, a voice 2 fermata is drawn below the staff instead, under the other voice 2 marks of its beat (see [Voices](#voices)).
 - Ignored on grace notes and tab staves.
 
 ### Example
@@ -608,7 +622,7 @@ The demo score in `examples/articulations-demo.js` (exported as `articulationsSc
 
 - **Vibrato** (`vibrato`): `true` draws the normal wavy line. `'wide'` draws a taller, longer and heavier wave, on notation and TAB. Marks above a note with a wide vibrato sit a little higher to clear it.
 - **Tremolo** (`tremolo`): `true` draws three strokes, as before. `'8th'`, `'16th'` and `'32nd'` draw one, two or three strokes, centred where the three would be. The speed is trimmed and case-insensitive. Numbers and other values draw three strokes.
-- In a two-voice measure, vibrato is drawn for voice 1 only. Tremolo is drawn for both voices (see [Voices](#voices)).
+- In a two-voice measure, vibrato and tremolo are drawn for both voices. Voice 2's sit below its notes (see [Voices](#voices)).
 - SVG classes: on notation, `vibrato` with `vibrato-wide` for a wide wave, and `tremolo` with `tremolo-8th`, `tremolo-16th` or `tremolo-32nd` for a speed. On TAB, `tab-vibrato` with `tab-vibrato-wide`, and `tab-tremolo` with `tab-tremolo-8th`, `tab-tremolo-16th` or `tab-tremolo-32nd`. A plain `true` tremolo has the `tremolo` class alone. Fermatas use `fermata`, with `fermata-short` or `fermata-long` for those kinds.
 
 These fields do not change the API or the theme.
@@ -639,21 +653,25 @@ A measure can hold two rhythms on one staff, for example a melody over a held ba
 ```
 
 - **Stems, beams and tuplets.** Voice 1's stems always point up and voice 2's always point down, even for a single note. Each voice beams and groups its own notes, so a beam never joins the two. Voice 2's tuplet brackets go below the staff.
-- **Notes that sound together.** Where both voices have notes at the same time, they share one column. If voice 2's notes form a unison, second or crossed with voice 1's, voice 2 moves right. In the usual case its stem then lines up with voice 1's stem.
+- **Notes that sound together.** Where both voices have notes at the same time, they share one column.
+  - **Shared unison.** When both voices play the same note at the same time, one notehead is drawn for both. This needs the same note value, the same pitch and accidental (voice 2 may show none, since voice 1's carries), the same mute and ghost marking, the same dots, and no other note in either voice's chord closer than a third to it. Neither chord may have a notehead moved sideways. Each voice keeps its own stem, on either side of the shared head. Whole notes can share a head too.
+  - **Otherwise.** If voice 2's notes form a unison, second or crossed with voice 1's, voice 2 moves right. In the usual case its stem then lines up with voice 1's stem.
 - **Accidentals.** An accidental carries to later notes in the measure in either voice, as it does within one voice. Accidentals in a shared column are drawn as one stack.
-- **Dots.** A dot on a voice 2 note that sits on a line goes in the space below the line. A voice 1 dot on a line goes in the space above.
-- **Rests.** Each voice's rests are drawn separately and never merged. Voice 1's rests sit near the top line and voice 2's near the bottom line. A rest moves in whole staff spaces to clear the other voice's noteheads at the same time. A whole or half rest outside the staff gets a ledger line.
+- **Dots.** A dot on a voice 2 note that sits on a line goes in the space below the line. A voice 1 dot on a line goes in the space above. A shared unison head has one set of dots.
+- **Rests.** Each voice's rests are drawn separately, except a merged rest. When both voices rest at the same time, for the same length, with the same dots and tuplet ratio, and neither rest is hidden, one rest is drawn at the usual single-voice position and voice 2's rest draws nothing. A whole-measure rest merges only with another whole-measure rest. Otherwise voice 1's rests sit near the top line and voice 2's near the bottom line, and a rest moves in whole staff spaces to clear the other voice's noteheads. A whole or half rest outside the staff gets a ledger line.
 - **Ties and slurs.** Voice 1's ties and slurs go above the notes and voice 2's go below, on the outside of the pair. Each stays within its own voice, including the hammer-on and pull-off slurs on the notation staff.
 - **Grace notes.** Voice 1's grace notes have stems up and voice 2's have stems down. Each voice's grace notes lead into that voice's next note.
 - **Articulations and tremolo.** Articulation marks go on the stem side: above voice 1 and below voice 2. A whole-note tremolo in voice 2 goes below the note.
 - **TAB.** The frets of both voices show in the same columns. If both voices play the same string at the same time, voice 1's fret is drawn and voice 2's is left off the TAB staff. It still shows on the notation staff. Hammer-ons, pull-offs, slides, slide-ins, slide-outs and bends link within each voice.
-- **Rhythm on TAB.** The rhythm band (stems, beams, flags, dots, tuplets and rests) shows voice 1 only. Voice 2's frets still appear, so a note that only voice 2 plays shows on the TAB staff without a stem.
-- **Beat marks are read from voice 1 only.** These marks are not drawn on a voice 2 beat: chord symbols and chord diagrams, dynamics, fermatas, pick strokes, strum arrows, arpeggios, let ring, P.M., rakes, whammy, vibrato, harmonic labels (A.H., T.H., P.H., S.H.), tap, left-hand tap, slap, pop, trill, ornaments, right-hand letters, left-hand fingering, golpe, pick scrape and barre. Put them on a voice 1 beat.
+- **TAB marks.** In a column where both voices have a note, voice 1's mark wins for each kind: tremolo, vibrato, trill, tap, golpe. Right-hand letters and pick strokes on a tab-only track are taken from voice 1 as a whole. A kind of mark that only voice 2 has is drawn above the TAB staff in voice 1's place. Strums and whammy are voice 1 only.
+- **Rhythm on TAB.** Each voice has its own row of the rhythm band (stems, beams, flags, dots, tuplets and rests). Voice 1's row holds its stems, beams, flags and tuplets as before. Voice 2's row sits below it, with its stems hanging down, so a note that only voice 2 plays gets a stem in that row. An unmerged rest now sits in its voice's row below the staff, not in the staff, so a voice 1 rest never covers voice 2's frets. Those rests are drawn at a smaller size and without a background. A merged rest is drawn once, in the staff.
+- **Voice 2 beat marks.** Voice 2 can carry vibrato, trills, ornaments, right-hand letters, tap, left-hand tap, slap, pop, golpe, pick strokes and fermatas. On the notation staff they go below the staff, not above it. Going outward from the staff they stack in this order: vibrato, trill or ornament, right-hand letters, tap letter, golpe, pick stroke, then the fermata. The fermata is drawn inverted. On TAB they are drawn above the TAB staff, as described under TAB marks.
+- **Voice 1 beat marks.** These are read from voice 1 only, and are not drawn on a voice 2 beat: chord symbols and chord diagrams, dynamics, left-hand fingering, strum arrows, arpeggios, let ring, P.M., rakes, whammy, harmonic labels (A.H., T.H., P.H., S.H.), pick scrape, barre and beat text. Put them on a voice 1 beat.
 - **Hidden rests.** `{ "type": "rest", "duration": "half", "hidden": true }` takes its time but draws nothing and takes no room. Use one to start a voice later. A hidden rest works in any measure.
 - **When a measure has two voices.** A measure has two voices when voice 2 has at least one beat that is not a hidden rest. A voice 2 made only of hidden rests leaves the measure as a single-voice measure, with automatic stems.
 - **Other cases.** A `voices` list with one entry is the same as `beats`. An empty `voices` array, or a value that is not an array, falls back to `beats`. Entries after the second are ignored, so a measure has at most two voices. If voice 1 is empty and voice 2 has notes, voice 1 draws nothing.
 - **No bar-length check.** Voices are not compared with the time signature. Each voice is drawn with the beats it has, even if it is longer or shorter than the bar.
-- **SVG.** In a two-voice measure, voice 2's noteheads, accidentals, dots, ledger lines, stems, beams, grace notes, rests, articulations, tremolo and tuplets are inside a `<g class="voice-2">` group on the notation staff. Single-voice measures have no such group. TAB frets, ties and slurs are not inside it.
+- **SVG.** In a two-voice measure, voice 2's marks on the notation staff are inside a `<g class="voice-2">` group: noteheads, accidentals, dots, ledger lines, stems, beams, grace notes, rests, articulations, tremolo, tuplets, vibrato, trills, ornaments, right-hand letters, tap letters, golpe, pick strokes and fermatas. A voice 2 fermata also has the class `fermata-below`. Single-voice measures have no such group. TAB frets, ties and slurs are not inside it. Voice 2's TAB rhythm row is a `<g class="tab-rhythm voice-2">`, after voice 1's `tab-rhythm` group.
 
 ## Beat text
 
@@ -682,7 +700,7 @@ Free text on a beat, such as "rit.", "mute" or "let go". It is italic and starts
 - **Chord diagrams: taller systems.** With diagrams, a staff reaches about 10 to 11 staff spaces above its top line, against about 4 for a plain chord symbol, so systems get taller and fewer fit on a page.
 - **Time signatures across tracks.** Tracks cannot have different time signatures within the same measure column.
 - **Estimated sizes.** Glyph and text widths are estimated, not measured from the font. Spacing may look slightly different with another font or at unusual sizes.
-- **Rhythm on TAB staves.** In a two-voice measure the rhythm band shows voice 1 only (see [Voices](#voices)). Ties are not shown in the rhythm band, and rhythm slashes and tied-fret display are not drawn. Tremolo picking stays above the fret number and is not drawn on the stem. On staves with four strings or fewer, 32nd and 64th rests can reach a little past the outer string lines; the gap to the staff above grows to fit them.
+- **Rhythm on TAB staves.** Ties are not shown in the rhythm band, and rhythm slashes are not drawn. Tied-fret parentheses are drawn only with `tiedFrets: 'parens'` (see [Tied fret numbers](#tied-fret-numbers)). Tremolo picking stays above the fret number and is not drawn on the stem. On staves with four strings or fewer, 32nd and 64th rests can reach a little past the outer string lines; the gap to the staff above grows to fit them.
 - **Measure count.** Shorter tracks are padded with empty measures (whole-measure rests in notation, blank tab, no rest on a TAB rhythm staff). Their `measures` array is not extended in the input.
 - **Errors.** An unknown duration or an invalid pitch throws an error, and nothing is drawn for that score.
 - **Dynamics.** Only the names listed under `dynamic` are drawn as symbols. Other names print as plain text.
@@ -698,7 +716,7 @@ Free text on a beat, such as "rit.", "mute" or "let go". It is italic and starts
 - **Slap and pop.** Drawn above the staff only.
 - **Trill.** No speed, accidental or target notehead, and the wave does not continue across a line break. The trill glyph's size is estimated from the font, like other glyphs.
 - **Pick strokes and TAB.** Pick strokes are not drawn on the TAB staff when the track also shows notation.
-- **Ornaments.** Notation staff only. Not drawn on TAB, on tab-only tracks, on grace notes, on rests or in voice 2. No accidentals on ornaments, and no slashed or upward-turn forms.
+- **Ornaments.** Notation staff only. Not drawn on TAB, on tab-only tracks, on grace notes or on rests. No accidentals on ornaments, and no slashed or upward-turn forms.
 - **Left-hand fingering.** Notation staff only, on main notes. Not drawn on TAB, on tab-only tracks, on grace notes or in voice 2. The digits are plain text, with no string-number circles. A tie arc at the start of a system can pass under a digit.
 - **Right-hand letters.** Drawn for each beat's own notes only. There are no rasgueado letter sequences across beats.
 - **Golpe and left-hand tap.** Not drawn on rests or grace notes. The golpe is one sign for all three values: `'thumb'` and `'finger'` differ only in their class.
@@ -718,12 +736,13 @@ Free text on a beat, such as "rit.", "mute" or "let go". It is italic and starts
 - **One bracket height per system.** All volta brackets of a system sit at the height of the tallest one.
 - **Long navigation text.** A long jump text can reach left into the previous measures, and marks in adjacent narrow measures can crowd each other. A long ending label can run past the end of its bracket. Text widths are estimated, so the spacing around these marks is approximate.
 - **Voices: two at most.** A measure cannot have a third voice.
-- **Voices: beat marks on voice 2.** Chord symbols and diagrams, dynamics, fermatas, pick strokes, strums, arpeggios, let ring, P.M., rakes, whammy, vibrato, harmonic labels, tap, left-hand tap, slap, pop, trill, ornaments, right-hand letters, left-hand fingering, golpe, pick scrape and barre are drawn for voice 1 only. Voice 2 still draws its notes, articulations, tremolo, ties, slurs and slides.
-- **Voices: no shared noteheads or merged rests.** A unison is drawn with voice 2's noteheads moved to the right. Rests are never merged.
+- **Voices: beat marks on voice 2.** Chord symbols and diagrams, dynamics, left-hand fingering, strums, arpeggios, let ring, P.M., rakes, whammy, harmonic labels, pick scrape, barre and beat text are drawn for voice 1 only. Dynamics for voice 2 are not supported yet. Voice 2 still draws its notes, articulations, tremolo, vibrato, ties, slurs and slides, and the marks listed under [Voices](#voices).
+- **Voices: shared heads and merged rests need a close match.** A shared unison head and a merged rest only apply when the two notes or rests match exactly enough (see [Voices](#voices)). Any other unison moves voice 2 to the right, and any other pair of rests stays separate.
+- **Voices: release arrows on voice 2.** A voice 2 bend release arrow can still cross a fret number on the TAB staff.
 - **Voices: whole-measure rests.** A whole-measure rest is centred in the bar and does not move to clear the other voice's notes.
 - **Voices: links from a single-voice measure.** A tie, slur, hammer-on, pull-off or slide that starts in a single-voice measure and ends in voice 2 of the next measure is not drawn.
 - **Voices: grace notes.** Graces of both voices that lead into notes at the same time can collide.
-- **Voices: TAB.** A voice 2 fret on the same string as a voice 1 fret at the same time is left off the TAB staff. A voice 1 rest in the rhythm band is drawn over voice 2 frets and can hide them.
+- **Voices: TAB.** A voice 2 fret on the same string as a voice 1 fret at the same time is left off the TAB staff.
 - **Voices: dots.** Where the voices do not clash, a dot can sit close to the other voice's noteheads.
 - **Tremolo room.** A stemless (whole) note keeps the room for three strokes even with `'8th'` or `'16th'`, so a mark above it can sit a little higher than it needs to.
 - **Articulations and fermatas on tab.** They are not drawn on tab-only tracks.
@@ -758,6 +777,24 @@ It prints `ALL PASSED` and exits with code 0 on success.
 - To run one group on its own: `node tests/units.mjs`, `node tests/engraving.mjs`, or `node tests/articulations.mjs`.
 
 ## Changelog
+
+### 1.8.0 — 2026-11-08
+
+Voices and TAB rhythm. Scores with no `voices` are unchanged. Two-voice scores look different in several places, so check them after upgrading. Those changes are listed first.
+
+Changes to existing two-voice scores:
+
+- Voice 2's beat marks are drawn: vibrato, trills, ornaments, right-hand letters, tap marks, golpe, pick strokes and fermatas. On the notation staff they go below the staff, and the fermata is inverted. Before 1.8.0 voice 2 drew none of these.
+- On TAB, voice 2's tremolo, vibrato, trill, tap and golpe (and, on tab-only tracks, right-hand letters and pick strokes) are drawn above the staff in their column when voice 1 has no such mark there. Voice 1's mark wins when both have one.
+- TAB rhythm: voice 2 has its own row of stems, beams, flags, dots, tuplets and rests, below voice 1's row. The rhythm band is taller.
+- Rests on TAB: a rest that is not merged moves out of the staff into its voice's row, so a voice 1 rest no longer covers voice 2's frets.
+- Unisons: where both voices play the same note in the same way, they share one notehead. Other unisons move voice 2 right, as before.
+- Rests on notation: a rest that both voices take at the same time, for the same length, is drawn once.
+
+New:
+
+- `tiedFrets: 'parens'` on a track: parentheses around a tied-to fret number on TAB, such as `(5)`. It is off by default, so no score changes unless it sets this field. See [Tied fret numbers](#tied-fret-numbers).
+- New SVG classes: `tab-rhythm voice-2` (voice 2's TAB rhythm row) and `fermata-below` (a voice 2 fermata). Voice 2's notation marks sit inside the `voice-2` group.
 
 ### 1.7.0 — 2026-11-08
 
@@ -900,12 +937,13 @@ Initial public release.
   - `navigation.js`: the navigation fields (`ending`, `segno`, `coda`, `jump`, `section`, `repeatCount`), their canonical values and the merge across tracks.
   - `scoreText.js`: canonical forms of the score text fields (header lines, sections, repeat counts, beat text, capo) and the capo and tuning chart rows.
   - `noteEffects.js`: the canonical values of the `vibrato`, `tremolo` and `fermata` fields (for example `'wide'`, `'16th'` or `'short'`), used when drawing.
+  - `twoVoice.js`: the one shared rule for two voices (a voice 2 counts only when it has a beat that is not a hidden rest), which voice a layout element belongs to, and which beat supplies each TAB mark of a column.
   - `layout/`: positioning, no drawing.
     - `index.js`: `computeLayout`. Ties the layout steps together and sets element positions.
     - `timeline.js`: the shared note timeline across tracks and the horizontal spacing.
     - `chord.js`: chord geometry (seconds, accidental columns, dots, ledger lines), the room an arpeggio line needs and the columns of left-hand fingering digits.
     - `accidentals.js`: accidentals carried through a measure.
-    - `voices.js`: the shared columns of a two-voice measure (clash shift, shared accidentals, dots, rest positions).
+    - `voices.js`: the shared columns of a two-voice measure (clash shift, shared accidentals, dots, rest positions), shared unison noteheads, merged rests and the TAB marks of each column.
     - `systems.js`: system breaking, justification, headers, courtesy signatures, instrument-name indents.
     - `beams.js`: beams and tuplet groups, including compound meters.
     - `vertical.js`: places each staff vertically from its content.
@@ -921,10 +959,11 @@ Initial public release.
     - `tabLinks.js`: the per-note TAB links (hammer-ons, pull-offs, slides, slide-ins and slide-outs, bends, pre-bends and releases), drawn for each track by `passes/tabTechniques.js`.
     - `whammy.js`: whammy dive, hold, return and pre-dive lines (planning and drawing).
     - `trill.js`: the trill mark ("tr" and a wavy line).
+    - `voice2Marks.js`: voice 2's marks and fermatas below the notation staff, drawn by `passes/playingDirections.js`.
     - `arpeggio.js`: the arpeggio line left of a chord, on notation and TAB, drawn with each chord.
     - `strum.js`: strum arrows, and their placement above the TAB staff.
     - `handMarks.js`: the shapes of ornaments, the golpe, right-hand letters and left-hand fingering digits. The passes and `system.js` place them.
-    - `tabRhythm.js`: rhythm on TAB staves (stems, beams, flags, dots, tuplets and rests), drawn per measure.
+    - `tabRhythm.js`: rhythm on TAB staves (stems, beams, flags, dots, tuplets and rests), drawn per measure, with a second row for voice 2 in two-voice measures.
     - `chordDiagram.js`: one chord diagram (the fretboard box with its dots, barres, fingers and name).
     - `passes.js`: the score-wide passes, drawn after all systems; re-exports them from `passes/` and documents their order.
       - `passes/common.js`: helpers shared by the passes.

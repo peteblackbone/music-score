@@ -72,6 +72,7 @@ export function resolveVoiceAccidentals(track, mi) {
   const keyAlters = keySignatureAlterations(measure.keySignature);
   // Onset of every beat (a grace takes its next main beat's onset, trailing graces the voice's end).
   const order = [];
+  // plain data access: only two-voice measures have `voice2Beats` (twoVoice.js)
   [measure.beats, measure.voice2Beats || []].forEach((beats, v) => {
     let t = ZERO;
     let pending = [];

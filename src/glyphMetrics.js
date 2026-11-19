@@ -43,6 +43,9 @@ export const GLYPH_BOX = {
   rest16th: { bBoxNE: [1.28, 0.716], bBoxSW: [0, -2.0] },
   rest32nd: { bBoxNE: [1.452, 1.704], bBoxSW: [0, -2.0] },
   rest64th: { bBoxNE: [1.692, 1.72], bBoxSW: [0, -3.0] },
+  // Leger-line rests: measured from Bravura.woff2 ink like the staccatissimo below (the leger reaches left of the origin).
+  restWholeLegerLine: { bBoxNE: [1.595, 0.08], bBoxSW: [-0.47, -0.54] },
+  restHalfLegerLine: { bBoxNE: [1.595, 0.57], bBoxSW: [-0.47, -0.055] },
 
   // Flags (origin at the stem end)
   flag8thUp: { bBoxNE: [1.056, 0.03], bBoxSW: [0, -3.24] },
@@ -92,6 +95,8 @@ export const GLYPH_BOX = {
   fermataBelow: { bBoxNE: [2.42, 0.02], bBoxSW: [0, -1.364] },
   fermataShortAbove: { bBoxNE: [2.415, 1.365], bBoxSW: [0, 0] }, // measured the same way
   fermataLongAbove: { bBoxNE: [2.41, 1.335], bBoxSW: [0, -0.005] }, // measured the same way
+  fermataShortBelow: { bBoxNE: [2.415, 0], bBoxSW: [0, -1.365] }, // measured the same way
+  fermataLongBelow: { bBoxNE: [2.41, 0.005], bBoxSW: [0, -1.335] }, // measured the same way
   // Bowing marks / pick strokes (origin at the glyph's bottom)
   stringsDownBow: { bBoxNE: [1.248, 1.3], bBoxSW: [0, 0] },
   stringsUpBow: { bBoxNE: [1.0, 2.0], bBoxSW: [0, 0] },

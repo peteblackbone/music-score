@@ -37,11 +37,12 @@ import { glyphBox } from '../glyphMetrics.js';
 import { groupBeams } from './beams.js';
 import { layoutChord, fingeringLayout, notationInnerLeft, graceAccidentalRoom, DOT_GAP_SP, DOT_STEP_SP, DOT_RADIUS_SP, ARPEGGIO_ROOM_SP } from './chord.js';
 import { resolveMeasureAccidentals, resolveVoiceAccidentals } from './accidentals.js';
-import { combineVoices } from './voices.js';
-import { fretLabel, fretLabelWidth } from '../textMetrics.js';
+import { combineVoices, mergedRestPairs } from './voices.js';
+import { fretLabel, fretLabelWidth, tiedFretOpts } from '../textMetrics.js';
 import { layoutHeadGlyph } from '../harmonics.js';
 import { tabRhythmExtents } from './tabRhythm.js';
 import { beatArpeggio } from '../directions.js';
+import { isTwoVoiceMeasure } from '../twoVoice.js';
 
 const COLLISION_PAD_SP = 0.3;
 const TAIL_IDEAL_REDUCTION_SP = 0.5;
@@ -86,13 +87,13 @@ function notationExtents(el, positions, stemUp, accNames, beamed, theme) {
   return { left: chord.leftExt, right: chord.rightExt, chord };
 }
 
-/** Tab-staff extents (px) of one beat: half the widest fret-label knock-out. */
-export function tabExtents(el, theme) {
+/** Tab-staff extents (px) of one beat: half the widest fret-label knock-out (`labelOpts`: fretLabel's). */
+export function tabExtents(el, theme, labelOpts) {
   if (el.type === 'rest') return { left: 0, right: 0 };
   let half = 0;
   (el.notes || []).forEach((n) => {
     if (n.string == null || n.fret == null) return;
-    half = Math.max(half, fretLabelWidth(fretLabel(n), theme) / 2);
+    half = Math.max(half, fretLabelWidth(fretLabel(n, labelOpts), theme) / 2);
   });
   return { left: half, right: half };
 }
@@ -123,19 +124,21 @@ function anchorGraces(pending, anchor) {
  * variants apply when the measure opens a system: tied continuations at
  * the first onset restate their accidental (ui.md §7). Two-voice measures add
  * `events2` (voice 2, same shape; main events carry `dx`, rests `restPos` /
- * `restLedger`; see layout/voices.js); hidden rests are `{ t, hidden: true, … }`.
+ * `restLedger`, merged rests `restMerged`; see layout/voices.js); hidden rests are `{ t, hidden: true, … }`.
  */
 function trackEvents(track, mi, theme) {
   const measure = track.measures[mi];
-  if (!measure.voice2Beats) {
+  if (!isTwoVoiceMeasure(measure)) {
     const accs = track.showStandardNotation ? resolveMeasureAccidentals(track, mi) : null;
     return voiceEvents(track, measure, measure.beats, accs, null, theme, { tabBand: true, arpeggio: true, fingers: true });
   }
-  // Two voices: voice 2 (`events2`) has no TAB rhythm band, no arpeggio and no fingering.
+  // Two voices: voice 2 (`events2`) has its own TAB rhythm-band row, no arpeggio and no fingering;
+  // rests not merged with the other voice's sit in their voice's band row (`merged`: full-size, in the staff).
   const [a1, a2] = track.showStandardNotation ? resolveVoiceAccidentals(track, mi) : [null, null];
-  const r1 = voiceEvents(track, measure, measure.beats, a1, true, theme, { tabBand: true, arpeggio: true, fingers: true });
-  const r2 = voiceEvents(track, measure, measure.voice2Beats, a2, false, theme, { tabBand: false, arpeggio: false, fingers: false });
-  combineVoices(r1.events, r2.events, measure, theme);
+  const merged = mergedRestPairs(measure.beats, measure.voice2Beats, measure.timeSignature);
+  const r1 = voiceEvents(track, measure, measure.beats, a1, true, theme, { tabBand: true, arpeggio: true, fingers: true, merged: merged.v1 });
+  const r2 = voiceEvents(track, measure, measure.voice2Beats, a2, false, theme, { tabBand: true, arpeggio: false, fingers: false, merged: merged.v2 });
+  combineVoices(r1.events, r2.events, measure, theme, merged);
   return {
     events: r1.events, events2: r2.events, end: rmax(r1.end, r2.end), wholeMeasureRest: r1.wholeMeasureRest, empty: false,
     trailingGraces: Math.max(r1.trailingGraces, r2.trailingGraces), trailingAccRoom: Math.max(r1.trailingAccRoom, r2.trailingAccRoom),
@@ -146,9 +149,11 @@ function trackEvents(track, mi, theme) {
  * trackEvents for one voice's `beats` of `measure`: `accs` its accidentals
  * (null without notation), `forcedUp` the forced stem direction (null =
  * automatic); `tabBand` / `arpeggio` / `fingers` whether TAB rhythm-band
- * extents, arpeggio room and left-hand fingering room count.
+ * extents, arpeggio room and left-hand fingering room count; `merged` (two
+ * voices only) the beat indices of merged rests, every other rest being a
+ * band-row rest.
  */
-function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, arpeggio, fingers }) {
+function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, arpeggio, fingers, merged = null }) {
   const beams = groupBeams(beats, measure.timeSignature);
   const positionsOf = (el) => (el.notes || []).map((n) => (n.pitch == null ? 4 : staffPosition(n.pitch, track.clef)));
   // Final stem direction per beat: a beam group's shared direction (its overall range), else the beat's own.
@@ -208,11 +213,11 @@ function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, ar
       }
     }
     if (track.showTablature) {
-      const tb = tabExtents(el, theme);
+      const tb = tabExtents(el, theme, tiedFretOpts(track, el));
       left = Math.max(left, tb.left); right = Math.max(right, tb.right);
       leftFirst = Math.max(leftFirst, tb.left);
       if (tabBeamed) {
-        const rx = tabRhythmExtents(el, tabBeamed.has(bi), theme);
+        const rx = tabRhythmExtents(el, tabBeamed.has(bi), theme, !!merged && !merged.has(bi));
         left = Math.max(left, rx.left); right = Math.max(right, rx.right);
         leftFirst = Math.max(leftFirst, rx.left);
       }
@@ -227,7 +232,7 @@ function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, ar
     // An arpeggio line sits left of the chord's notation (and fingering) and TAB ink.
     if (arpeggio && beatArpeggio(el)) {
       const room = ARPEGGIO_ROOM_SP * theme.staffLineSpacing;
-      const tabIn = track.showTablature ? tabExtents(el, theme).left : 0;
+      const tabIn = track.showTablature ? tabExtents(el, theme, tiedFretOpts(track, el)).left : 0;
       left = Math.max(left, notationInnerLeft(el.notes, chord, theme) + room, tabIn + room);
       leftFirst = Math.max(leftFirst, notationInnerLeft(el.notes, chordFirst, theme) + room, tabIn + room);
     }

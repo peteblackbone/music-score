@@ -8,10 +8,11 @@
 import {
   renderHammerPull, renderSlide, renderSlideMark, renderBend, normalizeBend, bendSemitones, SLIDE_END_INSET_SP,
 } from './tab.js';
-import { fretLabel, fretLabelWidth } from '../textMetrics.js';
+import { fretLabel, fretLabelWidth, tiedFretOpts } from '../textMetrics.js';
 import { isNaturalHarmonic, decoratesFretLabel } from '../harmonics.js';
 import { linkTarget, slideMarks, bendOf } from '../directions.js';
 import { tabFretKnockoutHalf } from '../layout/tabRhythm.js';
+import { trackHasTwoVoices, isTwoVoiceMeasure, voiceOf } from '../twoVoice.js';
 
 const SLIDE_STUB_SP = 2;         // outgoing slide stroke across a system break (horizontal length)
 const SLIDE_LABEL_CLEAR_SP = 0.2; // slide end -> edge of a wide (harmonic) fret-label knock-out
@@ -74,15 +75,14 @@ const SLIDE_MARK_MIN_SP = 0.4;   // ...and skipped when clamping leaves less tha
  * measures), for the pass's per-beat marks.
  */
 export function renderTabLinks(track, trackRuns, systems, theme, helpers) {
-  const runs = trackRuns.filter((r) => r.track === track);
   const flat = collectTabNotes(track, trackRuns, theme, helpers.flattenRuns, 1);
-  if (!runs.some((r) => r.measures.some((m) => m.elements2))) {
+  if (!trackHasTwoVoices(trackRuns, track)) {
     drawTabLinks(flat, [], () => true, systems, theme, helpers);
     return flat;
   }
   const flat2 = collectTabNotes(track, trackRuns, theme, helpers.flattenRuns, 2);
   drawTabLinks(flat, flat2.filter((c) => c.voice === 2), () => true, systems, theme, helpers);
-  drawTabLinks(flat2, flat.filter((c) => c.measure.elements2), (item) => item.voice === 2, systems, theme, helpers);
+  drawTabLinks(flat2, flat.filter((c) => isTwoVoiceMeasure(c.measure)), (item) => item.voice === 2, systems, theme, helpers);
   return flat;
 }
 
@@ -93,29 +93,30 @@ function collectTabNotes(track, trackRuns, theme, flattenRuns, voice) {
   const flat = [];
   // A note's fret-label knock-out box (null without a fret), an obstacle for release falls.
   const knockHalf = tabFretKnockoutHalf(theme);
-  const knockOf = (n, x, y) => {
+  const knockOf = (n, x, y, opts) => {
     if (n.fret == null) return null;
-    const w = fretLabelWidth(fretLabel(n), theme);
+    const w = fretLabelWidth(fretLabel(n, opts), theme);
     return { x1: x - w / 2, x2: x + w / 2, top: y - knockHalf, bottom: y + knockHalf };
   };
   flattenRuns(trackRuns, track, (layoutEl, run, measure) => {
     const elDef = layoutEl.tabEl || layoutEl.el;
+    const opts = tiedFretOpts(track, elDef); // the label drawn (a tied-to fret may be "(5)")
     const x = layoutEl.x - (layoutEl.dx || 0); // TAB has no clash shift
     (elDef.notes || []).forEach((n) => {
       if (n.string == null) return;
       const y = run.tabBaselineY - (stringCount - n.string) * theme.tabStaffLineSpacing;
-      // A decorated harmonic label ("<12>", "5(17)") or a release note's "(7)"
+      // A decorated harmonic label ("<12>", "5(17)"), a release note's "(7)" or a tied-to "(5)"
       // is wider than the default slide inset allows for: clear its knock-out instead.
-      const slideInset = n.fret != null && (decoratesFretLabel(n) || bendOf(n.bend)?.type === 'release')
-        ? Math.max(SLIDE_END_INSET_SP * s, fretLabelWidth(fretLabel(n), theme) / 2 + SLIDE_LABEL_CLEAR_SP * s)
+      const slideInset = n.fret != null && (decoratesFretLabel(n) || bendOf(n.bend)?.type === 'release' || (opts && n.tieEnd && !n.mute))
+        ? Math.max(SLIDE_END_INSET_SP * s, fretLabelWidth(fretLabel(n, opts), theme) / 2 + SLIDE_LABEL_CLEAR_SP * s)
         : SLIDE_END_INSET_SP * s;
       flat.push({
         run, sysIdx: run.sysIdx, g: run.tabG, x, y,
         string: n.string, fret: n.fret, hammerPull: n.hammerPull, slide: n.slide, bend: n.bend,
         naturalHarmonic: isNaturalHarmonic(n), slideInset,
         grace: elDef.type === 'grace', slideIn: n.slideIn, slideOut: n.slideOut, measure,
-        knock: knockOf(n, x, y),
-        ...(layoutEl.voice ? { voice: layoutEl.voice } : {}),
+        knock: knockOf(n, x, y, opts),
+        ...(voiceOf(layoutEl) ? { voice: voiceOf(layoutEl) } : {}),
       });
     });
   }, voice);

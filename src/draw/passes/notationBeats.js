@@ -5,15 +5,16 @@
  * slurs (findSlurs), the lowest y a mark may reach above a beat
  * (beatClearTop), the outer edge of the slurs drawn above each beat
  * (slurAboveCurves) with the height a mark clears them at (slurClearTop /
- * slurClearSpan) and the beam groups of a track (beamGroupsOf). Shared by
- * curves.js, playingDirections.js and chordsFermatas.js. Reads only; draws
- * nothing.
+ * slurClearSpan; curveEdgeOver also below a curve) and the beam groups of a
+ * track (beamGroupsOf). Shared by curves.js, playingDirections.js,
+ * chordsFermatas.js and draw/voice2Marks.js. Reads only; draws nothing.
  */
 import { elementTop, elementBottom, curveOuterPoints } from '../notation.js';
 import { vibratoClearSp } from '../noteMarks.js';
 import { vibratoOf } from '../../noteEffects.js';
 import { linkTarget } from '../../directions.js';
 import { flattenRuns, breakEndX, breakStartX } from './common.js';
+import { voiceOf } from '../../twoVoice.js';
 
 const SLUR_CLEARANCE_SP = 1.1;   // slur end -> note's top (above) / bottom (below)
 const TUPLET_SLUR_CLEAR_SP = 0.9; // slur end above a tuplet bracket under it -> the bracket line
@@ -39,7 +40,7 @@ export function collectBeats(trackRuns, track, theme, voice = 1) {
       anchorAbove: (Number.isFinite(top) ? top : run.notationBaselineY - 4 * s) - SLUR_CLEARANCE_SP * s,
       anchorBelow: (Number.isFinite(bottom) ? bottom : run.notationBaselineY) + SLUR_CLEARANCE_SP * s,
       tupletAbove: info?.tupletY != null ? info.tupletY - TUPLET_SLUR_CLEAR_SP * s : Infinity,
-      voice: layoutEl.voice || 0,
+      voice: voiceOf(layoutEl),
     });
   }, voice);
   return beats;
@@ -55,7 +56,7 @@ export function collectBeats(trackRuns, track, theme, voice = 1) {
  */
 export function findSlurs(beats, { auto = false, voice = 1 } = {}) {
   const out = [];
-  const starts = (i) => voice !== 2 || beats[i].voice === 2;
+  const starts = (i) => voice !== 2 || voiceOf(beats[i]) === 2;
   beats.forEach((item, i) => {
     if (!item.el.slurStart || !starts(i)) return;
     const j = beats.findIndex((c, k) => k > i && c.el.slurEnd);
@@ -91,7 +92,7 @@ function slurEnds(beats, { i, j, above }, clearTuplets) {
  * below, otherwise above.
  */
 function slurSide(beats, i, j) {
-  if (beats.slice(i, j + 1).some((b) => b.voice)) return beats[i].voice !== 2;
+  if (beats.slice(i, j + 1).some(voiceOf)) return voiceOf(beats[i]) !== 2;
   const dirs = beats.slice(i, j + 1)
     .filter((b) => b.info && !b.info.isRest && !b.info.isGrace && b.info.noteheads?.length)
     .map((b) => b.info.stemUp);
@@ -187,16 +188,17 @@ function bezierAt(pts, t) {
 
 /**
  * Highest (min) y of a slur's outer edge `pts` over the x span (xa, xb),
- * clipped to the slur's own span; Infinity when they don't overlap. The
- * curve's x rises monotonically (control points at 0.28 / 0.72 of its
- * length), so each sampled x is found by bisection on t.
+ * clipped to the slur's own span; Infinity when they don't overlap. With
+ * `below` (a curve bowing down) the lowest (max) y, -Infinity when they
+ * don't overlap. The curve's x rises monotonically (control points at
+ * 0.28 / 0.72 of its length), so each sampled x is found by bisection on t.
  */
-function curveTopOver(pts, xa, xb) {
+export function curveEdgeOver(pts, xa, xb, below = false) {
   const x1 = Math.max(xa, pts[0][0]);
   const x2 = Math.min(xb, pts[3][0]);
-  if (x1 > x2) return Infinity;
+  if (x1 > x2) return below ? -Infinity : Infinity;
   const SAMPLES = 8;
-  let top = Infinity;
+  let edge = below ? -Infinity : Infinity;
   for (let k = 0; k <= SAMPLES; k++) {
     const x = x1 + ((x2 - x1) * k) / SAMPLES;
     let lo = 0; let hi = 1;
@@ -204,9 +206,10 @@ function curveTopOver(pts, xa, xb) {
       const mid = (lo + hi) / 2;
       if (bezierAt(pts, mid)[0] < x) lo = mid; else hi = mid;
     }
-    top = Math.min(top, bezierAt(pts, (lo + hi) / 2)[1]);
+    const y = bezierAt(pts, (lo + hi) / 2)[1];
+    edge = below ? Math.max(edge, y) : Math.min(edge, y);
   }
-  return top;
+  return edge;
 }
 
 /**
@@ -222,21 +225,23 @@ export function slurClearTop(item, half, sp) {
 /** Like slurClearTop for a mark spanning the x range (xa, xb) instead of centred on the beat. */
 export function slurClearSpan(item, xa, xb, sp) {
   return Math.min(Infinity, ...(item.slurCurves || [])
-    .map((pts) => curveTopOver(pts, xa, xb) - SLUR_DIRECTION_CLEAR_SP * sp));
+    .map((pts) => curveEdgeOver(pts, xa, xb) - SLUR_DIRECTION_CLEAR_SP * sp));
 }
 
 /**
  * Beam group of each beamed layout element of `track` (groups of 2+
- * beats, per measure): a Map layoutEl -> group key (the group's index array).
+ * beats, per measure): a Map layoutEl -> group key (the group's index
+ * array). `voice` 2: voice 2's groups of two-voice measures (`beamGroups2`).
  */
-export function beamGroupsOf(trackRuns, track) {
+export function beamGroupsOf(trackRuns, track, voice = 1) {
   const out = new Map();
   trackRuns.filter((r) => r.track === track).forEach((run) => {
     run.measures.forEach((measure) => {
-      (measure.beamGroups || []).forEach((grp) => {
+      const [groups, elements] = voice === 2 ? [measure.beamGroups2, measure.elements2] : [measure.beamGroups, measure.elements];
+      (groups || []).forEach((grp) => {
         if (grp.length < 2) return;
         grp.forEach((idx) => {
-          const le = measure.elements.find((e) => e.index === idx);
+          const le = elements.find((e) => e.index === idx);
           if (le) out.set(le, grp);
         });
       });

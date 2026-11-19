@@ -41,6 +41,11 @@ const VIB_WIDE_LIFT_SP = 0.15;
 const VIB_OFFSET_SP = 1.1;       // wave centre above the beat's top (renderVibrato)
 const VIB_MARK_CLEAR_SP = 0.7;   // marks above stay this far over the wave's top control point
 
+const VIB_BELOW_TREMOLO_SP = 2.6; // voice 2: wave centre below a stemless note with a tremolo under it
+
+/** Wave centre below the beat's bottom (sp) of a voice-2 vibrato (renderVibrato `below`), wide lift excluded. */
+export const vibratoBelowSp = (info, tremolo) => (tremolo && info.stemTopY == null ? VIB_BELOW_TREMOLO_SP : VIB_OFFSET_SP);
+
 /**
  * How far (sp) above a vibrato beat's top a mark above it must stay
  * (beatClearTop): VIB_MARK_CLEAR_SP above the wave's top control point
@@ -118,15 +123,20 @@ export function renderTremolo(g, info, theme, { below = false, speed = true } = 
  * `renderTremolo`, so it lands on the note's *final* stem geometry.
  * `kind` (noteEffects.js vibratoOf): 'wide' draws a taller, longer, heavier
  * wave (class `vibrato vibrato-wide`) lifted VIB_WIDE_LIFT_SP; true the
- * normal one.
+ * normal one. `below` (voice 2): mirrored under the beat's bottom
+ * (elementBottom), under a stemless note's tremolo (`tremolo`) further
+ * down (VIB_BELOW_TREMOLO_SP).
  */
-export function renderVibrato(g, info, width, theme, kind = true) {
+export function renderVibrato(g, info, width, theme, kind = true, { below = false, tremolo = false } = {}) {
   const wide = kind === 'wide';
   const v = wide ? VIB.wide : VIB.normal;
   const gEl = group({ class: wide ? 'vibrato vibrato-wide' : 'vibrato' });
   const color = theme.noteColor;
   const spacing = theme.staffLineSpacing;
-  const y = elementTop(info) - spacing * VIB_OFFSET_SP - (wide ? VIB_WIDE_LIFT_SP * spacing : 0);
+  const lift = wide ? VIB_WIDE_LIFT_SP * spacing : 0;
+  const y = below
+    ? elementBottom(info) + spacing * vibratoBelowSp(info, tremolo) + lift
+    : elementTop(info) - spacing * VIB_OFFSET_SP - lift;
   const x1 = info.x + 0.5 * spacing;
   const x2 = x1 + Math.max(1.4 * spacing, Math.min(3.4 * spacing, (width ?? 2.8 * spacing) - 0.8 * spacing));
   gEl.appendChild(path(wavyPathD(x1, x2, y, v.amp * spacing, v.wave * spacing), {

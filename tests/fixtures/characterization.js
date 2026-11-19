@@ -1427,6 +1427,119 @@ export const characterizationCases = [
       }],
     },
   },
+  {
+    // 1.8.0 voice-2 marks (R1). Gt. (notation + TAB): m1 voice 2 stacks an ornament, a right-hand letter, a golpe and
+    // a pick stroke, then a tap, then a wide vibrato with an inverted long fermata, under voice 1's mf; m2 two trills
+    // in a row, then a left-hand tap, slap and pop under a voice-2 slur; m3 a beamed pick-stroke pair (one line), a
+    // 16th tremolo and a merged half rest carrying two fermatas (voice 1's drawn); m4 a voice-2-only onset with a tap
+    // and a tremolo (its own TAB column) and a vibrato. TAB (tab-only): voice 2's right-hand letters and pick strokes
+    // where voice 1 has none, voice 1's winning where both have them, a golpe, trill and tap from voice 2.
+    name: 'voices-marks', width: 900,
+    score: {
+      tracks: [{
+        name: 'Gt.', showTablature: true,
+        measures: [
+          vm([tabd('quarter', 2, 1, {}, { dynamic: 'mf' }), tabq(2, 3), tabd('half', 1, 0)],
+            [tabd('quarter', 4, 2, { ornament: 'turn', rightFinger: 'p' }, { golpe: true, pickStroke: 'down' }), tabd('quarter', 4, 3, { tap: true }),
+              tabd('half', 5, 3, {}, { vibrato: 'wide', fermata: 'long' })]),
+          vm([tabq(2, 1), tabq(2, 1), tabq(2, 1), tabq(2, 1)],
+            [tabd('8th', 4, 0, { trill: true }), tabd('8th', 4, 2, { trill: true }), tabd('quarter', 4, 3, { leftHandTap: true }, { slurStart: true }),
+              tabd('quarter', 4, 2, { slap: true }), tabd('quarter', 4, 0, { pop: true }, { slurEnd: true })]),
+          vm([tabq(2, 1), tabq(2, 3), { type: 'rest', duration: 'half', fermata: true }],
+            [tabd('8th', 4, 2, {}, { pickStroke: 'down' }), tabd('8th', 4, 3, {}, { pickStroke: 'up' }), tabd('quarter', 5, 3, {}, { tremolo: '16th' }),
+              { type: 'rest', duration: 'half', fermata: 'short' }]),
+          vm([tabd('half', 2, 1), tabd('half', 1, 0)],
+            [qr(), tabd('quarter', 4, 2, { tap: true }, { tremolo: true }), tabd('half', 4, 0, {}, { vibrato: true })]),
+        ],
+      }, {
+        name: 'TAB', showStandardNotation: false, showTablature: true,
+        measures: [
+          vm([tabq(2, 1), tabd('quarter', 2, 3, { rightFinger: 'i' }, { pickStroke: 'down' }), tabd('half', 1, 0)],
+            [tabd('quarter', 4, 2, { rightFinger: 'p' }, { pickStroke: 'up' }), tabd('quarter', 4, 3, { rightFinger: 'm' }, { pickStroke: 'up' }), tabd('half', 5, 3)]),
+          vm([tabd('half', 2, 1), tabd('half', 2, 3)],
+            [tabd('quarter', 4, 0, { trill: true }), tabd('quarter', 4, 2), tabd('quarter', 4, 3, { tap: true }, { golpe: true }), tabd('quarter', 4, 0, { slap: true })]),
+          { beats: [tabq(2, 1), tabq(2, 3), tabd('half', 1, 0)] },
+          { beats: [tabd('whole', 2, 1)] },
+        ],
+      }],
+    },
+  },
+  {
+    // 1.8.0 two-voice TAB rhythm rows (R2, R3), TAB only (rhythm on) plus a notation + TAB track opting in. m1 a whole
+    // note over a dotted half and a quarter; m2 beamed 8th / 16ths with stubs, a dotted 8th, voice-2 quarter, 8th and
+    // half rests in row 2; m3 voice 1's beamed 32nds and 64ths (a deep row 1), voice 2's 16th / 32nd / 64th rests and
+    // flags; m4 both tuplet forms in both rows; m5 / m6 a whole-measure rest per voice (centred in its row); m7 merged
+    // whole-measure rests; m8 a merged quarter rest, a voice-1 half rest and a dotted voice-2 rest in the rows; m9 a
+    // single-voice measure. Gt. m1: a second between the voices (clash shift), row 2 at the column x.
+    name: 'voices-tab-rhythm', width: 900,
+    score: {
+      tracks: [{
+        name: 'TAB', showStandardNotation: false, showTablature: true,
+        measures: [
+          vm([tabd('whole', 2, 1)], [tabd('half', 4, 2, {}, { dots: 1 }), tabq(5, 3)]),
+          vm([tabe(2, 1), tabd('16th', 2, 3), tabd('16th', 2, 1), tabd('8th', 1, 0, {}, { dots: 1 }), tabd('16th', 2, 3), tabq(2, 1), tabq(1, 0)],
+            [qr(), { type: 'rest', duration: '8th' }, tabe(4, 2), { type: 'rest', duration: 'half' }]),
+          vm([...[0, 1, 3, 1, 0, 1, 3, 1].map((f) => tabd('32nd', 2, f)), ...[0, 1, 3, 1, 0, 1, 3, 1, 0, 1, 3, 1, 0, 1, 3, 1].map((f) => tabd('64th', 1, f)), tabd('half', 2, 1)],
+            [{ type: 'rest', duration: '16th' }, tabd('16th', 4, 2), { type: 'rest', duration: '8th' },
+              { type: 'rest', duration: '32nd' }, tabd('32nd', 4, 3), { type: 'rest', duration: '16th' }, tabe(4, 2),
+              { type: 'rest', duration: '64th' }, tabd('64th', 4, 0), { type: 'rest', duration: '32nd' }, tabd('16th', 4, 2),
+              tabe(5, 3), qr()]),
+          vm([tabe(2, 1, { tuplet: 3 }), tabe(2, 3, { tuplet: 3 }), tabe(2, 1, { tuplet: 3 }), tabq(1, 0, { tuplet: 3 }), tabq(1, 1, { tuplet: 3 }), tabq(1, 0, { tuplet: 3 }), tabq(2, 1)],
+            [tabe(4, 2, { tuplet: 3 }), { type: 'rest', duration: '8th', tuplet: 3 }, tabe(4, 3, { tuplet: 3 }), tabd('half', 5, 3, {}, { dots: 1 })]),
+          vm([{ type: 'rest', duration: 'whole' }], [tabq(4, 2), tabq(4, 3), tabd('half', 5, 3)]),
+          vm([tabq(2, 1), tabq(2, 3), tabd('half', 1, 0)], [{ type: 'rest', duration: 'whole' }]),
+          vm([{ type: 'rest', duration: 'whole' }], [{ type: 'rest', duration: 'whole' }]),
+          vm([qr(), tabq(2, 1), { type: 'rest', duration: 'half' }],
+            [qr(), { type: 'rest', duration: 'quarter', dots: 1 }, tabe(4, 2), tabq(4, 3)]),
+          { beats: [tabq(2, 1), tabq(2, 3), tabe(1, 0), tabe(1, 1), tabq(1, 3)] },
+        ],
+      }, {
+        name: 'Gt.', showTablature: true, tabRhythm: true,
+        measures: [vm([tabq(3, 2), tabq(2, 1), tabd('half', 2, 3)], [tabq(4, 5), tabq(4, 2), tabd('half', 5, 3)])],
+      }],
+    },
+  },
+  {
+    // 1.8.0 TAB rhythm rows across system breaks (600): system 1's deep voice-1 band (64ths) pushes its row 2 lower
+    // than system 2's; a merged quarter rest opens system 2 (drawn once, in the staff).
+    name: 'voices-tab-rhythm-break', width: 600,
+    score: {
+      tracks: [{
+        name: 'TAB', showStandardNotation: false, showTablature: true,
+        measures: [
+          vm([...[0, 1, 3, 1, 0, 1, 3, 1, 0, 1, 3, 1, 0, 1, 3, 1].map((f) => tabd('64th', 1, f)), tabq(2, 1), tabd('half', 2, 3)], [tabd('half', 4, 2), tabd('half', 5, 3)]),
+          vm([qr(), tabq(2, 1), tabd('half', 2, 3)], [qr(), tabq(4, 2), tabd('half', 5, 3)]),
+          vm([tabq(2, 1), tabq(2, 3), tabq(1, 0), tabq(1, 1)], [tabd('half', 4, 2), tabd('half', 5, 3)]),
+          vm([tabq(2, 1), tabq(2, 3), tabd('half', 1, 0)], [tabd('half', 4, 2), tabq(4, 3), tabq(4, 0)]),
+          vm([tabq(2, 1), tabq(2, 3), tabd('half', 1, 0)], [tabd('half', 4, 2), tabd('half', 5, 3)]),
+        ],
+      }],
+    },
+  },
+  {
+    // 1.8.0 tied-to frets "(n)" on TAB (R6), opted in with ' Parens ' on Gt.; TAB is the control (no option). m1 a tie
+    // per voice, voice 2's on fret 12; m2 ghost, mute and release tied-to notes; m3 a tied chord, a slide from a tied
+    // note; m4-m5 ties across the barline in both voices, and a voice-2 tied-to note dropped from TAB by voice 1's string.
+    name: 'voices-tied-frets', width: 900,
+    score: {
+      tracks: ['Gt.', 'TAB'].map((name) => ({
+        name, showTablature: true, ...(name === 'Gt.' ? { tiedFrets: ' Parens ' } : { showStandardNotation: false, tabRhythm: false }),
+        measures: [
+          vm([tabd('half', 2, 5, { tieStart: true }), tabd('half', 2, 5, { tieEnd: true })],
+            [tabd('half', 4, 12, { tieStart: true }), tabd('half', 4, 12, { tieEnd: true })]),
+          vm([tabd('quarter', 1, 3, { ghost: true, tieStart: true }), tabd('quarter', 1, 3, { ghost: true, tieEnd: true }),
+            tabd('quarter', 2, 5, { tieStart: true }), tabd('quarter', 2, 5, { mute: true, tieEnd: true })],
+          [tabd('half', 4, 7, { tieStart: true }), tabd('half', 4, 7, { bend: 'release', tieEnd: true })]),
+          vm([{ type: 'note', duration: 'half', notes: [{ string: 2, fret: 5, tieStart: true }, { string: 3, fret: 5, tieStart: true }] },
+            { type: 'note', duration: 'quarter', notes: [{ string: 2, fret: 5, tieEnd: true, slide: true }, { string: 3, fret: 5, tieEnd: true }] }, tabq(2, 7)],
+          [tabd('half', 5, 3, { tieStart: true }), tabd('half', 5, 3, { tieEnd: true })]),
+          vm([tabd('half', 2, 3), tabd('half', 2, 10, { tieStart: true })], [tabd('whole', 5, 2, { tieStart: true })]),
+          vm([tabd('half', 2, 10, { tieEnd: true }), tabd('half', 2, 3)],
+            [tabd('quarter', 5, 2, { tieEnd: true }), tabq(5, 2), tabd('half', 2, 3, { tieEnd: true })]),
+        ],
+      })),
+    },
+  },
 ];
 
 // Copy of a score with tabRhythm: false on every track (source untouched). Today the field is ignored, so

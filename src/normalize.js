@@ -61,6 +61,9 @@
  * to whether the track shows TAB (`showTablature`), else is read as a
  * boolean; `score.chordShapes` and `beat.chordDiagram` pass through.
  *
+ * Tied frets on TAB: `track.tiedFrets` is canonicalized when present
+ * ('parens' or null; textMetrics.js tiedFretsMode).
+ *
  * Two voices: `measure.voices: [{ beats }, { beats }]` replaces `beats`
  * (voice 1 = `beats`, the raw `voices` key is dropped). Voice 2 is
  * normalized like voice 1 and kept as `voice2Beats` only when it has a
@@ -72,7 +75,8 @@ import { harmonicKind } from './harmonics.js';
 import { withDirections, trillOf, withNoteSlides } from './directions.js';
 import { withHandBeat, withHandNote } from './hands.js';
 import { mergeNavigation } from './navigation.js';
-import { isHiddenRest } from './duration.js';
+import { isTwoVoiceBeats } from './twoVoice.js';
+import { tiedFretsMode } from './textMetrics.js';
 
 const sameTime = (a, b) => a.beats === b.beats && a.beatType === b.beatType;
 
@@ -151,7 +155,7 @@ export function normalizeScore(score) {
       const beats = normBeats(voices ? (Array.isArray(voices[0]?.beats) ? voices[0].beats : []) : (measure.beats || []));
       const v2 = voices && Array.isArray(voices[1]?.beats) ? normBeats(voices[1].beats) : null;
       // A voice 2 of only hidden rests leaves the measure single-voice.
-      const twoVoice = !!v2 && v2.some((b) => !isHiddenRest(b));
+      const twoVoice = isTwoVoiceBeats(v2);
       measures.push({
         ...base,
         padded,
@@ -178,6 +182,7 @@ export function normalizeScore(score) {
     };
     out.tabRhythm = resolveTabRhythm(track.tabRhythm, out);
     out.showChordDiagrams = track.showChordDiagrams === undefined ? out.showTablature : !!track.showChordDiagrams;
+    if (track.tiedFrets !== undefined) out.tiedFrets = tiedFretsMode(track.tiedFrets);
     return out;
   });
   return { ...score, measureCount, tracks, navigation: mergeNavigation(rawTracks, measureCount) };

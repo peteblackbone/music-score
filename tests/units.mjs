@@ -2304,7 +2304,8 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   test('two-voice layout: clash shift for a second, a unison and crossed voices; none for a third or a rest', () => {
     const plain = (stemDxSp(NH, true) - stemDxSp(NH, false)) * S;
     const dx = (p1, p2) => col(quarters(p1), quarters(p2)).elements2[0].dx;
-    eq([near(dx('A4', 'G4'), plain), near(dx('G4', 'G4'), plain), near(dx('E4', 'G4'), plain), dx('B4', 'G4'), dx('C5', 'E4')], [true, true, true, 0, 0]);
+    // 1.8: an eligible unison (same pitch, head, dots) shares one head (dx 0); a unison that differs (here the accidental) still shifts
+    eq([near(dx('A4', 'G4'), plain), dx('G4', 'G4'), near(dx('G#4', 'G4'), plain), near(dx('E4', 'G4'), plain), dx('B4', 'G4'), dx('C5', 'E4')], [true, 0, true, true, 0, 0]);
     const m = col([nb(['A4']), rs(), rs('half')], [nb(['G4']), nb(['G4']), rs('half')]);
     eq([near(m.elements2[0].x - m.elements[0].x, plain), m.elements2[1].dx, m.elements2[1].x === m.elements[1].x], [true, 0, true]);
     const w = col([nb(['A4'], 'whole')], [nb(['G4'], 'whole')]);
@@ -2335,7 +2336,9 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
   test('two-voice layout: rest positions 8 / 0, whole-measure rests 8 / 2', () => {
     const m = col([rs(), nb(['C5']), rs('half')], [nb(['E4']), rs(), rs('half')]);
-    eq([m.elements[0].restPos, m.elements2[1].restPos, m.elements[2].restPos, m.elements2[2].restPos], [8, 0, 8, 0]);
+    // 1.8: the two half rests at beat 3 merge (one rest at the single-voice position, no restPos)
+    eq([m.elements[0].restPos, m.elements2[1].restPos, m.elements[2].restPos, m.elements2[2].restPos], [8, 0, undefined, undefined]);
+    eq([m.elements[2].restMerged, m.elements2[2].restMerged, m.elements[0].restMerged], [true, true, undefined]);
     const w = lay2([vm([rs('whole')], quarters('E4')), vm(quarters('C5'), [rs('whole')])]);
     eq([w[0].elements[0].restPos, w[0].elements[0].wholeMeasureRest, w[1].elements2[0].restPos, w[1].elements2[0].wholeMeasureRest], [8, true, 2, true]);
     eq('restPos' in w[0].elements2[0], false);
@@ -2434,7 +2437,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const headY = w.ms[0].elements2[0].rendered.noteheads[0].y;
     eq([tr.length, tr.every((l) => +l.getAttribute('y1') > headY + S / 2 && +l.getAttribute('y2') > headY + S / 2)], [3, true]);
   });
-  test('two-voice drawing: TAB shows voice 2\'s frets at the column x, voice 1 wins a shared string; rhythm band voice 1 only', () => {
+  test('two-voice drawing: TAB shows voice 2\'s frets at the column x, voice 1 wins a shared string; rhythm band one row per voice (1.8)', () => {
     const fr = (string, fret, duration = 'quarter') => ({ type: 'note', duration, notes: [{ string, fret }] });
     const m = vm([fr(2, 5, 'half'), fr(1, 3, 'half')], [fr(2, 7), fr(4, 9), fr(5, 2), fr(5, 4)]);
     const { ms, staff } = draw2([m], { showTablature: true });
@@ -2444,6 +2447,9 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const tab = draw2([m], { showStandardNotation: false, showTablature: true });
     const band = nodes(tab.staff('tab'), (nd, cls) => nd.tag === 'line' && cls.includes('tab-rhythm'));
     eq(band.map((l) => +(+l.getAttribute('x1')).toFixed(2)), tab.ms[0].elements.map((e) => +e.x.toFixed(2)));
+    // 1.8: voice 2's row follows in <g class="tab-rhythm voice-2">, stems at the column x (x - dx)
+    const band2 = nodes(tab.staff('tab'), (nd, cls) => nd.tag === 'line' && cls.includes('tab-rhythm voice-2'));
+    eq(band2.map((l) => +(+l.getAttribute('x1')).toFixed(2)), tab.ms[0].elements2.map((e) => +(e.x - e.dx).toFixed(2)));
   });
 
   // two-voice passes (full render): ties, slurs, grace slurs, TAB links per voice
@@ -2542,11 +2548,21 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const a = serialize(renderTree(score, 600)); const b = serialize(renderTree(score, 600));
     eq([a === b, JSON.stringify(score) === before], [true, true]);
   });
-  test('beat marks on a voice-2 beat draw nothing: output is byte-identical to the same beat without them', () => {
-    const marks = { pickStroke: 'down', strum: 'up', arpeggio: true, letRing: true, palmMute: true, rake: 'down', whammy: true, vibrato: true, fermata: true, dynamic: 'ff', chord: 'Am', tap: true, slap: true, pop: true, trill: true };
+  test('voice-1-only beat marks on a voice-2 beat draw nothing: output is byte-identical to the same beat without them (1.8 split)', () => {
+    const marks = { strum: 'up', arpeggio: true, letRing: true, palmMute: true, rake: 'down', whammy: true, dynamic: 'ff', chord: 'Am' };
     const mk = (extra, track) => serialize(full([vm([nb([{ string: 3, fret: 2 }, { string: 4, fret: 2 }]), nb([{ string: 3, fret: 3 }]), nb([{ string: 3, fret: 4 }], 'half')],
       [nb([{ string: 5, fret: 2 }, { string: 6, fret: 2 }], 'quarter', extra), rs(), nb([{ string: 5, fret: 3 }], 'half', extra)])], track));
     [{ showTablature: true }, { showStandardNotation: false, showTablature: true }, {}].forEach((track, i) => eq(mk(marks, track) === mk({}, track), true, `track ${i}`));
+    // 1.8 (R1): pick stroke, vibrato, fermata, tap / slap / pop and trill on voice 2 now draw on every kind of track
+    for (const extra of [{ pickStroke: 'down' }, { vibrato: true }, { tap: true }, { trill: true }]) {
+      const n = extra;
+      const withNote = (track) => serialize(full([vm([nb([{ string: 3, fret: 2 }, { string: 4, fret: 2 }]), nb([{ string: 3, fret: 3 }]), nb([{ string: 3, fret: 4 }], 'half')],
+        [nb([{ string: 5, fret: 2, ...(n.tap ? { tap: true } : {}), ...(n.trill ? { trill: true } : {}) }], 'quarter', n.tap || n.trill ? {} : n), rs(), nb([{ string: 5, fret: 3 }], 'half')])], track));
+      const plain = (track) => serialize(full([vm([nb([{ string: 3, fret: 2 }, { string: 4, fret: 2 }]), nb([{ string: 3, fret: 3 }]), nb([{ string: 3, fret: 4 }], 'half')],
+        [nb([{ string: 5, fret: 2 }]), rs(), nb([{ string: 5, fret: 3 }], 'half')])], track));
+      [{ showTablature: true }, { showStandardNotation: false, showTablature: true }, {}].forEach((track, i) => eq(withNote(track) === plain(track), false, `${Object.keys(extra)[0]} track ${i}`));
+    }
+    eq(mk({ fermata: true }, {}) === mk({}, {}), false, 'fermata');
     // a mark that is honoured on voice 1 would differ, so the comparison is not vacuous
     const one = serialize(full([vm([nb([{ string: 3, fret: 2 }], 'quarter', { pickStroke: 'down' }), rs('half'), rs()], [nb([{ string: 5, fret: 2 }], 'whole')])], { showTablature: true }));
     const none = serialize(full([vm([nb([{ string: 3, fret: 2 }]), rs('half'), rs()], [nb([{ string: 5, fret: 2 }], 'whole')])], { showTablature: true }));
@@ -2642,7 +2658,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   const { group: svgGroup } = await imp('src/draw/svgUtil.js');
   // the 57 pre-1.6 cases (the 1.6.0 char-score-text-* fixtures use the new fields on purpose; the 1.7.0
   // char-ornaments-* came later)
-  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments)-/.test(c.id));
+  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets)-/.test(c.id));
   const thm = resolveTheme({});
   const s = thm.staffLineSpacing;
   const ok = (c, m) => { if (!c) throw new Error(m); };
@@ -3597,7 +3613,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(y(rh[1].children[0]) + 0.25 * 11 <= -10 + 1e-9, true, 'letters at least 1 sp above the TAB top line');
   });
 
-  test('stack: ornaments, letters and golpe are not drawn on graces, rests or voice 2; directionTopY reaches the golpe', () => {
+  test('stack: ornaments, letters and golpe are not drawn on graces or rests; on voice 2 they go below the staff (1.8); directionTopY reaches the golpe', () => {
     const svg = render({ tracks: [{ measures: [
       { beats: [
         { type: 'grace', duration: '16th', notes: [{ pitch: 'D4', ornament: 'turn', rightFinger: 'p' }], golpe: true },
@@ -3607,7 +3623,9 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
       { voices: [{ beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'E5' }] }] },
         { beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'G4', ornament: 'turn', rightFinger: 'p' }], golpe: true }] }] },
     ] }] });
-    eq([byClass(svg, 'ornament').length, byClass(svg, 'fingering-right').length, byClass(svg, 'golpe').length], [0, 0, 1]);
+    eq([byClass(svg, 'ornament').length, byClass(svg, 'fingering-right').length, byClass(svg, 'golpe').length], [1, 1, 2]);
+    // 1.8: the voice-2 whole note's marks hang below the staff (bottom line at 40)
+    eq([byClass(svg, 'ornament'), byClass(svg, 'fingering-right'), byClass(svg, 'golpe').slice(1)].map((gs) => y(gs[0].children[0]) > 40), [true, true, true]);
     const golpe = byClass(svg, 'golpe')[0].children[0];
     const fermata = byClass(svg, 'fermata')[0];
     eq(y(fermata.children[0]) < y(golpe) - 1.14 * 10, true, 'fermata above the golpe');
@@ -3766,6 +3784,746 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const lh = fermataY({ leftHandTap: true });
     const l = byClass(lh.svg, 'left-hand-tap')[0].children[0];
     eq(lh.f <= y(l) - glyphBox(String.fromCodePoint(l.textContent.codePointAt(0))).top * 10 - 4 + 1e-9, true, 'above the left-hand tap glyph');
+  });
+}
+
+// ---------- pre-1.8 characterization: voices & TAB rhythm (pins taken before the 1.8.0 change) ----------
+{
+  const { cases } = await import('./cases.mjs');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { durationR } = await imp('src/duration.js');
+  const { add, ZERO, key } = await imp('src/rational.js');
+  const th = resolveTheme();
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+
+  // Trigger scan over normalizeScore output. Per two-voice measure ("track.measure", 1-based measures):
+  // R1 = voice-2 beats carrying vibrato / trill / ornament / rightFinger / tap-style letters / golpe / pickStroke /
+  // fermata, or a tremolo on a TAB track; R4 = over-approximated unison (same pitch string in both voices at one
+  // onset); R5 = merged-rest candidate (non-hidden rests of equal duration and dots at one onset).
+  const scan = (c) => {
+    const sc = normalizeScore(c.score);
+    const r = { r1: [], r4: [], r5: [], band: [], two: [], rests: [], tiedFrets: [] };
+    sc.tracks.forEach((t, ti) => {
+      if (t.tiedFrets !== undefined) r.tiedFrets.push(ti);
+      t.measures.forEach((m, mi) => {
+        if (!m.voice2Beats) return;
+        const id = `${ti}.${mi + 1}`;
+        r.two.push(id);
+        if (t.tabRhythm) r.band.push(id);
+        const cats = new Set();
+        for (const b of m.voice2Beats) {
+          if (b.vibrato) cats.add('vibrato');
+          if (b.golpe) cats.add('golpe');
+          if (b.pickStroke) cats.add('pick');
+          if (b.fermata) cats.add('fermata');
+          if (b.tremolo && t.showTablature) cats.add('tabTremolo');
+          for (const n of b.notes || []) {
+            if (n.trill) cats.add('trill');
+            if (n.ornament) cats.add('ornament');
+            if (n.rightFinger) cats.add('rightFinger');
+            if (n.tap || n.leftHandTap || n.slap || n.pop) cats.add('tap');
+          }
+        }
+        if (cats.size) r.r1.push(`${id}:${[...cats].sort().join('+')}`);
+        const onsets = (beats) => { let t0 = ZERO; return beats.map((b) => { const o = key(t0); if (b.type !== 'grace') t0 = add(t0, durationR(b)); return [o, b]; }); };
+        const o1 = onsets(m.beats); const o2 = onsets(m.voice2Beats);
+        o1.forEach(([k1, b1]) => {
+          if (b1.type === 'rest' && !b1.hidden) r.rests.push(`${id}:v1@${k1}`);
+        });
+        o2.forEach(([k2, b2]) => {
+          if (b2.type === 'rest' && !b2.hidden) r.rests.push(`${id}:v2@${k2}`);
+          o1.forEach(([k1, b1]) => {
+            if (k1 !== k2 || b1.type === 'grace' || b2.type === 'grace') return;
+            if (b1.type === 'note' && b2.type === 'note' && b1.notes.some((n1) => b2.notes.some((n2) => n1.pitch != null && n1.pitch === n2.pitch))) r.r4.push(`${id}@${k1}`);
+            if (b1.type === 'rest' && b2.type === 'rest' && !b1.hidden && !b2.hidden && key(durationR(b1)) === key(durationR(b2)) && (b1.dots || 0) === (b2.dots || 0)) r.r5.push(`${id}@${k1}`);
+          });
+        });
+      });
+    });
+    return r;
+  };
+  // The pins describe the 63 pre-1.8 cases (the 1.8 fixtures exercise these triggers on purpose).
+  const pre18 = cases.filter((c) => !/^char-(voices-marks|voices-tab-rhythm|voices-tied-frets)-/.test(c.id));
+  const scans = new Map(pre18.map((c) => [c.id, scan(c)]));
+  const twoVoiceIds = [...scans].filter(([, r]) => r.two.length).map(([id]) => id);
+
+  test('pre-1.8 scan: the two-voice cases are exactly the six known fixtures', () => {
+    eq(pre18.length, 63);
+    eq(twoVoiceIds, ['char-voices-w900', 'char-voices-break-w600', 'char-voices-tab-w900', 'char-note-effects-w900', 'char-score-text-w900', 'char-ornaments-w900']);
+  });
+  test('pre-1.8 scan: voices-break, score-text, ornaments and voices-tab have no R1 / R4 / R5 triggers; their other variants are single-voice', () => {
+    for (const id of ['char-voices-break-w600', 'char-score-text-w900', 'char-ornaments-w900', 'char-voices-tab-w900']) {
+      const r = scans.get(id);
+      eq([id, r.r1, r.r4, r.r5], [id, [], [], []]);
+    }
+    for (const id of cases.map((c) => c.id).filter((i) => /^char-(score-text|ornaments)-/.test(i) && !twoVoiceIds.includes(i))) eq([id, scans.get(id).two], [id, []]);
+  });
+  test('pre-1.8 scan: voices has exactly the R4 candidate at m3 and TAB tremolo at m6 / m8', () => {
+    const r = scans.get('char-voices-w900');
+    eq([r.r1, r.r4, r.r5, r.band, r.two.length], [['0.6:tabTremolo', '0.8:tabTremolo'], ['0.3@1/4'], [], [], 8]);
+  });
+  test('pre-1.8 scan: voices-tab has the rhythm band on the TAB track only, a voice-1 rest in m4 and a voice-2 rest in m3', () => {
+    const r = scans.get('char-voices-tab-w900');
+    eq(r.band, ['1.1', '1.2', '1.3', '1.4']);
+    eq(r.two, ['0.1', '0.2', '0.3', '0.4', '1.1', '1.2', '1.3', '1.4']);
+    eq(r.rests.filter((s) => s.startsWith('1.')), ['1.3:v2@3/4', '1.4:v1@0/1']);
+  });
+  test('pre-1.8 scan: note-effects has R1 at m13 only (fermata, TAB tremolo and vibrato on voice 2)', () => {
+    const r = scans.get('char-note-effects-w900');
+    eq([r.r1, r.r4, r.r5, r.two], [['0.13:fermata+tabTremolo+vibrato'], [], [], ['0.13']]);
+  });
+  test('pre-1.8 scan: no case has an R5 candidate or a tiedFrets key; the only band with two voices is voices-tab', () => {
+    for (const [id, r] of scans) eq([id, r.r5, r.tiedFrets], [id, [], []]);
+    eq([...scans].filter(([, r]) => r.band.length).map(([id, r]) => [id, r.band]), [['char-voices-tab-w900', ['1.1', '1.2', '1.3', '1.4']]]);
+  });
+  test('pre-1.8 scan: normalizeScore adds no tiedFrets key; 1.8 canonicalizes a present one', () => {
+    const t = (extra) => normalizeScore({ tracks: [{ showTablature: true, ...extra, measures: [{ beats: [{ type: 'note', duration: 'whole', notes: [{ string: 1, fret: 3 }] }] }] }] }).tracks[0];
+    eq('tiedFrets' in t({}), false);
+    eq([t({ tiedFrets: ' Parens ' }).tiedFrets, t({ tiedFrets: 'x' }).tiedFrets], ['parens', null]);
+  });
+
+  // combineVoices JSON for unisons the 1.8 shared head must NOT merge: voice 2 keeps its clash shift of one head width.
+  const nb = (ps, duration = 'quarter', x = {}) => ({ type: 'note', duration, notes: ps.map((p) => (typeof p === 'string' ? { pitch: p } : p)), ...x });
+  const rs = (duration = 'quarter', x = {}) => ({ type: 'rest', duration, ...x });
+  const vm = (b1, b2) => ({ voices: [{ beats: b1 }, { beats: b2 }] });
+  const col = (b1, b2) => computeLayout(normalizeScore({ tracks: [{ showStandardNotation: true, measures: [vm(b1, b2)] }] }), th, 900).systems[0].tracks[0].measures[0];
+  const sl = (c) => ({ heads: c.heads, accidentals: c.accidentals, dots: c.dots, leftExt: c.leftExt, rightExt: c.rightExt, stemUp: c.stemUp });
+  const pinOf = (m) => ({ dx: m.elements2[0].dx, x: [m.elements[0].x, m.elements2[0].x], v1: sl(m.elements[0].chord), v2: sl(m.elements2[0].chord) });
+  const R = [rs(), rs('half')];
+  const unisons = {
+    accidental: [[nb(['G#4']), ...R], [nb(['G4']), ...R]],
+    dots: [[nb(['G4'], 'half', { dots: 1 }), rs()], [nb(['G4'], 'half'), rs('half')]],
+    mute: [[nb(['G4']), ...R], [nb([{ pitch: 'G4', mute: true }]), ...R]],
+    second: [[nb(['G4', 'A4']), ...R], [nb(['G4']), ...R]],
+    headGlyph: [[nb(['G4'], 'half'), rs('half')], [nb(['G4']), ...R]],
+  };
+  const PINS = {
+    accidental: {"dx":11.799999999999999,"x":[135.96,147.76000000000002],"v1":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a4","width":11.799999999999999}],"accidentals":[{"noteIndex":0,"name":"sharp","dx":-18.36}],"dots":{"dx":10.899999999999999,"step":5,"radius":1.7000000000000002,"positions":[3]},"leftExt":26.12,"rightExt":5.8999999999999995,"stemUp":true},"v2":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a4","width":11.799999999999999}],"accidentals":[{"noteIndex":0,"name":"natural","dx":-37.92}],"dots":{"dx":10.899999999999999,"step":5,"radius":1.7000000000000002,"positions":[1]},"leftExt":37.92,"rightExt":5.8999999999999995,"stemUp":false}},
+    dots: {"dx":11.799999999999999,"x":[115.74000000000001,127.54],"v1":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a3","width":11.799999999999999}],"accidentals":[],"dots":{"dx":22.7,"step":5,"radius":1.7000000000000002,"positions":[3]},"leftExt":5.8999999999999995,"rightExt":24.4,"stemUp":true},"v2":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a3","width":11.799999999999999}],"accidentals":[],"dots":{"dx":10.9,"step":5,"radius":1.7000000000000002,"positions":[1]},"leftExt":5.8999999999999995,"rightExt":5.8999999999999995,"stemUp":false}},
+    mute: {"dx":11.799999999999999,"x":[115.74000000000001,127.54],"v1":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a4","width":11.799999999999999}],"accidentals":[],"dots":{"dx":10.899999999999999,"step":5,"radius":1.7000000000000002,"positions":[3]},"leftExt":5.8999999999999995,"rightExt":5.8999999999999995,"stemUp":true},"v2":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a4","width":11.799999999999999}],"accidentals":[],"dots":{"dx":10.899999999999999,"step":5,"radius":1.7000000000000002,"positions":[1]},"leftExt":5.8999999999999995,"rightExt":5.8999999999999995,"stemUp":false}},
+    second: {"dx":23.599999999999998,"x":[115.74000000000001,139.34],"v1":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a4","width":11.799999999999999},{"noteIndex":1,"pos":3,"dx":11.799999999999999,"glyph":"\ue0a4","width":11.799999999999999}],"accidentals":[],"dots":{"dx":22.7,"step":5,"radius":1.7000000000000002,"positions":[3]},"leftExt":5.8999999999999995,"rightExt":17.7,"stemUp":true},"v2":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a4","width":11.799999999999999}],"accidentals":[],"dots":{"dx":10.899999999999999,"step":5,"radius":1.7000000000000002,"positions":[1]},"leftExt":5.8999999999999995,"rightExt":5.8999999999999995,"stemUp":false}},
+    headGlyph: {"dx":11.799999999999999,"x":[115.74000000000001,127.54],"v1":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a3","width":11.799999999999999}],"accidentals":[],"dots":{"dx":10.899999999999999,"step":5,"radius":1.7000000000000002,"positions":[3]},"leftExt":5.8999999999999995,"rightExt":5.8999999999999995,"stemUp":true},"v2":{"heads":[{"noteIndex":0,"pos":2,"dx":0,"glyph":"\ue0a4","width":11.799999999999999}],"accidentals":[],"dots":{"dx":10.899999999999999,"step":5,"radius":1.7000000000000002,"positions":[1]},"leftExt":5.8999999999999995,"rightExt":5.8999999999999995,"stemUp":false}},
+  };
+  for (const [name, [a, b]] of Object.entries(unisons)) {
+    test(`pre-1.8 combineVoices: non-eligible unison (${name}) keeps two heads, voice 2 shifted by a head width`, () => {
+      eq(pinOf(col(a, b)), PINS[name]);
+    });
+  }
+
+  // Serialized TAB rhythm groups on a tab-only track (notation off -> band on).
+  const e8 = (p) => nb([p], '8th');
+  const single = { beats: [e8('C5'), e8('D5'), nb(['E5'], 'quarter', { dots: 1 }), e8('F5'), rs('quarter')] };
+  const two = vm([e8('C5'), e8('D5'), nb(['E5'], 'half'), nb(['G5'])], [nb(['C4'], 'half'), nb(['E4']), nb(['G4'])]);
+  const tabOnly = (ms) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures: ms }] });
+  const groups = (svg) => walk(svg).filter((n) => (n.getAttribute('class') || '').split(' ').includes('tab-rhythm'));
+  const SINGLE_ON_TWO_VOICE_TRACK = "<g class=\"tab-rhythm\">\n  <line x1=\"98.69\" y1=\"85\" x2=\"98.69\" y2=\"110\" stroke=\"#1a1a1a\" stroke-width=\"1.3\"/>\n  <line x1=\"123.44\" y1=\"85\" x2=\"123.44\" y2=\"110\" stroke=\"#1a1a1a\" stroke-width=\"1.3\"/>\n  <line x1=\"148.19\" y1=\"85\" x2=\"148.19\" y2=\"110\" stroke=\"#1a1a1a\" stroke-width=\"1.3\"/>\n  <circle cx=\"153.19\" cy=\"94\" r=\"1.7\" fill=\"#1a1a1a\"/>\n  <line x1=\"191.06\" y1=\"85\" x2=\"191.06\" y2=\"110\" stroke=\"#1a1a1a\" stroke-width=\"1.3\"/>\n  <text x=\"191.06\" y=\"110\" font-family=\"Bravura, BravuraFallback, serif\" font-size=\"30\" fill=\"#1a1a1a\">\ue241</text>\n  <g class=\"tab-rest\">\n    <rect x=\"208.4\" y=\"20.54\" width=\"14.8\" height=\"33.92\" fill=\"#ffffff\"/>\n    <text x=\"215.8\" y=\"37.46\" font-family=\"Bravura, BravuraFallback, serif\" font-size=\"40\" fill=\"#1a1a1a\" text-anchor=\"middle\">\ue4e5</text>\n  </g>\n  <path d=\"M 97.64 110 L 124.49 110 L 124.49 105 L 97.64 105 Z\" fill=\"#1a1a1a\" stroke=\"none\"/>\n</g>\n";
+  const ROW1_NO_RESTS = "<g class=\"tab-rhythm\">\n  <line x1=\"98.69\" y1=\"85\" x2=\"98.69\" y2=\"110\" stroke=\"#1a1a1a\" stroke-width=\"1.3\"/>\n  <line x1=\"123.44\" y1=\"85\" x2=\"123.44\" y2=\"110\" stroke=\"#1a1a1a\" stroke-width=\"1.3\"/>\n  <line x1=\"148.19\" y1=\"85\" x2=\"148.19\" y2=\"97.5\" stroke=\"#1a1a1a\" stroke-width=\"1.3\"/>\n  <line x1=\"218.19\" y1=\"85\" x2=\"218.19\" y2=\"110\" stroke=\"#1a1a1a\" stroke-width=\"1.3\"/>\n  <path d=\"M 97.64 110 L 124.49 110 L 124.49 105 L 97.64 105 Z\" fill=\"#1a1a1a\" stroke=\"none\"/>\n</g>\n";
+  test('pre-1.8 tab rhythm: a single-voice measure on a track that also has a two-voice measure serializes exactly', () => {
+    eq(serialize(groups(render(tabOnly([single, two])))[0]), SINGLE_ON_TWO_VOICE_TRACK);
+  });
+  test('pre-1.8 tab rhythm: row 1 of a two-voice measure without rests serializes exactly (1.8 adds voice 2\'s row as a second group)', () => {
+    const gs = groups(render(tabOnly([two])));
+    eq(gs.length, 2);
+    eq(serialize(gs[0]), ROW1_NO_RESTS);
+  });
+}
+
+// ---------- 1.8.0: the shared two-voice predicate (src/twoVoice.js) ----------
+{
+  const tv = await imp('src/twoVoice.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const th = resolveTheme();
+  const hr = { type: 'rest', duration: 'half', hidden: true };
+  const q = (p) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: p }] });
+  test('twoVoice: isTwoVoiceBeats truth table (only a non-hidden beat counts)', () => {
+    eq([undefined, null, 'x', {}, [], [hr], [hr, hr], [hr, q('C4')], [{ type: 'rest', duration: 'whole' }], [{ type: 'grace', notes: [] }]].map(tv.isTwoVoiceBeats),
+      [false, false, false, false, false, false, false, true, true, true]);
+  });
+  test('twoVoice: isTwoVoiceMeasure / voiceOf / tabMarkBeat truth tables', () => {
+    eq([undefined, null, {}, { beats: [] }, { voice2Beats: [] }, { elements2: [] }, { elements: [], elements2: null }].map(tv.isTwoVoiceMeasure),
+      [false, false, false, false, true, true, false]);
+    eq([{}, { voice: undefined }, { voice: 1 }, { voice: 2 }].map(tv.voiceOf), [0, 0, 1, 2]);
+    const el = { id: 'own' }; const other = { id: 'v2' };
+    eq([tv.tabMarkBeat({ el }, 'pick'), tv.tabMarkBeat({ el, tabMarks: {} }, 'pick'), tv.tabMarkBeat({ el, tabMarks: { pick: other } }, 'pick'), tv.tabMarkBeat({ el, tabMarks: { pick: other } }, 'tap')],
+      [el, el, other, el]);
+  });
+  test('twoVoice: normalize keeps voice2Beats exactly when isTwoVoiceBeats; layout adds elements2 exactly then; trackHasTwoVoices per track', () => {
+    const variants = [[q('C4')], [hr], [hr, hr], [], [hr, q('D4')]];
+    const sc = normalizeScore({ tracks: [
+      { measures: variants.map((v2) => ({ voices: [{ beats: [q('C5'), q('C5'), q('C5'), q('C5')] }, { beats: v2 }] })) },
+      { measures: variants.map(() => ({ beats: [q('E4')] })) },
+    ] });
+    eq(sc.tracks[0].measures.map(tv.isTwoVoiceMeasure), variants.map(tv.isTwoVoiceBeats));
+    eq(sc.tracks[0].measures.map((m) => 'voice2Beats' in m), [true, false, false, false, true]);
+    const lay = computeLayout(sc, th, 3000);
+    const lm = lay.systems.flatMap((s) => s.tracks[0].measures);
+    eq(lm.map(tv.isTwoVoiceMeasure), [true, false, false, false, true]);
+    eq(lm.map((m) => 'elements2' in m), [true, false, false, false, true]);
+    const runs = lay.systems.flatMap((s) => s.tracks.map((t, ti) => ({ track: sc.tracks[ti], measures: t.measures })));
+    eq([tv.trackHasTwoVoices(runs, sc.tracks[0]), tv.trackHasTwoVoices(runs, sc.tracks[1])], [true, false]);
+    eq(lm[0].elements.map(tv.voiceOf).concat(lm[0].elements2.map(tv.voiceOf), lm[1].elements.map(tv.voiceOf)), [1, 1, 1, 1, 2, 0, 0, 0, 0]);
+  });
+}
+
+// ---------- 1.8.0: inverted short / long fermatas and leger-line rests (glyphs.js, glyphMetrics.js) ----------
+{
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const cpOf = (name) => Glyph[name].codePointAt(0).toString(16).toUpperCase();
+  test('1.8 glyphs: codepoints E4C5 / E4C7 / E4F4 / E4F5 (verified in the bundled Bravura cmap)', () => {
+    eq(['fermataShortBelow', 'fermataLongBelow', 'restWholeLegerLine', 'restHalfLegerLine'].map(cpOf), ['E4C5', 'E4C7', 'E4F4', 'E4F5']);
+  });
+  test('1.8 glyphs: measured ink boxes; inverted fermatas hang from the origin and mirror the upright ones', () => {
+    const b = (n) => { const x = glyphBox(n); return [x.left, x.right, x.top, x.bottom]; };
+    eq([b('fermataShortBelow'), b('fermataLongBelow')], [[0, 2.415, 0, -1.365], [0, 2.41, 0.005, -1.335]]);
+    for (const [up, down] of [['fermataShortAbove', 'fermataShortBelow'], ['fermataLongAbove', 'fermataLongBelow']]) {
+      const u = glyphBox(up); const d = glyphBox(down);
+      eq([u.width === d.width, Math.abs(u.top + d.bottom) < 1e-9, Math.abs(u.bottom + d.top) < 1e-9], [true, true, true], down);
+    }
+  });
+  test('1.8 glyphs: leger-line rests keep the height range of the plain rest, the leger reaching past both sides of its advance', () => {
+    const b = (n) => { const x = glyphBox(n); return [x.left, x.right, x.top, x.bottom]; };
+    eq([b('restWholeLegerLine'), b('restHalfLegerLine')], [[-0.47, 1.595, 0.08, -0.54], [-0.47, 1.595, 0.57, -0.055]]);
+    for (const [plain, leger] of [['restWhole', 'restWholeLegerLine'], ['restHalf', 'restHalfLegerLine']]) {
+      const p = glyphBox(plain); const l = glyphBox(leger);
+      eq([l.left < p.left, l.right > p.right, Math.abs((l.left + l.right) / 2 - p.width / 2) < 0.01], [true, true, true], leger);
+    }
+  });
+}
+
+// ---------- 1.8.0: merged rests (R5, layout/voices.js mergedRestPairs) ----------
+{
+  const { mergedRestPairs } = await imp('src/layout/voices.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { drawSystem } = await imp('src/draw/system.js');
+  const { restForDuration } = await imp('src/glyphs.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing; const BL = 4 * S;
+  const nb = (ps, duration = 'quarter', x = {}) => ({ type: 'note', duration, notes: ps.map((p) => (typeof p === 'string' ? { pitch: p } : p)), ...x });
+  const rs = (duration = 'quarter', x = {}) => ({ type: 'rest', duration, ...x });
+  const vm = (b1, b2, x = {}) => ({ ...x, voices: [{ beats: b1 }, { beats: b2 }] });
+  const sets = (r) => [[...r.v1], [...r.v2]];
+  const ts44 = { beats: 4, beatType: 4 };
+  const nodes = (g, pred) => [...walk(g)].filter(({ nd, cls }) => pred(nd, cls)).map(({ nd }) => nd);
+  const draw = (measures, track = {}) => {
+    const sc = normalizeScore({ tracks: [{ showStandardNotation: true, ...track, measures }] });
+    const sys = computeLayout(sc, th, 900).systems[0];
+    const d = drawSystem(makeContainer(), sys, 0, sc, th);
+    return { ms: sys.tracks[0].measures, staff: (kind) => d.staves.find((st) => st.kind === kind)?.g };
+  };
+  test('R5 mergedRestPairs: same onset, duration, dots and length merge; dots, tuplet ratio, hidden or onset differences do not', () => {
+    eq(sets(mergedRestPairs([nb(['C5']), rs(), rs('half')], [nb(['E4']), rs(), rs('half')], ts44)), [[1, 2], [1, 2]]);
+    eq(sets(mergedRestPairs([rs('half', { dots: 1 }), nb(['C5'])], [rs('half'), rs()], ts44)), [[], []]);
+    eq(sets(mergedRestPairs([rs('8th', { tuplet: 3 }), nb(['C5'], '8th', { tuplet: 3 }), nb(['C5'], '8th', { tuplet: 3 })], [rs('8th'), nb(['E4'], '8th')], { beats: 1, beatType: 4 })), [[], []]);
+    eq(sets(mergedRestPairs([rs('half', { hidden: true }), rs('half')], [rs('half'), rs('half')], ts44)), [[1], [1]], 'a hidden rest takes time but never merges');
+    eq(sets(mergedRestPairs([{ type: 'grace', notes: [{ pitch: 'D5' }] }, rs(), nb(['C5'], 'half', { dots: 1 })], [rs(), nb(['E4'], 'half', { dots: 1 })], ts44)), [[1], [0]], 'graces take no time');
+    eq(sets(mergedRestPairs([nb(['C5']), rs()], [rs(), nb(['E4'])], { beats: 2, beatType: 4 })), [[], []], 'different onsets');
+  });
+  test('R5 mergedRestPairs: a whole-measure rest merges only with a whole-measure rest', () => {
+    eq(sets(mergedRestPairs([rs('whole')], [rs('whole')], ts44)), [[0], [0]]);
+    const ts24 = { beats: 2, beatType: 4 };
+    eq(sets(mergedRestPairs([rs('whole')], [rs('whole'), nb(['E4'])], ts24)), [[], []]);
+  });
+  test('R5 layout: merged rests carry restMerged and no restPos / restLedger; unmerged rests keep theirs', () => {
+    const m = draw([vm([nb(['C5']), rs(), rs('half')], [rs(), rs(), nb(['E4'], 'half')])]).ms[0];
+    eq([m.elements[1].restMerged, m.elements2[1].restMerged, 'restPos' in m.elements[1], 'restPos' in m.elements2[1]], [true, true, false, false]);
+    eq([m.elements2[0].restMerged, m.elements2[0].restPos, m.elements[2].restMerged, m.elements[2].restPos], [undefined, 0, undefined, 8]);
+  });
+  test('R5 notation: one rest from voice 1 at the single-voice position (pos 4 / 4 / 6), no ledger, nothing in voice 2', () => {
+    const { ms, staff } = draw([vm([nb(['C5']), rs(), rs('half')], [nb(['E4']), rs(), rs('half')]), vm([rs('whole')], [rs('whole')])]);
+    const g = staff('notation');
+    const restY = (glyph, inV2) => nodes(g, (nd, cls) => nd.tag === 'text' && nd.textContent === glyph && cls.includes('voice-2') === inV2).map((nd) => +nd.getAttribute('y'));
+    eq([restY(restForDuration('quarter'), false), restY(restForDuration('half'), false), restY(restForDuration('whole'), false)], [[BL - 2 * S], [BL - 2 * S], [BL - 3 * S]]);
+    eq(['quarter', 'half', 'whole'].map((d) => restY(restForDuration(d), true).length), [0, 0, 0]);
+    eq(nodes(g, (nd) => nd.tag === 'line' && nd.getAttribute('y1') === nd.getAttribute('y2') && (+nd.getAttribute('y1') < 0 || +nd.getAttribute('y1') > BL)).length, 0, 'no ledger');
+    eq([ms[0].elements2[1].rendered.hidden, ms[0].elements2[2].rendered.hidden, ms[1].elements2[0].rendered.hidden, ms[1].elements[0].wholeMeasureRest], [true, true, true, true]);
+  });
+  test('R5 TAB (rhythm band): the merged rest is drawn once inside the staff with its knock-out', () => {
+    const fr = (string, fret, d = 'quarter') => ({ type: 'note', duration: d, notes: [{ string, fret }] });
+    const { staff } = draw([vm([fr(2, 5), rs(), fr(1, 3, 'half')], [fr(5, 2), rs(), fr(5, 4, 'half')])], { showStandardNotation: false, showTablature: true });
+    const restGs = nodes(staff('tab'), (nd) => nd.tag === 'g' && nd.getAttribute('class') === 'tab-rest');
+    eq([restGs.length, restGs[0].children[0].tag, restGs[0].children[1].textContent], [1, 'rect', restForDuration('quarter')]);
+  });
+  test('R5 fermatas: on a merged rest only the voice-1 fermata is drawn', () => {
+    const svg = renderTree({ tracks: [{ showStandardNotation: true, measures: [vm([nb(['C5'], 'half'), rs('half', { fermata: true })], [nb(['E4'], 'half'), rs('half', { fermata: 'long' })])] }] });
+    const fs = nodes(svg, (nd) => nd.tag === 'g' && /^fermata( |$)/.test(nd.getAttribute('class') || ''));
+    eq(fs.map((f) => f.getAttribute('class')), ['fermata']);
+  });
+}
+
+// ---------- 1.8.0: shared unison noteheads (R4, layout/voices.js sharedHead) ----------
+{
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { drawSystem } = await imp('src/draw/system.js');
+  const { stemDxSp } = await imp('src/layout/chord.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const nb = (ps, duration = 'quarter', x = {}) => ({ type: 'note', duration, notes: ps.map((p) => (typeof p === 'string' ? { pitch: p } : p)), ...x });
+  const rs = (duration = 'quarter', x = {}) => ({ type: 'rest', duration, ...x });
+  const vm = (b1, b2, x = {}) => ({ ...x, voices: [{ beats: b1 }, { beats: b2 }] });
+  const nodes = (g, pred) => [...walk(g)].filter(({ nd, cls }) => pred(nd, cls)).map(({ nd }) => nd);
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  const draw = (measures) => {
+    const sc = normalizeScore({ tracks: [{ showStandardNotation: true, measures }] });
+    const sys = computeLayout(sc, th, 900).systems[0];
+    const d = drawSystem(makeContainer(), sys, 0, sc, th);
+    return { ms: sys.tracks[0].measures, g: d.staves[0].g };
+  };
+  const heads = (g, x) => nodes(g, (nd) => nd.tag === 'text' && /[-]/u.test(nd.textContent) && Math.abs(+nd.getAttribute('x') - x) < 0.01);
+  test('R4: an eligible unison draws one head; voice 2 at the column x (dx 0) with its head flagged shared', () => {
+    const { ms, g } = draw([vm([nb(['G4']), nb(['C5']), rs('half')], [nb(['G4']), nb(['E4']), rs('half')])]);
+    const [v1, v2] = [ms[0].elements[0], ms[0].elements2[0]];
+    eq([v2.dx, v2.x === v1.x, v2.chord.heads[0].shared, v1.chord.heads[0].shared], [0, true, true, undefined]);
+    eq(heads(g, v1.x).length, 1);
+    eq([v2.rendered.noteheads.length, near(v2.rendered.noteheads[0].x, v1.x)], [1, true], 'voice 2 keeps its notehead record (ties)');
+  });
+  test('R4: two stems at the anchors of the shared head, voice 1 up on the right, voice 2 down on the left', () => {
+    const { ms } = draw([vm([nb(['G4']), nb(['C5']), rs('half')], [nb(['G4']), nb(['E4']), rs('half')])]);
+    const [r1, r2] = [ms[0].elements[0].rendered, ms[0].elements2[0].rendered];
+    const NH = String.fromCodePoint(0xE0A4);
+    eq([near(r1.stemAttachX, ms[0].elements[0].x + stemDxSp(NH, true) * S), near(r2.stemAttachX, ms[0].elements[0].x + stemDxSp(NH, false) * S), r1.stemUp, r2.stemUp], [true, true, true, false]);
+  });
+  test('R4: one accidental and one dot set for the shared head; voice 2 keeps the dots of its other heads', () => {
+    const { ms, g } = draw([vm([nb(['F#4'], 'half', { dots: 1 }), nb(['C5'])], [nb(['F#4', 'C4'], 'half', { dots: 1 }), nb(['E4'])])]);
+    const [v1, v2] = [ms[0].elements[0], ms[0].elements2[0]];
+    eq([v1.chord.accidentals.length, v2.chord.accidentals.length, v2.dx], [1, 0, 0]);
+    eq(nodes(g, (nd) => nd.tag === 'text' && nd.textContent === String.fromCodePoint(0xE262)).length, 1, 'one sharp');
+    // F#4 = pos 1 (space): voice 1 dot at 1; voice 2's own dot on 1 dropped, C4 (pos -2, line) keeps its dot at -3
+    eq([v1.chord.dots.positions, v2.chord.dots.positions], [[1], [-3]]);
+  });
+  test('R4: ties stay per voice on a shared head', () => {
+    const svg = renderTree({ tracks: [{ showStandardNotation: true, measures: [
+      vm([nb([{ pitch: 'G4', tieStart: true }], 'half'), nb(['C5'], 'half')], [nb([{ pitch: 'G4', tieStart: true }], 'half'), nb(['E4'], 'half')]),
+      vm([nb([{ pitch: 'G4', tieEnd: true }], 'whole')], [nb([{ pitch: 'G4', tieEnd: true }], 'whole')])] }] });
+    const ties = nodes(svg, (nd) => nd.tag === 'path' && nd.getAttribute('class') === 'tie');
+    eq(ties.length, 2);
+  });
+  test('R4: whole notes share one head and draw no stem', () => {
+    const { ms, g } = draw([vm([nb(['G4'], 'whole')], [nb(['G4'], 'whole')])]);
+    eq([ms[0].elements2[0].dx, heads(g, ms[0].elements[0].x).length, nodes(g, (nd) => nd.tag === 'line' && nd.getAttribute('stroke-width') === String(th.stemWidth)).length], [0, 1, 0]);
+  });
+  test('R4: non-eligible unisons keep the 1.4 clash shift (other second, crossing, displaced head)', () => {
+    const plain = (stemDxSp(String.fromCodePoint(0xE0A4), true) - stemDxSp(String.fromCodePoint(0xE0A4), false)) * S;
+    const dx = (b1, b2) => draw([vm([b1, nb(['C5']), rs('half')], [b2, nb(['E4']), rs('half')])]).ms[0].elements2[0].dx;
+    eq(dx(nb(['G4']), nb(['G4', 'F4'])) >= plain, true, 'voice-2 second below the unison');
+    eq(dx(nb(['G4', 'A4']), nb(['G4'])) > plain, true, 'voice-1 second (displaced head)');
+    eq(dx(nb(['G4']), nb(['G4', 'A4'])) > 0, true, 'crossing');
+  });
+}
+
+// ---------- 1.8.0: two-voice TAB rhythm rows (R2) and band-row rests (R3) ----------
+{
+  const TR = await imp('src/layout/tabRhythm.js');
+  const { tabRow2TopY } = await imp('src/draw/tabRhythm.js');
+  const { inkBounds } = await imp('src/layout/ink.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const LB = 5 * th.tabStaffLineSpacing; const T1 = TR.tabStemTopY(LB, th);
+  const fr = (string, fret, duration = 'quarter', x = {}) => ({ type: 'note', duration, notes: [{ string, fret }], ...x });
+  const rs = (duration = 'quarter', x = {}) => ({ type: 'rest', duration, ...x });
+  const vm = (b1, b2) => ({ voices: [{ beats: b1 }, { beats: b2 }] });
+  const q4 = (st) => [fr(st, 1), fr(st, 2), fr(st, 3), fr(st, 4)];
+  const tabScore = (measures) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures }] });
+  const nodes = (g, pred) => [...walk(g)].filter(({ nd, cls }) => pred(nd, cls)).map(({ nd }) => nd);
+  const near = (a, b, e = 1e-9) => Math.abs(a - b) < e;
+  const row = (svg, v2) => nodes(svg, (nd) => nd.tag === 'g' && nd.getAttribute('class') === (v2 ? 'tab-rhythm voice-2' : 'tab-rhythm'));
+  const stemTops = (gs) => [...new Set(gs.flatMap((g) => nodes(g, (nd) => nd.tag === 'line').map((l) => +l.getAttribute('y1'))))];
+  test('R2: voice 2\'s stems hang from T2 = T1 + (max(2.5, D1) + 1.5) sp; by default LB + 5 sp', () => {
+    eq(T1, LB + S);
+    const svg = renderTree(tabScore([vm(q4(1), q4(5))]));
+    eq([stemTops(row(svg, false)), stemTops(row(svg, true))], [[T1], [LB + 5 * S]]);
+  });
+  test('R2: a deeper voice-1 band (beamed 64ths, 4 sp) pushes T2 down for its own system only', () => {
+    const deep = vm([...Array(16)].map(() => fr(1, 1, '64th')).concat([fr(1, 2, 'half', { dots: 1 })]), q4(5));
+    const svg = renderTree(tabScore([deep, vm(q4(1), q4(5))]), 330);
+    const systems = nodes(svg, (nd) => nd.tag === 'g' && /^system /.test(nd.getAttribute('class') || ''));
+    eq(systems.length, 2);
+    eq(systems.map((sys) => stemTops(row(sys, true))), [[T1 + (4 + 1.5) * S], [LB + 5 * S]]);
+  });
+  test('R2: the probe depth is the ink voice 1\'s row actually draws (flag tails, tuplet brackets)', () => {
+    const t3 = (f) => fr(1, f, '16th', { tuplet: 3 });
+    for (const b1 of [[fr(1, 1, '32nd'), rs('32nd'), rs('16th'), rs('8th'), rs('half', { dots: 1 })], [t3(1), rs('16th', { tuplet: 3 }), t3(2), rs('8th'), rs('half', { dots: 1 })]]) {
+      const sc = normalizeScore(tabScore([vm(b1, q4(5))]));
+      const m = computeLayout(sc, th, 900).systems[0].tracks[0].measures[0];
+      const svg = renderTree(tabScore([vm(b1, q4(5))]));
+      const d1 = (inkBounds(row(svg, false)[0], th).bottom - T1) / S;
+      eq(d1 > 2.5, true, 'deeper than the minimum');
+      eq(near(tabRow2TopY([m], 6, LB, th), T1 + (d1 + 1.5) * S), true);
+      eq(stemTops(row(svg, true)).map((y) => +y.toFixed(6)), [+(T1 + (d1 + 1.5) * S).toFixed(6)]);
+    }
+  });
+  test('R3: band-row rest glyphs at tabFlagScale, heights 2.24 / 1.28 / 2.04 / 2.78 / 3.54 sp, centred 1.25 sp below T but top >= T', () => {
+    const hs = ['quarter', '8th', '16th', '32nd', '64th'].map((d) => { const { box } = TR.tabBandRest(d, th); return box.top - box.bottom; });
+    eq(hs.map((h, i) => near(h, [2.24, 1.28, 2.04, 2.78, 3.54][i], 0.006)), [true, true, true, true, true]);
+    ['whole', 'half', 'quarter', '8th', '16th', '32nd', '64th'].forEach((d) => {
+      const { box } = TR.tabBandRest(d, th);
+      const y = TR.tabBandRestY(100, box, S);
+      const top = y - box.top * S; const centre = y - ((box.top + box.bottom) / 2) * S;
+      eq([top >= 100 - 1e-9, near(centre, 100 + 1.25 * S) || near(top, 100)], [true, true], d);
+    });
+  });
+  test('R3: whole / half rests in a row use the leger-line glyphs E4F4 / E4F5', () => {
+    eq([TR.tabBandRest('whole', th).glyph, TR.tabBandRest('half', th).glyph].map((g) => g.codePointAt(0).toString(16)), ['e4f4', 'e4f5']);
+    const svg = renderTree(tabScore([vm([fr(1, 1, 'half'), fr(1, 2, 'half')], [rs('half'), fr(5, 2, 'half')])]));
+    const rest = nodes(row(svg, true)[0], (nd) => nd.tag === 'text')[0];
+    eq([rest.textContent.codePointAt(0).toString(16), +rest.getAttribute('font-size')], ['e4f5', 40 * th.tabFlagScale]);
+  });
+  test('R3: unmerged rests sit in their own row without a knock-out; dots on the row\'s dot line', () => {
+    const svg = renderTree(tabScore([vm([rs('quarter', { dots: 1 }), fr(1, 1, '8th'), fr(1, 2, 'half')], [fr(5, 1), fr(5, 2), rs('half')])]));
+    const r1 = nodes(row(svg, false)[0], (nd) => nd.tag === 'g' && nd.getAttribute('class') === 'tab-rest')[0];
+    const r2 = nodes(row(svg, true)[0], (nd) => nd.tag === 'g' && nd.getAttribute('class') === 'tab-rest')[0];
+    eq([r1.children.map((c) => c.tag), r2.children.map((c) => c.tag)], [['text', 'circle'], ['text']]);
+    const { box } = TR.tabBandRest('quarter', th);
+    eq([+r1.children[0].getAttribute('y'), +r1.children[1].getAttribute('cy')], [TR.tabBandRestY(T1, box, S), T1 + TR.TAB_DOT_ROW_SP * S]);
+    eq(near(+r1.children[1].getAttribute('cx') - +r1.children[0].getAttribute('x'), (box.width / 2 + 0.5) * S), true, 'first dot');
+  });
+  test('R3: a whole-measure rest is centred in its row (unless merged); tabRhythmExtents rowRest uses the band box', () => {
+    const sc = normalizeScore(tabScore([vm([rs('whole')], q4(5))]));
+    const m = computeLayout(sc, th, 900).systems[0].tracks[0].measures[0];
+    const svg = renderTree(tabScore([vm([rs('whole')], q4(5))]));
+    const t = nodes(row(svg, false)[0], (nd) => nd.tag === 'text')[0];
+    eq([+(+t.getAttribute('x')).toFixed(2), t.textContent.codePointAt(0).toString(16)], [+((m.contentX + m.endX) / 2).toFixed(2), 'e4f4']);
+    const half = (d) => TR.tabRhythmExtents(rs(d), false, th, true).left;
+    eq(near(half('quarter'), glyphBox('restQuarter').width * th.tabFlagScale / 2 * S), true);
+    eq(near(half('whole'), glyphBox('restWholeLegerLine').width * th.tabFlagScale / 2 * S), true);
+    eq(near(TR.tabRhythmExtents(rs('8th', { dots: 1 }), false, th, true).right, (glyphBox('rest8th').width * th.tabFlagScale / 2 + 0.5 + 0.17) * S), true);
+    eq(TR.tabRhythmExtents(rs('8th'), false, th), TR.tabRhythmExtents(rs('8th'), false, th, false), 'default unchanged');
+  });
+}
+
+// ---------- 1.8.0: voice-2 marks below the notation staff and per TAB column (R1) ----------
+{
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { drawSystem } = await imp('src/draw/system.js');
+  const P = await imp('src/draw/passes.js');
+  const { renderVoice2Directions } = await imp('src/draw/voice2Marks.js');
+  const { elementBottom } = await imp('src/draw/notation.js');
+  const { tapMarkBox } = await imp('src/draw/tab.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing; const BL = 4 * S;
+  const nb = (ps, duration = 'quarter', x = {}) => ({ type: 'note', duration, notes: ps.map((p) => (typeof p === 'string' ? { pitch: p } : p)), ...x });
+  const rs = (duration = 'quarter', x = {}) => ({ type: 'rest', duration, ...x });
+  const vm = (b1, b2) => ({ voices: [{ beats: b1 }, { beats: b2 }] });
+  const nodes = (g, pred) => [...walk(g)].filter(({ nd, cls }) => pred(nd, cls)).map(({ nd }) => nd);
+  const near = (a, b, e = 1e-6) => Math.abs(a - b) < e;
+  const ofClass = (g, c) => nodes(g, (nd) => nd.tag === 'g' && (nd.getAttribute('class') || '').split(' ').includes(c));
+  // System 1 drawn, then passes 1-5 (enough for the marks below and their clearances), on a 900 px layout.
+  const draw = (measures, track = {}) => {
+    const sc = normalizeScore({ tracks: [{ showStandardNotation: true, ...track, measures }] });
+    const { systems } = computeLayout(sc, th, 900);
+    const d = drawSystem(makeContainer(), systems[0], 0, sc, th);
+    P.renderTiesAndSlurs(sc, d.runs, th, systems); P.renderGraceSlurs(sc, d.runs, th);
+    P.renderTabArticulations(sc, d.runs, th, systems); P.renderTechniqueLabelRuns(sc, d.runs, th, systems);
+    P.renderPlayingDirections(sc, d.runs, th, systems);
+    return { ms: systems[0].tracks[0].measures, staff: (kind) => d.staves.find((st) => st.kind === kind)?.g, runs: d.runs };
+  };
+  const glyphTop = (gEl, name) => +gEl.children[0].getAttribute('y') - glyphBox(name).top * S;
+  const glyphBottom = (gEl, name) => +gEl.children[0].getAttribute('y') - glyphBox(name).bottom * S;
+  const ornTop = (g) => glyphTop(ofClass(g, 'ornament')[0], 'ornamentTurn');
+
+  test('R1 notation: voice 2 stacks ornament, letters, tap, golpe, pick stroke 0.4 sp apart below the staff, then the inverted fermata 0.5 sp below', () => {
+    const all = nb([{ pitch: 'E4', ornament: 'turn', rightFinger: 'p', tap: true }], 'quarter', { golpe: true, pickStroke: 'down', fermata: true });
+    const { staff } = draw([vm([nb(['C5'], 'whole')], [all, rs(), rs('half')])]);
+    const g = staff('notation');
+    const v2 = ofClass(g, 'voice-2').find((v) => ofClass(v, 'ornament').length);
+    eq(!!v2 && ofClass(v2, 'fermata').length, 1, 'one voice-2 marks group holds them');
+    const size = 1.1 * S;
+    const orn = [ornTop(g), glyphBottom(ofClass(g, 'ornament')[0], 'ornamentTurn')];
+    const ly = +ofClass(g, 'fingering-right')[0].children[0].getAttribute('y');
+    const letters = [ly - 0.8 * size, ly + 0.25 * size];
+    const tap = tapMarkBox(0, +ofClass(g, 'tap')[0].children[0].getAttribute('y'), th, 'tap');
+    const golpe = [glyphTop(ofClass(g, 'golpe')[0], 'guitarGolpe'), glyphBottom(ofClass(g, 'golpe')[0], 'guitarGolpe')];
+    const pick = [glyphTop(ofClass(g, 'pick-stroke')[0], 'stringsDownBow'), glyphBottom(ofClass(g, 'pick-stroke')[0], 'stringsDownBow')];
+    const ferm = glyphTop(ofClass(g, 'fermata')[0], 'fermataBelow');
+    const layers = [orn, letters, [tap.top, tap.bottom], golpe, pick];
+    eq(orn[0] >= BL + S - 1e-9, true, 'below the staff');
+    layers.slice(1).forEach((l, i) => eq(near(l[0] - layers[i][1], 0.4 * S), true, `gap ${i}`));
+    eq([near(ferm - pick[1], 0.5 * S), ofClass(g, 'fermata')[0].getAttribute('class')], [true, 'fermata fermata-below']);
+  });
+  test('R1 notation: clearBottom terms - own ink, vibrato, stemless tremolo, tuplet, voice 1 in the column, slurs below, label runs, rest', () => {
+    const turn = (p, d = 'quarter', x = {}) => nb([{ pitch: p, ornament: 'turn' }], d, x);
+    const fill = [rs(), rs('half')];
+    let r = draw([vm([nb(['C5'], 'whole')], [turn('E4'), ...fill])]);
+    eq(near(ornTop(r.staff('notation')), elementBottom(r.ms[0].elements2[0].rendered) + S), true, 'own ink + 1');
+    r = draw([vm([nb(['C5'], 'whole')], [turn('E4', 'quarter', { vibrato: true }), ...fill])]);
+    eq(near(ornTop(r.staff('notation')), elementBottom(r.ms[0].elements2[0].rendered) + 2 * S), true, 'vibrato + 2');
+    r = draw([vm([nb(['C5'], 'whole')], [turn('G4', 'whole', { tremolo: true })])]);
+    eq(near(ornTop(r.staff('notation')), elementBottom(r.ms[0].elements2[0].rendered) + 2.8 * S), true, 'stemless tremolo + 2.8');
+    r = draw([vm([nb(['C5'], 'whole')], [turn('E4', '8th', { tuplet: 3 }), nb(['E4'], '8th', { tuplet: 3 }), nb(['E4'], '8th', { tuplet: 3 }), rs(), rs('half')])]);
+    eq(near(ornTop(r.staff('notation')), r.ms[0].elements2[0].rendered.tupletBottomY + 1.1 * S), true, 'tuplet + 1.1');
+    r = draw([vm([nb(['C4'], 'whole')], [turn('G4', 'whole')])]);
+    eq(near(ornTop(r.staff('notation')), elementBottom(r.ms[0].elements[0].rendered) + S), true, 'voice 1 in the column + 1');
+    r = draw([vm([nb(['C5'], 'whole')], [nb(['E4'], 'quarter', { slurStart: true }), turn('F4'), nb(['E4'], 'half', { slurEnd: true })])]);
+    eq(ornTop(r.staff('notation')) > elementBottom(r.ms[0].elements2[1].rendered) + S + 1e-6, true, 'slur below pushes it down');
+    r = draw([vm([nb(['C5'], 'half', { letRing: true }), nb(['C5'], 'half', { letRing: true })], [turn('E4'), rs(), rs('half')])]);
+    const label = (r.runs[0].labelBoxes || []).filter((b) => b.top >= BL);
+    eq(label.length > 0 && ornTop(r.staff('notation')) >= Math.max(...label.map((b) => b.bottom)) + 0.4 * S - 1e-9, true, 'label run + 0.4');
+    r = draw([vm([nb(['C5'], 'whole')], [nb(['E4']), rs('quarter', { fermata: true }), rs('half')])]);
+    eq(near(glyphTop(ofClass(r.staff('notation'), 'fermata')[0], 'fermataBelow'), r.ms[0].elements2[1].rendered.restBottomY + S), true, 'rest + 1');
+  });
+  test('R1 notation: consecutive voice-2 trills share the lowest line; picks of a voice-2 beam group share the lowest top', () => {
+    const tr = (p) => nb([{ pitch: p, trill: true }]);
+    let r = draw([vm([nb(['C5'], 'whole')], [tr('C4'), tr('G4'), rs('half')])]);
+    const ys = ofClass(r.staff('notation'), 'trill').map((t) => +t.children[0].getAttribute('y'));
+    eq([ys.length, ys[0] === ys[1]], [2, true]);
+    eq(ys[0] > glyphBox('ornamentTrill').top * S + elementBottom(r.ms[0].elements2[0].rendered) + S - 1e-6, true, 'lowest of the two');
+    r = draw([vm([nb(['C5'], 'whole')], [nb(['C4'], '8th', { pickStroke: 'down' }), nb(['G4'], '8th', { pickStroke: 'up' }), rs(), rs('half')])]);
+    const [pd, pu] = ofClass(r.staff('notation'), 'pick-stroke');
+    eq(near(glyphTop(pd, 'stringsDownBow'), glyphTop(pu, 'stringsUpBow')), true, 'one top line');
+  });
+  test('R1 notation: dynamics in the system move down below voice-2 marks', () => {
+    const svgOf = (x) => renderTree({ tracks: [{ showStandardNotation: true, measures: [vm([nb(['C5'], 'whole', { dynamic: 'ff' })], [nb(['E4'], 'quarter', x), rs(), rs('half')])] }] });
+    const dy = (svg) => +nodes(svg, (nd) => nd.tag === 'text' && nd.getAttribute('class') === 'dynamic')[0].getAttribute('y');
+    eq(dy(svgOf({ golpe: true, pickStroke: 'down' })) > dy(svgOf({})), true);
+  });
+  const fr = (string, fret, d = 'quarter', x = {}, n = {}) => ({ type: 'note', duration: d, notes: [{ string, fret, ...n }], ...x });
+  test('R1 TAB: voice 1 wins each category it has; a category only voice 2 has is drawn in the voice-1 column', () => {
+    const { ms, staff } = draw([vm([fr(2, 5, 'half', { tremolo: '8th' }, { tap: true }), fr(2, 7, 'half')],
+      [fr(4, 2, 'half', { tremolo: '32nd', golpe: true }, { slap: true }), fr(4, 4, 'half', { vibrato: true })])], { showTablature: true });
+    const g = staff('tab');
+    eq([ofClass(g, 'tab-tremolo').map((t) => t.getAttribute('class')), ofClass(g, 'tap').length, ofClass(g, 'slap').length, ofClass(g, 'golpe').length, ofClass(g, 'tab-vibrato').length],
+      [['tab-tremolo tab-tremolo-8th'], 1, 0, 1, 1]);
+    eq([Object.keys(ms[0].elements[0].tabMarks), Object.keys(ms[0].elements[1].tabMarks)], [['golpe'], ['vibrato']]);
+    eq(near(+ofClass(g, 'golpe')[0].children[0].getAttribute('x') + glyphBox('guitarGolpe').width * S / 2, ms[0].elements[0].x), true, 'golpe at the column x');
+  });
+  test('R1 TAB: a tremolo column sits above a higher voice-2 fret (topString); voice-2-only onsets carry their own marks', () => {
+    const top = (string) => { const { staff } = draw([vm([fr(3, 5, 'whole', { tremolo: true })], [fr(string, 2, 'whole')])], { showTablature: true });
+      return Math.min(...ofClass(staff('tab'), 'tab-tremolo')[0].children.map((l) => +l.getAttribute('y2'))); };
+    eq(top(1) < top(5) - 1.4 * th.tabStaffLineSpacing, true);
+    const { ms, staff } = draw([vm([fr(2, 5, 'half'), fr(2, 7, 'half')], [fr(4, 2), fr(4, 3, 'quarter', { tremolo: true }, { tap: true }), rs('half')])], { showTablature: true });
+    const own = ms[0].elements2[1];
+    eq([own.tabOwn, own.tabEl.tremolo, ms[0].elements2[0].tabOwn], [true, true, undefined]);
+    eq([near(+ofClass(staff('tab'), 'tap')[0].children[0].getAttribute('x'), own.x - own.dx), ofClass(staff('tab'), 'tab-tremolo').length], [true, 1]);
+  });
+  test('R1 TAB: whammy and strum stay with voice 1, also at a voice-2-only onset', () => {
+    const mk = (x) => serialize(renderTree({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [vm([fr(2, 5, 'half'), fr(2, 7, 'half')], [fr(4, 2), fr(4, 3, 'quarter', x), rs('half')])] }] }));
+    eq([mk({ whammy: true }) === mk({}), mk({ strum: 'down' }) === mk({})], [true, true]);
+  });
+  test('R1 tab-only: right-hand letters and pick stroke - voice 1 wins as a whole, else the voice-2 ones at the column', () => {
+    const svgOf = (x1, n1, x2, n2) => renderTree({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [vm([fr(2, 5, 'whole', x1, n1)], [fr(4, 2, 'whole', x2, n2)])] }] });
+    const letters = (svg) => ofClass(svg, 'fingering-right').map((f) => f.children.map((t) => t.textContent));
+    eq(letters(svgOf({}, { rightFinger: 'i' }, {}, { rightFinger: 'm' })), [['i']]);
+    eq(letters(svgOf({}, {}, {}, { rightFinger: 'm' })), [['m']]);
+    eq(ofClass(svgOf({ strum: 'down' }, {}, { pickStroke: 'up' }, {}), 'pick-stroke').length, 0, 'voice 1 strum takes the pick slot');
+    eq(ofClass(svgOf({}, {}, { pickStroke: 'up' }, {}), 'pick-stroke').map((p) => p.getAttribute('class')), ['pick-stroke pick-stroke-up']);
+  });
+}
+
+// ---------- 1.8.0: tied-to frets in parentheses on TAB (R6, track.tiedFrets: 'parens') ----------
+{
+  const TM = await imp('src/textMetrics.js');
+  const { tabExtents } = await imp('src/layout/timeline.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const P = { tiedParens: true };
+  const fr = (string, fret, d = 'half', n = {}, x = {}) => ({ type: 'note', duration: d, notes: [{ string, fret, ...n }], ...x });
+  const nodes = (g, pred) => [...walk(g)].filter(({ nd, cls }) => pred(nd, cls)).map(({ nd }) => nd);
+  const labels = (svg) => nodes(svg, (nd, cls) => nd.tag === 'text' && cls.some((c) => /staff-tab/.test(c)) && +nd.getAttribute('font-size') === th.tabFontSize).map((nd) => nd.textContent);
+  const tabScore = (measures, extra = {}) => ({ tracks: [{ showStandardNotation: false, showTablature: true, tabRhythm: false, tiedFrets: 'parens', ...extra, measures }] });
+  test('R6 fretLabel: (5) ~1.57 sp, (12) ~2.17, (<12>) ~3.49, (5(17)); ghost / release not wrapped twice; mute stays x', () => {
+    const w = (n) => +(TM.fretLabelWidth(TM.fretLabel({ tieEnd: true, ...n }, P), th) / S).toFixed(2);
+    eq([TM.fretLabel({ fret: 5, tieEnd: true }, P), w({ fret: 5 }), TM.fretLabel({ fret: 12, tieEnd: true }, P), w({ fret: 12 })], ['(5)', 1.57, '(12)', 2.17]);
+    eq([TM.fretLabel({ fret: 12, harmonic: 'natural', tieEnd: true }, P), w({ fret: 12, harmonic: 'natural' })], ['(<12>)', 3.49]);
+    eq(TM.fretLabel({ fret: 5, harmonic: 'artificial', harmonicFret: 17, tieEnd: true }, P), '(5(17))');
+    eq([{ fret: 5, ghost: true }, { fret: 5, bend: 'release' }, { fret: 5, mute: true }, { fret: 5, mute: true, ghost: true }].map((n) => TM.fretLabel({ ...n, tieEnd: true }, P)), ['(5)', '(5)', 'x', '(x)']);
+    eq([TM.fretLabel({ fret: 5, tieEnd: true }), TM.fretLabel({ fret: 5, tieEnd: true }, undefined), TM.fretLabel({ fret: 5 }, P)], ['5', '5', '5']);
+  });
+  test('R6 normalize / options: tiedFretsMode trims any case; tiedFretOpts only for main beats of an opted-in track', () => {
+    eq([' Parens ', 'PARENS', 'parens', 'paren', true, null, 1].map(TM.tiedFretsMode), ['parens', 'parens', 'parens', null, null, null, null]);
+    const on = { tiedFrets: 'parens' };
+    eq([TM.tiedFretOpts(on, { type: 'note' }), TM.tiedFretOpts(on, { type: 'grace' }), TM.tiedFretOpts({}, { type: 'note' }), TM.tiedFretOpts({ tiedFrets: null }, { type: 'note' })], [P, undefined, undefined, undefined]);
+    eq(Object.isFrozen(TM.tiedFretOpts(on, { type: 'note' })), true);
+  });
+  test('R6 drawing: both voices, across a system break, graces unchanged, a control track without the option', () => {
+    const tie = (s, f) => [fr(s, f, 'half', { tieStart: true }), fr(s, f, 'half', { tieEnd: true })];
+    eq(labels(renderTree(tabScore([{ beats: tie(2, 5) }]))), ['5', '(5)']);
+    eq(labels(renderTree(tabScore([{ voices: [{ beats: tie(1, 3) }, { beats: tie(4, 7) }] }]))).sort(), ['(3)', '(7)', '3', '7']);
+    const brk = renderTree(tabScore([{ beats: [fr(1, 1, 'half'), fr(2, 5, 'half', { tieStart: true })] }, { beats: [fr(2, 5, 'whole', { tieEnd: true })] }]), 140);
+    eq(labels(brk), ['1', '5', '(5)']);
+    eq(labels(renderTree(tabScore([{ beats: [{ type: 'grace', notes: [{ string: 2, fret: 5, tieEnd: true }] }, fr(2, 7, 'whole')] }]))), ['5', '7']);
+    eq(labels(renderTree(tabScore([{ beats: tie(2, 5) }], { tiedFrets: undefined }))), ['5', '5']);
+  });
+  test('R6 room: knock-out, tabExtents, slide inset use the same label', () => {
+    const svg = renderTree(tabScore([{ beats: tie2() }]));
+    function tie2() { return [fr(2, 5, 'half', { tieStart: true }), fr(2, 5, 'half', { tieEnd: true })]; }
+    const rects = nodes(svg, (nd, cls) => nd.tag === 'rect' && cls.some((c) => /staff-tab/.test(c))).map((r) => +(+r.getAttribute('width')).toFixed(2));
+    eq(rects.includes(+TM.fretLabelWidth('(5)', th).toFixed(2)), true, 'knock-out');
+    const el = { type: 'note', notes: [{ string: 2, fret: 5, tieEnd: true }] };
+    eq([tabExtents(el, th, P).left, tabExtents(el, th).left], [TM.fretLabelWidth('(5)', th) / 2, TM.fretLabelWidth('5', th) / 2]);
+    const slid = (extra) => renderTree(tabScore([{ beats: [fr(2, 3, 'half', { slide: true }), fr(2, 5, 'half', { tieEnd: true })] }], extra));
+    const endX = (s) => Math.max(...nodes(s, (nd, cls) => nd.tag === 'line' && cls.some((c) => /staff-tab/.test(c)) && nd.getAttribute('stroke-linecap') === 'round' && nd.getAttribute('y1') !== nd.getAttribute('y2')).map((l) => +l.getAttribute('x2')));
+    eq(endX(slid({})) < endX(slid({ tiedFrets: undefined })), true, 'slide stops before the wider label');
+  });
+  test('R6 opt-in: an absent or unknown tiedFrets renders byte-identical to no key (C0 unaffected)', () => {
+    const base = (extra) => serialize(renderTree(tabScore([{ beats: [fr(2, 5, 'half', { tieStart: true }), fr(2, 5, 'half', { tieEnd: true })] }], extra)));
+    eq([base({ tiedFrets: undefined }) === base({ tiedFrets: 'x' }), base({ tiedFrets: undefined }) === base({ tiedFrets: null })], [true, true]);
+  });
+}
+
+// ---------- 1.8.0 verification gap-fill: R1 / R2 / R4 / R5 / R6 edge cases (independent oracles) ----------
+{
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { drawSystem } = await imp('src/draw/system.js');
+  const P = await imp('src/draw/passes.js');
+  const { elementBottom } = await imp('src/draw/notation.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const { mergedRestPairs } = await imp('src/layout/voices.js');
+  const { stemDxSp } = await imp('src/layout/chord.js');
+  const TR = await imp('src/layout/tabRhythm.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing; const BL = 4 * S;
+  const LB = 5 * th.tabStaffLineSpacing; const T1 = TR.tabStemTopY(LB, th);
+  const nb = (ps, duration = 'quarter', x = {}) => ({ type: 'note', duration, notes: ps.map((p) => (typeof p === 'string' ? { pitch: p } : p)), ...x });
+  const rs = (duration = 'quarter', x = {}) => ({ type: 'rest', duration, ...x });
+  const fr = (string, fret, d = 'quarter', x = {}, n = {}) => ({ type: 'note', duration: d, notes: [{ string, fret, ...n }], ...x });
+  const vm = (b1, b2) => ({ voices: [{ beats: b1 }, { beats: b2 }] });
+  const nodes = (g, pred) => [...walk(g)].filter(({ nd, cls }) => pred(nd, cls)).map(({ nd }) => nd);
+  const near = (a, b, e = 1e-6) => Math.abs(a - b) < e;
+  const ofClass = (g, c) => nodes(g, (nd) => nd.tag === 'g' && (nd.getAttribute('class') || '').split(' ').includes(c));
+  const draw = (measures, track = {}) => {
+    const sc = normalizeScore({ tracks: [{ showStandardNotation: true, ...track, measures }] });
+    const { systems } = computeLayout(sc, th, 900);
+    const d = drawSystem(makeContainer(), systems[0], 0, sc, th);
+    P.renderTiesAndSlurs(sc, d.runs, th, systems); P.renderGraceSlurs(sc, d.runs, th);
+    P.renderTabArticulations(sc, d.runs, th, systems); P.renderTechniqueLabelRuns(sc, d.runs, th, systems);
+    P.renderPlayingDirections(sc, d.runs, th, systems);
+    return { ms: systems[0].tracks[0].measures, staff: (kind) => d.staves.find((st) => st.kind === kind)?.g };
+  };
+  const glyphTop = (gEl, name) => +gEl.children[0].getAttribute('y') - glyphBox(name).top * S;
+  const ornTop = (g) => glyphTop(ofClass(g, 'ornament')[0], 'ornamentTurn');
+  const code = (t) => t.textContent.codePointAt(0).toString(16);
+
+  test('gap R1 notation: inverted fermata classes and glyphs per kind (E4C1 / E4C5 / E4C7); voice 1 keeps the upright ones', () => {
+    const of = (v1f, v2f) => {
+      const svg = renderTree({ tracks: [{ showStandardNotation: true, measures: [vm([nb(['C5'], 'half', v1f ? { fermata: v1f } : {}), rs('half')], [nb(['E4'], 'half', v2f ? { fermata: v2f } : {}), rs('half')])] }] });
+      return ofClass(svg, 'fermata').map((g) => [g.getAttribute('class'), code(g.children[0])]).sort();
+    };
+    eq(of(null, true), [['fermata fermata-below', 'e4c1']]);
+    eq(of(null, 'short'), [['fermata fermata-short fermata-below', 'e4c5']]);
+    eq(of(null, 'long'), [['fermata fermata-long fermata-below', 'e4c7']]);
+    eq(of('short', null), [['fermata fermata-short', 'e4c4']]);
+    eq(of('long', 'long'), [['fermata fermata-long fermata-below', 'e4c7'], ['fermata fermata-long', 'e4c6']]);
+  });
+  test('gap R1 notation: clearBottom floor (staff bottom + 1 sp) and wide vibrato (+2.3 sp)', () => {
+    const turn = (p, x = {}) => nb([{ pitch: p, ornament: 'turn' }], 'quarter', x);
+    let r = draw([vm([nb(['C6'], 'whole')], [turn('G5'), rs(), rs('half')])]);
+    eq(elementBottom(r.ms[0].elements2[0].rendered) + S < BL + S, true, 'own ink is above the staff bottom, so the floor binds');
+    eq(near(ornTop(r.staff('notation')), BL + S), true, 'B + 1');
+    r = draw([vm([nb(['C5'], 'whole')], [turn('E4', { vibrato: 'wide' }), rs(), rs('half')])]);
+    eq(near(ornTop(r.staff('notation')), elementBottom(r.ms[0].elements2[0].rendered) + 2.3 * S), true, 'wide vibrato + 2.3');
+  });
+  test('gap R1 notation: an absent layer is skipped (pick stroke 0.4 sp under the letters, letters 1 sp under the own ink)', () => {
+    const { staff, ms } = draw([vm([nb(['C5'], 'whole')], [nb([{ pitch: 'E4', rightFinger: 'm' }], 'quarter', { pickStroke: 'up' }), rs(), rs('half')])]);
+    const g = staff('notation');
+    const ly = +ofClass(g, 'fingering-right')[0].children[0].getAttribute('y');
+    const size = 1.1 * S;
+    eq(near(glyphTop(ofClass(g, 'pick-stroke')[0], 'stringsUpBow') - (ly + 0.25 * size), 0.4 * S), true, 'pick under the letters');
+    eq(near(ly - 0.8 * size, elementBottom(ms[0].elements2[0].rendered) + S), true, 'letters under the own ink');
+  });
+  test('gap R1 TAB: trill and vibrato - voice 1 wins (same output as without the voice-2 mark); a voice-2-only trill is drawn; a v1 rest makes the voice-2 column its own', () => {
+    const tab = (b1, b2) => serialize(draw([vm(b1, b2)], { showTablature: true }).staff('tab'));
+    const t7 = fr(2, 5, 'half', {}, { trill: { fret: 7 } });
+    eq(tab([t7, fr(2, 7, 'half')], [fr(4, 2, 'half', {}, { trill: { fret: 9 } }), fr(4, 3, 'half')]) === tab([t7, fr(2, 7, 'half')], [fr(4, 2, 'half'), fr(4, 3, 'half')]), true, 'trill');
+    const vib = fr(2, 5, 'half', { vibrato: true });
+    eq(tab([vib, fr(2, 7, 'half')], [fr(4, 2, 'half', { vibrato: true }), fr(4, 3, 'half')]) === tab([vib, fr(2, 7, 'half')], [fr(4, 2, 'half'), fr(4, 3, 'half')]), true, 'vibrato: one wave per column');
+    eq(ofClass(draw([vm([fr(2, 5, 'half'), fr(2, 7, 'half')], [fr(4, 2, 'half', { vibrato: true }), fr(4, 3, 'half')])], { showTablature: true }).staff('tab'), 'tab-vibrato').length, 1, 'voice-2-only vibrato');
+    const only = draw([vm([fr(2, 5, 'half'), fr(2, 7, 'half')], [fr(4, 2, 'half', {}, { trill: { fret: 9 } }), fr(4, 3, 'half')])], { showTablature: true }).staff('tab');
+    eq(ofClass(only, 'trill').map((t) => t.children.filter((c) => c.tag === 'text')[1].textContent), ['(9)'], 'voice-2-only trill suffix');
+    const own = draw([vm([rs('half'), fr(2, 7, 'half')], [fr(4, 2, 'half', { tremolo: '8th' }), fr(4, 3, 'half')])], { showTablature: true });
+    eq([own.ms[0].elements2[0].tabOwn, ofClass(own.staff('tab'), 'tab-tremolo').map((t) => t.getAttribute('class'))], [true, ['tab-tremolo tab-tremolo-8th']], 'v1 rest at the onset');
+  });
+  test('gap R1: voice-1-only marks on a voice-2 beat (LH finger, barre, pick scrape) draw nothing', () => {
+    const mk = (n, b) => serialize(draw([vm([nb(['C5'], 'whole')], [nb([{ pitch: 'E4', ...n }], 'quarter', b), rs(), rs('half')])]).staff('notation'));
+    eq(mk({ finger: 2 }, { barre: 3, pickScrape: true }) === mk({}, {}), true);
+    const v1 = (n, b) => serialize(draw([vm([nb([{ pitch: 'C5', ...n }], 'whole', b)], [nb(['E4'], 'whole')])]).staff('notation'));
+    eq([v1({ finger: 2 }, {}) === v1({}, {}), v1({}, { barre: 3 }) === v1({}, {})], [false, false], 'voice 1 does draw them (not vacuous)');
+  });
+
+  const tabScore = (measures) => ({ tracks: [{ showStandardNotation: false, showTablature: true, measures }] });
+  const row2 = (svg) => nodes(svg, (nd) => nd.tag === 'g' && nd.getAttribute('class') === 'tab-rhythm voice-2');
+  const vlines = (gs) => gs.flatMap((g) => nodes(g, (nd) => nd.tag === 'line')).map((l) => [+l.getAttribute('y1'), +l.getAttribute('y2')]);
+  const q4 = (st) => [fr(st, 1), fr(st, 2), fr(st, 3), fr(st, 4)];
+  test('gap R2: row-2 stems hang down by tabStemLengthSp (half 1.25, quarter 2.5, 32nd 3.25, whole none); beams flush at the stem ends, levels beamWidth + 0.2 sp apart', () => {
+    const svg = renderTree(tabScore([vm([fr(1, 1, 'half'), fr(1, 2, 'half')], [fr(5, 1, 'half'), fr(5, 2), ...Array(8).fill(0).map(() => fr(5, 3, '32nd'))]), vm([fr(1, 1, 'whole')], [fr(5, 1, 'whole')])]));
+    const T2 = LB + 5 * S;
+    const ls = vlines(row2(svg));
+    eq(ls.length, 10, 'the whole note draws no stem');
+    eq(ls.map(([a]) => a), Array(10).fill(T2));
+    eq(ls.map(([, b]) => +((b - T2) / S).toFixed(4)), [1.25, 2.5, ...Array(8).fill(3.25)]);
+    const beams = nodes(row2(svg)[0], (nd) => nd.tag === 'path').map((p) => p.getAttribute('d').match(/-?\d+(\.\d+)?/g).map(Number).filter((_, i) => i % 2 === 1));
+    const end = T2 + 3.25 * S; const step = th.beamWidth + 0.2 * S;
+    eq(beams.map((ys) => [+Math.max(...ys).toFixed(6), +Math.min(...ys).toFixed(6)]), [0, 1, 2].map((k) => [+(end - k * step).toFixed(6), +(end - k * step - th.beamWidth).toFixed(6)]));
+  });
+  test('gap R2: a deep voice-1 band in a single-voice measure of the same system does not push T2', () => {
+    const deep = { beats: [...Array(16)].map(() => fr(1, 1, '64th')).concat([fr(1, 2, 'half', { dots: 1 })]) };
+    const svg = renderTree(tabScore([deep, vm(q4(1), q4(5))]), 1600);
+    eq(nodes(svg, (nd) => nd.tag === 'g' && /^system /.test(nd.getAttribute('class') || '')).length, 1, 'one system');
+    eq([...new Set(vlines(row2(svg)).map(([a]) => a))], [LB + 5 * S]);
+  });
+  test('gap R3: a voice-1 rest over a voice-2 fret sits in row 1 and a voice-2 rest in row 2, neither knocked out; the fret under the rest is drawn', () => {
+    const svg = renderTree(tabScore([vm([rs(), fr(1, 3), fr(1, 4, 'half')], [fr(5, 2), rs(), fr(5, 5, 'half')])]));
+    const rests = nodes(svg, (nd) => nd.tag === 'g' && nd.getAttribute('class') === 'tab-rest');
+    eq(rests.map((g) => g.children.map((c) => c.tag)), [['text'], ['text']]);
+    const { box } = TR.tabBandRest('quarter', th);
+    const ys = rests.map((g) => +g.children[0].getAttribute('y'));
+    eq([near(ys[0], TR.tabBandRestY(T1, box, S)), near(ys[1], TR.tabBandRestY(LB + 5 * S, box, S))], [true, true]);
+    const frets = nodes(svg, (nd) => nd.tag === 'text' && +nd.getAttribute('font-size') === th.tabFontSize).map((nd) => nd.textContent);
+    eq([...frets].sort(), ['2', '3', '4', '5']);
+  });
+
+  test('gap R4: a unison with other heads a third away shares (both sides); a later onset and a second below do not', () => {
+    const plain = (stemDxSp(String.fromCodePoint(0xE0A4), true) - stemDxSp(String.fromCodePoint(0xE0A4), false)) * S;
+    const col = (b1, b2) => draw([vm([b1, nb(['C5']), rs('half')], [b2, nb(['E4']), rs('half')])]).ms[0];
+    let m = col(nb(['G4', 'B4']), nb(['G4', 'E4']));
+    eq([m.elements2[0].dx, m.elements2[0].chord.heads.find((h) => h.shared)?.noteIndex], [0, 0]);
+    m = col(nb(['G4']), nb(['G4', 'F4']));
+    eq([m.elements2[0].dx, m.elements2[0].chord.heads.some((h) => h.shared)], [plain + m.elements2[0].chord.headWidth, false], 'a displaced second head adds a head width');
+    m = col(nb(['A4']), nb(['G4']));
+    eq([m.elements2[0].dx, m.elements2[0].chord.heads.some((h) => h.shared)], [plain, false], 'a second apart is the plain clash shift');
+    m = draw([vm([rs(), nb(['G4']), rs('half')], [nb(['G4']), rs(), rs('half')])]).ms[0];
+    eq([m.elements2[0].dx, m.elements2[0].chord.heads.some((h) => h.shared)], [0, false], 'different onsets');
+  });
+  test('gap R4: whole notes with different accidentals clash by a head width; a voice-2 note without an accidental of its own still shares (one carry)', () => {
+    const w = draw([vm([nb(['G#4'], 'whole')], [nb(['G4'], 'whole')])]).ms[0];
+    eq(near(w.elements2[0].dx, w.elements[0].chord.headWidth), true);
+    // voice 1 F#4 then F4 shows a natural at beat 2; voice 2's F4 there shows none and still shares the head
+    const r = draw([vm([nb(['F#4']), nb(['F4']), rs('half')], [rs(), nb(['F4']), rs('half')])]);
+    const [e1, e2] = [r.ms[0].elements[1], r.ms[0].elements2[1]];
+    eq([e2.dx, e2.chord.heads[0].shared, e2.chord.accidentals.length, e1.chord.accidentals.map((a) => a.name)], [0, true, 0, ['natural']]);
+    eq(nodes(r.staff('notation'), (nd) => nd.tag === 'text' && nd.textContent === String.fromCodePoint(0xE261)).length, 1, 'one natural sign');
+  });
+
+  test('gap R5: merge conditions - duration, hidden on either voice, equal tuplet ratio merges, a different one does not, equal dots merge', () => {
+    const ts44 = { beats: 4, beatType: 4 }; const ts14 = { beats: 1, beatType: 4 };
+    const sets = (r) => [[...r.v1], [...r.v2]];
+    eq(sets(mergedRestPairs([rs('half'), rs('half')], [rs('quarter'), rs('quarter'), rs('half')], ts44)), [[1], [2]], 'only the onset at 1/2 has equal durations');
+    eq(sets(mergedRestPairs([rs('half'), rs('half')], [rs('half'), rs('half', { hidden: true })], ts44)), [[0], [0]], 'hidden voice-2 rest');
+    const t3 = (d = '8th') => rs(d, { tuplet: 3 });
+    eq(sets(mergedRestPairs([t3(), t3(), t3()], [t3(), t3(), t3()], ts14)), [[0, 1, 2], [0, 1, 2]], 'equal ratio');
+    eq(sets(mergedRestPairs([t3(), t3(), t3()], [rs('8th', { tuplet: 5 }), rs('8th', { tuplet: 5 })], ts14)), [[], []], 'ratio 3 vs 5');
+    eq(sets(mergedRestPairs([rs('half', { dots: 1 })], [rs('half', { dots: 1 }), rs()], ts44)), [[0], [0]], 'equal dots merge');
+  });
+
+  const tiedScore = (measures, extra = {}) => ({ tracks: [{ showStandardNotation: true, showTablature: true, tabRhythm: false, tiedFrets: 'parens', ...extra, measures }] });
+  const labels = (svg) => nodes(svg, (nd, cls) => nd.tag === 'text' && cls.some((c) => /staff-tab/.test(c)) && +nd.getAttribute('font-size') === th.tabFontSize).map((nd) => nd.textContent);
+  test('gap R6: the notation staff is byte-identical with and without tiedFrets', () => {
+    const measures = [{ beats: [nb([{ pitch: 'E4', string: 2, fret: 5, tieStart: true }], 'half'), nb([{ pitch: 'E4', string: 2, fret: 5, tieEnd: true }], 'half')] }];
+    const notation = (extra) => nodes(renderTree(tiedScore(measures, extra)), (nd) => nd.tag === 'g' && nd.getAttribute('class') === 'staff staff-notation').map(serialize).join('');
+    eq(notation({}) === notation({ tiedFrets: undefined }), true);
+    eq(notation({}).length > 100, true);
+    eq(labels(renderTree(tiedScore(measures))), ['5', '(5)'], 'the TAB does change');
+  });
+  test('gap R6: a voice-2 note dropped from TAB (voice 1 frets the string at the onset) shows no label', () => {
+    const n = (n) => ({ type: 'note', duration: 'half', notes: [n] });
+    const svg = renderTree(tiedScore([vm([n({ string: 2, fret: 3, tieEnd: true }), n({ string: 3, fret: 1 })], [n({ string: 2, fret: 5, tieEnd: true }), n({ string: 4, fret: 2 })])]));
+    eq(labels(svg), ['(3)', '1', '2']);
   });
 }
 
