@@ -40,7 +40,9 @@
  * earlier ones record:
  *
  * - `run.tabInkBoxes` (bend, tap "T" / slap "S" / pop "P", trill, whammy
- *   dip and dive / return / pre-dive line ink): written by 3, read by 3
+ *   dip and dive / return / pre-dive line ink): seeded from
+ *   `run.tabOnlyBoxes` (tab-only articulations, ../tabOnlyMarks.js), then
+ *   written by 3, read by 3
  *   (trill, dip and line placement), 4 and 5
  * - `run.hpBoxes` (hammer-on/pull-off ink): written by 3, read by 3 (tap
  *   "T", trill, whammy line) and 5
@@ -57,10 +59,12 @@
  * - pass 6 measures the notation staff's ink, so it must follow the passes
  *   that draw there (1, 2 and 5).
  *
- * Non-pass calls between the passes (not re-exported here): renderFadeWah
+ * Non-pass calls between the passes (not re-exported here):
+ * renderTabOnlyArticulations after 2 (tab-only tracks with
+ * tabArticulations; seeds pass 3 so labels move outward), renderFadeWah
  * and renderOttavaAlta after 5 (so pass 6 measures their ink and chord
  * symbols rise above them), renderOttavaBassa (8vb / 15mb) after 6 (below
- * the dynamics line), beat text (draw/beatText.js renderBeatText) after 7,
+ * the dynamics line), renderTabOnlyFermatas after 7, beat text (draw/beatText.js renderBeatText) after 7,
  * then navigation, then the score tempo text and tempo changes
  * (draw/tempoMarks.js) outermost above the system.
  */

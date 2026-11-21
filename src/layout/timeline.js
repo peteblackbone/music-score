@@ -31,7 +31,7 @@
  */
 import { R, ZERO, add, sub, cmp, key, toNumber, max as rmax } from '../rational.js';
 import { durationR, isHiddenRest } from '../duration.js';
-import { notePosition } from '../pitch.js';
+import { clefAt, clefNotePosition } from '../clef.js';
 import { noteheadForDuration, restForDuration, flagForDuration } from '../glyphs.js';
 import { glyphBox } from '../glyphMetrics.js';
 import { groupBeams } from './beams.js';
@@ -43,6 +43,7 @@ import { layoutHeadGlyph } from '../harmonics.js';
 import { tabRhythmExtents } from './tabRhythm.js';
 import { beatArpeggio } from '../directions.js';
 import { isTwoVoiceMeasure } from '../twoVoice.js';
+import { isSlashBeat, SLASH_HEAD, SLASH_POSITION, slashHeadGlyph, tabSlashHalf } from '../slash.js';
 
 const COLLISION_PAD_SP = 0.3;
 const TAIL_IDEAL_REDUCTION_SP = 0.5;
@@ -75,11 +76,13 @@ function notationExtents(el, positions, stemUp, accNames, beamed, theme) {
     const right = el.dots ? Math.max(half, half + (DOT_GAP_SP + DOT_STEP_SP * (el.dots - 1) + DOT_RADIUS_SP) * s) : half;
     return { left: half, right, chord: null };
   }
-  const notes = el.notes || [];
+  // A rhythm slash lays out as one slash head on the middle line (slash.js).
+  const slash = isSlashBeat(el);
+  const notes = slash ? [SLASH_HEAD] : el.notes || [];
   if (!notes.length) return { left: 0, right: 0, chord: null };
-  const chord = layoutChord(notes, positions, stemUp, accNames, {
-    headGlyph: noteheadForDuration(el.duration),
-    headGlyphs: notes.map((n) => layoutHeadGlyph(n, el.duration)),
+  const chord = layoutChord(notes, positions, stemUp, slash ? [null] : accNames, {
+    headGlyph: slash ? slashHeadGlyph(el.duration) : noteheadForDuration(el.duration),
+    headGlyphs: notes.map((n) => (slash ? slashHeadGlyph(el.duration) : layoutHeadGlyph(n, el.duration))),
     dots: el.dots || 0,
     duration: el.duration,
     flagged: !beamed && el.duration !== 'whole' && !!flagForDuration(el.duration, stemUp),
@@ -90,6 +93,7 @@ function notationExtents(el, positions, stemUp, accNames, beamed, theme) {
 /** Tab-staff extents (px) of one beat: half the widest fret-label knock-out (`labelOpts`: fretLabel's). */
 export function tabExtents(el, theme, labelOpts) {
   if (el.type === 'rest') return { left: 0, right: 0 };
+  if (isSlashBeat(el)) { const h = tabSlashHalf(el, theme); return { left: h, right: h }; }
   let half = 0;
   (el.notes || []).forEach((n) => {
     if (n.string == null || n.fret == null) return;
@@ -130,14 +134,14 @@ function trackEvents(track, mi, theme) {
   const measure = track.measures[mi];
   if (!isTwoVoiceMeasure(measure)) {
     const accs = track.showStandardNotation ? resolveMeasureAccidentals(track, mi) : null;
-    return voiceEvents(track, measure, measure.beats, accs, null, theme, { tabBand: true, arpeggio: true, fingers: true });
+    return voiceEvents(track, measure, measure.beats, accs, null, theme, { tabBand: true, arpeggio: true, fingers: true, clef: clefAt(track, mi) });
   }
   // Two voices: voice 2 (`events2`) has its own TAB rhythm-band row, no arpeggio and no fingering;
   // rests not merged with the other voice's sit in their voice's band row (`merged`: full-size, in the staff).
   const [a1, a2] = track.showStandardNotation ? resolveVoiceAccidentals(track, mi) : [null, null];
   const merged = mergedRestPairs(measure.beats, measure.voice2Beats, measure.timeSignature);
-  const r1 = voiceEvents(track, measure, measure.beats, a1, true, theme, { tabBand: true, arpeggio: true, fingers: true, merged: merged.v1 });
-  const r2 = voiceEvents(track, measure, measure.voice2Beats, a2, false, theme, { tabBand: true, arpeggio: false, fingers: false, merged: merged.v2 });
+  const r1 = voiceEvents(track, measure, measure.beats, a1, true, theme, { tabBand: true, arpeggio: true, fingers: true, merged: merged.v1, clef: clefAt(track, mi) });
+  const r2 = voiceEvents(track, measure, measure.voice2Beats, a2, false, theme, { tabBand: true, arpeggio: false, fingers: false, merged: merged.v2, clef: clefAt(track, mi) });
   combineVoices(r1.events, r2.events, measure, theme, merged);
   return {
     events: r1.events, events2: r2.events, end: rmax(r1.end, r2.end), wholeMeasureRest: r1.wholeMeasureRest, empty: false,
@@ -151,18 +155,20 @@ function trackEvents(track, mi, theme) {
  * automatic); `tabBand` / `arpeggio` / `fingers` whether TAB rhythm-band
  * extents, arpeggio room and left-hand fingering room count; `merged` (two
  * voices only) the beat indices of merged rests, every other rest being a
- * band-row rest.
+ * band-row rest; `clef` the clef in force (clef.js clefAt).
  */
-function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, arpeggio, fingers, merged = null }) {
+function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, arpeggio, fingers, merged = null, clef }) {
   const beams = groupBeams(beats, measure.timeSignature);
-  const positionsOf = (el) => (el.notes || []).map((n) => (n.pitch == null ? 4 : notePosition(n, track.clef)));
+  const positionsOf = (el) => (isSlashBeat(el) ? [SLASH_POSITION] : (el.notes || []).map((n) => (n.pitch == null ? 4 : clefNotePosition(n, clef))));
+  // Rhythm slashes stem up (unless the voice forces a direction), alone or in a beam group.
+  const slashUp = (idx) => (idx.some((i) => isSlashBeat(beats[i])) ? true : null);
   // Final stem direction per beat: a beam group's shared direction (its overall range), else the beat's own.
   const groupStem = new Map();
   beams.forEach((grp) => {
     if (grp.length < 2) return;
     const all = grp.flatMap((i) => positionsOf(beats[i]));
     if (!all.length) return;
-    const up = forcedUp ?? stemUpFor(all);
+    const up = forcedUp ?? slashUp(grp) ?? stemUpFor(all);
     grp.forEach((i) => groupStem.set(i, up));
   });
   // Beats in a TAB beam group (no flag), only when the TAB staff shows rhythm.
@@ -199,7 +205,7 @@ function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, ar
     let leftFirst = 0; let chordFirst = null; let accidentalsFirst = null;
     if (track.showStandardNotation) {
       const positions = positionsOf(el);
-      const stemUp = groupStem.has(bi) ? groupStem.get(bi) : forcedUp ?? (positions.length ? stemUpFor(positions) : true);
+      const stemUp = groupStem.has(bi) ? groupStem.get(bi) : forcedUp ?? slashUp([bi]) ?? (positions.length ? stemUpFor(positions) : true);
       const beamed = groupStem.has(bi);
       accidentals = accs[bi].names;
       const n = notationExtents(el, positions, stemUp, accidentals, beamed, theme);

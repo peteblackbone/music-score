@@ -8,8 +8,8 @@
  * nested transforms.
  *
  * Per staff: staff lines, system header (clef, key, time), each measure's
- * opening repeat barline, mid-system key/time change, content and closing
- * barline, and the courtesy signature after the last barline.
+ * opening repeat barline, mid-system clef and key/time change, content and
+ * closing barline, and the courtesy clef/signature after the last barline.
  */
 import { group } from './svgUtil.js';
 import { drawStaffLines, drawClef, drawKeySignature, drawTimeSignature, drawStaffBarline } from './staff.js';
@@ -29,6 +29,9 @@ import { glyphBox } from '../glyphMetrics.js';
 import { noteheadForDuration } from '../glyphs.js';
 import { isTwoVoiceMeasure, voiceOf } from '../twoVoice.js';
 import { tiedFretOpts } from '../textMetrics.js';
+import { clefAt } from '../clef.js';
+import { CLEF_CHANGE_SCALE } from '../layout/systems.js';
+import { renderMultiRest } from './multiRest.js';
 
 // Top staff line -> lowest allowed tuplet bracket line. The end ticks hang 0.5 sp below the
 // line and the number is centred on it, so 1 sp keeps both at least 0.5 sp clear of the staff.
@@ -95,7 +98,9 @@ function drawStaff(g, system, sysIdx, staff, theme) {
   const row2Y = twoVoice.length ? tabRow2TopY(twoVoice, track.tuning.length, lineBottom, theme) : null;
   measures.forEach((measure) => drawMeasure(g, measure, staff, theme, row2Y));
   if (system.courtesy) {
-    drawSignatureChange(g, system.courtesy, system.tracks[staff.ti].courtesy, staff, theme, 'courtesy');
+    const lastM = measures[measures.length - 1];
+    const next = (lastM.multiRest?.lastMi ?? lastM.measureIndex) + 1;
+    drawSignatureChange(g, system.courtesy, system.tracks[staff.ti].courtesy, staff, theme, 'courtesy', next);
   }
 }
 
@@ -111,28 +116,32 @@ function drawSystemHeader(g, system, firstMeasure, staff, theme) {
     }
     return;
   }
-  g.appendChild(drawClef(h.clefX, lineBottom, track.clef, track.octaveClef, theme));
+  const clef = clefAt(track, system.measureIndices[0]);
+  g.appendChild(drawClef(h.clefX, lineBottom, clef, track.octaveClef, theme));
   if (firstMeasure.keySignature) {
-    g.appendChild(drawKeySignature(h.keyX, lineBottom, firstMeasure.keySignature, track.clef, theme).node);
+    g.appendChild(drawKeySignature(h.keyX, lineBottom, firstMeasure.keySignature, clef, theme).node);
   }
   if (h.showTime) g.appendChild(drawTimeSignature(h.timeX, lineBottom, firstMeasure.timeSignature, theme));
 }
 
 /**
  * A key and/or time signature drawn after the start of a measure
- * (mid-system change) or after the system's last barline (courtesy).
+ * (mid-system change) or after the system's last barline (courtesy, which
+ * may start with a reduced clef: `sig.clef` at `pos.clefX`, notation only).
  * `pos` gives the x of each part: `{ keyX, timeX }`; `sig` what to draw:
- * `{ key: { to, from } | null, time: ts | null }`.
+ * `{ key: { to, from } | null, time: ts | null }`; `mi` the measure the change
+ * belongs to (its clef in force places the key signature).
  */
-function drawSignatureChange(g, pos, sig, staff, theme, cls) {
+function drawSignatureChange(g, pos, sig, staff, theme, cls, mi) {
   if (!sig) return;
   const { track, lineBottom } = staff;
   const tabOnly = staff.kind === 'tab' && !track.showStandardNotation;
   if (staff.kind !== 'notation' && !tabOnly) return;
   if (tabOnly && !sig.time) return;
   const parts = cls ? group({ class: cls }) : g;
+  if (sig.clef && !tabOnly) parts.appendChild(clefChange(pos.clefX, sig.clef, staff, theme, 'courtesy-clef'));
   if (sig.key && !tabOnly) {
-    parts.appendChild(drawKeySignature(pos.keyX, lineBottom, sig.key.to, track.clef, theme, sig.key.from).node);
+    parts.appendChild(drawKeySignature(pos.keyX, lineBottom, sig.key.to, clefAt(track, mi), theme, sig.key.from).node);
   }
   if (sig.time) parts.appendChild(drawTimeSignature(pos.timeX, tabOnly ? tabTimeBaseline(staff, theme) : lineBottom, sig.time, theme));
   if (parts !== g) g.appendChild(parts);
@@ -146,13 +155,19 @@ function tabTimeBaseline(staff, theme) {
   return staff.lineBottom / 2 + 2 * theme.staffLineSpacing;
 }
 
+/** A reduced clef (clef change or courtesy clef) in `<g class="clef ${cls}">`. */
+function clefChange(x, clef, staff, theme, cls) {
+  return group({ class: `clef ${cls}` }, [drawClef(x, staff.lineBottom, clef, staff.track.octaveClef, theme, CLEF_CHANGE_SCALE)]);
+}
+
 /** One measure of one staff: opening repeat, mid-system change, content, closing barline (`row2Y`: drawTabMeasure). */
 function drawMeasure(g, measure, staff, theme, row2Y) {
   const { track, kind, lineBottom } = staff;
   if (measure.startBarline) {
     g.appendChild(drawStaffBarline(measure.startBarline.x, barlineStaff(staff, theme), measure.startBarline.type, theme));
   }
-  if (measure.midSig) drawSignatureChange(g, measure.midSig, measure.midSig, staff, theme, null);
+  if (measure.clefChange && kind === 'notation') g.appendChild(clefChange(measure.clefChange.x, measure.clefChange.clef, staff, theme, 'clef-change'));
+  if (measure.midSig) drawSignatureChange(g, measure.midSig, measure.midSig, staff, theme, null, measure.measureIndex);
 
   if (kind === 'notation') drawNotationMeasure(g, measure, track, lineBottom, theme);
   else drawTabMeasure(g, measure, track, lineBottom, theme, row2Y);
@@ -178,6 +193,7 @@ function barlineStaff(staff, theme) {
  * voice 2 (stems down, in `<g class="voice-2">`) each on its own.
  */
 function drawNotationMeasure(g, measure, track, notationBaselineY, theme) {
+  if (measure.multiRest) { renderMultiRest(g, measure, 'notation', notationBaselineY, theme); return; }
   if (measure.wholeRest && !measure.elements.length) {
     // Empty measure: an implicit whole-measure rest (ui.md §4, design Q9).
     renderWholeMeasureRest(g, measure.wholeRest.x, notationBaselineY, theme);
@@ -281,6 +297,8 @@ function drawTupletBrackets(g, tupletGroups, elements, notationBaselineY, theme,
  * voice 2's rhythm row (draw/tabRhythm.js tabRow2TopY), two-voice measures only.
  */
 function drawTabMeasure(g, measure, track, tabBaselineY, theme, row2Y) {
+  // A multi-measure rest shows on TAB only with TAB rhythm (else the TAB stays blank).
+  if (measure.multiRest) { if (track.tabRhythm) renderMultiRest(g, measure, 'tab', tabBaselineY, theme); return; }
   measure.elements.forEach((layoutEl) => {
     const labelOpts = tiedFretOpts(track, layoutEl.el);
     layoutEl.tabRendered = renderTabElement(g, { ...layoutEl, tabBaselineY }, track.tuning.length, theme, labelOpts);

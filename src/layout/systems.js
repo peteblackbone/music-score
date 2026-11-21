@@ -4,8 +4,8 @@
  *
  * - per-system header (clef, key, time) widths, max over all staves;
  * - time signature only on system 1 and where it changes;
- * - mid-system key/time changes and courtesy signatures at the end of a
- *   system whose successor starts with a change;
+ * - mid-system clef/key/time changes and courtesy clefs/signatures at the
+ *   end of a system whose successor starts with a change (clefs at 0.75 size);
  * - repeat-start barlines at the start of their measure;
  * - instrument-name indents (names themselves are drawn in draw/decor.js);
  * - greedy system breaking and justification (all systems except the last,
@@ -16,7 +16,8 @@
  * All widths px. Pure functions, no DOM.
  */
 import { glyphBox, glyphStringBox } from '../glyphMetrics.js';
-import { Glyph, accidentalGlyph, timeSigDigits, clefGlyph } from '../glyphs.js';
+import { Glyph, accidentalGlyph, timeSigDigits } from '../glyphs.js';
+import { clefAt, notationClefChange, clefGlyphFor } from '../clef.js';
 import { estimateTextWidth } from '../textMetrics.js';
 
 export const KEY_STEP_SP = 1.1;          // between key-signature accidentals
@@ -26,6 +27,8 @@ const HEADER_TO_NOTE_SP = 1.5;           // last header item -> first note (plus
 const MID_SIG_GAP_SP = 1;                // opening barline -> mid-system key/time
 const COURTESY_GAP_SP = 0.75;            // last barline -> courtesy signature
 const COURTESY_TAIL_SP = 0.5;            // courtesy signature -> staff end
+export const CLEF_CHANGE_SCALE = 0.75;   // clef change / courtesy clef size (of a header clef)
+const CLEF_CHANGE_GAP_SP = 0.75;         // opening barline / repeat sign -> clef change
 export const REPEAT_START_WIDTH_SP = 1.8;       // thick 0.5 + 0.4 + thin + 0.4 + dots
 export const REPEAT_END_START_WIDTH_SP = 3.4;   // dots + 0.4 + thin + 0.4 + thick 0.5 + 0.4 + thin + 0.4 + dots
 const REPEAT_AFTER_HEADER_SP = 1;        // header -> repeat-start barline at a system start
@@ -76,7 +79,7 @@ const notationTracks = (score) => score.tracks.filter((t) => t.showStandardNotat
 const timeSigTracks = (score) => score.tracks.filter((t) => t.showStandardNotation || t.showTablature);
 
 /**
- * Header of a system starting at measure `mi`: x offsets from the
+ * Header of a system starting at measure `mi` (clefs in force there): x offsets from the
  * system-start x of clef, tab clef (centre), key and time, whether the time
  * signature is shown, and `width` = offset of the first measure's column
  * (its own lead padding then adds measurePaddingSp + left extent, so the
@@ -86,7 +89,7 @@ export function headerLayout(mi, score, theme, isFirstSystem) {
   const s = theme.staffLineSpacing;
   const nTracks = notationTracks(score);
   let clefW = 0;
-  nTracks.forEach((t) => { clefW = Math.max(clefW, glyphBox(clefGlyph(t.clef, t.octaveClef)).width); });
+  nTracks.forEach((t) => { clefW = Math.max(clefW, glyphBox(clefGlyphFor(clefAt(t, mi), t.octaveClef)).width); });
   score.tracks.forEach((t) => {
     if (t.showTablature) clefW = Math.max(clefW, tabClefMetrics(t.tuning.length, theme).width / s);
   });
@@ -147,21 +150,47 @@ export function trackSignatureChange(track, mi) {
   };
 }
 
-/** Width (px) of a courtesy signature for a change at measure `mi`, incl. gaps; 0 if none. */
+/**
+ * Width (px) of the clef change at measure `mi`: the widest changing clef
+ * over notation staves at CLEF_CHANGE_SCALE; 0 when no staff changes clef.
+ */
+export function clefChangeWidth(mi, score, theme) {
+  let w = 0;
+  notationTracks(score).forEach((t) => {
+    const c = notationClefChange(t, mi);
+    if (c) w = Math.max(w, glyphBox(clefGlyphFor(c, t.octaveClef)).width * CLEF_CHANGE_SCALE);
+  });
+  return w * theme.staffLineSpacing;
+}
+
+/** Per-track courtesy for a change at measure `mi`: trackSignatureChange plus `clef` when its notation staff changes clef. */
+export function trackCourtesy(track, mi) {
+  const sig = trackSignatureChange(track, mi);
+  const clef = notationClefChange(track, mi);
+  if (!clef) return sig;
+  return { key: sig ? sig.key : null, time: sig ? sig.time : null, clef };
+}
+
+/** Width (px) of a courtesy clef and/or signature for a change at measure `mi`, incl. gaps; 0 if none. */
 export function courtesyWidth(mi, score, theme) {
+  const s = theme.staffLineSpacing;
   const sig = mi < score.measureCount ? signatureChange(mi, score, theme) : null;
+  const cw = mi < score.measureCount ? clefChangeWidth(mi, score, theme) : 0;
+  if (cw > 0) return cw + (sig && sig.width > 0 ? HEADER_ITEM_GAP_SP * s + sig.width : 0) + (COURTESY_GAP_SP + COURTESY_TAIL_SP) * s;
   if (!sig || sig.width === 0) return 0;
   return sig.width + (COURTESY_GAP_SP + COURTESY_TAIL_SP) * theme.staffLineSpacing;
 }
 
 /**
  * Opening area of measure `mi`, before its lead padding: repeat-start
- * barline and/or (mid-system only) key/time change. Positions are relative
+ * barline and/or (mid-system only) clef change (CLEF_CHANGE_GAP_SP after
+ * the barline / repeat sign) and key/time change, in that order. Positions are relative
  * to the measure's x (its opening barline, or the header width offset for
  * the first measure of a system). `header` = the system header when `mi`
  * is the system's first measure, else null.
  * Returns `{ repeatX, repeatType, mergedPrev, sig: { keyX, timeX } | null, width }`
- * (`repeatType`: 'repeatStart' | 'repeatEndStart' | null).
+ * (`repeatType`: 'repeatStart' | 'repeatEndStart' | null), plus `clefX` when
+ * a staff changes clef.
  */
 export function openingLayout(mi, score, theme, header) {
   const s = theme.staffLineSpacing;
@@ -186,15 +215,19 @@ export function openingLayout(mi, score, theme, header) {
     cursor = repeatX + (repeatType === 'repeatEndStart' ? REPEAT_END_START_WIDTH_SP : REPEAT_START_WIDTH_SP) * s;
   }
   let sig = null;
+  let clefX = null;
   if (!first) {
+    const cw = clefChangeWidth(mi, score, theme);
+    if (cw > 0) { clefX = cursor + CLEF_CHANGE_GAP_SP * s; cursor = clefX + cw; }
     const ch = signatureChange(mi, score, theme);
     if (ch && ch.width > 0) {
-      const keyX = cursor + MID_SIG_GAP_SP * s;
+      const keyX = cursor + (clefX != null ? HEADER_ITEM_GAP_SP : MID_SIG_GAP_SP) * s;
       sig = { keyX, timeX: keyX + (ch.keyW > 0 ? ch.keyW + (ch.timeW > 0 ? HEADER_ITEM_GAP_SP * s : 0) : 0) };
       cursor = keyX + ch.width;
     }
   }
-  return { repeatX, repeatType: repeat ? (repeatType || 'repeatStart') : null, mergedPrev, sig, width: cursor };
+  const out = { repeatX, repeatType: repeat ? (repeatType || 'repeatStart') : null, mergedPrev, sig, width: cursor };
+  return clefX != null ? { ...out, clefX } : out;
 }
 
 /**
@@ -216,10 +249,22 @@ export function openingWidth(mi, score, theme, header) {
   return openingLayout(mi, score, theme, header).width;
 }
 
-/** Courtesy positions after the last barline at `endX` (absolute). */
+/** Courtesy positions after the last barline at `endX` (absolute); `clefX` first when a staff changes clef. */
 export function courtesyLayout(mi, score, theme, endX) {
   const s = theme.staffLineSpacing;
   const ch = signatureChange(mi, score, theme);
+  const cw = clefChangeWidth(mi, score, theme);
+  if (cw > 0) {
+    const clefX = endX + COURTESY_GAP_SP * s;
+    const w = ch ? ch.width : 0;
+    const keyX = clefX + cw + (w > 0 ? HEADER_ITEM_GAP_SP * s : 0);
+    return {
+      clefX,
+      keyX,
+      timeX: keyX + (ch && ch.keyW > 0 ? ch.keyW + (ch.timeW > 0 ? HEADER_ITEM_GAP_SP * s : 0) : 0),
+      endX: keyX + w + COURTESY_TAIL_SP * s,
+    };
+  }
   const keyX = endX + COURTESY_GAP_SP * s;
   return {
     keyX,
@@ -260,11 +305,18 @@ export function systemIndents(score, theme) {
   };
 }
 
+/** Last measure index a column stands for (a multi-measure rest's run end, else `mi`). */
+export function lastOf(columns, mi) {
+  return Math.max(mi, columns[mi]?.lastMi ?? mi);
+}
+
 /**
  * Greedy system breaking. `columns[mi]` from buildColumn. Returns
  * `[{ measureIndices, indent, header, opening[], courtesy }]` where each
  * measure fits with its own header and (if the next system starts with a
- * key/time change) the courtesy signature.
+ * key/time change) the courtesy signature. A multi-measure rest column
+ * (`lastMi`, layout/multiRest.js) stands for its whole run: the loop steps
+ * over the run's other measures.
  */
 export function breakSystems(columns, score, theme, width) {
   const s = theme.staffLineSpacing;
@@ -283,10 +335,10 @@ export function breakSystems(columns, score, theme, width) {
       content: header.width + openingWidth(mi, score, theme, header) + columns[mi].naturalWidth + columns[mi].extraIfFirstInSystem,
     };
   };
-  for (let mi = 0; mi < columns.length; mi++) {
+  for (let mi = 0; mi < columns.length; mi = lastOf(columns, mi) + 1) {
     if (!cur) { open(mi); continue; }
     const add = openingWidth(mi, score, theme, null) + columns[mi].naturalWidth;
-    const courtesyNext = courtesyWidth(mi + 1, score, theme);
+    const courtesyNext = courtesyWidth(lastOf(columns, mi) + 1, score, theme);
     if (cur.content + add + courtesyNext <= cur.usable + 1e-6) {
       cur.measureIndices.push(mi);
       cur.content += add;
@@ -308,7 +360,7 @@ export function breakSystems(columns, score, theme, width) {
 export function justifySystem(sys, columns, score, theme, isLast) {
   const cols = sys.measureIndices.map((mi) => columns[mi]);
   const lastMi = sys.measureIndices[sys.measureIndices.length - 1];
-  const courtesy = isLast ? 0 : courtesyWidth(lastMi + 1, score, theme);
+  const courtesy = isLast ? 0 : courtesyWidth(lastOf(columns, lastMi) + 1, score, theme);
   let fixed = sys.header.width + courtesy;
   sys.measureIndices.forEach((mi, li) => { fixed += openingWidth(mi, score, theme, li === 0 ? sys.header : null) + columns[mi].leadPad + (li === 0 ? columns[mi].extraIfFirstInSystem : 0); });
   const nat = cols.reduce((a, c) => a + c.gaps.reduce((b, g) => b + g.nat, 0), 0);

@@ -20,6 +20,13 @@ export const Glyph = {
   fClef: '',
   gClef8vb: '',
   fClef8vb: '',
+  gClef8va: '',
+  gClef15mb: '',
+  gClef15ma: '',
+  cClef8vb: '',
+  fClef8va: '',
+  fClef15mb: '',
+  fClef15ma: '',
   tabClef6: '', // 6stringTabClef
   tabClef4: '', // 4stringTabClef
 
@@ -32,6 +39,10 @@ export const Glyph = {
   noteheadDiamondWhole: '\uE0D8',
   noteheadDiamondHalf: '\uE0D9',
   noteheadDiamondBlack: '\uE0DB',
+  // Rhythm slashes (1.11)
+  noteheadSlashHorizontalEnds: '\uE101',
+  noteheadSlashWhiteWhole: '\uE102',
+  noteheadSlashWhiteHalf: '\uE103',
 
   // Rests
   restMaxima: '',
@@ -157,12 +168,6 @@ export const Glyph = {
 
   brace:'',
 };
-
-/** Clef name ('treble' | 'bass') -> clef glyph; `octave` picks the 8vb variant (gClef8vb / fClef8vb). */
-export function clefGlyph(clef, octave) {
-  if (clef === 'bass') return octave ? Glyph.fClef8vb : Glyph.fClef;
-  return octave ? Glyph.gClef8vb : Glyph.gClef;
-}
 
 /** Pick stroke ('down' | 'up') -> bowing glyph (down-bow / up-bow), or null */
 export function pickStrokeGlyph(kind) {

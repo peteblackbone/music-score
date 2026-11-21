@@ -250,7 +250,8 @@ test('signatures', 'courtesy signature appears at the end of the system before a
 });
 
 test('signatures', 'clef + key signature on every system; accidental count = |key|; 8vb clef when fret-derived', () => {
-  const plain = new Set([0xE050, 0xE062, 0xE052, 0xE064]);
+  // header clefs: treble / bass and their octave forms, alto / tenor (1.11 char-clefs)
+  const plain = new Set([0xE050, 0xE062, 0xE052, 0xE064, 0xE051, 0xE053, 0xE054, 0xE05C, 0xE05D, 0xE063, 0xE065, 0xE066]);
   for (const [name, score, options] of SCORES) for (const width of [600, 900]) {
     const svg = renderTree(score, width, options);
     const norm = normalizeScore(clone(score));
@@ -527,8 +528,9 @@ function scaleDrift(theme, label, keep = () => true) {
 
 // 1.8: char-voices' voice-2 TAB tremolos (m6 / m8) became its TAB staves' topmost ink; their round caps are a fixed
 // 1.3 px stroke (draw/tab.js, not a theme width), so the ink-based staff placement below them is half that stroke
-// (0.65 px) off exact doubling. Checked on its own: y within 0.67, everything else exact.
-const TAB_TREMOLO_CAP_CASES = ['char-voices'];
+// (0.65 px) off exact doubling. Checked on its own: y within 0.67, everything else exact. 1.11: char-tab-articulations'
+// string-1 TAB tremolo (m1) places its notation + TAB control track's staves the same way.
+const TAB_TREMOLO_CAP_CASES = ['char-voices', 'char-tab-articulations'];
 test('scaling', 'x2 scaling with every stroke width doubled too: all coordinates double exactly (drift <= 0.02)', () => {
   const mx = scaleDrift(SCALED_STROKES, 'strokes-scaled', (name) => !TAB_TREMOLO_CAP_CASES.includes(name));
   for (const [k, v] of Object.entries(mx)) ok(v <= 0.02, `strokes-scaled max drift ${k} = ${v.toFixed(3)} > 0.02`);
@@ -1690,7 +1692,7 @@ const dirLabelStaff = (m, si, tr) => staffOf(m, si, tr, tr.tab);
 test('directions', 'AC1: every pre-existing fixture/example emits no let-ring / pick-stroke / tap / whammy group and no U+E610 / U+E612 glyph', () => {
   let checked = 0;
   for (const [name, score, options] of SCORES) {
-    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams') || name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-legato-slides') || name.startsWith('char-note-effects') || name.startsWith('char-ornaments') || name === 'char-voices-marks' || name.startsWith('char-bends-slides')) continue; // newer fixtures using directions on purpose
+    if (name.startsWith('char-directions') || name === 'char-navigation-tab-only' || name.startsWith('char-chord-diagrams') || name.startsWith('char-techniques-11') || name.startsWith('char-strum-arpeggio') || name.startsWith('char-legato-slides') || name.startsWith('char-note-effects') || name.startsWith('char-ornaments') || name === 'char-voices-marks' || name.startsWith('char-bends-slides') || name === 'char-slashes' || name === 'char-tab-articulations') continue; // newer fixtures using directions on purpose
     for (const width of [600, 900]) {
       all(renderTree(score, width, options)).forEach(({ n }) => {
         const c = cls(n).split(' ');
@@ -3192,6 +3194,7 @@ test('tab-rhythm', 'AC8: renderTabElement still returns undefined for rests and 
 test('tab-rhythm', 'AC10: tabRhythm forced true vs false on every TAB staff of every SCORE (600/900): TAB-group nodes outside tab-rhythm keep their local coordinates (all of them where the timeline x is unchanged, else every y)', () => {
   let strict = 0; let yOnly = 0; let staffTotal = 0; let moved = 0;
   for (const [name, score, options] of SCORES) for (const width of WIDTHS_TR) {
+    if (name === 'char-multirest') continue; // 1.11: a multi-measure rest is drawn on TAB only with TAB rhythm, on purpose
     const on = tabModel(forceTab(score, true), width, options); const off = tabModel(forceTab(score, false), width, options);
     const sameSys = JSON.stringify(on.layout.systems.map((s) => s.measureIndices)) === JSON.stringify(off.layout.systems.map((s) => s.measureIndices));
     ok(sameSys, `${name}@${width}: system breaks unchanged`);
@@ -3598,7 +3601,7 @@ test('navigation', 'AC12: classes navigation, volta, volta-number, volta-open, v
   NAV_FIX.forEach((c) => all(renderTree(c.score, c.width, c.options || {})).forEach(({ n }) => cls(n).split(' ').forEach((k) => seen.add(k))));
   ['navigation', 'volta', 'volta-number', 'volta-open', 'volta-closed', 'segno', 'coda', 'jump', 'to-coda', 'fine'].forEach((k) => ok(seen.has(k), `class ${k}`));
   for (const [name, score, options] of SCORES) {
-    if (/^char-(navigation|chord-diagrams|score-text)/.test(name)) continue; // newer fixtures using navigation on purpose
+    if (/^char-(navigation|chord-diagrams|score-text|multirest)/.test(name)) continue; // newer fixtures using navigation on purpose
     ok(!all(renderTree(score, 900, options)).some(({ n }) => /navigation|volta|segno|coda|jump/.test(cls(n))), `${name}: navigation output without navigation fields`);
   }
 });
@@ -5703,8 +5706,8 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
   });
 
   test('scoreText', 'G4: every pre-1.6 case with all new fields set to garbage renders byte-identical to its snapshot', () => {
-    const pre = cases.filter((c) => !/^char-score-text-/.test(c.id));
-    const snaps = fs.readdirSync(path.join(root0, 'tests/snapshots')).filter((f) => f.endsWith('.svg') && !/^char-score-text-/.test(f));
+    const pre = cases.filter((c) => !/^char-(score-text|clefs|multirest|slashes|tab-articulations)-/.test(c.id));
+    const snaps = fs.readdirSync(path.join(root0, 'tests/snapshots')).filter((f) => f.endsWith('.svg') && !/^char-(score-text|clefs|multirest|slashes|tab-articulations)-/.test(f));
     ok(pre.length > 0 && pre.length === snaps.length, `${pre.length} pre-1.6 cases vs ${snaps.length} pre-1.6 snapshots`);
     const GARB = [null, '', '  ', {}, 0, { below: true }, { letter: 'ABCD' }];
     for (const c of pre) {
@@ -5853,8 +5856,8 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
 
   test('hands17', 'G2: every pre-1.7 case with every new field set to garbage renders byte-identical to its snapshot', () => {
     // 1.8: the voices-marks / voices-tab-rhythm(-break) / voices-tied-frets fixtures are not pre-1.7 either; 1.9: nor bends-slides-*; 1.10: nor expression-*
-    const pre = cases.filter((c) => !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression)-/.test(c.id));
-    const snaps = fs.readdirSync(path.join(root0, 'tests/snapshots')).filter((f) => f.endsWith('.svg') && !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression)-/.test(f));
+    const pre = cases.filter((c) => !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression|clefs|multirest|slashes|tab-articulations)-/.test(c.id));
+    const snaps = fs.readdirSync(path.join(root0, 'tests/snapshots')).filter((f) => f.endsWith('.svg') && !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression|clefs|multirest|slashes|tab-articulations)-/.test(f));
     ok(pre.length === 60 && snaps.length === 60, `${pre.length} pre-1.7 cases vs ${snaps.length} pre-1.7 snapshots`);
     const NOTE = [{ ornament: 'trill', finger: 9, rightFinger: 'q', leftHandTap: false }, { ornament: 5, finger: 'x', rightFinger: 1, leftHandTap: 0 },
       { ornament: {}, finger: -1, rightFinger: 'pi', leftHandTap: '' }, { ornament: '', finger: 1.5, rightFinger: null, leftHandTap: null }];
@@ -6452,6 +6455,214 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
 
   test('expr10', 'determinism and clean numbers at 400 / 600 / 900; input untouched', () => {
     for (const f of EX) for (const width of [400, 600, 900]) {
+      const before = JSON.stringify(f.score);
+      const out = serialize(renderTree(f.score, width));
+      ok(!/NaN|Infinity|undefined/.test(out), `${f.name}@${width}: bad number`);
+      ok(out === serialize(renderTree(f.score, width)), `${f.name}@${width}: two renders differ`);
+      ok(JSON.stringify(f.score) === before, `${f.name}: input mutated`);
+    }
+  });
+}
+
+// ======================= clefs, multi-measure rests, rhythm slashes, tab-only marks (1.11.0) =======================
+// Fixtures clefs, multirest, slashes and tab-articulations (all w900; characterization.js describes each measure).
+{
+  const fx = (name) => characterizationCases.find((c) => c.name === name);
+  const S11 = DEF.staffLineSpacing;
+  const has = (n, k) => cls(n).split(/\s+/).includes(k);
+  const nodesWith = (root, k) => all(root).filter(({ n }) => has(n, k)).map(({ n }) => n);
+  const staffOfTrack = (tree, si, ti, kind) => staffGroups(systemsOf(tree)[si]).find((g) => Number(g.getAttribute('data-track')) === ti && cls(g).includes(kind));
+  const posOf = (y) => Math.round(((4 * S11 - y) / (S11 / 2)) * 100) / 100; // notation staff local y -> staff position
+  const nameOf = (c) => Object.keys(GLYPH_NAMES).find((k) => GLYPH_NAMES[k] === c._text);
+  const glyphTop = (t) => num(t, 'y') - (glyphBoxOf(nameOf(t)).top * num(t, 'font-size')) / 4;
+  const glyphBottom = (t) => num(t, 'y') - (glyphBoxOf(nameOf(t)).bottom * num(t, 'font-size')) / 4;
+  const headsAt = (g, x) => g.children.filter((c) => c.tag === 'text' && [0xE0A4, 0xE0A3].includes(cpOf(c)) && Math.abs(num(c, 'x') - x) < 1);
+
+  // ---- clefs ----
+  const CL = fx('clefs');
+  test('struct111', 'clefs: alto C4 on the middle line, tenor D4 on the top space; header / change key accidentals per clef table', () => {
+    const tree = renderTree(CL.score, 900); const lay = layoutOf(CL.score, 900);
+    const va0 = staffOfTrack(tree, 0, 0, 'notation');
+    const m0 = lay.systems[0].tracks[0].measures[0]; const m2 = lay.systems[0].tracks[0].measures[2];
+    ok(headsAt(va0, m0.elements[0].x).map((h) => posOf(num(h, 'y'))).join() === '4', 'alto C4');
+    ok(headsAt(va0, m2.elements[0].x).map((h) => posOf(num(h, 'y'))).join() === '7', 'tenor D4');
+    const keys = va0.children.filter((c) => cls(c) === 'key-signature').map((k) => k.children.map((a) => posOf(num(a, 'y'))).join());
+    ok(JSON.stringify(keys) === JSON.stringify(['7,4,8', '5,8']), `viola keys ${JSON.stringify(keys)}`);
+    const gt1 = staffOfTrack(tree, 1, 1, 'notation');
+    const hk = gt1.children.filter((c) => cls(c) === 'key-signature').map((k) => k.children.map((a) => posOf(num(a, 'y'))).join());
+    ok(hk[0] === '3,6', `guitar system-2 header key in alto: ${hk}`);
+  });
+  test('struct111', 'clefs: changes at 0.75 size; x order repeat dots < clef < key < time; one x per measure across tracks; opening = widest change', () => {
+    for (const width of [400, 600, 900]) {
+      const tree = renderTree(CL.score, width); const lay = layoutOf(CL.score, width);
+      nodesWith(tree, 'clef-change').forEach((g) => ok(num(g.children[0], 'font-size') === 0.75 * 4 * S11, 'change size'));
+      nodesWith(tree, 'courtesy-clef').forEach((g) => ok(num(g.children[0], 'font-size') === 0.75 * 4 * S11, 'courtesy size'));
+      lay.systems.forEach((sys) => sys.measureIndices.forEach((mi, li) => {
+        const cc = sys.tracks.map((t) => t.measures[li].clefChange).filter(Boolean);
+        if (!cc.length) return;
+        ok(li > 0, `${width} m${mi}: a change glyph only mid-system`);
+        ok(cc.every((c) => Math.abs(c.x - cc[0].x) < EPS), `${width} m${mi}: clef x differs across tracks`);
+        const m = sys.tracks[0].measures[li];
+        const widest = Math.max(...sys.tracks.map((t) => t.measures[li].clefChange)
+          .map((c, ti) => (c ? glyphBoxOf(nameOf({ _text: GLYPH_NAMES[{ treble: 'gClef', alto: 'cClef', tenor: 'cClef', bass: 'fClef' }[c.clef.replace(/\s/g, '').toLowerCase()] ?? 'gClef'] })).width : 0)));
+        const end = m.midSig ? m.midSig.keyX : m.contentX;
+        ok(end - cc[0].x >= widest * 0.75 * S11 - EPS, `${width} m${mi}: opening narrower than the widest clef`);
+        if (m.startBarline) ok(cc[0].x > m.startBarline.x, `${width} m${mi}: clef after the repeat sign`);
+        if (m.midSig?.key && m.midSig?.time) ok(cc[0].x < m.midSig.keyX && m.midSig.keyX < m.midSig.timeX, `${width} m${mi}: clef < key < time`);
+      }));
+      // repeat dots < clef in the staff drawing (viola m5 'BASS ' after a repeat-start)
+      systemsOf(tree).forEach((sg) => staffGroups(sg).filter((g) => cls(g).includes('notation')).forEach((g) => {
+        g.children.filter((c) => cls(c) === 'clef clef-change').forEach((c) => {
+          const x = num(c.children[0], 'x');
+          const bar = g.children.filter((b) => cls(b) === 'barline' && b.children.some((d) => d.tag === 'circle') && b.children.some((d) => Math.abs(num(d, d.tag === 'circle' ? 'cx' : 'x1') - x) < 3 * S11));
+          bar.forEach((b) => ok(Math.max(...b.children.filter((d) => d.tag === 'circle').map((d) => num(d, 'cx'))) < x, `${width}: repeat dots after the clef`));
+        });
+      }));
+    }
+  });
+  test('struct111', 'clefs: courtesy clef 0.75 sp after the last barline, before courtesy key/time; next system header = clef in force at full size', () => {
+    const tree = renderTree(CL.score, 900); const lay = layoutOf(CL.score, 900);
+    const s0 = lay.systems[0];
+    ok(s0.tracks[1].courtesy?.clef === 'alto' && !s0.tracks[0].courtesy?.clef, 'guitar courtesy alto; viola none (tenor -> tenor)');
+    near(s0.courtesy.clefX, s0.lastBarlineX + 0.75 * S11, EPS, 'courtesy clef x');
+    const cc = nodesWith(systemsOf(tree)[0], 'courtesy-clef');
+    ok(cc.length === 1 && cpOf(cc[0].children[0]) === 0xE05D, 'one cClef8vb courtesy clef');
+    const hdr = (ti) => staffOfTrack(tree, 1, ti, 'notation').children.find((c) => c.tag === 'text' && Math.abs(num(c, 'x') - lay.systems[1].header.clefX) < EPS);
+    ok(cpOf(hdr(0)) === 0xE05C && cpOf(hdr(1)) === 0xE05D && cpOf(hdr(2)) === 0xE065, 'system 2 header clefs: tenor, alto 8vb (auto), bass8va (explicit)');
+    ok([0, 1, 2].every((ti) => num(hdr(ti), 'font-size') === 4 * S11), 'full size');
+    ok(cpOf(staffOfTrack(tree, 0, 2, 'notation').children.find((c) => c.tag === 'text')) === 0xE065, 'bass8va header');
+  });
+  test('struct111', 'clefs: TAB frets identical with and without clef changes', () => {
+    const noClefs = JSON.parse(JSON.stringify(CL.score), (k, v) => (k === 'clef' && typeof v === 'string' ? undefined : v));
+    // the clef changes move system breaks, so compare the fret sequence and each fret's local y
+    const tabTexts = (tree) => systemsOf(tree).flatMap((sg) => staffGroups(sg).filter((g) => cls(g).includes('tab'))).flatMap((g) => all(g).filter(({ n }) => n.tag === 'text' && /^d+$/.test(n._text)).map(({ n }) => `${n._text}@${num(n, 'y')}`));
+    ok(JSON.stringify(tabTexts(renderTree(CL.score, 900))) === JSON.stringify(tabTexts(renderTree(noClefs, 900))), 'TAB texts differ');
+  });
+
+  // ---- multi-measure rests ----
+  const MRF = fx('multirest');
+  test('struct111', 'multi-rest: 5 runs x (guitar notation + TAB, bass TAB, keys notation) = 20 bars and counts; keys TAB blank', () => {
+    const tree = renderTree(MRF.score, 900);
+    ok(nodesWith(tree, 'multi-rest').length === 20 && nodesWith(tree, 'multi-rest-count').length === 20, `${nodesWith(tree, 'multi-rest').length} bars`);
+    systemsOf(tree).forEach((sg, si) => ok(!nodesWith(staffOfTrack(tree, si, 2, 'tab'), 'multi-rest').length, 'keys TAB'));
+    const counts = nodesWith(staffOfTrack(tree, 0, 0, 'notation'), 'multi-rest-count').map((g) => g.children[0]._text);
+    const digits = (k) => String.fromCodePoint(0xE080 + k);
+    ok(JSON.stringify(counts) === JSON.stringify([digits(4), digits(2), digits(2), digits(2)]), 'counts 4 2 2 2');
+  });
+  test('struct111', 'multi-rest: H-bar inset >= 1 sp, >= 2 sp long, centred on the middle line; strokes 2nd-4th line; count centred 0.5 sp above the top line', () => {
+    for (const width of [400, 600, 900]) {
+      const tree = renderTree(MRF.score, width); const lay = layoutOf(MRF.score, width);
+      lay.systems.forEach((sys, si) => sys.tracks.forEach((t, ti) => t.measures.forEach((m) => {
+        if (!m.multiRest) return;
+        ok(m.multiRest.x1 >= m.contentX + S11 - EPS && m.multiRest.x2 <= m.endX - S11 + EPS && m.multiRest.x2 - m.multiRest.x1 >= 2 * S11 - EPS, `${width} m${m.measureIndex}: bar ends`);
+        if (ti !== 2) return;
+        const g = staffOfTrack(tree, si, 2, 'notation');
+        const bar = nodesWith(g, 'multi-rest').find((b) => Math.abs(num(b.children[0], 'x') - m.multiRest.x1) < EPS);
+        const [r, l1, l2] = bar.children;
+        near(num(r, 'y') + num(r, 'height') / 2, 2 * S11, EPS, 'bar centre on the middle line');
+        near(num(r, 'height'), S11, EPS, 'bar thickness 1 sp');
+        ok(Math.abs(num(l1, 'y1') - S11) < EPS && Math.abs(num(l2, 'y2') - 3 * S11) < EPS, 'strokes');
+        const c = nodesWith(g, 'multi-rest-count').map((k) => k.children[0]).find((k) => Math.abs(num(k, 'x') - (m.multiRest.x1 + m.multiRest.x2) / 2) < EPS);
+        ok(!!c && c.getAttribute('text-anchor') === 'middle', 'count centred');
+        near(glyphBottom(c), -0.5 * S11, EPS, 'count 0.5 sp above the top line');
+      })));
+    }
+  });
+  test('struct111', 'multi-rest: measure numbers, segno / jump at the run column, endings and lone rests stay, a run can open a system', () => {
+    const lay = layoutOf(MRF.score, 900);
+    ok(JSON.stringify(lay.systems.map((s) => s.measureIndices)) === JSON.stringify([[0, 1, 5, 7, 9, 10], [12, 13, 14, 15, 16, 17], [18, 20]]), 'systems');
+    const tree = renderTree(MRF.score, 900);
+    const numbers = systemsOf(tree).slice(1).map((sg) => all(sg).find(({ n }) => cls(n) === 'measure-number')?.n._text);
+    ok(JSON.stringify(numbers) === JSON.stringify(['13', '19']), `numbers ${numbers}`);
+    const s0 = lay.systems[0]; const ms = s0.tracks[0].measures;
+    const segno = s0.marks.find((k) => k.kind === 'segno'); const jump = s0.marks.find((k) => k.kind === 'jump');
+    ok(segno.x > ms[1].x && segno.x < ms[1].endX, 'segno in the run column');
+    near(jump.xEnd, ms[5].endX, EPS, 'jump at the run end');
+    ok(ms[3].barline === 'repeatEnd' && ms[3].startBarline?.type === 'repeatStart', 'repeat-start .. repeat-end run');
+  });
+
+  // ---- rhythm slashes ----
+  const SLF = fx('slashes');
+  test('struct111', 'slashes: code point per duration on the middle line, stems up from the slash corner, beams; no accidental, ledger or tie', () => {
+    const tree = renderTree(SLF.score, 900);
+    const g = staffOfTrack(tree, 0, 0, 'notation');
+    const sl = nodesWith(g, 'slash').map((s) => s.children[0]);
+    ok(JSON.stringify(sl.map(cpOf)) === JSON.stringify([0xE101, 0xE101, 0xE101, 0xE101, 0xE101, 0xE101, 0xE103, 0xE101, 0xE101, 0xE102]), `code points ${sl.map(cpOf).map((c) => c.toString(16))}`);
+    sl.forEach((h) => near(num(h, 'y'), 2 * S11, EPS, 'middle line'));
+    const stems = g.children.filter((c) => c.tag === 'line' && num(c, 'stroke-width') === DEF.stemWidth);
+    sl.filter((h) => cpOf(h) !== 0xE102).forEach((h) => {
+      const w = glyphBoxOf(nameOf(h)).width;
+      const ax = num(h, 'x') + ((cpOf(h) === 0xE103 ? 3.12 : 2.124) - w / 2) * S11;
+      const st = stems.find((l) => Math.abs(num(l, 'x1') - ax) < 0.05);
+      ok(!!st, 'stem at the slash up anchor');
+      near(Math.max(num(st, 'y1'), num(st, 'y2')), S11, 0.05, 'stem base on the slash top corner');
+      ok(Math.min(num(st, 'y1'), num(st, 'y2')) < 0, 'stem up');
+    });
+    ok(nodesWith(g, 'beam').length + g.children.filter((c) => c.tag === 'path').length > 0, 'beams');
+    ok(!all(g).some(({ n }) => n.tag === 'text' && [0xE260, 0xE261, 0xE262].includes(cpOf(n))), 'no accidental');
+    ok(!all(g).some(({ n }) => /\btie\b/.test(cls(n))), 'no tie');
+  });
+  test('struct111', 'slashes: TAB slash over a backing rect in the column; voice-2 slash drawn as notes; tab-only band', () => {
+    const tree = renderTree(SLF.score, 900);
+    const ts = nodesWith(tree, 'tab-slash');
+    ok(ts.length === 20 + 13, `${ts.length} TAB slashes`); // guitar 6 + 3 + 1 + 7 + 3, rhythm 5 + 2 + 1 + 4 + 1
+    ts.forEach((t) => {
+      const [r, gl] = t.children;
+      ok(r.tag === 'rect' && gl.tag === 'text' && num(r, 'x') < num(gl, 'x') && num(r, 'x') + num(r, 'width') > num(gl, 'x'), 'rect behind glyph');
+    });
+    const v2 = nodesWith(staffOfTrack(tree, 1, 0, 'notation'), 'voice-2')[0];
+    ok(!nodesWith(v2, 'slash').length && v2.children.filter((c) => c.tag === 'text' && [0xE0A3, 0xE0A4].includes(cpOf(c))).length === 3, 'voice 2: three notes');
+  });
+
+  // ---- tab-only articulations and fermatas ----
+  const TAF = fx('tab-articulations');
+  test('struct111', 'tab marks: articulations above the TAB top line, frets and marks, below the P.M. / let-ring labels and the pick stroke; stack order', () => {
+    const tree = renderTree(TAF.score, 900);
+    const g = staffOfTrack(tree, 0, 0, 'tab');
+    const arts = nodesWith(g, 'tab-articulations');
+    ok(arts.length === 12, `${arts.length} articulation stacks`);
+    ok(JSON.stringify(arts[0].children.map(cpOf)) === JSON.stringify([0xE4A2, 0xE4A4, 0xE4A0]), 'staccato, tenuto, accent');
+    arts.forEach((a) => {
+      ok(glyphBottom(a.children[0]) <= -0.5 * S11 + EPS, 'above the top line');
+      for (let i = 1; i < a.children.length; i++) ok(glyphBottom(a.children[i]) < glyphTop(a.children[i - 1]), 'stacked upward');
+    });
+    const artTop = (x) => Math.min(...arts.filter((a) => Math.abs(num(a.children[0], 'x') - x) < 1).flatMap((a) => a.children.map(glyphTop)));
+    nodesWith(g, 'palm-mute').concat(nodesWith(g, 'let-ring')).forEach((l) => {
+      const t = l.children.find((c) => c.tag === 'text');
+      ok(num(t, 'y') < artTop(num(t, 'x')), 'label above the articulation');
+    });
+    const pick = nodesWith(g, 'pick-stroke')[0].children[0];
+    ok(glyphBottom(pick) < artTop(num(pick, 'x')), 'pick stroke above');
+    const tap = all(g).find(({ n }) => n.tag === 'text' && n._text === 'T').n;
+    ok(num(tap, 'y') < artTop(num(tap, 'x')), 'tap T above');
+  });
+  test('struct111', 'tab marks: fermatas on notes and a rest above the column ink, below beat text; none on the control tracks; no articulations on rests', () => {
+    const tree = renderTree(TAF.score, 900);
+    const g = staffOfTrack(tree, 0, 0, 'tab');
+    const fer = nodesWith(g, 'tab-fermata').map((f) => f.children[0]);
+    ok(JSON.stringify(fer.map(cls)) === JSON.stringify(['fermata', 'fermata fermata-short', 'fermata fermata-long', 'fermata', 'fermata']), `fermatas ${fer.map(cls)}`);
+    fer.forEach((f) => {
+      const t = f.children[0]; const x = num(t, 'x'); const half = (glyphBoxOf(nameOf(t)).width / 2) * S11;
+      const others = all(g).filter(({ n, parents }) => !parents.includes(f) && n !== f && ['text', 'line', 'rect', 'path'].includes(n.tag) && n._text !== 'rit.' && !parents.some((p) => /tab-fermata/.test(cls(p))))
+        .map(({ n }) => n).filter((n) => { const b = nodeBox(n); return b.x1 < x + half && b.x2 > x - half; });
+      const inkTop = Math.min(...others.map((n) => nodeBox(n).top));
+      ok(num(t, 'y') <= inkTop - 0.5 * S11 + EPS, `fermata (origin = its bottom edge) at ${x}: ${glyphBottom(t)} vs ink ${inkTop} (${others.filter((n) => nodeBox(n).top === inkTop).map((n) => n.tag + ' ' + cls(n) + ' ' + (n._text || '')).join()})`);
+    });
+    const rit = all(g).find(({ n }) => n.tag === 'text' && n._text === 'rit.').n;
+    ok(num(rit, 'y') < glyphTop(fer[2].children[0]), 'beat text outside the fermata');
+    for (const [ti, kind] of [[1, 'tab'], [2, 'tab'], [2, 'notation']]) {
+      const c = staffOfTrack(tree, 0, ti, kind);
+      ok(!nodesWith(c, 'tab-articulations').length && !nodesWith(c, 'tab-fermata').length, `track ${ti} ${kind}: no tab-only marks`);
+    }
+    const lay = layoutOf(TAF.score, 900);
+    // (single-voice measures: a voice-1 rest's column in m4 carries voice 2's tenuto on purpose)
+    const restXs = lay.systems[0].tracks[0].measures.filter((m) => !m.elements2).flatMap((m) => m.elements.filter((le) => le.el.type === 'rest').map((le) => le.x));
+    ok(restXs.length === 1, 'one single-voice rest');
+    ok(!nodesWith(g, 'tab-articulations').some((a) => restXs.some((x) => Math.abs(num(a.children[0], 'x') - x) < EPS)), 'no articulations on rests');
+  });
+
+  test('struct111', 'determinism and clean numbers at 400 / 600 / 900; input untouched', () => {
+    for (const f of [CL, MRF, SLF, TAF]) for (const width of [400, 600, 900]) {
       const before = JSON.stringify(f.score);
       const out = serialize(renderTree(f.score, width));
       ok(!/NaN|Infinity|undefined/.test(out), `${f.name}@${width}: bad number`);

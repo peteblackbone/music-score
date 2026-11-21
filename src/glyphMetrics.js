@@ -145,6 +145,18 @@ export const GLYPH_BOX = {
   metNote16thUp: { bBoxNE: [2.145, 2.833], bBoxSW: [-0.02, -0.583] },
   metNote32ndUp: { bBoxNE: [2.208, 3.708], bBoxSW: [-0.02, -0.583] },
   metAugmentationDot: { bBoxNE: [0.458, 0.27], bBoxSW: [-0.02, -0.27] },
+  // 1.11 octave clefs, C clef 8vb and rhythm-slash noteheads: measured the same way, padded outward by
+  // 0.02 sp on every side. Slash stem anchors follow the Bravura metadata convention (corner of the slash).
+  gClef8va: { bBoxNE: [2.708, 5.333], bBoxSW: [-0.02, -2.708] },
+  gClef15mb: { bBoxNE: [2.708, 4.458], bBoxSW: [-0.02, -3.583] },
+  gClef15ma: { bBoxNE: [2.708, 5.333], bBoxSW: [-0.02, -2.708] },
+  cClef8vb: { bBoxNE: [2.833, 2.083], bBoxSW: [-0.02, -3.02] },
+  fClef8va: { bBoxNE: [2.77, 2.02], bBoxSW: [-0.083, -2.583] },
+  fClef15mb: { bBoxNE: [2.77, 1.083], bBoxSW: [-0.083, -3.02] },
+  fClef15ma: { bBoxNE: [2.77, 2.02], bBoxSW: [-0.083, -2.583] },
+  noteheadSlashHorizontalEnds: { bBoxNE: [2.145, 1.02], bBoxSW: [-0.02, -1.02], stemUpSE: [2.124, 1.0], stemDownNW: [0, -1.0] },
+  noteheadSlashWhiteWhole: { bBoxNE: [3.958, 1.02], bBoxSW: [-0.02, -1.02] },
+  noteheadSlashWhiteHalf: { bBoxNE: [3.145, 1.02], bBoxSW: [-0.02, -1.02], stemUpSE: [3.12, 1.0], stemDownNW: [0, -1.0] },
 };
 
 const BY_CHAR = new Map();

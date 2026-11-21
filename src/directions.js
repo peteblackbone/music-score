@@ -196,9 +196,9 @@ export function bendOf(raw) {
   return { type: 'bend', amount: 'full', release: false, hold: false };
 }
 
-/** Whether `el` is a main (non-grace) beat with at least one note. */
+/** Whether `el` is a main (non-grace) beat with at least one note, or a rhythm slash (slash.js; its beat-level marks draw). */
 export function isMainNoteBeat(el) {
-  return !!el && el.type !== 'rest' && el.type !== 'grace' && (el.notes || []).length > 0;
+  return !!el && el.type !== 'rest' && el.type !== 'grace' && ((el.notes || []).length > 0 || el.slash === true);
 }
 
 /** Canonical pick stroke ('down' | 'up') of a raw `pickStroke` value, or null. Idempotent. */

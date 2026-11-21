@@ -2040,7 +2040,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   // the 52 pre-1.4 cases (the 1.4.0 two-voice fixtures char-voices-*, the 1.5.0 char-note-effects-*, the 1.6.0
   // char-score-text-*, the 1.7.0 char-ornaments-* and the 1.9.0 char-bends-slides-* came later)
   const isVoices = (id) => id.startsWith('char-voices-');
-  const isPost14 = (id) => /^char-(voices|note-effects|score-text|ornaments|bends-slides|expression)-/.test(id);
+  const isPost14 = (id) => /^char-(voices|note-effects|score-text|ornaments|bends-slides|expression|clefs|multirest|slashes|tab-articulations)-/.test(id);
   const cases = (await import('./cases.mjs')).cases.filter((c) => !isPost14(c.id));
   const { computeLayout } = await imp('src/layout/index.js');
   const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
@@ -2660,7 +2660,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   const { group: svgGroup } = await imp('src/draw/svgUtil.js');
   // the 57 pre-1.6 cases (the 1.6.0 char-score-text-* fixtures use the new fields on purpose; the 1.7.0
   // char-ornaments-* and the 1.9.0 char-bends-slides-* came later)
-  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression)-/.test(c.id));
+  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression|clefs|multirest|slashes|tab-articulations)-/.test(c.id));
   const thm = resolveTheme({});
   const s = thm.staffLineSpacing;
   const ok = (c, m) => { if (!c) throw new Error(m); };
@@ -3850,7 +3850,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     return r;
   };
   // The pins describe the 63 pre-1.8 cases (the 1.8 fixtures exercise these triggers on purpose; the 1.9 char-bends-slides-* came later).
-  const pre18 = cases.filter((c) => !/^char-(voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression)-/.test(c.id));
+  const pre18 = cases.filter((c) => !/^char-(voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression|clefs|multirest|slashes|tab-articulations)-/.test(c.id));
   const scans = new Map(pre18.map((c) => [c.id, scan(c)]));
   const twoVoiceIds = [...scans].filter(([, r]) => r.two.length).map(([id]) => id);
 
@@ -4589,7 +4589,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
 
   test('pre-1.9 scan: none of the 67 cases (raw or normalized) uses a compound bend, legato slide, feedback harmonic, trill tied forward, whammyScoop / whammyBar key', () => {
     // the 1.9.0 char-bends-slides-* fixtures use them on purpose
-    const pre19 = cases.filter((c) => !/^char-(bends-slides|expression)-/.test(c.id));
+    const pre19 = cases.filter((c) => !/^char-(bends-slides|expression|clefs|multirest|slashes|tab-articulations)-/.test(c.id));
     eq(pre19.length, 67);
     const zero = { compound: 0, legato: 0, feedback: 0, trillTie: 0, whammyKeys: 0 };
     for (const c of pre19) {
@@ -4668,7 +4668,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
 // ---------- pre-1.10 characterization: dynamics, tempoText and staff positions (pins taken before the 1.10.0 change) ----------
 {
   // the 1.10.0 char-expression-* fixtures use the new keys on purpose
-  const cases = (await import('./cases.mjs')).cases.filter((c) => !/^char-expression-/.test(c.id));
+  const cases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(expression|clefs|multirest|slashes|tab-articulations)-/.test(c.id));
   const { createHash } = await import('node:crypto');
   const { staffPosition } = await imp('src/pitch.js');
   const sha = (v) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
@@ -4750,6 +4750,122 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     table.forEach(([p, clef, want]) => eq(staffPosition(p, clef), want, `${p} ${clef}`));
     eq(staffPosition('F#4'), 1);
     eq(staffPosition('Bb3', 'treble'), -3);
+  });
+}
+
+// ---------- pre-1.11 characterization: clef, key signature and header output (pins taken before the 1.11.0 change) ----------
+{
+  // the 1.11.0 char-clefs-*, char-multirest-*, char-slashes-* and char-tab-articulations-* fixtures use the new keys on purpose
+  const NEW_FIXTURE = /^char-(clefs|multirest|slashes|tab-articulations)-/;
+  const cases = (await import('./cases.mjs')).cases.filter((c) => !NEW_FIXTURE.test(c.id));
+  const { createHash } = await import('node:crypto');
+  const { keySignatureLayout } = await imp('src/pitch.js');
+  const { headerLayout } = await imp('src/layout/systems.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const theme = resolveTheme({});
+  const sha = (v) => createHash('sha256').update(typeof v === 'string' ? v : JSON.stringify(v)).digest('hex');
+  const lists = (m) => (m.voices ? m.voices.map((v, i) => [i, v.beats || []]) : [[0, m.beats || []], [1, m.voice2Beats || []]]);
+
+  test('pre-1.11 scan: none of the 73 cases (raw or normalized) has a 1.11 key (clef values, measure clef, multiMeasureRests, slash, tabArticulations)', () => {
+    eq(cases.length, 73);
+    for (const c of cases) {
+      for (const [label, sc] of [['raw', c.score], ['normalized', normalizeScore(c.score)]]) {
+        if ('multiMeasureRests' in sc) throw new Error(`${c.id} ${label}: multiMeasureRests`);
+        (sc.tracks || []).forEach((t) => {
+          if (![undefined, 'treble', 'bass'].includes(t.clef)) throw new Error(`${c.id} ${label}: track clef ${t.clef}`);
+          if ('tabArticulations' in t) throw new Error(`${c.id} ${label}: tabArticulations`);
+          (t.measures || []).forEach((m) => {
+            if ('clef' in m) throw new Error(`${c.id} ${label}: measure has clef`);
+            for (const [, beats] of lists(m)) for (const b of beats) {
+              if ('slash' in b) throw new Error(`${c.id} ${label}: beat has slash`);
+              (b.graces || []).forEach((g) => { if ('slash' in g) throw new Error(`${c.id} ${label}: grace has slash`); });
+            }
+          });
+        });
+      }
+    }
+  });
+  test('pre-1.11 scan: the scan is not vacuous (it sees treble and bass track clefs, two voices and graces)', () => {
+    const clefs = new Set(); let v2 = 0, graces = 0;
+    for (const c of cases) (c.score.tracks || []).forEach((t) => {
+      clefs.add(t.clef);
+      (t.measures || []).forEach((m) => lists(m).forEach(([vi, beats]) => { if (vi) v2 += beats.length; graces += beats.filter((b) => b.type === 'grace' || (b.graces || []).length).length; }));
+    });
+    if (!clefs.has('bass') || !clefs.has('treble') || !v2 || !graces) throw new Error(`clefs=${[...clefs]} v2=${v2} graces=${graces}`);
+  });
+
+  const variants = [];
+  for (const clef of [null, 'treble', 'bass', 'nonsense']) for (const up of [false, true]) for (const key of [0, 3, -4]) {
+    const track = { showStandardNotation: true, showTablature: true, ...(clef ? { clef } : {}), ...(up ? { writtenOctaveUp: true } : {}),
+      measures: [{ keySignature: key, timeSignature: { beats: 4, beatType: 4 }, beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'C4' }] }] }] };
+    variants.push({ id: `${clef}|${up}|${key}`, score: { tracks: [track] } });
+  }
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const byClefGroup = (fn) => {
+    const out = {};
+    for (const v of variants) (out[v.id.split('|')[0]] ||= []).push([v.id, fn(v)]);
+    return Object.fromEntries(Object.entries(out).map(([k, a]) => [k, sha(a)]));
+  };
+  const HEADER_HASHES = {
+    null: "b64a08ce2e209e38ab693f4d228b90de302dddc15a562d8bb25f3cb1a9196f8e",
+    treble: "18de9fe0fbc5a9daa6858c857105663bcaea9308a519e1f1eb438bfe40b820ed",
+    bass: "65e6f6b213ef05cafcb1ef12665e42b45f31eb710a930e9db641f50eab1d0d19",
+    nonsense: "7115bf3b12a73935b8a70916e9da6e543db172eb586573bb35805b73dbeb57f7",
+  };
+  const SVG_HASHES = {
+    null: "710c993ce645cca88e7b341afa560a460ade7e568a3fbd9191bea0a6fd24685e",
+    treble: "3ea4d6f03c405372a612c1bc9fedfd9cd37e8eb72ca10fa7e849c9a5e3bbc487",
+    bass: "aa3ed461657d85ea5fd3e9bef6fbd844df7a0cf532cdc5bf3f4083dbae121bb4",
+    nonsense: "d3d8e81c3cb71425a36601063811360da88a0358b80ba181b04968aa1cd67a9f",
+  };
+  test('pre-1.11 pin: headerLayout(0, normalized, theme, true) of single-measure scores, per track clef (null/treble/bass/nonsense) x writtenOctaveUp x key (sha256)', () => {
+    eq(variants.length, 24);
+    eq(byClefGroup((v) => headerLayout(0, normalizeScore(v.score), theme, true)), HEADER_HASHES);
+  });
+  test('pre-1.11 pin: serialized SVG of single-measure scores, per track clef x writtenOctaveUp x key (sha256)', () => {
+    eq(byClefGroup((v) => serialize(render(v.score))), SVG_HASHES);
+  });
+  test('pre-1.11 pin: an unrecognised clef name draws exactly like treble (SVG and header)', () => {
+    for (const up of [false, true]) for (const key of [0, 3, -4]) {
+      const a = variants.find((v) => v.id === `nonsense|${up}|${key}`), b = variants.find((v) => v.id === `treble|${up}|${key}`);
+      eq(serialize(render(a.score)), serialize(render(b.score)));
+      eq(headerLayout(0, normalizeScore(a.score), theme, true), headerLayout(0, normalizeScore(b.score), theme, true));
+    }
+  });
+
+  test('pre-1.11 pin: keySignatureLayout hand table, key -7..7 x treble/bass/undefined (letters, alter, staff position)', () => {
+    const L = { sharp: 'FCGDAEB'.split(''), flat: 'BEADGCF'.split('') };
+    const P = {
+      treble: { sharp: [8, 5, 9, 6, 3, 7, 4], flat: [4, 7, 3, 6, 2, 5, 1] },
+      bass: { sharp: [6, 3, 7, 4, 1, 5, 2], flat: [2, 5, 1, 4, 0, 3, -1] },
+    };
+    for (const clef of ['treble', 'bass', undefined]) for (let k = -7; k <= 7; k++) {
+      const kind = k > 0 ? 'sharp' : 'flat', n = Math.abs(k);
+      const want = Array.from({ length: n }, (_, i) => ({ letter: L[kind][i], alter: k > 0 ? 1 : -1, position: P[clef || 'treble'][kind][i] }));
+      eq(keySignatureLayout(k, clef), want, `key ${k} clef ${clef}`);
+    }
+    eq(keySignatureLayout(), []);
+    eq(keySignatureLayout(2, 'nonsense'), keySignatureLayout(2, 'treble'));
+  });
+
+  test('pre-1.11 pin: none of the 73 snapshot SVGs has a clef, clef-change, courtesy-clef, multi-rest, multi-rest-count, slash, tab-slash, tab-articulations, or tab-fermata class token', () => {
+    const dir = path.join(root0, 'tests', 'snapshots');
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.svg') && !NEW_FIXTURE.test(f));
+    eq(files.length, 73);
+    const BAN = new Set(['clef', 'clef-change', 'courtesy-clef', 'multi-rest', 'multi-rest-count', 'slash', 'tab-slash', 'tab-articulations', 'tab-fermata']);
+    let seen = 0;
+    for (const f of files) {
+      const svg = fs.readFileSync(path.join(dir, f), 'utf8');
+      for (const m of svg.matchAll(/class="([^"]*)"/g)) for (const tok of m[1].split(/\s+/)) {
+        seen++;
+        if (BAN.has(tok)) throw new Error(`${f}: class token ${tok}`);
+      }
+    }
+    if (!seen) throw new Error('no class attributes scanned');
   });
 }
 
@@ -5436,7 +5552,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
   test('1.10 the 70 snapshot cases: no note gets ottavaShift; notePosition === staffPosition everywhere', () => {
     let count = 0;
-    for (const c of cases.filter((x) => !x.id.startsWith('char-expression'))) {
+    for (const c of cases.filter((x) => !/^char-(expression|clefs|multirest|slashes|tab-articulations)-/.test(x.id))) {
       for (const t of normalizeScore(c.score).tracks) for (const m of t.measures) for (const b of [...m.beats, ...(m.voice2Beats || [])]) {
         for (const n of b.notes || []) {
           if ('ottavaShift' in n) throw new Error(`${c.id}: ottavaShift`);
@@ -5857,6 +5973,739 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(tt(mid).length, 1);
     eq([tt(mid)[0].textContent, tt(mid)[0].getAttribute('x')], [tt(base)[0].textContent, tt(base)[0].getAttribute('x')]);
     eq(count(base.nodes), [0, 0, 0, 0, 0]);
+  });
+}
+
+// ---------- 1.11.0: octave clefs, C clef 8vb and slash noteheads (glyphs.js, glyphMetrics.js) ----------
+{
+  const { glyphBox, hasGlyphBox, stemAnchors } = await imp('src/glyphMetrics.js');
+  const cpOf = (name) => Glyph[name].codePointAt(0).toString(16).toUpperCase();
+  const NAMES = {
+    gClef15mb: 'E051', gClef8va: 'E053', gClef15ma: 'E054', cClef8vb: 'E05D', fClef15mb: 'E063', fClef8va: 'E065', fClef15ma: 'E066',
+    noteheadSlashHorizontalEnds: 'E101', noteheadSlashWhiteWhole: 'E102', noteheadSlashWhiteHalf: 'E103',
+  };
+  test('1.11 glyphs: 10 code points (verified in the bundled Bravura cmap), one UTF-16 unit each, each with a box', () => {
+    eq(Object.keys(NAMES).map(cpOf), Object.values(NAMES));
+    eq(Object.keys(NAMES).filter((n) => Glyph[n].length !== 1 || !hasGlyphBox(n) || !hasGlyphBox(Glyph[n])), []);
+  });
+  test('1.11 glyphs: boxes are the measured ink padded outward 0.02 sp; the pre-1.11 clef boxes are unchanged', () => {
+    const b = (n) => { const x = glyphBox(n); return [x.left, x.right, x.top, x.bottom]; };
+    eq(b('gClef8va'), [-0.02, 2.708, 5.333, -2.708]);
+    eq(b('gClef15mb'), [-0.02, 2.708, 4.458, -3.583]);
+    eq(b('cClef8vb'), [-0.02, 2.833, 2.083, -3.02]);
+    eq(b('fClef15mb'), [-0.083, 2.77, 1.083, -3.02]);
+    eq(b('fClef15ma'), [-0.083, 2.77, 2.02, -2.583]);
+    eq(b('noteheadSlashWhiteWhole'), [-0.02, 3.958, 1.02, -1.02]);
+    eq(b('gClef15ma'), b('gClef8va'));
+    eq(b('fClef8va'), b('fClef15ma'));
+    eq([b('gClef'), b('cClef'), b('fClef'), b('gClef8vb'), b('fClef8vb')],
+      [[0, 2.684, 4.392, -2.632], [0, 2.796, 2.024, -2.024], [0, 2.736, 1.048, -2.54], [0, 2.684, 4.392, -3.56], [0, 2.736, 1.048, -3.44]]);
+  });
+  test('1.11 glyphs: slash noteheads with stems have corner stem anchors; the whole slash has none', () => {
+    eq(stemAnchors('noteheadSlashHorizontalEnds'), { up: [2.124, 1.0], down: [0, -1.0] });
+    eq(stemAnchors('noteheadSlashWhiteHalf'), { up: [3.12, 1.0], down: [0, -1.0] });
+    eq(stemAnchors('noteheadSlashWhiteWhole'), null);
+  });
+}
+
+// ---------- 1.11.0: the clef module (src/clef.js) ----------
+{
+  const C = await imp('src/clef.js');
+  const { notePosition, keySignatureLayout } = await imp('src/pitch.js');
+  const cases = (await import('./cases.mjs')).cases;
+  test('1.11 clefOf: canonical names (trimmed, any case); everything else null', () => {
+    eq(C.CLEF_NAMES.map(C.clefOf), C.CLEF_NAMES);
+    eq(['  Alto', 'BASS ', 'Treble8VB', '\ttenor\n', 'bass15MA'].map(C.clefOf), ['alto', 'bass', 'treble8vb', 'tenor', 'bass15ma']);
+    eq(['nonsense', '', 'treble 8vb', 'soprano', 'percussion', 'g', null, undefined, 3, {}, ['alto'], true].map(C.clefOf), Array(12).fill(null));
+  });
+  test('1.11 trackClef: canonical track clef, else treble', () => {
+    eq([{ clef: 'Alto' }, { clef: 'nonsense' }, {}, { clef: 7 }, null, undefined].map(C.trackClef), ['alto', 'treble', 'treble', 'treble', 'treble', 'treble']);
+  });
+  test('1.11 clefAt / clefChangeAt: measure clefs apply until the next change; unknown ignored; equal = no change; measure 0 replaces the track clef', () => {
+    const t = { clef: 'bass', measures: [{}, { clef: 'Tenor' }, {}, { clef: 'tenor' }, { clef: 'bogus' }, { clef: 'bass8va' }, null, { clef: ' TREBLE ' }] };
+    eq([0, 1, 2, 3, 4, 5, 6, 7].map((mi) => C.clefAt(t, mi)), ['bass', 'tenor', 'tenor', 'tenor', 'tenor', 'bass8va', 'bass8va', 'treble']);
+    eq([0, 1, 2, 3, 4, 5, 6, 7].map((mi) => C.clefChangeAt(t, mi)), [null, 'tenor', null, null, null, 'bass8va', null, 'treble']);
+    eq([C.clefAt(t, 99), C.clefAt(t, -1)], ['treble', 'bass']);
+    const t0 = { clef: 'treble', measures: [{ clef: 'alto' }, { clef: 'alto' }] };
+    eq([C.clefAt(t0, 0), C.clefChangeAt(t0, 0), C.clefChangeAt(t0, 1)], ['alto', null, null]);
+    eq(C.clefChangeAt({ measures: [{}, { clef: 'treble8vb' }] }, 1), 'treble8vb', 'treble -> treble8vb is a change');
+    eq([C.clefAt({}, 0), C.clefAt({ clef: 'alto', measures: [] }, 3)], ['treble', 'alto']);
+  });
+  test('1.11 clefBase / clefAnchorPos: octave variants use their base', () => {
+    eq(C.CLEF_NAMES.map(C.clefBase), ['treble', 'bass', 'alto', 'tenor', 'treble', 'treble', 'treble', 'treble', 'bass', 'bass', 'bass', 'bass']);
+    eq(C.CLEF_NAMES.map(C.clefAnchorPos), [2, 6, 4, 6, 2, 2, 2, 2, 6, 6, 6, 6]);
+    eq([C.clefBase('nonsense'), C.clefAnchorPos(undefined)], ['treble', 2]);
+  });
+  test('1.11 clefNotePosition equals pitch.js notePosition for treble/bass (and their octave labels) over every note of every case', () => {
+    let n = 0;
+    // the 1.11 char-clefs fixture uses alto / tenor clefs on purpose
+    for (const c of cases.filter((x) => !x.id.startsWith('char-clefs-'))) for (const t of normalizeScore(c.score).tracks) for (const m of t.measures) {
+      for (const b of [...m.beats, ...(m.voice2Beats || [])]) for (const note of b.notes || []) {
+        if (note.pitch == null) continue;
+        for (const [clef, base] of [['treble', 'treble'], ['bass', 'bass'], ['treble8vb', 'treble'], ['bass15ma', 'bass'], [t.clef, t.clef]]) {
+          if (C.clefNotePosition(note, clef) !== notePosition(note, base)) throw new Error(`${c.id} ${note.pitch} ${clef}`);
+        }
+        n++;
+      }
+    }
+    if (n < 1000) throw new Error(`only ${n} notes`);
+  });
+  test('1.11 clefNotePosition: alto C4 on the middle line, tenor C4 on the 4th line, bottom lines F3 / D3; ottava shift on top', () => {
+    const p = (pitch, clef, ottavaShift) => C.clefNotePosition({ pitch, ...(ottavaShift ? { ottavaShift } : {}) }, clef);
+    eq([p('C4', 'alto'), p('F3', 'alto'), p('G4', 'alto'), p('C4', 'tenor'), p('D3', 'tenor'), p('A4', 'tenor')], [4, 0, 8, 6, 0, 11]);
+    eq([p('C4', 'alto', -7), p('C4', 'tenor', 7), p('C#4', 'alto'), p('Cb4', 'tenor')], [-3, 13, 4, 6]);
+  });
+  test('1.11 clefKeySignatureLayout: alto/tenor hand table; treble/bass identical to keySignatureLayout', () => {
+    const L = { sharp: 'FCGDAEB'.split(''), flat: 'BEADGCF'.split('') };
+    const P = { alto: { sharp: [7, 4, 8, 5, 2, 6, 3], flat: [3, 6, 2, 5, 1, 4, 0] }, tenor: { sharp: [2, 6, 3, 7, 4, 8, 5], flat: [5, 8, 4, 7, 3, 6, 2] } };
+    for (const clef of ['alto', 'tenor']) for (let k = -7; k <= 7; k++) {
+      const kind = k > 0 ? 'sharp' : 'flat';
+      const want = Array.from({ length: Math.abs(k) }, (_, i) => ({ letter: L[kind][i], alter: k > 0 ? 1 : -1, position: P[clef][kind][i] }));
+      eq(C.clefKeySignatureLayout(k, clef), want, `${clef} ${k}`);
+      eq(C.clefKeySignatureLayout(k, `${clef === 'alto' ? 'Alto ' : 'TENOR'}`), want);
+    }
+    for (let k = -7; k <= 7; k++) {
+      for (const [clef, base] of [['treble', 'treble'], ['bass', 'bass'], ['treble15mb', 'treble'], ['bass8va', 'bass'], [undefined, 'treble'], ['nonsense', 'treble']]) {
+        eq(C.clefKeySignatureLayout(k, clef), keySignatureLayout(k, base), `${clef} ${k}`);
+      }
+    }
+    eq(C.clefKeySignatureLayout(9, 'alto').length, 7);
+  });
+  test('1.11 clefGlyphFor: explicit octave clef wins over auto 8vb; auto turns treble/bass into 8vb and alto/tenor into cClef8vb', () => {
+    const want = {
+      treble: ['gClef', 'gClef8vb'], bass: ['fClef', 'fClef8vb'], alto: ['cClef', 'cClef8vb'], tenor: ['cClef', 'cClef8vb'],
+      treble8vb: ['gClef8vb', 'gClef8vb'], treble8va: ['gClef8va', 'gClef8va'], treble15mb: ['gClef15mb', 'gClef15mb'], treble15ma: ['gClef15ma', 'gClef15ma'],
+      bass8vb: ['fClef8vb', 'fClef8vb'], bass8va: ['fClef8va', 'fClef8va'], bass15mb: ['fClef15mb', 'fClef15mb'], bass15ma: ['fClef15ma', 'fClef15ma'],
+      nonsense: ['gClef', 'gClef8vb'],
+    };
+    for (const [clef, [plain, auto]] of Object.entries(want)) {
+      eq([C.clefGlyphFor(clef, false), C.clefGlyphFor(clef, true)], [Glyph[plain], Glyph[auto]], clef);
+    }
+  });
+}
+
+// ---------- 1.11.0: the clef in force at every clef site (timeline, notation, header, key signatures, tuning chart) ----------
+{
+  const C = await imp('src/clef.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { headerLayout } = await imp('src/layout/systems.js');
+  const { tuningChartEntries, REFERENCE_TUNINGS } = await imp('src/scoreText.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const nt = (ps, x = {}, duration = 'quarter') => ({ type: 'note', duration, notes: ps.map((p) => ({ pitch: p })), ...x });
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const notationNodes = (score, width = 1400) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return all(box.children[0]).filter((n) => /\bstaff-notation\b/.test(cls(n))).flatMap((g) => all(g));
+  };
+  // local y (top line 0) -> staff position (0 = bottom line)
+  const posOf = (n) => Math.round(((4 * S - +n.getAttribute('y')) / (S / 2)) * 1000) / 1000;
+  const glyphs = (nodes, ch) => nodes.filter((n) => n.tag === 'text' && n.textContent === ch);
+  const heads = (nodes) => glyphs(nodes, Glyph.noteheadBlack).map(posOf);
+
+  test('1.11 clef sites: alto / tenor tracks draw their notes, clef glyph and anchor in C-clef positions', () => {
+    const alto = notationNodes({ tracks: [{ clef: 'Alto', measures: [{ beats: [nt(['C4']), nt(['F3']), nt(['G4']), nt(['B4'])] }] }] });
+    eq(heads(alto), [4, 0, 8, 10]);
+    eq(glyphs(alto, Glyph.cClef).map(posOf), [4]);
+    const tenor = notationNodes({ tracks: [{ clef: 'tenor', measures: [{ beats: [nt(['C4']), nt(['D3']), nt(['A3']), nt(['A4'])] }] }] });
+    eq(heads(tenor), [6, 0, 4, 11]);
+    eq(glyphs(tenor, Glyph.cClef).map(posOf), [6]);
+    const auto = notationNodes({ tracks: [{ clef: 'alto', writtenOctaveUp: true, measures: [{ beats: [nt(['C3'], {}, 'whole')] }] }] });
+    eq([glyphs(auto, Glyph.cClef8vb).map(posOf), glyphs(auto, Glyph.noteheadWhole).map(posOf)], [[4], [4]], 'auto 8vb: cClef8vb, written C4 on the middle line');
+    const explicit = notationNodes({ tracks: [{ clef: 'treble15ma', writtenOctaveUp: true, measures: [{ beats: [nt(['E3'], {}, 'whole')] }] }] });
+    eq([glyphs(explicit, Glyph.gClef15ma).map(posOf), glyphs(explicit, Glyph.gClef8vb).length, glyphs(explicit, Glyph.noteheadWhole).map(posOf)], [[2], 0, [0]]);
+  });
+  test('1.11 clef sites: header key signatures follow the clef table (alto, tenor, bass8va)', () => {
+    const acc = (clef, key) => {
+      const nodes = notationNodes({ tracks: [{ clef, measures: [{ keySignature: key, beats: [nt(['C4'], {}, 'whole')] }] }] });
+      const ks = nodes.find((n) => cls(n) === 'key-signature');
+      return ks.children.map(posOf);
+    };
+    eq(acc('alto', 4), [7, 4, 8, 5]);
+    eq(acc('alto', -3), [3, 6, 2]);
+    eq(acc('tenor', 7), [2, 6, 3, 7, 4, 8, 5]);
+    eq(acc('tenor', -2), [5, 8]);
+    eq(acc('bass8va', 2), acc('bass', 2));
+  });
+  test('1.11 clef sites: a measure clef moves the notes of that and later measures (both voices, graces) and not the earlier ones', () => {
+    const nodes = notationNodes({ tracks: [{ clef: 'treble', measures: [
+      { beats: [nt(['E4'], {}, 'whole')] },
+      { clef: 'bass', beats: [{ type: 'grace', duration: '8th', notes: [{ pitch: 'A2' }] }, nt(['G2'], {}, 'whole')] },
+      { voices: [{ beats: [nt(['B3'], {}, 'whole')] }, { beats: [nt(['G2'], {}, 'whole')] }] },
+      { clef: 'alto', beats: [nt(['C4'], {}, 'whole')] },
+    ] }] });
+    eq(glyphs(nodes, Glyph.noteheadWhole).map(posOf), [0, 0, 9, 0, 4]);
+    eq(heads(nodes), [1], 'the grace head (black, grace size) sits on bass A2');
+  });
+  test('1.11 clef sites: a mid-system key change takes the clef of its measure', () => {
+    const nodes = notationNodes({ tracks: [{ measures: [{ beats: [nt(['C4'], {}, 'whole')] }, { clef: 'alto', keySignature: 2, beats: [nt(['C4'], {}, 'whole')] }] }] });
+    const ks = nodes.filter((n) => cls(n) === 'key-signature');
+    eq(ks.map((k) => k.children.map(posOf)), [[7, 4]]);
+  });
+  test('1.11 clef sites: headerLayout sizes the clef in force at the system start (opening clef = its own header)', () => {
+    const later = normalizeScore({ tracks: [{ measures: [{ beats: [] }, { clef: 'treble15ma', beats: [] }] }] });
+    const own = normalizeScore({ tracks: [{ clef: 'treble15ma', measures: [{ beats: [] }, { beats: [] }] }] });
+    eq(headerLayout(1, later, th, false), headerLayout(0, own, th, false));
+    eq(headerLayout(0, later, th, true), headerLayout(0, normalizeScore({ tracks: [{ measures: [{ beats: [] }] }] }), th, true));
+    eq(headerLayout(1, later, th, false).keyX > headerLayout(0, later, th, false).keyX, true, 'the wider glyph pushes the key');
+  });
+  test('1.11 clef sites: tuning chart reference follows the base of the first clef ("Bass ", bass8vb, measure-0 clef)', () => {
+    const tuning = REFERENCE_TUNINGS.bass6;
+    eq(tuningChartEntries({ clef: 'bass', tuning }), []);
+    eq(tuningChartEntries({ clef: 'Bass ', tuning }), []);
+    eq(tuningChartEntries({ clef: 'bass8vb', tuning }), []);
+    eq(tuningChartEntries({ clef: 'treble', tuning, measures: [{ clef: 'bass15mb' }] }), []);
+    eq(tuningChartEntries({ clef: 'treble', tuning }).length, 6);
+    eq(tuningChartEntries({ clef: 'bass', tuning, measures: [{ clef: 'alto' }] }).length, 6);
+  });
+}
+
+// ---------- 1.11.0: mid-score clef changes and courtesy clefs (layout/systems.js, layout/index.js, draw/system.js) ----------
+{
+  const C = await imp('src/clef.js');
+  const Y = await imp('src/layout/systems.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const cases = (await import('./cases.mjs')).cases;
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const nt = (ps, duration = 'quarter') => ({ type: 'note', duration, notes: ps.map((p) => ({ pitch: p })) });
+  const q4 = (p) => [nt([p]), nt([p]), nt([p]), nt([p])];
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const render = (score, width) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  // every measure restates the clef in force: no change anywhere
+  const restated = (score) => ({ ...score, tracks: (score.tracks || []).map((t) => ({ ...t,
+    measures: (t.measures || []).map((m, mi) => ({ ...m, clef: C.clefAt(t, mi) })) })) });
+
+  test('1.11 clef changes: restating the clef in force on every measure of every case changes no headerLayout, openingLayout, courtesyWidth or layout model', () => {
+    let n = 0;
+    for (const c of cases) {
+      const a = normalizeScore(c.score), b = normalizeScore(restated(c.score));
+      const w = c.width || 900;
+      for (let mi = 0; mi < a.measureCount; mi++) {
+        const ha = Y.headerLayout(mi, a, th, mi === 0), hb = Y.headerLayout(mi, b, th, mi === 0);
+        eq(hb, ha, `${c.id} header ${mi}`);
+        eq(Y.openingLayout(mi, b, th, null), Y.openingLayout(mi, a, th, null), `${c.id} opening ${mi}`);
+        eq(Y.openingLayout(mi, b, th, hb), Y.openingLayout(mi, a, th, ha), `${c.id} first opening ${mi}`);
+        eq(Y.courtesyWidth(mi, b, th), Y.courtesyWidth(mi, a, th), `${c.id} courtesy ${mi}`);
+        eq(Y.clefChangeWidth(mi, b, th), Y.clefChangeWidth(mi, a, th), `${c.id} clef change ${mi}`);
+        // without clef changes the courtesy is exactly trackSignatureChange's (char-clefs has changes on purpose)
+        a.tracks.forEach((t, ti) => eq(Y.trackCourtesy(b.tracks[ti], mi), c.id.startsWith('char-clefs-') ? Y.trackCourtesy(t, mi) : Y.trackSignatureChange(t, mi), `${c.id} track ${ti}`));
+        n++;
+      }
+      eq(JSON.stringify(computeLayout(b, th, w)), JSON.stringify(computeLayout(a, th, w)), c.id);
+    }
+    if (n < 300) throw new Error(`only ${n} measures`);
+  });
+  test('1.11 clef changes: restated clefs render byte-identical SVG for a sample of cases', () => {
+    for (const c of cases.filter((_, i) => i % 7 === 0)) {
+      eq(serialize(render(restated(c.score), c.width)) === serialize(render(c.score, c.width)), true, c.id);
+    }
+  });
+
+  const two = (m2a, m2b) => ({ tracks: [
+    { clef: 'treble', measures: [{ beats: q4('C5') }, { ...m2a, beats: q4('C4') }, { beats: q4('C4') }] },
+    { clef: 'bass', showTablature: true, measures: [{ beats: q4('C3') }, { ...m2b, beats: q4('C3') }, { beats: q4('C3') }] },
+  ] });
+  test('1.11 clef changes: clefChangeWidth is the widest changing clef at 0.75; tab-only tracks and system starts do not count', () => {
+    const sc = normalizeScore(two({ clef: 'alto' }, { clef: 'treble15ma' }));
+    eq(Y.clefChangeWidth(1, sc, th), Math.max(glyphBox('gClef15ma').width, glyphBox('cClef').width) * 0.75 * S);
+    eq([Y.clefChangeWidth(0, sc, th), Y.clefChangeWidth(2, sc, th)], [0, 0]);
+    const tabOnly = normalizeScore({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: q4('C3') }, { clef: 'alto', beats: q4('C3') }] }] });
+    eq(Y.clefChangeWidth(1, tabOnly, th), 0);
+    eq(Y.trackCourtesy(tabOnly.tracks[0], 1), null);
+    const op = Y.openingLayout(1, sc, th, Y.headerLayout(1, sc, th, false));
+    eq('clefX' in op, false, 'no clef change glyph at a system start');
+  });
+  test('1.11 clef changes: opening = barline, 0.75 sp, clef (0.75 size), 1 sp, key, time; after a repeat sign the clef follows it', () => {
+    const sc = normalizeScore(two({ clef: 'alto', keySignature: 2, timeSignature: { beats: 3, beatType: 4 } }, {}));
+    const cw = glyphBox('cClef').width * 0.75 * S;
+    const op = Y.openingLayout(1, sc, th, null);
+    eq(op.clefX, 0.75 * S);
+    const ch = Y.signatureChange(1, sc, th);
+    eq([op.sig.keyX, op.width], [0.75 * S + cw + S, 0.75 * S + cw + S + ch.width]);
+    const rep = normalizeScore(two({ clef: 'alto', barline: 'repeatStart' }, {}));
+    const r = Y.openingLayout(1, rep, th, null);
+    eq([r.repeatX, r.clefX, r.width], [0, Y.REPEAT_START_WIDTH_SP * S + 0.75 * S, Y.REPEAT_START_WIDTH_SP * S + 0.75 * S + cw]);
+  });
+  test('1.11 clef changes: courtesyWidth / courtesyLayout put the clef first, then key/time 1 sp later', () => {
+    const sc = normalizeScore(two({ clef: 'tenor', keySignature: -3 }, {}));
+    const cw = glyphBox('cClef').width * 0.75 * S;
+    const ch = Y.signatureChange(1, sc, th);
+    eq(Y.courtesyWidth(1, sc, th), cw + S + ch.width + 1.25 * S);
+    const L = Y.courtesyLayout(1, sc, th, 100);
+    eq([L.clefX, L.keyX, L.endX - 100], [100 + 0.75 * S, 100 + 0.75 * S + cw + S, Y.courtesyWidth(1, sc, th)]);
+    const only = normalizeScore(two({ clef: 'tenor' }, {}));
+    eq(Y.courtesyWidth(1, only, th), cw + 1.25 * S);
+    eq(Y.courtesyLayout(1, only, th, 0).endX, cw + 1.25 * S);
+    eq(Y.trackCourtesy(only.tracks[0], 1), { key: null, time: null, clef: 'tenor' });
+    eq(Y.trackCourtesy(only.tracks[1], 1), null);
+    eq(Y.trackCourtesy(sc.tracks[0], 1), { key: { to: -3, from: 0 }, time: null, clef: 'tenor' });
+  });
+  test('1.11 clef changes: layout model has clefChange only where a staff changes clef', () => {
+    const wide = computeLayout(normalizeScore(two({ clef: 'alto' }, {})), th, 1400);
+    const ms = wide.systems[0].tracks.map((t) => t.measures.map((m) => m.clefChange || null));
+    eq(ms[0][1].clef, 'alto');
+    eq([ms[0][0], ms[0][2], ms[1][0], ms[1][1], ms[1][2]], [null, null, null, null, null]);
+    eq(Object.keys(wide.systems[0].tracks[0].measures[0]).includes('clefChange'), false);
+    eq(ms[0][1].x, wide.systems[0].tracks[0].measures[1].x + 0.75 * S);
+  });
+  test('1.11 clef changes: drawn at 0.75 size in <g class="clef clef-change">, order repeat dots < clef < key < time; header clef has no class', () => {
+    const svg = render(two({ clef: 'alto', keySignature: 2, timeSignature: { beats: 3, beatType: 4 }, barline: 'repeatStart' }, { clef: 'treble' }), 1400);
+    const nodes = all(svg);
+    const ch = nodes.filter((n) => cls(n) === 'clef clef-change');
+    eq(ch.length, 2);
+    const t0 = ch[0].children[0];
+    eq([t0.textContent, +t0.getAttribute('font-size')], [Glyph.cClef, 0.75 * 4 * S]);
+    eq(ch[1].children[0].textContent, Glyph.gClef);
+    eq(+t0.getAttribute('x'), +ch[1].children[0].getAttribute('x'), 'clefs of every staff share x');
+    const inStaff = all(nodes.filter((n) => /\bstaff-notation\b/.test(cls(n)))[0]);
+    const ks = inStaff.filter((n) => cls(n) === 'key-signature')[0], ts = inStaff.filter((n) => cls(n) === 'time-signature');
+    const dots = inStaff.filter((n) => n.tag === 'circle');
+    const x = (n) => +n.getAttribute('x');
+    eq(Math.max(...dots.map((d) => +d.getAttribute('cx'))) < x(t0) && x(t0) < x(ks.children[0]) && x(ks.children[0]) < x(ts[ts.length - 1].children[0]), true);
+    eq(ks.children.map((k) => Math.round((4 * S - +k.getAttribute('y')) / (S / 2))), [7, 4], 'alto key positions');
+    eq(inStaff.filter((n) => n.tag === 'text' && n.textContent === Glyph.gClef).length, 1, 'header clef');
+    eq(nodes.some((n) => cls(n).split(/\s+/).includes('courtesy-clef')), false);
+  });
+  test('1.11 clef changes: a change opening a system draws the clef in force full size in its header and a courtesy clef (before the courtesy key) at the previous system end', () => {
+    const score = { tracks: [{ measures: [
+      { beats: q4('C5') }, { beats: q4('C5') }, { beats: q4('C5') }, { beats: q4('C5') },
+      { clef: 'bass', keySignature: 1, beats: q4('C3') }, { beats: q4('C3') }, { beats: q4('C3') }, { beats: q4('C3') }] }] };
+    const lay = computeLayout(normalizeScore(score), th, 450);
+    const si = lay.systems.findIndex((s) => s.measureIndices.includes(4));
+    if (lay.systems[si].measureIndices[0] !== 4) throw new Error(`m5 does not open a system: ${lay.systems.map((s) => s.measureIndices)}`);
+    const prev = lay.systems[si - 1];
+    eq(prev.tracks[0].courtesy, { key: { to: 1, from: 0 }, time: null, clef: 'bass' });
+    eq(prev.courtesy.clefX, prev.lastBarlineX + 0.75 * S);
+    const nodes = all(render(score, 450));
+    const sysG = (k) => nodes.find((n) => cls(n) === `system system-${k}`);
+    const prevNodes = all(sysG(si - 1));
+    const cc = prevNodes.filter((n) => cls(n) === 'clef courtesy-clef');
+    eq(cc.length, 1);
+    eq([cc[0].children[0].textContent, +cc[0].children[0].getAttribute('font-size')], [Glyph.fClef, 3 * S]);
+    const cks = prevNodes.filter((n) => cls(n) === 'courtesy')[0];
+    eq(cks.children.map(cls), ['clef courtesy-clef', 'key-signature']);
+    eq(+cc[0].children[0].getAttribute('x') < +cks.children[1].children[0].getAttribute('x'), true);
+    const hdr = all(sysG(si)).filter((n) => n.tag === 'text' && n.textContent === Glyph.fClef);
+    eq([hdr.length, +hdr[0].getAttribute('font-size')], [1, 4 * S], 'system header: the clef in force, full size');
+    eq(all(sysG(si)).some((n) => cls(n) === 'clef clef-change'), false);
+  });
+  test('1.11 clef changes: TAB staves are identical with and without clef changes', () => {
+    const base = { tracks: [{ showTablature: true, measures: [
+      { beats: [{ type: 'note', duration: 'half', notes: [{ string: 3, fret: 2 }] }, { type: 'note', duration: 'half', notes: [{ string: 1, fret: 0 }] }] },
+      { beats: [{ type: 'note', duration: 'whole', notes: [{ string: 5, fret: 3 }] }] }] }] };
+    const withC = JSON.parse(JSON.stringify(base)); withC.tracks[0].measures[1].clef = 'alto';
+    const tab = (sc) => all(render(sc, 1400)).filter((n) => /\bstaff-tab\b/.test(cls(n))).map((g) => all(g).filter((n) => n.tag === 'text').map((n) => n.textContent));
+    eq(tab(withC), tab(base));
+  });
+}
+
+// ---------- 1.11.0: multi-measure rests (layout/multiRest.js, layout/index.js, draw/multiRest.js) ----------
+{
+  const M = await imp('src/layout/multiRest.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { timeSigDigits } = await imp('src/glyphs.js');
+  const cases = (await import('./cases.mjs')).cases;
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const q = (p) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: p }] });
+  const W = { type: 'rest', duration: 'whole' };
+  const notes = { beats: [q('C5'), q('D5'), q('E5'), q('F5')] };
+  const rest = (x = {}) => ({ beats: [W], ...x });
+  const score = (measures, x = {}) => ({ multiMeasureRests: true, ...x, tracks: [{ measures }] });
+  const runs = (sc) => { const r = M.multiRestRuns(normalizeScore(sc)); return r && [...r.entries()]; };
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const render = (sc, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(sc)), { width }).render();
+    return box.children[0];
+  };
+
+  test('1.11 multi-rest: isRestMeasure accepts empty / one plain bar-long rest in every track; any mark, hidden rest, second voice, grace or short rest rejects', () => {
+    const one = (beats, x = {}) => M.isRestMeasure(normalizeScore({ tracks: [{ measures: [{ beats, ...x }] }] }), 0);
+    eq([one([]), one([W]), one([{ type: 'rest', duration: 'half', dots: 1 }], { timeSignature: { beats: 3, beatType: 4 } }), one([{ ...W, slash: false }])], [true, true, true, true]);
+    eq([one([{ type: 'rest', duration: 'half' }]), one([W, W]), one([{ ...W, hidden: true }]), one([{ ...W, fermata: true }]),
+      one([{ ...W, text: 'x' }]), one([{ ...W, dynamic: 'p' }]), one([{ ...W, chord: 'C' }]), one([{ ...W, tempo: 90 }]), one([{ ...W, palmMute: true }]),
+      one([{ type: 'grace', duration: '8th', notes: [{ pitch: 'C5' }] }, W]), one([q('C5')]),
+      one([], { voices: [{ beats: [W] }, { beats: [{ ...W }] }] })], Array(12).fill(false));
+    const twoTracks = normalizeScore({ tracks: [{ measures: [rest()] }, { measures: [notes] }] });
+    eq(M.isRestMeasure(twoTracks, 0), false, 'every track must rest');
+  });
+  test('1.11 multi-rest: opt-in only with multiMeasureRests === true', () => {
+    const ms = [rest(), rest(), rest()];
+    for (const v of [undefined, false, 'true', 1, {}]) eq(runs({ ...score(ms), multiMeasureRests: v }), null, String(v));
+    eq(runs(score(ms)), [[0, 2]]);
+  });
+  test('1.11 multi-rest: run rules (first-only, last-only, endings, lone rests, padded measures)', () => {
+    eq(runs(score([notes, rest(), rest(), notes, rest(), notes, rest(), rest()])), [[1, 2], [6, 7]]);
+    eq(runs(score([rest(), rest({ keySignature: 2 }), rest(), rest({ timeSignature: { beats: 3, beatType: 4 }, beats: [{ type: 'rest', duration: 'half', dots: 1 }] }), rest()])), [[1, 2], [3, 4]]);
+    eq(runs(score([rest(), rest({ clef: 'bass' }), rest({ barline: 'repeatStart' }), rest({ segno: true }), rest({ coda: true }), rest({ section: 'A' })])), []);
+    eq(runs(score([rest({ segno: true }), rest(), rest({ barline: 'double' }), rest({ jump: 'D.C.' }), rest(), rest({ barline: 'repeatEnd', repeatCount: 3 }), rest()])), [[0, 2], [4, 5]]);
+    eq(runs(score([rest(), rest({ ending: 1 }), rest(), rest()])), [[2, 3]]);
+    eq(runs({ multiMeasureRests: true, tracks: [{ measures: [notes, rest(), rest()] }, { measures: [notes] }] }), [[1, 2]], 'padded measures rest');
+    eq(runs(score([rest(), rest({ clef: 'treble' })])), [[0, 1]], 'restating the clef is no change');
+  });
+  test('1.11 multi-rest: column and bar geometry (natural 8 sp, min 4 sp or count + 2 sp; inset 1 sp from content start / barline, at least 2 sp)', () => {
+    const col = M.multiRestColumn(1, 3, { onsets: [{}], gaps: [], leadPad: 9, extraIfFirstInSystem: 2, tracks: [] }, normalizeScore(score([rest(), rest(), rest(), rest()])), th);
+    eq([col.onsets, col.leadPad, col.extraIfFirstInSystem, col.lastMi, col.multiRest, col.gaps[0].nat, col.gaps[0].min, col.naturalWidth], [[], 0, 0, 3, 3, 8 * S, 4 * S, 8 * S]);
+    eq(M.multiRestBar(100, 200, th), { x1: 100 + S, x2: 200 - S });
+    eq(M.multiRestBar(100, 200, th, 'repeatEnd'), { x1: 100 + S, x2: 200 - 2.8 * S });
+    eq(M.multiRestBar(100, 100 + 3 * S, th), { x1: 100 + 0.5 * S, x2: 100 + 2.5 * S });
+  });
+  test('1.11 multi-rest: layout model (one measure per run, last barline, measure numbers, navigation at the run column, courtesy after the run)', () => {
+    const ms = [notes, rest({ segno: true }), rest(), rest(), rest({ jump: 'D.S.', barline: 'double' }), notes, notes];
+    const lay = computeLayout(normalizeScore(score(ms)), th, 900);
+    const sys = lay.systems[0];
+    eq(sys.measureIndices, [0, 1, 5, 6]);
+    const m = sys.tracks[0].measures[1];
+    eq([m.measureIndex, m.barline, m.elements, m.wholeRest, m.multiRest.count, m.multiRest.lastMi], [1, 'double', [], null, 4, 4]);
+    eq([m.multiRest.x1, m.multiRest.x2], [m.contentX + S, m.endX - 1.5 * S]);
+    eq(sys.marks.map((k) => [k.kind, k.mi]), [['segno', 1], ['jump', 4]]);
+    eq(sys.marks[1].xEnd, m.endX);
+    eq('multiRest' in sys.tracks[0].measures[0], false);
+    const off = computeLayout(normalizeScore({ ...score(ms), multiMeasureRests: false }), th, 900);
+    eq(off.systems.flatMap((s) => s.measureIndices), [0, 1, 2, 3, 4, 5, 6]);
+    // a run ending a system: the courtesy is for the measure after the run
+    const many = [notes, notes, notes, rest(), rest(), rest({ keySignature: 3, ...notes }), notes, notes, notes, notes];
+    const l2 = computeLayout(normalizeScore(score(many)), th, 520);
+    const s0 = l2.systems.find((s) => s.measureIndices.includes(3));
+    eq([s0.measureIndices, s0.tracks[0].courtesy], [[2, 3], { key: { to: 3, from: 0 }, time: null }]);
+    eq(l2.systems.flatMap((s) => s.measureIndices).includes(4), false);
+  });
+  test('1.11 multi-rest: drawn H-bar on the middle line, end strokes 2nd-4th line, count 0.5 sp above the top line; TAB only with TAB rhythm', () => {
+    const sc = { multiMeasureRests: true, tracks: [
+      { measures: [notes, rest(), rest(), rest(), rest(), rest(), rest(), rest(), rest(), rest(), rest(), rest(), notes] },
+      { showStandardNotation: false, showTablature: true, measures: [notes, ...Array(11).fill({ beats: [] }), notes] },
+      { showTablature: true, measures: [notes, ...Array(11).fill(rest()), notes] },
+      { showTablature: true, tabRhythm: true, measures: [notes, ...Array(11).fill(rest()), notes] },
+    ] };
+    const nodes = all(render(sc, 1200));
+    const staves = nodes.filter((n) => /^staff staff-/.test(cls(n)));
+    const kinds = staves.map((g) => [cls(g), g.getAttribute('data-track'), all(g).filter((n) => cls(n) === 'multi-rest').length]);
+    eq(kinds, [['staff staff-notation', '0', 1], ['staff staff-tab', '1', 1], ['staff staff-notation', '2', 1], ['staff staff-tab', '2', 0],
+      ['staff staff-notation', '3', 1], ['staff staff-tab', '3', 1]]);
+    const bar = all(staves[0]).find((n) => cls(n) === 'multi-rest');
+    const [r, l1, l2] = bar.children;
+    eq([+r.getAttribute('y'), +r.getAttribute('height')], [1.5 * S, S]);
+    eq([+l1.getAttribute('y1'), +l1.getAttribute('y2'), +l2.getAttribute('x1') - +l1.getAttribute('x1') > 2 * S], [S, 3 * S, true]);
+    const count = all(staves[0]).find((n) => cls(n) === 'multi-rest-count').children[0];
+    eq([count.textContent, count.getAttribute('text-anchor'), +count.getAttribute('y')], [timeSigDigits(11), 'middle', -1.5 * S]);
+    eq(+count.getAttribute('x'), (+l1.getAttribute('x1') + +l2.getAttribute('x1')) / 2);
+  });
+  test('1.11 multi-rest: off is byte-identical — every case with multiMeasureRests: false renders its snapshot', () => {
+    const dir = path.join(root0, 'tests', 'snapshots');
+    let n = 0;
+    for (const c of cases) {
+      if (c.id.startsWith('char-multirest-')) continue; // the multirest fixture collapses on purpose
+      const file = path.join(dir, `${c.id}.svg`);
+      if (!fs.existsSync(file)) continue;
+      const box = makeContainer();
+      new MusicScoreRenderer(box, { ...JSON.parse(JSON.stringify(c.score)), multiMeasureRests: false }, { width: c.width, ...(c.options || {}) }).render();
+      if (serialize(box.children[0]) !== fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n')) throw new Error(c.id);
+      n++;
+    }
+    if (n < 76) throw new Error(`only ${n}`);
+  });
+}
+
+// ---------- 1.11.0: rhythm slashes (slash.js, normalize.js, layout/timeline.js, draw/notation.js, draw/tab.js) ----------
+{
+  const SL = await imp('src/slash.js');
+  const { isMainNoteBeat } = await imp('src/directions.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const cases = (await import('./cases.mjs')).cases;
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const sl = (d, x = {}) => ({ type: 'note', duration: d, slash: true, ...x });
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const render = (sc, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(sc)), { width }).render();
+    return all(box.children[0]);
+  };
+
+  test('1.11 slash: withSlash / isSlashBeat / slashHeadGlyph', () => {
+    const n = { type: 'note', duration: 'quarter', notes: [{ pitch: 'C4' }] };
+    eq(SL.withSlash({ ...n, slash: true }, true), { ...n, slash: true, notes: [] });
+    eq([SL.withSlash({ ...n, slash: true }, false), SL.withSlash({ ...n, slash: 'yes' }, true), SL.withSlash({ ...n, slash: false }, true)].map((b) => [b.slash, b.notes.length]), [[false, 1], [false, 1], [false, 1]]);
+    eq([SL.withSlash({ type: 'rest', duration: 'quarter', slash: true }, true).slash, SL.withSlash({ type: 'grace', duration: '8th', slash: true, notes: [] }, true).slash], [false, false]);
+    eq([SL.isSlashBeat({ type: 'note', slash: true }), SL.isSlashBeat({ type: 'rest', slash: true }), SL.isSlashBeat({ type: 'note', slash: 'true' }), SL.isSlashBeat(null)], [true, false, false, false]);
+    eq(['whole', 'half', 'quarter', '8th', '16th'].map(SL.slashHeadGlyph), [Glyph.noteheadSlashWhiteWhole, Glyph.noteheadSlashWhiteHalf, Glyph.noteheadSlashHorizontalEnds, Glyph.noteheadSlashHorizontalEnds, Glyph.noteheadSlashHorizontalEnds]);
+  });
+  test('1.11 slash: isMainNoteBeat counts slash beats (beat-level marks draw)', () => {
+    eq([isMainNoteBeat({ type: 'note', slash: true, notes: [] }), isMainNoteBeat({ type: 'note', notes: [] }), isMainNoteBeat({ type: 'note', slash: false, notes: [] })], [true, false, false]);
+  });
+  test('1.11 slash: normalize drops voice-1 slash notes only when the key is present; ignored on voice 2, graces and rests', () => {
+    const t = normalizeScore({ tracks: [{ measures: [
+      { beats: [sl('quarter', { notes: [{ pitch: 'C4' }] }), { type: 'grace', duration: '8th', slash: true, notes: [{ pitch: 'D4' }] }, sl('quarter'), { type: 'rest', duration: 'half', slash: true }] },
+      { voices: [{ beats: [sl('whole')] }, { beats: [{ type: 'note', duration: 'whole', slash: true, notes: [{ pitch: 'C4' }] }] }] },
+      { beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'C4' }] }] },
+    ] }] }).tracks[0];
+    eq(t.measures[0].beats.map((b) => [b.type, b.slash, b.notes.length]), [['note', true, 0], ['grace', false, 1], ['note', true, 0], ['rest', false, 0]]);
+    eq([t.measures[1].beats[0].slash, t.measures[1].voice2Beats[0].slash, t.measures[1].voice2Beats[0].notes.length], [true, false, 1]);
+    eq('slash' in t.measures[2].beats[0], false);
+  });
+  test('1.11 slash: notation head on the middle line in <g class="slash">, stems up (beamed too), no accidental or ledger; whole has no stem', () => {
+    const nodes = render({ tracks: [{ measures: [{ keySignature: -3, beats: [sl('quarter', { notes: [{ pitch: 'C6', accidental: 'sharp' }] }), sl('8th'), sl('8th'), sl('half')] }, { beats: [sl('whole')] }] }] });
+    const st = all(nodes.find((n) => cls(n) === 'staff staff-notation'));
+    const heads = st.filter((n) => cls(n) === 'slash').map((g) => g.children[0]);
+    eq(heads.map((h) => h.textContent), [Glyph.noteheadSlashHorizontalEnds, Glyph.noteheadSlashHorizontalEnds, Glyph.noteheadSlashHorizontalEnds, Glyph.noteheadSlashWhiteHalf, Glyph.noteheadSlashWhiteWhole]);
+    eq(heads.map((h) => +h.getAttribute('y')), Array(5).fill(2 * S));
+    eq(st.some((n) => n.tag === 'text' && [Glyph.accidentalSharp, Glyph.accidentalNatural].includes(n.textContent)), false);
+    // stems: x at the slash's up anchor, from its top corner upwards
+    const stems = st.filter((n) => n.tag === 'line' && n.getAttribute('stroke-width') === String(th.stemWidth));
+    eq(stems.length, 4);
+    const q = heads[0];
+    const a = glyphBox('noteheadSlashHorizontalEnds');
+    const s0 = stems.find((l) => Math.abs(+l.getAttribute('x1') - (+q.getAttribute('x') + (2.124 - a.width / 2) * S)) < 0.01);
+    eq(!!s0 && Math.max(+s0.getAttribute('y1'), +s0.getAttribute('y2')), 2 * S - 1.0 * S);
+    eq(Math.min(...stems.map((l) => Math.min(+l.getAttribute('y1'), +l.getAttribute('y2')))) < 0, true, 'stems go up');
+  });
+  test('1.11 slash: layout lays a slash out as one head at position 4, stem up; two voices keep voice 1 up', () => {
+    const lay = computeLayout(normalizeScore({ tracks: [{ measures: [{ voices: [{ beats: [sl('half'), sl('half')] }, { beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'G4' }] }] }] }] }] }), th, 900);
+    const els = lay.systems[0].tracks[0].measures[0].elements;
+    eq(els.map((e) => [e.chord.heads.map((h) => h.pos), e.chord.stemUp, e.chord.heads[0].glyph]), [[[4], true, Glyph.noteheadSlashWhiteHalf], [[4], true, Glyph.noteheadSlashWhiteHalf]]);
+  });
+  test('1.11 slash: TAB draws a slash head over a backing (class tab-slash) instead of frets; beat-level marks still draw', () => {
+    const nodes = render({ tracks: [{ showTablature: true, measures: [{ beats: [sl('quarter', { notes: [{ string: 1, fret: 5 }], pickStroke: 'down', tremolo: true }), sl('quarter'), sl('half')] }] }] });
+    const tab = all(nodes.find((n) => cls(n) === 'staff staff-tab'));
+    const ts = tab.filter((n) => cls(n) === 'tab-slash');
+    eq(ts.length, 3);
+    eq(ts.map((g) => [g.children[0].tag, g.children[1].tag]), Array(3).fill(['rect', 'text']));
+    const midY = (5 * th.tabStaffLineSpacing) / 2;
+    eq(ts.map((g) => +g.children[1].getAttribute('y')), Array(3).fill(midY));
+    eq(tab.some((n) => n.tag === 'text' && n.textContent === '5'), false, 'no fret');
+    eq(tab.some((n) => /tab-tremolo/.test(cls(n))), false, 'no TAB tremolo on a slash');
+    eq(nodes.some((n) => n.tag === 'text' && n.textContent === Glyph.stringsDownBow), true, 'pick stroke');
+  });
+  test('1.11 slash: off is byte-identical — every case with slash: false on every beat renders its snapshot', () => {
+    const dir = path.join(root0, 'tests', 'snapshots');
+    const off = (beats) => (beats || []).map((b) => ({ ...b, slash: false }));
+    let n = 0;
+    for (const c of cases) {
+      if (c.id.startsWith('char-slashes-')) continue; // the slashes fixture has note beats without notes (they need slash: true)
+      const file = path.join(dir, `${c.id}.svg`);
+      if (!fs.existsSync(file)) continue;
+      const sc = JSON.parse(JSON.stringify(c.score));
+      (sc.tracks || []).forEach((t) => (t.measures || []).forEach((m) => {
+        if (!m) return;
+        if (Array.isArray(m.beats)) m.beats = off(m.beats);
+        if (Array.isArray(m.voices)) m.voices = m.voices.map((v) => (v && Array.isArray(v.beats) ? { ...v, beats: off(v.beats) } : v));
+      }));
+      const box = makeContainer();
+      new MusicScoreRenderer(box, sc, { width: c.width, ...(c.options || {}) }).render();
+      if (serialize(box.children[0]) !== fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n')) throw new Error(c.id);
+      n++;
+    }
+    if (n < 76) throw new Error(`only ${n}`);
+  });
+}
+
+// ---------- 1.11.0: articulations and fermatas on tab-only TAB staves (draw/tabOnlyMarks.js) ----------
+{
+  const TM = await imp('src/draw/tabOnlyMarks.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const cases = (await import('./cases.mjs')).cases;
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const f = (s, fr, x = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string: s, fret: fr }], ...x });
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const render = (sc, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(sc)), { width }).render();
+    return all(box.children[0]);
+  };
+  const tabOnly = (measures, x = {}) => ({ showStandardNotation: false, showTablature: true, tabArticulations: true, measures, ...x });
+  const tabTop = 0; // a TAB staff group's top line is y = 0
+  const groups = (nodes, c) => nodes.filter((n) => cls(n) === c);
+
+  test('1.11 tab marks: only tab-only tracks with tabArticulations === true', () => {
+    eq([{ showStandardNotation: false, showTablature: true, tabArticulations: true }, { showStandardNotation: false, showTablature: true, tabArticulations: 'true' },
+      { showStandardNotation: true, showTablature: true, tabArticulations: true }, { showStandardNotation: false, showTablature: false, tabArticulations: true },
+      { showStandardNotation: false, showTablature: true }].map(TM.hasTabOnlyMarks), [true, false, false, false, false]);
+    const ms = [{ beats: [f(3, 2, { articulations: ['accent'], fermata: true }), f(3, 2), { type: 'rest', duration: 'half', fermata: true }] }];
+    const nodes = render({ tracks: [tabOnly(ms), tabOnly(ms, { tabArticulations: false }), { showTablature: true, tabArticulations: true, measures: ms }] });
+    const staves = nodes.filter((n) => /^staff staff-/.test(cls(n)));
+    eq(staves.map((g) => [g.getAttribute('data-track'), cls(g).split(' ')[1], groups(all(g), 'tab-articulations').length, groups(all(g), 'tab-fermata').length]),
+      [['0', 'staff-tab', 1, 2], ['1', 'staff-tab', 0, 0], ['2', 'staff-notation', 0, 0], ['2', 'staff-tab', 0, 0]]);
+  });
+  test('1.11 tab marks: articulation stack (nearest first) above the TAB top line, frets and tremolo; graces and rests get none', () => {
+    const nodes = render({ tracks: [tabOnly([{ beats: [f(3, 2, { articulations: ['accent', 'tenuto', 'staccato'] }), f(1, 12, { articulations: ['marcato'], tremolo: true }),
+      { type: 'grace', duration: '8th', notes: [{ string: 1, fret: 3 }], articulations: ['accent'] }, f(1, 5), { type: 'rest', duration: 'half', articulations: ['accent'] }] }])] });
+    const arts = groups(nodes, 'tab-articulations');
+    eq(arts.length, 2);
+    const glyphs = arts[0].children.map((c) => c.textContent);
+    eq(glyphs, [Glyph.articStaccatoAbove, Glyph.articTenutoAbove, Glyph.articAccentAbove]);
+    const ys = arts[0].children.map((c, i) => +c.getAttribute('y') - glyphBox(glyphs[i]).bottom * S); // ink bottoms
+    eq(ys[0], tabTop - 0.5 * S);
+    eq(ys[1] < ys[0] && ys[2] < ys[1], true);
+    const tab = nodes.find((n) => cls(n) === 'staff staff-tab');
+    const fret12 = all(tab).find((n) => n.tag === 'text' && n.textContent === '12');
+    const marc = arts[1].children[0];
+    const marcBottom = +marc.getAttribute('y') - glyphBox('articMarcatoAbove').bottom * S;
+    const trem = all(tab).filter((n) => /tab-tremolo/.test(cls(n))).flatMap((g) => g.children);
+    const tremTop = Math.min(...trem.map((l) => Math.min(+l.getAttribute('y1'), +l.getAttribute('y2'))));
+    eq(marcBottom < tremTop && marcBottom < +fret12.getAttribute('y') - th.tabFontSize, true);
+  });
+  test('1.11 tab marks: P.M. and let-ring labels, pick strokes and tap T stack outside the articulations', () => {
+    const nodes = render({ tracks: [tabOnly([{ beats: [f(3, 2, { articulations: ['accent'], palmMute: true }), f(3, 2, { articulations: ['accent'], letRing: true, pickStroke: 'down' }),
+      { type: 'note', duration: 'half', notes: [{ string: 2, fret: 5, tap: true }], articulations: ['marcato'] }] }])] });
+    const arts = groups(nodes, 'tab-articulations');
+    const topOf = (g) => Math.min(...g.children.map((c) => +c.getAttribute('y') - glyphBox(c.textContent).top * S));
+    const labelY = (c) => +all(groups(nodes, c)[0]).find((n) => n.tag === 'text').getAttribute('y');
+    eq(labelY('palm-mute') < topOf(arts[0]), true, 'P.M. baseline above the accent');
+    eq(labelY('let-ring') < topOf(arts[1]), true);
+    const pick = all(groups(nodes, 'pick-stroke pick-stroke-down')[0]).find((n) => n.tag === 'text');
+    eq(+pick.getAttribute('y') < labelY('let-ring'), true);
+    const tap = nodes.filter((n) => n.tag === 'text' && n.textContent === 'T');
+    eq(tap.length === 1 && +tap[0].getAttribute('y') < topOf(arts[2]), true, 'tap T above the marcato');
+  });
+  test('1.11 tab marks: fermatas on note and rest beats above every ink of the column, below beat text; voice 1 wins per column', () => {
+    const nodes = render({ tracks: [tabOnly([
+      { beats: [f(3, 2, { fermata: true, articulations: ['accent'] }), { type: 'rest', duration: 'quarter', fermata: 'short' }, f(1, 0, { fermata: 'long', text: 'rit.' }), f(1, 0, { fermata: 'bogus' })] },
+      { voices: [{ beats: [f(3, 2, { articulations: ['accent'] }), f(3, 2, { fermata: true }), { type: 'rest', duration: 'half' }] },
+        { beats: [f(5, 3, { articulations: ['staccato'] }), f(5, 3, { articulations: ['staccato'], fermata: 'short' }), f(6, 3, { duration: 'half', articulations: ['tenuto'], fermata: true })] }] },
+    ])] });
+    const fer = groups(nodes, 'tab-fermata');
+    eq(fer.map((g) => cls(g.children[0])), ['fermata', 'fermata fermata-short', 'fermata fermata-long', 'fermata', 'fermata']);
+    const accTop = Math.min(...groups(nodes, 'tab-articulations')[0].children.map((c) => +c.getAttribute('y') - glyphBox(c.textContent).top * S));
+    eq(Math.abs(+fer[0].children[0].children[0].getAttribute('y') - (accTop - 0.5 * S)) < 0.01, true, 'fermata 0.5 sp above the accent');
+    const restY = +fer[1].children[0].children[0].getAttribute('y');
+    eq(restY <= tabTop - 0.5 * S && restY >= tabTop - 0.5 * S - th.staffLineWidth, true, 'rest fermata 0.5 sp above the top line (and its stroke)');
+    const rit = nodes.find((n) => n.tag === 'text' && n.textContent === 'rit.');
+    eq(+rit.getAttribute('y') < +fer[2].children[0].children[0].getAttribute('y') - glyphBox('fermataLongAbove').top * S, true, 'beat text outside');
+    // two voices: voice 1's accent wins beat 1 (no staccato), voice 2's staccato fills beat 2, v2's own column (v1 rests) draws its tenuto
+    const arts = groups(nodes, 'tab-articulations').slice(1).map((g) => g.children.map((c) => c.textContent));
+    eq(arts, [[Glyph.articAccentAbove], [Glyph.articStaccatoAbove], [Glyph.articTenutoAbove]]);
+  });
+  test('1.11 tab marks: off is byte-identical — every case with tabArticulations: false on every track renders its snapshot', () => {
+    const dir = path.join(root0, 'tests', 'snapshots');
+    let n = 0;
+    for (const c of cases) {
+      if (c.id.startsWith('char-tab-articulations-')) continue; // the tab-articulations fixture draws its marks on purpose
+      const file = path.join(dir, `${c.id}.svg`);
+      if (!fs.existsSync(file)) continue;
+      const sc = JSON.parse(JSON.stringify(c.score));
+      (sc.tracks || []).forEach((t) => { t.tabArticulations = false; });
+      const box = makeContainer();
+      new MusicScoreRenderer(box, sc, { width: c.width, ...(c.options || {}) }).render();
+      if (serialize(box.children[0]) !== fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n')) throw new Error(c.id);
+      n++;
+    }
+    if (n < 76) throw new Error(`only ${n}`);
+  });
+}
+
+// ---------- 1.11.0: verification audit — extra edge cases (clef sites, multi-rest keys, slash marks) ----------
+{
+  const M = await imp('src/layout/multiRest.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const nt = (ps, duration = 'quarter', x = {}) => ({ type: 'note', duration, notes: ps.map((p) => ({ pitch: p })), ...x });
+  const W = { type: 'rest', duration: 'whole' };
+  const rest = (x = {}) => ({ beats: [W], ...x });
+  const q4 = (p) => [nt([p]), nt([p]), nt([p]), nt([p])];
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const render = (sc, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(sc)), { width }).render();
+    return all(box.children[0]);
+  };
+  const posOf = (n) => Math.round(((4 * S - +n.getAttribute('y')) / (S / 2)) * 1000) / 1000;
+  const wholes = (nodes) => nodes.filter((n) => n.tag === 'text' && n.textContent === Glyph.noteheadWhole).map(posOf);
+
+  test('1.11 audit clef: two voices under alto and tenor take the C-clef positions in both voices', () => {
+    for (const [clef, p1, p2, want] of [['alto', 'C4', 'F3', [4, 0]], ['TENOR ', 'C4', 'D3', [6, 0]]]) {
+      const nodes = render({ tracks: [{ clef, measures: [{ voices: [{ beats: [nt([p1], 'whole')] }, { beats: [nt([p2], 'whole')] }] }] }] });
+      eq(wholes(nodes), want, clef);
+    }
+  });
+  test('1.11 audit clef: an 8va ottava under alto shifts the head by 7 positions and draws the bracket', () => {
+    const plain = render({ tracks: [{ clef: 'alto', measures: [{ beats: [nt(['C4'], 'whole')] }] }] });
+    const ott = render({ tracks: [{ clef: 'alto', measures: [{ beats: [nt(['C4'], 'whole', { ottava: '8va' })] }] }] });
+    eq([wholes(plain), wholes(ott)], [[4], [-3]]);
+    eq(ott.some((n) => /\bottava\b/.test(cls(n))), true);
+  });
+  test('1.11 audit clef: a measure-0 clef replaces the header clef (no clef-change drawn, header glyph is the new clef)', () => {
+    const nodes = render({ tracks: [{ clef: 'treble', measures: [{ clef: 'bass', beats: [nt(['G2'], 'whole')] }, { beats: [nt(['G2'], 'whole')] }] }] });
+    const st = all(nodes.find((n) => /\bstaff-notation\b/.test(cls(n))));
+    eq(st.filter((n) => n.tag === 'text' && n.textContent === Glyph.fClef).length, 1);
+    eq(st.filter((n) => n.tag === 'text' && n.textContent === Glyph.gClef).length, 0);
+    eq(nodes.some((n) => /clef-change|courtesy-clef/.test(cls(n))), false);
+    eq(wholes(st), [0, 0]);
+  });
+  test('1.11 audit clef: a mid-system change draws no courtesy clef; restating it (any case) draws no second change', () => {
+    const sc = { tracks: [{ measures: [{ beats: q4('C4') }, { clef: 'alto', beats: q4('C4') }, { clef: 'ALTO', beats: q4('C4') }, { beats: q4('C4') }] }] };
+    eq(computeLayout(normalizeScore(sc), th, 1400).systems.length, 1);
+    const nodes = render(sc, 1400);
+    eq([nodes.filter((n) => cls(n) === 'clef clef-change').length, nodes.some((n) => /courtesy-clef/.test(cls(n)))], [1, false]);
+    const long = (k) => ({ tracks: [{ measures: Array.from({ length: 12 }, (_, i) => ({ ...(i === k ? { clef: 'alto' } : {}), beats: q4('C4') })) }] });
+    const first = computeLayout(normalizeScore(long(-1)), th, 700).systems[0].measureIndices;
+    if (first.length < 3) throw new Error('fixture: system 1 too short');
+    const l2 = computeLayout(normalizeScore(long(first[1])), th, 700);
+    eq(l2.systems.some((s) => s.tracks[0].courtesy?.clef), false);
+  });
+  test('1.11 audit clef: an unknown measure clef draws like none; a clef on a tab-only measure draws like none', () => {
+    const base = { tracks: [{ measures: [{ beats: [nt(['C4'], 'whole')] }, { beats: [nt(['C4'], 'whole')] }] }] };
+    const bogus = JSON.parse(JSON.stringify(base)); bogus.tracks[0].measures[1].clef = 'soprano';
+    eq(serialize(render(bogus)[0]), serialize(render(base)[0]));
+    const f = { type: 'note', duration: 'whole', notes: [{ string: 3, fret: 2 }] };
+    const tabOnly = { tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: [f] }, { clef: 'bass', beats: [f] }] }] };
+    const noClef = JSON.parse(JSON.stringify(tabOnly)); delete noClef.tracks[0].measures[1].clef;
+    eq(serialize(render(tabOnly)[0]), serialize(render(noClef)[0]));
+  });
+
+  test('1.11 audit multi-rest: any other beat key (ottava, hairpin, fade, wah, tuplet, articulations, fermata) keeps a measure out of a run', () => {
+    const one = (extra) => M.isRestMeasure(normalizeScore({ tracks: [{ measures: [{ beats: [{ ...W, ...extra }] }] }] }), 0);
+    eq([one({}), one({ slash: true })], [true, true], 'slash is ignored on rests');
+    for (const extra of [{ ottava: '8va' }, { hairpin: 'cresc' }, { fade: 'in' }, { wah: 'open' }, { tuplet: 3 }, { articulations: ['accent'] }, { fermata: 'long' }]) {
+      eq(one(extra), false, JSON.stringify(extra));
+    }
+  });
+  test('1.11 audit multi-rest: a run longer than a system is still one column inside one system', () => {
+    const sc = { multiMeasureRests: true, tracks: [{ measures: [{ beats: [nt(['C5'])] }, ...Array(30).fill(0).map(() => rest()), { beats: [nt(['C5'])] }] }] };
+    const lay = computeLayout(normalizeScore(sc), th, 300);
+    const cols = lay.systems.flatMap((s) => s.tracks[0].measures.filter((m) => m.multiRest).map((m) => [s.measureIndices.includes(m.measureIndex), m.multiRest.count]));
+    eq(cols, [[true, 30]]);
+    eq(lay.systems.flatMap((s) => s.measureIndices), [0, 1, 31]);
+  });
+  test('1.11 audit multi-rest: a lone rest between runs is drawn as a plain rest; only runs of two or more get a bar and count', () => {
+    const q = { beats: [nt(['C5'])] };
+    const nodes = render({ multiMeasureRests: true, tracks: [{ measures: [q, rest(), q, rest(), rest(), q] }] }, 1000);
+    eq([nodes.filter((n) => cls(n) === 'multi-rest').length, nodes.filter((n) => cls(n) === 'multi-rest-count').length], [1, 1]);
+  });
+
+  test('1.11 audit slash: beat-level marks (fermata, text) draw on a slash beat; no tie or arpeggio is drawn', () => {
+    const nodes = render({ tracks: [{ measures: [{ beats: [{ type: 'note', duration: 'quarter', slash: true, fermata: true, text: 'hit', arpeggio: 'up', notes: [{ pitch: 'C4', tieStart: true }] }, nt(['C4'])] }] }] });
+    const st = all(nodes.find((n) => /\bstaff-notation\b/.test(cls(n))));
+    eq(st.some((n) => /\bfermata\b/.test(cls(n))), true, 'fermata');
+    eq(nodes.some((n) => n.tag === 'text' && n.textContent === 'hit'), true, 'text');
+    eq(nodes.some((n) => /\btie\b|\barpeggio\b/.test(cls(n))), false, 'no tie / arpeggio');
+    eq(st.filter((n) => cls(n) === 'slash').length, 1);
+  });
+  test('1.11 audit slash: a slash on a rest changes nothing', () => {
+    const base = { tracks: [{ measures: [{ beats: [nt(['C4'], 'half'), { type: 'rest', duration: 'half' }] }] }] };
+    const slashed = JSON.parse(JSON.stringify(base)); slashed.tracks[0].measures[0].beats[1].slash = true;
+    eq(serialize(render(slashed)[0]), serialize(render(base)[0]));
   });
 }
 

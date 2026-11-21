@@ -7,7 +7,9 @@ import {
   Glyph, restForDuration, flagForDuration, accidentalGlyph, dynamicGlyph, pickStrokeGlyph,
 } from '../glyphs.js';
 import { layoutHeadGlyph } from '../harmonics.js';
-import { notePosition, staffPositionToY } from '../pitch.js';
+import { staffPositionToY } from '../pitch.js';
+import { clefAt, clefNotePosition } from '../clef.js';
+import { isSlashBeat, SLASH_HEAD, SLASH_POSITION } from '../slash.js';
 import { smuflFontSizePx } from '../theme.js';
 import { beamCount } from '../duration.js';
 import {
@@ -60,7 +62,7 @@ export function renderNotationElement(g, layoutEl, measure, track, theme, opts =
   const spacing = theme.staffLineSpacing;
   const el = layoutEl.el;
   const x = layoutEl.x;
-  const clef = track.clef;
+  const clef = clefAt(track, measure.measureIndex);
 
   if (el.type === 'rest') {
     // A voice-2 rest merged with voice 1's (layout/voices.js) is drawn once, by voice 1.
@@ -89,10 +91,12 @@ export function renderNotationElement(g, layoutEl, measure, track, theme, opts =
     return { isRest: true, x, noteheads: [], ...bottomOf(glyph, y) };
   }
 
-  if (el.type === 'grace') return renderGraceNote(g, layoutEl, track, theme);
+  if (el.type === 'grace') return renderGraceNote(g, layoutEl, clef, theme);
 
-  const notes = el.notes || [];
-  const positions = notes.map((n) => notePosition(n, clef));
+  // A rhythm slash: one slash head (the chord layout's glyph) on the middle line, in <g class="slash">.
+  const slash = isSlashBeat(el);
+  const notes = slash ? [SLASH_HEAD] : el.notes || [];
+  const positions = slash ? [SLASH_POSITION] : notes.map((n) => clefNotePosition(n, clef));
   const minPos = Math.min(...positions);
   const maxPos = Math.max(...positions);
   const chord = layoutEl.chord;
@@ -115,9 +119,10 @@ export function renderNotationElement(g, layoutEl, measure, track, theme, opts =
     // A voice-2 head shared with voice 1's (layout/voices.js) is drawn once, by voice 1.
     const shared = !!chord.heads[i].shared;
     if (!shared) {
-      g.appendChild(glyphText(hx, y, glyph, theme.fontFamily, fontSize, {
+      const head = glyphText(hx, y, glyph, theme.fontFamily, fontSize, {
         fill: theme.noteColor, 'text-anchor': 'middle',
-      }));
+      });
+      g.appendChild(slash ? group({ class: 'slash' }, [head]) : head);
     }
     // Ghost note: a note played very quietly/buried (as opposed to a
     // dead/muted note, which is silenced/percussive) — shown as the
@@ -157,6 +162,7 @@ export function renderNotationElement(g, layoutEl, measure, track, theme, opts =
     isRest: false, x, noteheads, stemUp, minPos, maxPos, duration: el.duration, headGlyph: chord.stemGlyph,
     stemBaseGlyphUp: chord.heads[positions.indexOf(minPos)].glyph,
     stemBaseGlyphDown: chord.heads[positions.indexOf(maxPos)].glyph,
+    ...(slash ? { slash: true } : {}),
   };
   if (el.duration === 'whole') return info;
 
@@ -216,16 +222,15 @@ export function renderWholeMeasureRest(g, x, baselineY, theme, pos = 6) {
  * enough info (`x`, `noteheads`, `stemTopY`/`stemBottomY`) for that pass
  * and for tremolo/vibrato to build on, same shape as a normal note.
  */
-function renderGraceNote(g, layoutEl, track, theme) {
+function renderGraceNote(g, layoutEl, clef, theme) {
   const spacing = theme.staffLineSpacing;
   const scale = theme.graceNoteScale;
   const fontSize = smuflFontSizePx(theme) * scale;
   const el = layoutEl.el;
   const x = layoutEl.x;
-  const clef = track.clef;
 
   const notes = el.notes || [];
-  const positions = notes.map((n) => notePosition(n, clef));
+  const positions = notes.map((n) => clefNotePosition(n, clef));
   const minPos = Math.min(...positions);
   const maxPos = Math.max(...positions);
   // Two-voice measures: voice 1's graces stem up, voice 2's down.
@@ -332,7 +337,7 @@ export function renderBeams(g, measureLayout, rendered, theme, baselineY, forced
     // One shared stem direction for the whole group, based on its overall pitch range.
     const overallMin = Math.min(...infos.map((i) => i.minPos));
     const overallMax = Math.max(...infos.map((i) => i.maxPos));
-    const stemUp = forcedStemUp ?? stemUpFor([overallMin, overallMax]);
+    const stemUp = forcedStemUp ?? (infos.some((i) => i.slash) ? true : stemUpFor([overallMin, overallMax]));
     const dirSign = stemUp ? -1 : 1; // direction from notehead toward the stem tip
     const extendSign = stemUp ? 1 : -1; // secondary beams thicken toward the notehead
 

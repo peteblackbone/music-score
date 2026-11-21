@@ -84,6 +84,7 @@
   <a href="#directions">Picking &amp; directions</a>
   <a href="#tab-rhythm">Rhythm on tab</a>
   <a href="#voices">Two voices</a>
+  <a href="#structure">Clefs, rests &amp; slashes</a>
   <a href="#theme">Theming</a>
   <a href="#limits">Not included</a>
 </nav>
@@ -98,6 +99,7 @@
   <div class="tile"><b>Full notation basics</b><span>Keys, meters, tuplets, dots, ties, slurs, accidentals, chords.</span></div>
   <div class="tile"><b>Marks</b><span>Articulations, fermatas, dynamics, chord symbols, vibrato, tremolo.</span></div>
   <div class="tile"><b>Expression and tempo</b><span>Hairpins, fades, wah, 8va, 8vb, 15ma and 15mb brackets, and tempo changes with a metronome mark.</span></div>
+  <div class="tile"><b>Notation structure</b><span>Alto, tenor and octave clefs with clef changes mid-score, multi-measure rests, rhythm slashes, and articulations and fermatas on tab-only staves.</span></div>
   <div class="tile"><b>Themeable</b><span>Colours, fonts and spacing; everything scales with one key.</span></div>
   <div class="tile"><b>Accessible SVG</b><span><code>role="img"</code> with a <code>&lt;title&gt;</code> and <code>&lt;desc&gt;</code>.</span></div>
   <div class="tile"><b>Zero dependencies</b><span>Plain ES modules; Bravura font shipped locally.</span></div>
@@ -362,6 +364,24 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 <p>A TAB-only track shows each voice's rhythm: voice 1 on the first row under the TAB, voice 2 on a second row below it. A rest that both voices take at the same time is drawn once, in the staff.</p>
 <div class="demo" data-demo="voicesTab" data-width="680"></div>
 
+<h2 id="structure">Clefs, rests and slashes</h2>
+<p>1.11.0 additions: alto, tenor and octave clefs, clef changes in the middle of a score, multi-measure rests, rhythm slashes, and articulations and fermatas above a tab-only staff. Scores that use none of these fields draw as before, except that a clef name such as <code>'alto'</code> now draws its own clef (and the tuning chart reads bass-family names such as <code>'bass8vb'</code> as bass), a measure <code>clef</code> now changes the clef, and <code>slash: true</code>, which was ignored, now draws a slash.</p>
+<table>
+  <tr><th>Field</th><th>Drawn as</th></tr>
+  <tr><td><code>clef</code> (track, measure)</td><td><code>'treble'</code>, <code>'bass'</code>, <code>'alto'</code>, <code>'tenor'</code> or an octave form such as <code>'treble8vb'</code> or <code>'bass15ma'</code>. A measure's <code>clef</code> changes the clef from that measure on</td></tr>
+  <tr><td><code>multiMeasureRests</code> (score)</td><td><code>true</code>: each run of two or more rest measures becomes one bar, with the bar count above it</td></tr>
+  <tr><td><code>slash</code> (beat)</td><td><code>true</code> on a voice 1 note beat: one slash head on the middle line, and a slash on TAB, in place of its notes</td></tr>
+  <tr><td><code>tabArticulations</code> (track)</td><td><code>true</code> on a tab-only track: articulations and fermatas drawn above the TAB staff</td></tr>
+</table>
+<p>Alto and tenor clefs put middle C on the middle and fourth lines. An octave clef changes only the sign, so the notes stay where the base clef puts them. A clef change is drawn after the barline at smaller size, followed by the key and time signatures.</p>
+<div class="demo" data-demo="clefs" data-width="680"></div>
+<p>A run of rest measures collapses into one bar. A segno or a key change starts a new run, and a double or final barline ends one. Turn the feature on with <code>multiMeasureRests: true</code>.</p>
+<div class="demo" data-demo="multiRest" data-width="680"></div>
+<p>A rhythm slash shows a beat's rhythm with one slash head, not its pitches. Beams, dots and tuplets work as usual, and chord symbols, fermatas and articulations on the beat still draw.</p>
+<div class="demo" data-demo="slashes" data-width="680"></div>
+<p>On a tab-only track, <code>tabArticulations: true</code> draws the articulations above the TAB staff, and a fermata sits above the beat's other TAB marks. A track that also shows notation keeps its marks on the notation staff.</p>
+<div class="demo" data-demo="tabMarks" data-width="680"></div>
+
 <h2 id="theme">Theming</h2>
 <p>Pass <code>options.theme</code> to override any key of <code>defaultTheme</code>: colours (<code>noteColor</code>, <code>staffLineColor</code>, <code>tabFretColor</code>, <code>background</code>), fonts, line widths and spacing. Spacing keys ending in <code>Sp</code> are in staff spaces, so <code>staffLineSpacing</code> scales the whole score. Rhythm on tab uses <code>tabStemGapSp</code>, <code>tabStemLengthSp</code>, <code>tabHalfStemLengthSp</code>, <code>tabFlagScale</code> and <code>tabFretColor</code>.</p>
 <div class="demo" data-demo="theme" data-width="640" data-theme='{"staffLineSpacing":13,"noteColor":"#1f3a8a","staffLineColor":"#64748b","tabFretColor":"#1f3a8a","background":"#fbfaf6"}'></div>
@@ -370,6 +390,7 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 <ul class="points">
   <li>Playback, an editor, and import/export of other formats (design notes for these are in <a href="ARCHITECTURE.md">ARCHITECTURE.md</a>).</li>
   <li>Different time signatures across tracks in the same measure.</li>
+  <li>Soprano, baritone and percussion clefs, clef changes in the middle of a measure, slash measures and repeat-measure signs.</li>
   <li>Glyph and text widths are estimated, not measured from the font.</li>
 </ul>
 <p class="note">See "Known limitations" in the README for the full list.</p>
@@ -824,6 +845,79 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
         measures: [
           { beats: [t('half', 2, 5, { tieStart: true }), t('half', 2, 5, { tieEnd: true })] },
           { beats: [t('quarter', 1, 12, { tieStart: true }), t('quarter', 1, 12, { tieEnd: true }), t('half', 1, 10)] },
+        ],
+      }],
+    },
+    clefs: {
+      tracks: [{
+        name: 'Vla.', showStandardNotation: true, showTablature: false, clef: 'alto',
+        measures: [
+          { keySignature: 2, beats: [n('quarter', 'C4'), n('quarter', 'E4'), n('quarter', 'G4'), n('quarter', 'C5')] },
+          { clef: 'tenor', beats: [n('quarter', 'D3'), n('quarter', 'F3'), n('half', 'A3')] },
+          { clef: 'bass8vb', keySignature: -3, timeSignature: { beats: 3, beatType: 4 }, beats: [n('quarter', 'C3'), n('quarter', 'E3'), n('quarter', 'G3')] },
+          { clef: 'treble15ma', keySignature: 0, timeSignature: { beats: 4, beatType: 4 }, beats: [n('whole', 'G5')] },
+        ],
+      }],
+    },
+
+    multiRest: {
+      multiMeasureRests: true,
+      tracks: [{
+        name: 'Gtr.', showStandardNotation: true, showTablature: true, tabRhythm: true,
+        measures: [
+          { beats: [t('quarter', 3, 2), t('quarter', 3, 4), t('half', 2, 3)] },
+          { segno: true, beats: [] },
+          { beats: [] },
+          { beats: [], barline: 'double' },
+          { beats: [t('whole', 1, 5)] },
+          { beats: [] },
+          { beats: [t('whole', 1, 5)] },
+        ],
+      }],
+    },
+
+    slashes: {
+      tracks: [{
+        name: 'Gtr.', showStandardNotation: true, showTablature: true,
+        measures: [
+          { beats: [
+            { type: 'note', duration: 'quarter', slash: true },
+            { type: 'note', duration: '8th', slash: true },
+            { type: 'note', duration: '8th', slash: true },
+            { type: 'note', duration: 'half', slash: true },
+          ] },
+          { beats: [
+            r('quarter'),
+            { type: 'note', duration: 'quarter', slash: true, chord: 'G', articulations: ['accent'] },
+            { type: 'note', duration: 'half', slash: true, fermata: true },
+          ] },
+          { beats: [
+            n('quarter', 'E3'),
+            { type: 'note', duration: 'quarter', slash: true, dots: 0 },
+            { type: 'note', duration: 'quarter', slash: true },
+            { type: 'note', duration: 'quarter', slash: true },
+          ] },
+          { beats: [
+            { type: 'note', duration: 'whole', slash: true, dynamic: 'mf' },
+          ] },
+        ],
+      }],
+    },
+
+    tabMarks: {
+      tracks: [{
+        name: 'Gtr.', showStandardNotation: false, showTablature: true, tabArticulations: true,
+        measures: [
+          { beats: [
+            t('quarter', 3, 2, {}, { articulations: ['staccato'], palmMute: true }),
+            t('quarter', 3, 4, {}, { articulations: ['tenuto', 'accent'], palmMute: true }),
+            t('quarter', 2, 3, {}, { fermata: true }),
+            t('quarter', 2, 5, {}, { articulations: ['marcato'], fermata: 'short' }),
+          ] },
+          { beats: [
+            t('half', 1, 5, {}, { articulations: ['accent'], fermata: 'long', vibrato: true }),
+            r('half', { fermata: true }),
+          ] },
         ],
       }],
     },

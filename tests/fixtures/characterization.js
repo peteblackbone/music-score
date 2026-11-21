@@ -24,6 +24,37 @@ const E_TOP = [[3, 1], [2, 0], [1, 0]];
 const vm = (beats1, beats2) => ({ voices: [{ beats: beats1 }, { beats: beats2 }] });
 const ras = (k) => tabc(E_TOP, { strum: k % 2 ? 'up' : 'down' }, '16th');
 
+// 1.11.0 fixtures (clefs, multi-measure rests, rhythm slashes, tab-only articulations)
+const T34 = { beats: 3, beatType: 4 };
+const sl = (duration, extra = {}) => ({ type: 'note', duration, slash: true, ...extra });
+const WR = { type: 'rest', duration: 'whole' };
+// multirest: per measure 'n' = notes, 'r' = a rest measure in every track; extras by measure index
+const MR = 'nrrrrrrrrnrrnrnrnrrrn'.split('');
+const MR_EXTRA = { 1: { segno: true }, 5: { keySignature: 2 }, 7: { barline: 'repeatStart' }, 8: { barline: 'repeatEnd' }, 11: { jump: 'D.S.' }, 15: { ending: 1 } };
+function mrMeasure(kind, i, track) {
+  const extra = MR_EXTRA[i] || {};
+  if (kind === 'n') {
+    if (track === 'bass') return { ...extra, beats: [tabd('half', 4, 0), tabd('half', 3, 2)] };
+    if (track === 'keys') return { ...extra, beats: [q('C5'), q('E5'), q('G5'), q('C6')] };
+    return { ...extra, beats: [tabq(3, 2), tabq(2, 3), tabq(1, 0), tabq(2, 1)] };
+  }
+  // the fermata rest (m18) only on the guitar; the bass leaves its rest measures empty (beats: [])
+  if (i === 17 && track === 'gtr') return { ...extra, beats: [{ ...WR, fermata: true }] };
+  return { ...extra, beats: track === 'bass' ? [] : [WR] };
+}
+const tf = (string, fret, extra = {}, note = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string, fret, ...note }], ...extra });
+const TA = [
+  { beats: [tf(3, 2, { articulations: ['accent', 'tenuto', 'staccato'] }), tf(2, 3, { articulations: ['marcato'] }),
+    tf(1, 12, { articulations: ['accent'], tremolo: true }), tf(1, 5, { articulations: ['staccatissimo'], vibrato: true })] },
+  { beats: [tf(4, 2, { articulations: ['accent'], palmMute: true }), tf(4, 2, { articulations: ['staccato'], palmMute: true }),
+    tf(3, 2, { articulations: ['accent'], letRing: true, pickStroke: 'down' }), tf(3, 4, { articulations: ['tenuto'] }, { bend: 'full' })] },
+  { beats: [tf(2, 5, { articulations: ['accent'] }, { tap: true }), tf(3, 7, { fermata: true }), { type: 'rest', duration: 'quarter', fermata: 'short' },
+    tf(1, 0, { fermata: 'long', text: 'rit.', chord: 'E' })] },
+  vm([tf(3, 2, { articulations: ['accent'] }), tf(3, 2), { type: 'rest', duration: 'half' }],
+    [tf(5, 3, { articulations: ['staccato'] }), tf(5, 3, { articulations: ['staccato'], fermata: true }),
+      { type: 'note', duration: 'half', notes: [{ string: 6, fret: 3 }], articulations: ['tenuto'], fermata: true }]),
+];
+
 export const characterizationCases = [
   {
     name: 'tab-only', width: 900,
@@ -1672,6 +1703,120 @@ export const characterizationCases = [
           { beats: [tabq(1, 15, { ottava: '8va', hairpin: 'dim' }), tabq(1, 17, { ottava: '8va', hairpin: 'dim' }), tabd('half', 1, 12, {}, { tempo: { bpm: 90, unit: '8th', text: 'Swing' } })] },
         ],
       }],
+    },
+  },
+  {
+    // 1.11.0 clefs: an alto viola (key A, two voices, an 8va note); m3 tenor + 2 flats + 3/4 on every track (clef,
+    // key, time); m4 'tenor' again (no change); m5 'BASS ' after a repeat-start; m7 alto after a repeat-end; a
+    // guitar written an octave up (auto 8vb) with measure clefs treble15ma (explicit wins), alto (cClef8vb), opening
+    // system 2 (courtesy clef at the end of system 1), and treble again; a notation + TAB bass in bass8va, tenor in m7.
+    name: 'clefs', width: 900,
+    score: {
+      tracks: [
+        {
+          name: 'Viola', label: 'Va.', clef: 'alto',
+          measures: [
+            { keySignature: 3, beats: [q('C4'), q('E4'), q('G4'), q('A5', { ottava: '8va' })] },
+            vm([q('A4'), q('B4'), pc(['C#5'], {}, 'half')], [pc(['F#3'], {}, 'half'), pc(['A3'], {}, 'half')]),
+            { clef: 'tenor', keySignature: -2, timeSignature: T34, beats: [q('D4'), q('F4'), q('Bb3')] },
+            { clef: 'tenor', beats: [q('C4'), q('Eb4'), q('G4')] },
+            { clef: 'BASS ', barline: 'repeatStart', beats: [q('G2'), q('Bb2'), q('D3')] },
+            { barline: 'repeatEnd', beats: [q('F3'), q('E3'), q('D3')] },
+            { clef: 'alto', beats: [q('C4'), q('D4'), q('E4')] },
+            { beats: [pc(['F4'], {}, 'half'), q('G4')] },
+          ],
+        },
+        {
+          name: 'Guitar', label: 'Gtr.', writtenOctaveUp: true,
+          measures: [
+            { keySignature: 3, beats: [q('E3'), q('A3'), q('C#4'), q('E4')] },
+            { clef: 'treble15ma', beats: [q('E3'), q('A3'), q('C#4'), q('E4')] },
+            { keySignature: -2, timeSignature: T34, beats: [q('D3'), q('F3'), q('Bb3')] },
+            { clef: 'alto', beats: [q('C3'), q('Eb3'), q('G3')] },
+            { beats: [q('G2'), q('Bb2'), q('D3')] },
+            { beats: [q('F3'), q('E3'), q('D3')] },
+            { clef: 'treble', beats: [q('C4'), q('D4'), q('E4')] },
+            { beats: [pc(['F4'], {}, 'half'), q('G4')] },
+          ],
+        },
+        {
+          name: 'Bass', label: 'Bs.', clef: 'bass8va', showTablature: true, tuning: ['E1', 'A1', 'D2', 'G2'],
+          measures: [
+            { keySignature: 3, beats: [tabq(4, 0), tabq(3, 0), tabq(2, 2), tabq(1, 2)] },
+            { beats: [tabd('half', 3, 0), tabd('half', 2, 2)] },
+            { keySignature: -2, timeSignature: T34, beats: [tabq(3, 5), tabq(2, 3), tabq(1, 1)] },
+            { beats: [tabq(3, 3), tabq(2, 1), tabq(1, 0)] },
+            { beats: [tabq(4, 3), tabq(3, 1), tabq(2, 0)] },
+            { beats: [tabq(3, 8), tabq(3, 7), tabq(2, 0)] },
+            { clef: 'tenor', beats: [tabq(2, 5), tabq(2, 7), tabq(1, 4)] },
+            { beats: [tabd('half', 1, 5), tabq(1, 7)] },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // 1.11.0 multi-measure rests (multiMeasureRests: true): a notation + TAB guitar with TAB rhythm, a tab-only bass
+    // (empty rest measures) and a notation + TAB track without TAB rhythm (blank TAB). Runs: m2-5 (segno on m2),
+    // m6-7 (key change on m6), m8-9 (repeat-start .. repeat-end), m11-12 (D.S. on m12), m19-20; not collapsed: the
+    // lone rest m14, the ending m16, the guitar's fermata rest m18.
+    name: 'multirest', width: 900,
+    score: {
+      multiMeasureRests: true,
+      tracks: [
+        { name: 'Guitar', label: 'Gtr.', showTablature: true, tabRhythm: true, measures: MR.map((m, i) => mrMeasure(m, i, 'gtr')) },
+        { name: 'Bass', label: 'Bs.', showStandardNotation: false, showTablature: true, tuning: ['E1', 'A1', 'D2', 'G2'], measures: MR.map((m, i) => mrMeasure(m, i, 'bass')) },
+        { name: 'Keys', label: 'Ks.', showTablature: true, tabRhythm: false, measures: MR.map((m, i) => mrMeasure(m, i, 'keys')) },
+      ],
+    },
+  },
+  {
+    // 1.11.0 rhythm slashes on notation + TAB (TAB rhythm on): quarters with a chord symbol, an accent and a pick
+    // stroke, beamed 8ths, half, dotted quarter, whole, an 8th triplet, 16ths; a slash with pitches (dropped); slash
+    // on a rest and on a grace (ignored); a two-voice measure: voice-1 slashes over voice-2 notes, one voice-2 beat
+    // with slash (ignored); a tab-only track with slashes in its rhythm band.
+    name: 'slashes', width: 900,
+    score: {
+      tracks: [
+        {
+          name: 'Guitar', label: 'Gtr.', showTablature: true, tabRhythm: true,
+          measures: [
+            { beats: [sl('quarter', { chord: 'Am' }), sl('quarter', { articulations: ['accent'] }), sl('8th'), sl('8th'), sl('8th', { pickStroke: 'down' }), sl('8th')] },
+            { beats: [sl('half', { chord: 'F' }), sl('quarter', { dots: 1 }), sl('8th')] },
+            { beats: [sl('whole', { chord: 'C' })] },
+            { beats: [sl('8th', { tuplet: 3 }), sl('8th', { tuplet: 3 }), sl('8th', { tuplet: 3 }), sl('quarter', { notes: [n('C6')] }),
+              { type: 'rest', duration: 'quarter', slash: true }, { type: 'grace', duration: '16th', slash: true, notes: [{ pitch: 'E4', string: 2, fret: 5 }] },
+              sl('16th'), sl('16th'), sl('8th')] },
+            vm([sl('quarter'), sl('quarter'), sl('half')],
+              [pc([{ pitch: 'E4', string: 2, fret: 5 }], {}, 'half'), pc([{ pitch: 'D4', string: 2, fret: 3 }], { slash: true }), pc([{ pitch: 'C4', string: 2, fret: 1 }])]),
+          ],
+        },
+        {
+          name: 'Rhythm', label: 'Rhy.', showStandardNotation: false, showTablature: true,
+          measures: [
+            { beats: [sl('quarter'), sl('quarter'), sl('8th'), sl('8th'), sl('quarter')] },
+            { beats: [sl('half'), sl('half')] },
+            { beats: [sl('whole')] },
+            { beats: [sl('quarter'), sl('quarter'), sl('quarter'), sl('quarter')] },
+            { beats: [sl('whole')] },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // 1.11.0 articulations and fermatas on a tab-only TAB staff (tabArticulations: true): a staccato + tenuto + accent
+    // stack, marcato, marks over a string-1 tremolo / vibrato, P.M. and let-ring runs, a pick stroke, a bend, a tap,
+    // fermatas (normal / short / long) on notes and a rest, beat text, a chord symbol, a two-voice measure (voice 1
+    // wins; voice-2-only marks in its place). Controls: the same on a tab-only track without the flag and on a
+    // notation + TAB track with it (ignored).
+    name: 'tab-articulations', width: 900,
+    score: {
+      tracks: [
+        { name: 'TAB', showStandardNotation: false, showTablature: true, showChordDiagrams: false, tabArticulations: true, measures: TA },
+        { name: 'No flag', showStandardNotation: false, showTablature: true, showChordDiagrams: false, measures: TA },
+        { name: 'Notation', showTablature: true, showChordDiagrams: false, tabArticulations: true, measures: TA },
+      ],
     },
   },
 ];

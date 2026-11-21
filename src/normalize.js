@@ -75,6 +75,10 @@
  * with a valid `beat.ottava` gets `ottavaShift` on the notes inside its
  * ottava runs (withOttavaShifts: their displayed staff position); other
  * tracks are returned as they are.
+ *
+ * Rhythm slashes (slash.js): a beat with a `slash` key gets `slash: true`
+ * and no notes when it is a visible voice-1 note beat with `slash: true`,
+ * else `slash: false`; beats without the key are unchanged.
  */
 import { pitchFromFret, transposeOctaves } from './pitch.js';
 import { harmonicKind } from './harmonics.js';
@@ -84,6 +88,10 @@ import { mergeNavigation } from './navigation.js';
 import { isTwoVoiceBeats } from './twoVoice.js';
 import { tiedFretsMode } from './textMetrics.js';
 import { withOttavaShifts } from './expression.js';
+import { withSlash } from './slash.js';
+
+/** `beat` (normalized from raw `raw`) with its rhythm-slash flag resolved, when `raw` has a `slash` key. */
+const slashed = (raw, voice1, beat) => (raw.slash !== undefined ? withSlash(beat, voice1) : beat);
 
 const sameTime = (a, b) => a.beats === b.beats && a.beatType === b.beatType;
 
@@ -118,7 +126,8 @@ export function normalizeScore(score) {
     const measures = [];
     let fromFret = false;
     // One voice's beats, normalized against the current key (`curKey`); sets `fromFret`.
-    const normBeats = (beats) => beats.map((b) => withHandBeat(withDirections({
+    // `voice1`: rhythm slashes (slash.js withSlash) apply to voice 1 only; beats without a `slash` key are untouched.
+    const normBeats = (beats, voice1 = true) => beats.map((b) => slashed(b, voice1, withHandBeat(withDirections({
       dots: 0, // keeps `dots` the first key
       ...b,
       dots: clampDots(b.dots),
@@ -143,7 +152,7 @@ export function normalizeScore(score) {
         const x = n.harmonic ? { ...out, harmonic: harmonicKind(n.harmonic) } : out;
         return withHandNote(withNoteSlides(n.trill !== undefined ? { ...x, trill: trillOf(n.trill) } : x));
       }),
-    })));
+    }))));
     for (let mi = 0; mi < measureCount; mi++) {
       const padded = !source[mi];
       const measure = source[mi] || { beats: [] };
@@ -160,7 +169,7 @@ export function normalizeScore(score) {
       let base = measure;
       if (voices) { base = { ...measure }; delete base.voices; }
       const beats = normBeats(voices ? (Array.isArray(voices[0]?.beats) ? voices[0].beats : []) : (measure.beats || []));
-      const v2 = voices && Array.isArray(voices[1]?.beats) ? normBeats(voices[1].beats) : null;
+      const v2 = voices && Array.isArray(voices[1]?.beats) ? normBeats(voices[1].beats, false) : null;
       // A voice 2 of only hidden rests leaves the measure single-voice.
       const twoVoice = isTwoVoiceBeats(v2);
       measures.push({

@@ -3,8 +3,9 @@
  * barlines for the standard-notation staff.
  */
 import { line, group, glyphText, circle } from './svgUtil.js';
-import { accidentalGlyph, timeSigDigits, clefGlyph } from '../glyphs.js';
-import { keySignatureLayout, staffPositionToY } from '../pitch.js';
+import { accidentalGlyph, timeSigDigits } from '../glyphs.js';
+import { staffPositionToY } from '../pitch.js';
+import { clefGlyphFor, clefAnchorPos, clefKeySignatureLayout } from '../clef.js';
 import { smuflFontSizePx } from '../theme.js';
 import { KEY_STEP_SP, keySignatureWidthSp } from '../layout/systems.js';
 
@@ -22,17 +23,19 @@ export function drawStaffLines(x, endX, baselineY, theme) {
 }
 
 /**
- * Clef at x (left edge). `octave`: draw the 8vb variant (gClef8vb U+E052 /
- * fClef8vb U+E064) used for guitar music written an octave above sounding
- * pitch; it has the same anchor as the plain clef.
+ * Clef `clef` (any clef.js name) at x (left edge). `octave`: the track's
+ * automatic 8vb (track.octaveClef, guitar music written an octave above
+ * sounding pitch) — gClef8vb / fClef8vb / cClef8vb, same anchor as the
+ * plain clef; an explicit octave clef name wins (clef.js clefGlyphFor).
+ * `scale` < 1 draws a clef change / courtesy clef (same anchor line).
  */
-export function drawClef(x, baselineY, clef, octave, theme) {
-  const fontSize = smuflFontSizePx(theme);
-  const glyph = clefGlyph(clef, octave);
+export function drawClef(x, baselineY, clef, octave, theme, scale = 1) {
+  const fontSize = smuflFontSizePx(theme) * scale;
+  const glyph = clefGlyphFor(clef, octave);
   // Bravura's clef glyphs are designed so the glyph baseline sits on the
   // staff line the clef "wraps": G4 (2nd line, position 2) for treble,
-  // F3 (4th line, position 6) for bass.
-  const anchorPos = clef === 'bass' ? 6 : 2;
+  // F3 (4th line, position 6) for bass, C4 for the C clefs (clefAnchorPos).
+  const anchorPos = clefAnchorPos(clef);
   const y = baselineY + staffPositionToY(anchorPos, theme.staffLineSpacing);
   return glyphText(x, y, glyph, theme.fontFamily, fontSize, { fill: theme.noteColor });
 }
@@ -47,7 +50,7 @@ export function drawKeySignature(x, baselineY, keySig, clef, theme, fromKey = 0)
   const fontSize = smuflFontSizePx(theme);
   const g = group({ class: 'key-signature' });
   const cancel = !keySig && fromKey;
-  const layout = keySignatureLayout(cancel ? fromKey : keySig, clef);
+  const layout = clefKeySignatureLayout(cancel ? fromKey : keySig, clef);
   let cx = x;
   for (const item of layout) {
     const glyph = accidentalGlyph(cancel ? 'natural' : item.alter > 0 ? 'sharp' : 'flat');
