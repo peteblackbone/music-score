@@ -180,8 +180,9 @@ function slurAboveLimits(beats, systems, theme) {
  * that can sit above the note: the staff itself, the note's stem/
  * noteheads/articulations, a vibrato or whole-note tremolo, a tuplet
  * bracket, any slur drawn above the beat, the beat's pick stroke / tap "T"
- * (`info.directionTopY`, FERMATA_DIRECTION_GAP_SP) and any chord symbol it
- * overlaps (the chord-symbol line sits below fermatas). Runs after every
+ * (`info.directionTopY`, FERMATA_DIRECTION_GAP_SP) and any chord symbol,
+ * fade / wah mark or ottava bracket (`item.aboveBoxes`) it overlaps (the
+ * chord-symbol line sits below fermatas). Runs after every
  * system is drawn (a slur can start in an earlier measure) and after
  * renderPlayingDirections and renderChordSymbolsAndDynamics.
  */
@@ -201,7 +202,7 @@ export function renderFermatas(score, trackRuns, theme, systems) {
       const bottomY = Math.min(
         beatClearTop(item, sp),
         info.directionTopY != null ? info.directionTopY - FERMATA_DIRECTION_GAP_SP * sp : Infinity,
-        ...item.chordBoxes
+        ...[...item.chordBoxes, ...item.aboveBoxes]
           .filter((b) => b.x1 < item.x + halfFermata && b.x2 > item.x - halfFermata)
           .map((b) => b.top - FERMATA_CHORD_GAP_SP * sp),
       );

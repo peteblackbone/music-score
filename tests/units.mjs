@@ -5568,6 +5568,66 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.10.0: fade and wah marks above the staff (draw/expressionMarks.js) ----------
+{
+  const { resolveTheme } = await imp('src/theme.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const nt = (ps, x = {}, duration = 'quarter') => ({ type: 'note', duration, notes: ps.map((p) => ({ pitch: p })), ...x });
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const draw = (measures, track = {}) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, { tracks: [{ ...track, measures }] }, { width: 900 }).render();
+    return all(box.children[0]);
+  };
+  // ink bottom / top of a full-size glyph text node, in its staff group's coordinates
+  const glyphInk = (nd) => {
+    const name = Object.keys(Glyph).find((k) => Glyph[k] === nd.textContent);
+    const b = glyphBox(name); const y = +nd.getAttribute('y');
+    return { bottom: y - b.bottom * S, top: y - b.top * S, x: +nd.getAttribute('x') };
+  };
+  const of = (nodes, k) => nodes.filter((n) => cls(n).split(/\s+/).includes(k));
+
+  test('1.10 fade / wah: glyphs and classes; ink bottom at least 1 sp above the top line; a wah lands 0.4 sp above a fade on its beat', () => {
+    const nodes = draw([{ beats: [nt(['C5'], { fade: 'in' }), nt(['C5'], { fade: ' OUT ' }), nt(['C5'], { fade: 'swell', wah: '+' }), nt(['C5'], { wah: 'o', fade: 'x' })] }]);
+    const fades = of(nodes, 'fade'); const wahs = of(nodes, 'wah');
+    eq(fades.map(cls), ['fade fade-in', 'fade fade-out', 'fade fade-swell']);
+    eq(wahs.map(cls), ['wah wah-closed', 'wah wah-open']);
+    eq(fades.map((n) => n.textContent).concat(wahs.map((n) => n.textContent)),
+      [Glyph.guitarFadeIn, Glyph.guitarFadeOut, Glyph.guitarVolumeSwell, Glyph.guitarClosePedal, Glyph.guitarOpenPedal]);
+    eq(fades.concat(wahs).every((n) => glyphInk(n).bottom <= -1 * S + 0.01), true);
+    eq(new Set(fades.map((n) => n.getAttribute('y'))).size, 1, 'consecutive fades share one bottom');
+    const fadeTop = glyphInk(fades[2]).top;
+    eq(Math.abs(glyphInk(wahs[0]).bottom - (fadeTop - 0.4 * S)) < 0.02, true, 'wah above the fade');
+  });
+  test('1.10 fade / wah: clear high notes; non-consecutive marks each keep their own height', () => {
+    const nodes = draw([{ beats: [nt(['C5'], { fade: 'in' }), nt(['C5']), nt(['C7'], { fade: 'in' }), nt(['C5'])] }]);
+    const [a, b] = of(nodes, 'fade').map(glyphInk);
+    eq([Math.abs(a.bottom + 1 * S) < 0.01, b.bottom < a.bottom - 2 * S], [true, true]);
+  });
+  test('1.10 fade / wah: chord symbols rise above them; a fermata clears them at 0.5 sp', () => {
+    const nodes = draw([{ beats: [nt(['C5'], { fade: 'in', wah: 'open', chord: 'Am', fermata: true }), nt(['C5']), nt(['C5']), nt(['C5'])] }]);
+    const wah = glyphInk(of(nodes, 'wah')[0]);
+    const chord = of(nodes, 'chord-symbol')[0];
+    eq(+chord.getAttribute('y') + 0.25 * th.dynamicFontSize < wah.top, true, 'chord symbol above the wah');
+    const ferm = nodes.find((n) => n.textContent === Glyph.fermataAbove);
+    const fb = +ferm.getAttribute('y') - glyphBox('fermataAbove').bottom * S;
+    eq(fb <= wah.top - 0.5 * S + 0.01, true, 'fermata above the wah');
+  });
+  test('1.10 fade / wah: above the TAB staff of a tab-only track; voice-1 main beats only', () => {
+    const t = (x = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 5 }], ...x });
+    const nodes = draw([{ beats: [t({ fade: 'in' }), { type: 'grace', duration: '16th', notes: [{ string: 1, fret: 7 }], wah: 'open' }, t({ wah: 'closed' }), t(), t()] }],
+      { showStandardNotation: false, showTablature: true });
+    eq([of(nodes, 'fade').length, of(nodes, 'wah').length], [1, 1]);
+    const lines = nodes.filter((n) => n.tag === 'line' && n.getAttribute('y1') === n.getAttribute('y2') && +n.getAttribute('x2') - +n.getAttribute('x1') > 200);
+    const top = Math.min(...lines.map((n) => +n.getAttribute('y1')));
+    eq(lines.length >= 6, true, 'TAB lines found');
+    eq(of(nodes, 'fade').concat(of(nodes, 'wah')).every((n) => glyphInk(n).bottom <= top - 1 * S + 0.01), true);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

@@ -22,6 +22,7 @@ import { drawSystem } from './draw/system.js';
 import { drawTempo, drawSystemDecor, tempoTextWidth } from './draw/decor.js';
 import { renderNavigation } from './draw/navigation.js';
 import { renderBeatText } from './draw/beatText.js';
+import { renderFadeWah } from './draw/expressionMarks.js';
 import {
   renderTiesAndSlurs, renderGraceSlurs, renderTabArticulations, renderTechniqueLabelRuns, renderChordSymbolsAndDynamics,
   renderFermatas, renderPlayingDirections,
@@ -89,6 +90,8 @@ export class MusicScoreRenderer {
     renderTechniqueLabelRuns(score, trackRuns, theme, layout.systems);
     // Pick strokes, notation tap "T" / slap / pop and trills (above everything but chord symbols and fermatas).
     renderPlayingDirections(score, trackRuns, theme, layout.systems);
+    // Fade / wah marks above the staff (outside the pass barrel; chord symbols and fermatas clear them).
+    renderFadeWah(score, trackRuns, theme, layout.systems);
     // Chord symbols / dynamics once everything they must clear is drawn.
     renderChordSymbolsAndDynamics(score, trackRuns, theme, layout.systems);
     // Fermatas last so they can clear slurs, tuplets and chord symbols.
