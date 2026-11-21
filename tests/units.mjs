@@ -5976,6 +5976,38 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.11.0: octave clefs, C clef 8vb and slash noteheads (glyphs.js, glyphMetrics.js) ----------
+{
+  const { glyphBox, hasGlyphBox, stemAnchors } = await imp('src/glyphMetrics.js');
+  const cpOf = (name) => Glyph[name].codePointAt(0).toString(16).toUpperCase();
+  const NAMES = {
+    gClef15mb: 'E051', gClef8va: 'E053', gClef15ma: 'E054', cClef8vb: 'E05D', fClef15mb: 'E063', fClef8va: 'E065', fClef15ma: 'E066',
+    noteheadSlashHorizontalEnds: 'E101', noteheadSlashWhiteWhole: 'E102', noteheadSlashWhiteHalf: 'E103',
+  };
+  test('1.11 glyphs: 10 code points (verified in the bundled Bravura cmap), one UTF-16 unit each, each with a box', () => {
+    eq(Object.keys(NAMES).map(cpOf), Object.values(NAMES));
+    eq(Object.keys(NAMES).filter((n) => Glyph[n].length !== 1 || !hasGlyphBox(n) || !hasGlyphBox(Glyph[n])), []);
+  });
+  test('1.11 glyphs: boxes are the measured ink padded outward 0.02 sp; the pre-1.11 clef boxes are unchanged', () => {
+    const b = (n) => { const x = glyphBox(n); return [x.left, x.right, x.top, x.bottom]; };
+    eq(b('gClef8va'), [-0.02, 2.708, 5.333, -2.708]);
+    eq(b('gClef15mb'), [-0.02, 2.708, 4.458, -3.583]);
+    eq(b('cClef8vb'), [-0.02, 2.833, 2.083, -3.02]);
+    eq(b('fClef15mb'), [-0.083, 2.77, 1.083, -3.02]);
+    eq(b('fClef15ma'), [-0.083, 2.77, 2.02, -2.583]);
+    eq(b('noteheadSlashWhiteWhole'), [-0.02, 3.958, 1.02, -1.02]);
+    eq(b('gClef15ma'), b('gClef8va'));
+    eq(b('fClef8va'), b('fClef15ma'));
+    eq([b('gClef'), b('cClef'), b('fClef'), b('gClef8vb'), b('fClef8vb')],
+      [[0, 2.684, 4.392, -2.632], [0, 2.796, 2.024, -2.024], [0, 2.736, 1.048, -2.54], [0, 2.684, 4.392, -3.56], [0, 2.736, 1.048, -3.44]]);
+  });
+  test('1.11 glyphs: slash noteheads with stems have corner stem anchors; the whole slash has none', () => {
+    eq(stemAnchors('noteheadSlashHorizontalEnds'), { up: [2.124, 1.0], down: [0, -1.0] });
+    eq(stemAnchors('noteheadSlashWhiteHalf'), { up: [3.12, 1.0], down: [0, -1.0] });
+    eq(stemAnchors('noteheadSlashWhiteWhole'), null);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
