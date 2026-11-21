@@ -36,14 +36,45 @@ const BASE_R = {
   whole: R(1), half: R(1, 2), quarter: R(1, 4), '8th': R(1, 8), '16th': R(1, 16), '32nd': R(1, 32), '64th': R(1, 64),
 };
 
-/** Exact effective duration of a beat (dots and tuplet ratio applied), as a rational fraction of a whole note. */
+/** Exact effective duration of a beat (dots and every tuplet ratio of its chain applied), as a rational fraction of a whole note. */
 export function durationR(el) {
   const base = BASE_R[el.duration];
   if (!base) throw new Error(`Unknown duration: ${el.duration}`);
   let value = base; let addend = base;
   for (let i = 0; i < (el.dots || 0); i++) { addend = mul(addend, R(1, 2)); value = add(value, addend); }
+  return tupletChain(el).reduce((v, t) => mul(v, R(t.of, t.count)), value);
+}
+
+const isInt = (v) => Number.isInteger(v);
+/** One strict `tuplets` entry: an integer n >= 2 ({ count: n, of: 2 }) or a plain { count >= 2, of >= 1 (default 2) } of integers; else null. */
+function strictTuplet(raw) {
+  if (isInt(raw)) return raw >= 2 ? { count: raw, of: 2 } : null;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const of = raw.of === undefined ? 2 : raw.of;
+  return isInt(raw.count) && raw.count >= 2 && isInt(of) && of >= 1 ? { count: raw.count, of } : null;
+}
+
+/**
+ * A beat's `tuplets` field (nested tuplets, outer first): an array of 1–2
+ * strict entries (see strictTuplet) → `[{ count, of }]`; anything else —
+ * not an array, empty, longer than 2, or any invalid entry — → null (the
+ * whole field is ignored and `tuplet` applies).
+ */
+export function validTuplets(raw) {
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 2) return null;
+  const out = raw.map(strictTuplet);
+  return out.every(Boolean) ? out : null;
+}
+
+/**
+ * The tuplet ratios a beat sits in, outer → inner: a valid `tuplets`
+ * (overrides `tuplet`), else `[normalizeTuplet(tuplet)]`, else `[]`.
+ */
+export function tupletChain(el) {
+  const nested = validTuplets(el.tuplets);
+  if (nested) return nested;
   const t = normalizeTuplet(el.tuplet);
-  return t ? mul(value, R(t.of, t.count)) : value;
+  return t ? [t] : [];
 }
 
 /**

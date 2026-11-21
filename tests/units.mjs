@@ -6883,6 +6883,64 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.12.0: nested tuplets (duration.js validTuplets / tupletChain, layout/tuplets.js) ----------
+{
+  const { validTuplets, tupletChain, durationR, normalizeTuplet } = await imp('src/duration.js');
+  const { tabColumnMarks } = await imp('src/layout/voices.js');
+  const e8 = (extra = {}) => ({ type: 'note', duration: '8th', notes: [{ pitch: 'E4' }], ...extra });
+  const eq4 = (extra = {}) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }], ...extra });
+
+  test('1.12 validTuplets: accepted forms (integers >= 2, { count, of } with of defaulting to 2), outer first', () => {
+    eq(validTuplets([3]), [{ count: 3, of: 2 }]);
+    eq(validTuplets([3, 3]), [{ count: 3, of: 2 }, { count: 3, of: 2 }]);
+    eq(validTuplets([{ count: 5, of: 4 }, 3]), [{ count: 5, of: 4 }, { count: 3, of: 2 }]);
+    eq(validTuplets([{ count: 2 }]), [{ count: 2, of: 2 }]);
+    eq(validTuplets([{ count: 7, of: 1 }]), [{ count: 7, of: 1 }]);
+  });
+  test('1.12 validTuplets: any invalid entry or a wrong length ignores the whole field (null)', () => {
+    const bad = [undefined, null, 3, '3', {}, { count: 3 }, [], [3, 3, 3], [1], [0], [-3], [2.5], ['3'], [null], [[3]], [{}],
+      [{ count: 1 }], [{ count: 3, of: 0 }], [{ count: 3, of: 1.5 }], [{ count: '3' }], [{ count: 3, of: '2' }], [3, { count: 1 }], [3, 'x']];
+    bad.forEach((b) => eq(validTuplets(b), null, JSON.stringify(b)));
+  });
+  test('1.12 tupletChain: valid tuplets overrides tuplet; invalid tuplets falls back to tuplet; neither -> []', () => {
+    eq(tupletChain(e8({ tuplets: [3], tuplet: 5 })), [{ count: 3, of: 2 }]);
+    eq(tupletChain(e8({ tuplets: [3, 3, 3], tuplet: 5 })), [{ count: 5, of: 2 }]);
+    eq(tupletChain(e8({ tuplets: [{ count: 1 }] })), []);
+    eq(tupletChain(e8({ tuplets: ['3'], tuplet: { count: 6, of: 4 } })), [{ count: 6, of: 4 }]);
+    eq(tupletChain(e8({ tuplet: 3 })), [normalizeTuplet(3)]);
+    eq(tupletChain(e8()), []);
+  });
+  test('1.12 durationR: nested chains multiply every ratio (8th x [3,3] = 1/18 whole; 8th x [5:4, 3] = 1/15); 1-entry = tuplet', () => {
+    eq(durationR(e8({ tuplets: [3, 3] })), { n: 1, d: 18 });
+    eq(durationR(e8({ tuplets: [{ count: 5, of: 4 }, 3] })), { n: 1, d: 15 });
+    eq(durationR(eq4({ tuplets: [3, { count: 5, of: 4 }], dots: 1 })), { n: 1, d: 5 });
+    eq(durationR(e8({ tuplets: [3] })), durationR(e8({ tuplet: 3 })));
+    eq(durationR(e8({ tuplets: [{ count: 6, of: 4 }] })), durationR(e8({ tuplet: { count: 6, of: 4 } })));
+    eq(durationR(e8({ tuplets: [3], tuplet: 5 })), { n: 1, d: 12 });
+    eq(durationR(e8({ tuplets: [3, 3, 3], tuplet: 5 })), { n: 1, d: 20 });
+    let msg = null;
+    try { durationR(e8({ tuplets: 'x', tuplet: 0 })); } catch (e) { msg = e.message; }
+    eq(msg, 'rational: zero denominator');
+  });
+  test('1.12 tupletGroups: a 1-entry tuplets groups exactly like the same tuplet (and overrides tuplet)', () => {
+    const shapes = [[3, 3, 3], [{ count: 5 }], [{ count: 6, of: 4 }]];
+    for (const t of shapes) {
+      const a = Array.from({ length: 6 }, () => e8({ tuplet: t[0] }));
+      const b = Array.from({ length: 6 }, () => e8({ tuplets: [t[0]], tuplet: 7 }));
+      eq(tupletGroups(b, T44), tupletGroups(a, T44), JSON.stringify(t));
+    }
+    const q = [eq4({ tuplets: [3] }), eq4({ tuplets: [3] }), eq4({ tuplets: [3] }), { type: 'note', duration: 'half', notes: [{ pitch: 'E4' }] }];
+    eq(tupletGroups(q, T44), [{ indices: [0, 1, 2], count: 3 }]);
+  });
+  test('1.12 tabEl: voice-2 tabEl copies tuplets only when the beat has the key (key order unchanged otherwise)', () => {
+    const els = [{ el: e8({ tuplet: 3 }) }, { el: e8({ tuplets: [3, 3], tuplet: 3 }) }];
+    tabColumnMarks([], els);
+    eq(Object.keys(els[0].tabEl), ['type', 'duration', 'dots', 'tuplet', 'notes']);
+    eq(Object.keys(els[1].tabEl), ['type', 'duration', 'dots', 'tuplet', 'tuplets', 'notes']);
+    eq(els[1].tabEl.tuplets, [3, 3]);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
