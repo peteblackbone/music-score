@@ -209,7 +209,7 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <tr><td><code>tempo</code> (beat)</td><td>A number, or <code>{ bpm, unit, dots, text }</code>: a metronome note and <code>= N</code> above the staff. <code>unit</code> is <code>'quarter'</code> by default, and <code>dots</code> is 0 to 2</td></tr>
 </table>
 <ul class="points">
-  <li>Inside an ottava bracket the notes are drawn an octave (8va, 8vb) or two octaves (15ma, 15mb) away from their pitch, as the bracket means, so enter the sounding pitch. The TAB and chord diagrams do not change.</li>
+  <li>Inside an ottava bracket the notes are drawn an octave (8va, 8vb) or two octaves (15ma, 15mb) further on top of the usual written octave, as the bracket means; enter <code>pitch</code> the same way as outside the bracket. The TAB and chord diagrams do not change.</li>
   <li>A hairpin starts after a dynamic on its first beat, ends before the next dynamic, and continues across a system break with a narrow opening.</li>
   <li>A rest inside a hairpin or ottava run needs the same field too, or it ends the run.</li>
   <li>Tempo changes come from voice 1. At a time shared by two tracks, the first track's is drawn. A tempo on the first beat of the score sits after <code>tempoText</code>.</li>

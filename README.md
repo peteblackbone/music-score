@@ -264,7 +264,7 @@ Beats are the rhythmic events in a measure, in order. Each beat is one note, one
 | `hairpin` | `'cresc'` or `'dim'` | Crescendo or diminuendo hairpin on the dynamics line below the notation staff. Consecutive beats with the same value form one hairpin. Aliases: `'<'` and `'crescendo'` for `'cresc'`; `'>'`, `'diminuendo'`, `'decresc'` and `'decrescendo'` for `'dim'`. Any case. Other values draw nothing. See [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo). |
 | `fade` | `'in'`, `'out'` or `'swell'` | Fade-in, fade-out or volume-swell sign above the top staff. Any case. Other values draw nothing. See [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo). |
 | `wah` | `'open'` (or `'o'`) or `'closed'` (or `'close'`, `'+'`) | Wah-pedal sign above the top staff, above a fade on the same beat. Any case. Other values draw nothing. See [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo). |
-| `ottava` | `'8va'`, `'8vb'`, `'15ma'` or `'15mb'` | Octave bracket over consecutive beats that each set it. Notes inside the bracket are drawn an octave away from their pitch on the notation staff (see [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo)). Any case. Other values, such as `'22ma'`, draw nothing. |
+| `ottava` | `'8va'`, `'8vb'`, `'15ma'` or `'15mb'` | Octave bracket over consecutive beats that each set it. Notes inside the bracket are drawn an octave or two further away on the notation staff (see [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo)). Any case. Other values, such as `'22ma'`, draw nothing. |
 | `tempo` | number, or `{ bpm, unit, dots, text }` | Tempo change with a metronome note and `= N` above the top staff. `bpm` must be above 0 and at most 1000. `unit` is `'whole'`, `'half'`, `'quarter'` (default), `'8th'`, `'16th'` or `'32nd'`. `dots` is 0 to 2 (more is capped at 2). `text` is bold text before the note. See [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo). |
 
 Notes: eighth notes and shorter are beamed automatically within each beat (the beat unit set by the time signature). A `grace` beat is a small ornament with no duration. It is drawn just before the next beat and automatically slurred to it.
@@ -309,7 +309,7 @@ Guitar and bass music is written an octave higher than it sounds. The library fo
 
 - A note given by `string` and `fret` is written an octave above its sounding pitch. Its staff is drawn with an 8vb clef.
 - A note given by `pitch` is drawn exactly as written, unless its track sets `writtenOctaveUp: true`. In that case the `pitch` is treated as the sounding pitch and is drawn an octave higher, with an 8vb clef.
-- The exception is an ottava bracket. A note inside an `8va`, `8vb`, `15ma` or `15mb` run is drawn an octave or two away from its `pitch`, as the bracket means. Enter the sounding pitch there. See [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo).
+- Ottava brackets add to the rules above. Inside an `8va`, `8vb`, `15ma` or `15mb` run the drawn position moves a further octave or two on top of them (for example, on a guitar track the written octave-up still applies first), as the bracket means. Keep entering `pitch` the same way as outside the bracket. See [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo).
 
 Tie matching uses the pitch, not the spelling, so enharmonic spellings tie together.
 
