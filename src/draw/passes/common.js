@@ -7,6 +7,9 @@
 
 const BREAK_GAP_SP = 0.5;        // split arc -> last barline / system header
 
+/** Half the width of a notehead (noteheadBlack), in sp: a beat's head left edge is x - HEAD_HALF_SP * sp. */
+export const HEAD_HALF_SP = 0.59;
+
 /**
  * Visit every layout element of `track`, in score order (system by system,
  * measure by measure), calling `visit(layoutEl, run, measure)` where `run`

@@ -1,7 +1,8 @@
 /**
  * draw/passes/notationBeats.js — the rendered beats of a notation track in
  * score order with their slur anchors (collectBeats; it also reads
- * `run.chordBoxes`, written by renderChordSymbolsAndDynamics), the track's
+ * `run.chordBoxes`, written by renderChordSymbolsAndDynamics, and
+ * `run.aboveBoxes`, fade / wah / ottava ink above the staff), the track's
  * slurs (findSlurs), the lowest y a mark may reach above a beat
  * (beatClearTop), the outer edge of the slurs drawn above each beat
  * (slurAboveCurves) with the height a mark clears them at (slurClearTop /
@@ -36,6 +37,7 @@ export function collectBeats(trackRuns, track, theme, voice = 1) {
     beats.push({
       sysIdx: run.sysIdx, g: run.notationG, x: layoutEl.x, el: layoutEl.el, layoutEl, info, baselineY: run.notationBaselineY,
       chordBoxes: run.chordBoxes || [],
+      aboveBoxes: run.aboveBoxes || [],
       topY: top,
       anchorAbove: (Number.isFinite(top) ? top : run.notationBaselineY - 4 * s) - SLUR_CLEARANCE_SP * s,
       anchorBelow: (Number.isFinite(bottom) ? bottom : run.notationBaselineY) + SLUR_CLEARANCE_SP * s,

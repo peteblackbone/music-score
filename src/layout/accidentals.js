@@ -17,7 +17,7 @@
  *
  * Pure function, no DOM.
  */
-import { parsePitch, createAccidentalState, accidentalNameForAlter, keySignatureAlterations } from '../pitch.js';
+import { displayPitch, createAccidentalState, accidentalNameForAlter, keySignatureAlterations } from '../pitch.js';
 import { durationR } from '../duration.js';
 import { ZERO, add, cmp } from '../rational.js';
 
@@ -31,7 +31,7 @@ function resolveBeat(state, keyAlters, el) {
   const restate = [];
   notes.forEach((n) => {
     if (n.pitch == null) { names.push(null); restate.push(null); return; }
-    const p = parsePitch(n.pitch);
+    const p = displayPitch(n); // step + displayed octave (an ottava run moves the octave)
     if (n.accidental) {
       names.push(n.accidental); restate.push(n.accidental);
       state.set(p);

@@ -1,6 +1,6 @@
 # music-score
 
-Version 1.9.0 · MIT licence
+Version 1.10.0 · MIT licence
 
 A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL).
 
@@ -215,7 +215,7 @@ Optional measure fields draw volta brackets, navigation marks, repeat counts and
 - **Jump texts** (`jump`) are drawn in bold italics, ending at the measure's closing barline. The standard texts are matched without regard to case or extra spaces. `'To Coda'` is followed by a small coda sign.
 - **Section markers** (`section`): `'Verse'` draws the text in a box. `{ letter: 'A', text: 'Intro' }` boxes the letter and writes the text after the box, and `{ letter: 'B' }` draws the box alone. A letter is kept when it is 1 to 3 characters; a longer letter is dropped, so the text is boxed on its own. A marker sits above the top staff at the start of its measure, or where a segno would go. A section that starts a system is drawn on that system. A second section on the same system moves right to keep a gap after the first. Sections sit in a row of their own, above the other marks.
 - **Repeat counts** (`repeatCount`): `x3` (a whole number from 2 to 99, written with a plain letter x) is drawn at the right end of a measure with a `'repeatEnd'` barline, in the same row as the segno, coda and jump texts. Without a repeat end, nothing is drawn. In the same measure, a jump text moves left to make room for it.
-- **Placement.** Everything is drawn above the top staff of each system only, whether it is a notation or a TAB staff. All brackets of a system share one height, and all marks of a system share one baseline. From the staff outward the order is: the music, pick strokes and TAB labels and bends, chord diagrams and chord symbols, fermatas, beat text (see [Beat text](#beat-text)), volta brackets, segno, coda, jump texts and repeat counts, section markers, then the tempo. The score gets taller to make room, but the horizontal spacing does not change.
+- **Placement.** Everything is drawn above the top staff of each system only, whether it is a notation or a TAB staff. All brackets of a system share one height, and all marks of a system share one baseline. From the staff outward the order is: the music, pick strokes and TAB labels and bends, fade and wah marks, 8va and 15ma brackets, chord diagrams and chord symbols, fermatas, beat text (see [Beat text](#beat-text)), volta brackets, segno, coda, jump texts and repeat counts, section markers, then the tempo, including metronome marks from `tempo` (see [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo)). The score gets taller to make room, but the horizontal spacing does not change.
 - **Drawing only.** There is no playback, no unrolling of repeats and no check that the marks make musical sense.
 - SVG classes: `navigation` (one group per system), `volta` with `volta-closed` or `volta-open`, `volta-number`, `segno`, `coda`, and `jump` with `to-coda` or `fine`. `volta-closed` and `volta-open` describe the whole bracket, so every part of a bracket split across systems carries the same one, even the parts without a closing hook. New classes: `section` (one group per marker), `section-letter` (the boxed letter), `section-text` (boxed text, or the text after the box) and `repeat-count`.
 - Segno, coda, jump texts and repeat counts in one system share one height, above all of that system's brackets, so a sign can sit higher than the bracket-free measure it belongs to would need. Section markers share one height above that row.
@@ -240,7 +240,7 @@ Beats are the rhythmic events in a measure, in order. Each beat is one note, one
 | `tuplet` | number or `{ count, of }` | `3` means a triplet (3 notes in the time of 2). `of` defaults to 2. Consecutive beats with the same ratio form one bracket once they add up to a complete tuplet. |
 | `hidden` | boolean | Rests only (`{ type: 'rest', hidden: true }`). The rest takes its time but draws nothing and takes no room. Works in any measure. See [Voices](#voices). |
 | `notes` | array of notes | Required for `note` and `grace`. Several entries make a chord. Rests have no notes. |
-| `dynamic` | string | `'p'`, `'pp'`, `'ppp'`, `'mp'`, `'mf'`, `'f'`, `'ff'`, `'fff'`, `'sfz'`, `'rfz'`, `'n'`. Other values print as plain text. Drawn below the notation staff. |
+| `dynamic` | string | `'p'`, `'pp'`, `'ppp'`, `'mp'`, `'mf'`, `'f'`, `'ff'`, `'fff'`, `'sfz'`, `'rfz'`, `'n'`. Other values print as plain text. Drawn below the notation staff. A dynamic on a voice 2 beat is drawn too, at voice 2's position; if voice 1 has a dynamic at the same time, voice 2's is not drawn. See [Voices](#voices). |
 | `chord` | string | Chord symbol drawn above the staff, e.g. `'C'` or `'F/A'`. With a chord diagram, the name is centred above the diagram. |
 | `chordDiagram` | shape object or `false` | Optional. A shape for this beat's chord diagram, used instead of the `chordShapes` entry. `false` hides the diagram and keeps the plain chord symbol. See [Chord diagrams](#chord-diagrams). |
 | `tremolo` | `true`, `'8th'`, `'16th'` or `'32nd'` | Tremolo-picking marks. `true` draws three strokes. `'8th'`, `'16th'` and `'32nd'` draw one, two or three strokes, in any case, with spaces around the word ignored. Numbers (`8`, `16`, `32`) and other values draw three strokes. See [Vibrato and tremolo](#vibrato-and-tremolo). |
@@ -261,6 +261,11 @@ Beats are the rhythmic events in a measure, in order. Each beat is one note, one
 | `pickScrape` | `true`, `'down'` or `'up'` | "P.S." label run (pick scrape), like let ring. Consecutive scraped beats share one label whichever direction they use. The direction is accepted but not drawn. See [Ornaments, fingering and hand marks](#ornaments-fingering-and-hand-marks). |
 | `barre` | a fret `1` to `24` (number or digit string), or `{ fret, half }` | Barre label run: `"C II"` for `barre: 2`, `"½C V"` for `{ fret: 5, half: true }`. Only `half: true` makes a half barre. Other values draw nothing. See [Ornaments, fingering and hand marks](#ornaments-fingering-and-hand-marks). |
 | `text` | string or `{ text, below }` | Free italic text above the staff, or under it with `below: true`. Voice 1 note and rest beats only: grace notes and voice 2 ignore it. See [Beat text](#beat-text). |
+| `hairpin` | `'cresc'` or `'dim'` | Crescendo or diminuendo hairpin on the dynamics line below the notation staff. Consecutive beats with the same value form one hairpin. Aliases: `'<'` and `'crescendo'` for `'cresc'`; `'>'`, `'diminuendo'`, `'decresc'` and `'decrescendo'` for `'dim'`. Any case. Other values draw nothing. See [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo). |
+| `fade` | `'in'`, `'out'` or `'swell'` | Fade-in, fade-out or volume-swell sign above the top staff. Any case. Other values draw nothing. See [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo). |
+| `wah` | `'open'` (or `'o'`) or `'closed'` (or `'close'`, `'+'`) | Wah-pedal sign above the top staff, above a fade on the same beat. Any case. Other values draw nothing. See [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo). |
+| `ottava` | `'8va'`, `'8vb'`, `'15ma'` or `'15mb'` | Octave bracket over consecutive beats that each set it. Notes inside the bracket are drawn an octave or two further away on the notation staff (see [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo)). Any case. Other values, such as `'22ma'`, draw nothing. |
+| `tempo` | number, or `{ bpm, unit, dots, text }` | Tempo change with a metronome note and `= N` above the top staff. `bpm` must be above 0 and at most 1000. `unit` is `'whole'`, `'half'`, `'quarter'` (default), `'8th'`, `'16th'` or `'32nd'`. `dots` is 0 to 2 (more is capped at 2). `text` is bold text before the note. See [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo). |
 
 Notes: eighth notes and shorter are beamed automatically within each beat (the beat unit set by the time signature). A `grace` beat is a small ornament with no duration. It is drawn just before the next beat and automatically slurred to it.
 
@@ -304,6 +309,7 @@ Guitar and bass music is written an octave higher than it sounds. The library fo
 
 - A note given by `string` and `fret` is written an octave above its sounding pitch. Its staff is drawn with an 8vb clef.
 - A note given by `pitch` is drawn exactly as written, unless its track sets `writtenOctaveUp: true`. In that case the `pitch` is treated as the sounding pitch and is drawn an octave higher, with an 8vb clef.
+- Ottava brackets add to the rules above. Inside an `8va`, `8vb`, `15ma` or `15mb` run the drawn position moves a further octave or two on top of them (for example, on a guitar track the written octave-up still applies first), as the bracket means. Keep entering `pitch` the same way as outside the bracket. See [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo).
 
 Tie matching uses the pitch, not the spelling, so enharmonic spellings tie together.
 
@@ -577,7 +583,7 @@ The renderer spaces and breaks the score for you. A short list of what to expect
 - **Accidentals** last until the end of their measure. In a two-voice measure they carry across both voices (see [Voices](#voices)). Grace notes take part too: an altered grace note carries into the notes after it in the measure, and an altered note carries into the grace notes after it. A grace note's accidental is drawn at grace size, left of its head, or left of the slash on a stem-down grace. The next measure starts again from the key signature. A tied note that starts a new system repeats its accidental.
 - **Ties and slurs** sit on the side opposite the stems. In a two-voice measure, voice 1's sit above the notes and voice 2's below (see [Voices](#voices)). Ties, slurs, hammer-ons and pull-offs that cross a line break are split into two parts.
 - **Beaming.** Eighth notes and shorter beam within each beat. Compound meters group by dotted beat, so 6/8 beams as two groups of three and 12/8 as four.
-- **Chord symbols and dynamics** each sit on one line per system: chord symbols above the staff, dynamics below it. Both are kept clear of the notes. Chord diagrams sit in one row per system staff, between the music and the chord-symbol line (see [Chord diagrams](#chord-diagrams)).
+- **Chord symbols and dynamics** each sit on one line per system: chord symbols above the staff, dynamics and hairpins below it. Both are kept clear of the notes. Chord diagrams sit in one row per system staff, between the music and the chord-symbol line (see [Chord diagrams](#chord-diagrams)).
 - **Technique labels** (P.M., harmonic, pick scrape and barre labels) are placed clear of bend arrows and text, starting after a bend or moving out a lane when needed.
 - **Vertical spacing depends on the content.** Staves with tall notes or chords get more room. Sparse staves get less.
 - **TAB clef.** Six-string and four-string tabs use the standard TAB clef. Other string counts use the letters T, A and B.
@@ -681,7 +687,8 @@ A measure can hold two rhythms on one staff, for example a melody over a held ba
 - **TAB marks.** In a column where both voices have a note, voice 1's mark wins for each kind: tremolo, vibrato, trill, tap, golpe. Right-hand letters and pick strokes on a tab-only track are taken from voice 1 as a whole. A kind of mark that only voice 2 has is drawn above the TAB staff in voice 1's place. Strums and whammy are voice 1 only.
 - **Rhythm on TAB.** Each voice has its own row of the rhythm band (stems, beams, flags, dots, tuplets and rests). Voice 1's row holds its stems, beams, flags and tuplets as before. Voice 2's row sits below it, with its stems hanging down, so a note that only voice 2 plays gets a stem in that row. An unmerged rest now sits in its voice's row below the staff, not in the staff, so a voice 1 rest never covers voice 2's frets. Those rests are drawn at a smaller size and without a background. A merged rest is drawn once, in the staff.
 - **Voice 2 beat marks.** Voice 2 can carry vibrato, trills, ornaments, right-hand letters, tap, left-hand tap, slap, pop, golpe, pick strokes and fermatas. On the notation staff they go below the staff, not above it. Going outward from the staff they stack in this order: vibrato, trill or ornament, right-hand letters, tap letter, golpe, pick stroke, then the fermata. The fermata is drawn inverted. On TAB they are drawn above the TAB staff, as described under TAB marks.
-- **Voice 1 beat marks.** These are read from voice 1 only, and are not drawn on a voice 2 beat: chord symbols and chord diagrams, dynamics, left-hand fingering, strum arrows, arpeggios, let ring, P.M., rakes, whammy, harmonic labels (A.H., T.H., P.H., S.H.), pick scrape, barre and beat text. Put them on a voice 1 beat.
+- **Voice 1 beat marks.** These are read from voice 1 only, and are not drawn on a voice 2 beat: chord symbols and chord diagrams, left-hand fingering, strum arrows, arpeggios, let ring, P.M., rakes, whammy, harmonic labels (A.H., T.H., P.H., S.H.), pick scrape, barre, beat text, hairpins, fades, wah marks, ottava brackets and tempo changes. Put them on a voice 1 beat.
+- **Dynamics on voice 2.** A dynamic on a voice 2 beat is drawn on the dynamics line, at voice 2's position. If voice 1 has a dynamic at the same time, voice 2's is not drawn.
 - **Hidden rests.** `{ "type": "rest", "duration": "half", "hidden": true }` takes its time but draws nothing and takes no room. Use one to start a voice later. A hidden rest works in any measure.
 - **When a measure has two voices.** A measure has two voices when voice 2 has at least one beat that is not a hidden rest. A voice 2 made only of hidden rests leaves the measure as a single-voice measure, with automatic stems.
 - **Other cases.** A `voices` list with one entry is the same as `beats`. An empty `voices` array, or a value that is not an array, falls back to `beats`. Entries after the second are ignored, so a measure has at most two voices. If voice 1 is empty and voice 2 has notes, voice 1 draws nothing.
@@ -704,6 +711,42 @@ Free text on a beat, such as "rit.", "mute" or "let go". It is italic and starts
 { "type": "note", "duration": "quarter", "text": "rit.", "notes": [{ "string": 1, "fret": 5 }] }
 ```
 
+## Expression lines, ottava and tempo
+
+Beat fields for the marks along and above the staff: hairpins, fades, wah marks, octave brackets and tempo changes. None of them change the rhythm, and none change the pitch data, the TAB or the chord diagrams. Scores that use none of them draw as before.
+
+- **Hairpins** (`hairpin`): `'cresc'` or `'dim'`, with the aliases listed in the [Beat](#beat) table. Consecutive beats with the same value form one hairpin on the dynamics line below the notation staff.
+  - A hairpin starts just after a dynamic on its first beat, and ends just before the next dynamic. A dynamic on a beat inside the run starts a new hairpin on that beat.
+  - Grace notes do not end a hairpin. A rest in the run needs the same `hairpin` value, or it ends the hairpin. An empty measure ends it.
+  - A hairpin that crosses a system break continues on the next system, with a narrow opening at the break.
+  - Notation only. A tab-only track draws no hairpins.
+- **Fades** (`fade`): `'in'` (fade in), `'out'` (fade out) or `'swell'` (volume swell). They sit above the track's top staff: the notation, or the TAB when the track shows no notation. Consecutive fades on one system share one height.
+- **Wah** (`wah`): `'open'` or `'closed'`. It sits above the top staff, like a fade, and above a fade on the same beat.
+- **Ottava brackets** (`ottava`): `'8va'`, `'8vb'`, `'15ma'` or `'15mb'`. Set the field on each beat of the run. Consecutive voice 1 beats with the same value share one bracket. A tied note that continues the run inherits the value and needs no field of its own. A rest in the run needs the field too, or it ends the bracket. An empty measure ends it.
+  - `8va` and `15ma` sit above the notation staff. `8vb` and `15mb` sit below it, under the dynamics.
+  - **Display only.** Inside the bracket the notes are drawn one octave (`8va`, `8vb`) or two octaves (`15ma`, `15mb`) away from their pitch, as the bracket means. `8va` and `15ma` draw the notes lower, and `8vb` and `15mb` draw them higher. Enter the sounding pitch for every note in the bracket, and the library draws it where it is written. The stems, ledger lines and accidentals follow the drawn position. The `pitch` values, the TAB frets and the chord diagrams do not change.
+  - A run that crosses a system break continues on the next system with `(8)` or `(15)` after the bracket's start.
+  - Notation only. A tab-only track draws no brackets.
+- **Tempo changes** (`tempo`): a number, or an object `{ bpm, unit, dots, text }`.
+  - `bpm` is the tempo, above 0 and at most 1000. It is shown with at most two decimals, so `92.5` shows as `= 92.5`.
+  - `unit` is the note the tempo counts: `'whole'`, `'half'`, `'quarter'` (the default), `'8th'`, `'16th'` or `'32nd'`. `dots` adds 0 to 2 augmentation dots.
+  - `text` is bold text before the metronome note, such as `'Faster'`. Empty text is ignored.
+  - A tempo change sits above the top staff of its system, outside the other marks above it. Only voice 1 beats carry it. Where two tracks have a tempo change at the same time, the first track's is drawn.
+  - The score's `tempoText` is unchanged. A tempo change on the first beat of the score sits after `tempoText` on the same line, or at the time signature when there is no `tempoText`.
+  - A tempo change changes the drawing only. Nothing is played at that tempo.
+- **Voice 2 dynamics** are drawn on the dynamics line, at voice 2's position. Voice 1's dynamic wins at the same time (see [Voices](#voices)).
+- Hairpins, fades, wah marks, brackets and tempo changes take no horizontal room, so a dense beat can crowd them. A system with a hairpin draws its dynamics line a little lower to clear it. Fermatas move up to clear fades, wah marks and brackets, and chord symbols rise above them.
+
+```json
+{ "type": "note", "duration": "quarter", "dynamic": "p", "hairpin": "cresc", "notes": [{ "pitch": "C4" }] }
+```
+
+```json
+{ "type": "note", "duration": "half", "tempo": { "bpm": 92.5, "unit": "quarter", "dots": 1, "text": "Slower" }, "notes": [{ "pitch": "G4" }] }
+```
+
+SVG classes: `hairpin` with `hairpin-cresc` or `hairpin-dim` (one path per segment), plus `hairpin-cont` on a segment after a system break; `fade` with `fade-in`, `fade-out` or `fade-swell`; `wah` with `wah-open` or `wah-closed`; `ottava` with `ottava-8va`, `ottava-8vb`, `ottava-15ma` or `ottava-15mb` (one group per bracket segment), plus `ottava-cont` on a continuation after a system break; and `tempo-change` (one group per tempo change) with `tempo-change-text`, `tempo-change-note`, `tempo-change-dot` and `tempo-change-bpm` inside it.
+
 ## Known limitations
 
 - **Dots on chords with seconds.** Augmentation dots on a chord whose notes sit a second apart may not be placed cleanly.
@@ -719,6 +762,11 @@ Free text on a beat, such as "rit.", "mute" or "let go". It is italic and starts
 - **Measure count.** Shorter tracks are padded with empty measures (whole-measure rests in notation, blank tab, no rest on a TAB rhythm staff). Their `measures` array is not extended in the input.
 - **Errors.** An unknown duration or an invalid pitch throws an error, and nothing is drawn for that score.
 - **Dynamics.** Only the names listed under `dynamic` are drawn as symbols. Other names print as plain text.
+- **Dynamics line: no horizontal avoidance.** Dynamics, from either voice, take no horizontal room. Two dynamics at nearby but different times can overlap. Voice 2 grace notes do not draw a dynamic.
+- **Expression lines: tab-only tracks.** Hairpins and ottava brackets are not drawn on a track without notation. Fades, wah marks and tempo changes are drawn above the TAB.
+- **Ottava: one-beat bracket at a system end.** A bracket that covers only the last beat of a system can put its hook about 1.3 staff spaces past the barline.
+- **Ottava: the stored pitch.** Inside a bracket the note is drawn at a different place from its `pitch` (see [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo)). Notes outside a bracket are drawn as written.
+- **Tempo changes.** A tempo change shows its tempo but plays nothing. Long text is not wrapped.
 - **No validation, no `schemaVersion`.** A malformed score may throw or render oddly.
 - **Harmonics: sounding pitch.** A natural harmonic is drawn at the fretted (touch) pitch, written an octave above sounding pitch. Sounding-pitch notation and 8va markings for harmonics are not supported.
 - **Harmonics: heads.** An A.H. or other artificial harmonic has a single notehead. Double noteheads (touch and sounding) are not drawn.
@@ -753,7 +801,7 @@ Free text on a beat, such as "rit.", "mute" or "let go". It is italic and starts
 - **One bracket height per system.** All volta brackets of a system sit at the height of the tallest one.
 - **Long navigation text.** A long jump text can reach left into the previous measures, and marks in adjacent narrow measures can crowd each other. A long ending label can run past the end of its bracket. Text widths are estimated, so the spacing around these marks is approximate.
 - **Voices: two at most.** A measure cannot have a third voice.
-- **Voices: beat marks on voice 2.** Chord symbols and diagrams, dynamics, left-hand fingering, strums, arpeggios, let ring, P.M., rakes, whammy, harmonic labels, pick scrape, barre and beat text are drawn for voice 1 only. Dynamics for voice 2 are not supported yet. Voice 2 still draws its notes, articulations, tremolo, vibrato, ties, slurs and slides, and the marks listed under [Voices](#voices).
+- **Voices: beat marks on voice 2.** Chord symbols and diagrams, left-hand fingering, strums, arpeggios, let ring, P.M., rakes, whammy, harmonic labels, pick scrape, barre, beat text, hairpins, fades, wah marks, ottava brackets and tempo changes are drawn for voice 1 only. Dynamics on voice 2 are drawn (see [Voices](#voices)), except on a voice 2 grace note. Voice 2 still draws its notes, articulations, tremolo, vibrato, ties, slurs and slides, and the marks listed under [Voices](#voices).
 - **Voices: shared heads and merged rests need a close match.** A shared unison head and a merged rest only apply when the two notes or rests match exactly enough (see [Voices](#voices)). Any other unison moves voice 2 to the right, and any other pair of rests stays separate.
 - **Voices: release arrows on voice 2.** A voice 2 bend release arrow can still cross a fret number on the TAB staff.
 - **Voices: whole-measure rests.** A whole-measure rest is centred in the bar and does not move to clear the other voice's notes.
@@ -794,6 +842,26 @@ It prints `ALL PASSED` and exits with code 0 on success.
 - To run one group on its own: `node tests/units.mjs`, `node tests/engraving.mjs`, or `node tests/articulations.mjs`.
 
 ## Changelog
+
+### 1.10.0 — 2026-11-21
+
+Expression lines and tempo. Scores that use none of the inputs listed below are unchanged, with one exception: a `dynamic` on a voice 2 beat is now drawn. Five beat fields that were ignored before 1.10.0 now draw (`hairpin`, `fade`, `wah`, `ottava` and `tempo`), so check any score that already sets them. Those changes are listed first.
+
+Changes to existing inputs:
+
+- A `dynamic` on a voice 2 beat is now drawn on the dynamics line below the notation staff, at voice 2's position. Before 1.10.0 it was not drawn. If voice 1 has a dynamic at the same time, voice 2's is not drawn. Voice 2 chord symbols are still not drawn, and neither are dynamics on voice 2 grace notes. See [Voices](#voices).
+- `beat.hairpin`, `beat.fade`, `beat.wah`, `beat.ottava` and `beat.tempo` were ignored before 1.10.0. Now each one draws its mark. See [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo).
+- `tempoText` is unchanged. A tempo change on the first beat of the score shares a baseline with `tempoText`, which can then sit a little higher.
+
+New:
+
+- `hairpin` on a beat: crescendo and diminuendo hairpins on the dynamics line, split across a system break.
+- `fade` on a beat: fade-in, fade-out and volume-swell signs above the staff.
+- `wah` on a beat: open and closed wah signs above the staff.
+- `ottava` on a beat: 8va, 8vb, 15ma and 15mb brackets. Notes inside a bracket are drawn an octave or two away from their pitch, on the notation staff only. The score's pitch data and the TAB are not changed.
+- `tempo` on a beat: a tempo change with a metronome note, optional dots and bold text, shown above the staff.
+- Fermatas clear the fade, wah and bracket marks, and chord symbols rise above them. A system with a hairpin lowers its dynamics line to clear it.
+- New SVG classes: `hairpin`, `hairpin-cresc`, `hairpin-dim`, `hairpin-cont`, `fade`, `fade-in`, `fade-out`, `fade-swell`, `wah`, `wah-open`, `wah-closed`, `ottava`, `ottava-8va`, `ottava-8vb`, `ottava-15ma`, `ottava-15mb`, `ottava-cont`, `tempo-change`, `tempo-change-text`, `tempo-change-note`, `tempo-change-dot` and `tempo-change-bpm`.
 
 ### 1.9.0 — 2026-11-20
 
@@ -972,6 +1040,7 @@ Initial public release.
   - `navigation.js`: the navigation fields (`ending`, `segno`, `coda`, `jump`, `section`, `repeatCount`), their canonical values and the merge across tracks.
   - `scoreText.js`: canonical forms of the score text fields (header lines, sections, repeat counts, beat text, capo) and the capo and tuning chart rows.
   - `noteEffects.js`: the canonical values of the `vibrato`, `tremolo` and `fermata` fields (for example `'wide'`, `'16th'` or `'short'`), used when drawing.
+  - `expression.js`: the canonical values of the `hairpin`, `fade`, `wah`, `ottava` and `tempo` fields, and the ottava display shift that normalize adds to the notes inside a bracket.
   - `twoVoice.js`: the one shared rule for two voices (a voice 2 counts only when it has a beat that is not a hidden rest), which voice a layout element belongs to, and which beat supplies each TAB mark of a column.
   - `layout/`: positioning, no drawing.
     - `index.js`: `computeLayout`. Ties the layout steps together and sets element positions.
@@ -1009,11 +1078,15 @@ Initial public release.
       - `passes/tabTechniques.js`: tab techniques (tap / left-hand tap / slap / pop letters, golpe, trills, whammy dips and lines). Hands the per-note links to `tabLinks.js`.
       - `passes/techniqueLabels.js`: technique labels (P.M., harmonics, let ring, pick scrape, barre, rake).
       - `passes/playingDirections.js`: pick strokes, strum arrows, ornaments, right-hand letters, notation tap / left-hand tap / slap / pop letters, golpe and trills.
-      - `passes/chordsFermatas.js`: chord symbols and dynamics, and fermatas.
+      - `passes/chordsFermatas.js`: chord symbols and diagrams, the dynamics line (drawn by `dynamicsLine.js`), and fermatas.
     - `header.js`: the page header rows (title, subtitle, credits, instructions, capo and tuning chart) and the copyright footer.
     - `navigation.js`: volta brackets, segno, coda, jump texts and repeat counts, and section markers above each system's top staff, drawn after the fermatas and beat text and before the tempo.
     - `beatText.js`: beat text (`beat.text`) above or below a track's staves, drawn after the fermatas and outside the `passes/` barrel.
     - `decor.js`: tempo, measure numbers, joining line, bracket and instrument names.
+    - `dynamicsLine.js`: the dynamics line below a notation staff (voice 1 and voice 2 dynamics, and hairpins), drawn by pass 6.
+    - `expressionMarks.js`: fade and wah marks above the top staff, drawn after pass 5.
+    - `ottava.js`: 8va and 15ma brackets above the notation staff (drawn before pass 6), and 8vb and 15mb brackets below it (drawn after pass 6).
+    - `tempoMarks.js`: tempo changes (the metronome note and `= N`), drawn after navigation, above each system's top staff.
     - `svgUtil.js`: small SVG helpers.
   - `theme.js`: theme defaults and the pixel-key conversion.
   - `glyphs.js`: Bravura glyph names. `glyphMetrics.js`: approximate glyph bounding boxes. `textMetrics.js`: estimated text widths.

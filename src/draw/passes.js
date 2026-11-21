@@ -16,7 +16,9 @@
  * - techniqueLabels.js — palm mute / harmonic / let-ring / rake label runs
  * - playingDirections.js — pick strokes, strum arrows (draw/strum.js),
  *   notation tap "T" / slap / pop and trills
- * - chordsFermatas.js — chord symbols, chord diagrams and dynamics, and fermatas
+ * - chordsFermatas.js — chord symbols, chord diagrams and the dynamics line
+ *   (drawn by ../dynamicsLine.js: dynamics of both voices and hairpins), and
+ *   fermatas
  *
  * `trackRuns` holds one entry per system per track:
  * `{ track, ti, sysIdx, measures, notationG, tabG, notationBaselineY,
@@ -46,13 +48,21 @@
  *   by 5
  * - `run.chordBoxes` (chord symbols and chord diagrams): written by 6, read by 7 through
  *   collectBeats (empty before 6)
+ * - `run.aboveBoxes` (fade / wah marks and 8va / 15ma brackets, drawn by
+ *   ../expressionMarks.js renderFadeWah and ../ottava.js renderOttavaAlta
+ *   between passes 5 and 6): read by 7 through collectBeats, so fermatas
+ *   clear them
  * - `info.directionTopY` (top of a beat's pick stroke / strum / tap "T" / trill):
  *   written by 5, read by 7
  * - pass 6 measures the notation staff's ink, so it must follow the passes
  *   that draw there (1, 2 and 5).
  *
- * Beat text (draw/beatText.js renderBeatText) runs after pass 7 and before
- * navigation; it is not a pass of this barrel and is not re-exported here.
+ * Non-pass calls between the passes (not re-exported here): renderFadeWah
+ * and renderOttavaAlta after 5 (so pass 6 measures their ink and chord
+ * symbols rise above them), renderOttavaBassa (8vb / 15mb) after 6 (below
+ * the dynamics line), beat text (draw/beatText.js renderBeatText) after 7,
+ * then navigation, then the score tempo text and tempo changes
+ * (draw/tempoMarks.js) outermost above the system.
  */
 export { flattenRuns } from './passes/common.js';
 export { renderTiesAndSlurs, renderGraceSlurs } from './passes/curves.js';

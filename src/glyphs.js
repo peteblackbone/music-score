@@ -127,6 +127,34 @@ export const Glyph = {
   stringsDownBow: '',
   stringsUpBow: '',
 
+  // Guitar expression (1.10): fades / volume swell, wah pedal open / closed
+  guitarFadeIn: '',
+  guitarFadeOut: '',
+  guitarVolumeSwell: '',
+  guitarOpenPedal: '',
+  guitarClosePedal: '',
+
+  // Octaves (1.10): ottava brackets and their continuation "(8)" / "(15)"
+  ottava: '',
+  ottavaAlta: '',
+  ottavaBassa: '',
+  quindicesima: '',
+  quindicesimaAlta: '',
+  quindicesimaBassa: '',
+  octaveParensLeft: '',
+  octaveParensRight: '',
+  ottavaBassaVb: '',
+  quindicesimaBassaMb: '',
+
+  // Metronome marks (1.10 tempo changes)
+  metNoteWhole: '',
+  metNoteHalfUp: '',
+  metNoteQuarterUp: '',
+  metNote8thUp: '',
+  metNote16thUp: '',
+  metNote32ndUp: '',
+  metAugmentationDot: '',
+
   brace:'',
 };
 
@@ -141,6 +169,36 @@ export function pickStrokeGlyph(kind) {
   if (kind === 'down') return Glyph.stringsDownBow;
   if (kind === 'up') return Glyph.stringsUpBow;
   return null;
+}
+
+/** Fade kind ('in' | 'out' | 'swell', expression.js fadeOf) -> glyph, or null */
+export function fadeGlyph(kind) {
+  return { in: Glyph.guitarFadeIn, out: Glyph.guitarFadeOut, swell: Glyph.guitarVolumeSwell }[kind] || null;
+}
+
+/** Wah kind ('open' | 'closed', expression.js wahOf) -> pedal glyph, or null */
+export function wahGlyph(kind) {
+  return { open: Glyph.guitarOpenPedal, closed: Glyph.guitarClosePedal }[kind] || null;
+}
+
+/**
+ * Ottava kind ('8va' | '8vb' | '15ma' | '15mb', expression.js ottavaOf) -> its
+ * glyph, or with `cont` the continuation after a system break: "(8)" / "(15)"
+ * from the octave parentheses. Unknown kinds -> null.
+ */
+export function ottavaGlyph(kind, cont = false) {
+  const eight = kind === '8va' || kind === '8vb';
+  if (!eight && kind !== '15ma' && kind !== '15mb') return null;
+  if (cont) return Glyph.octaveParensLeft + (eight ? Glyph.ottava : Glyph.quindicesima) + Glyph.octaveParensRight;
+  return { '8va': Glyph.ottavaAlta, '8vb': Glyph.ottavaBassaVb, '15ma': Glyph.quindicesimaAlta, '15mb': Glyph.quindicesimaBassaMb }[kind];
+}
+
+/** Metronome-mark note for a tempo unit ('whole' … '32nd'); anything else -> the quarter note. */
+export function metNoteGlyph(unit) {
+  return {
+    whole: Glyph.metNoteWhole, half: Glyph.metNoteHalfUp, quarter: Glyph.metNoteQuarterUp,
+    '8th': Glyph.metNote8thUp, '16th': Glyph.metNote16thUp, '32nd': Glyph.metNote32ndUp,
+  }[unit] || Glyph.metNoteQuarterUp;
 }
 
 /** Duration -> notehead glyph */

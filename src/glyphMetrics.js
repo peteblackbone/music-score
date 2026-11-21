@@ -121,6 +121,30 @@ export const GLYPH_BOX = {
   ornamentMordent: { bBoxNE: [2.95, 1.29], bBoxSW: [0, -0.31] },
   guitarLeftHandTapping: { bBoxNE: [1.63, 1.38], bBoxSW: [0, -0.24] },
   guitarGolpe: { bBoxNE: [1.12, 1.14], bBoxSW: [0, -0.02] },
+  // 1.10 expression, octave and metronome glyphs: measured from Bravura.woff2 ink (canvas measureText at
+  // 1000 px, ~1/64 sp resolution), padded outward by 0.02 sp on every side.
+  guitarFadeIn: { bBoxNE: [1.52, 1.52], bBoxSW: [-0.02, -0.02] },
+  guitarFadeOut: { bBoxNE: [1.52, 1.52], bBoxSW: [-0.02, -0.02] },
+  guitarVolumeSwell: { bBoxNE: [2.958, 1.52], bBoxSW: [-0.02, -0.02] },
+  guitarOpenPedal: { bBoxNE: [1.208, 1.208], bBoxSW: [-0.02, -0.02] },
+  guitarClosePedal: { bBoxNE: [1.208, 1.208], bBoxSW: [-0.02, -0.02] },
+  ottava: { bBoxNE: [1.583, 1.895], bBoxSW: [-0.02, -0.083] },
+  ottavaAlta: { bBoxNE: [3.583, 1.895], bBoxSW: [-0.02, -0.083] },
+  ottavaBassa: { bBoxNE: [3.395, 1.895], bBoxSW: [-0.02, -0.083] },
+  quindicesima: { bBoxNE: [2.708, 1.895], bBoxSW: [-0.02, -0.083] },
+  quindicesimaAlta: { bBoxNE: [5.333, 1.895], bBoxSW: [-0.02, -0.083] },
+  quindicesimaBassa: { bBoxNE: [5.208, 1.895], bBoxSW: [-0.02, -0.083] },
+  octaveParensLeft: { bBoxNE: [0.708, 1.958], bBoxSW: [-0.02, -0.083] },
+  octaveParensRight: { bBoxNE: [0.583, 1.958], bBoxSW: [-0.145, -0.083] },
+  ottavaBassaVb: { bBoxNE: [3.208, 1.895], bBoxSW: [-0.02, -0.083] },
+  quindicesimaBassaMb: { bBoxNE: [4.958, 1.895], bBoxSW: [-0.02, -0.083] },
+  metNoteWhole: { bBoxNE: [1.895, 0.645], bBoxSW: [-0.02, -0.52] },
+  metNoteHalfUp: { bBoxNE: [1.395, 2.77], bBoxSW: [-0.083, -0.583] },
+  metNoteQuarterUp: { bBoxNE: [1.395, 2.77], bBoxSW: [-0.02, -0.583] },
+  metNote8thUp: { bBoxNE: [2.145, 2.833], bBoxSW: [-0.02, -0.583] },
+  metNote16thUp: { bBoxNE: [2.145, 2.833], bBoxSW: [-0.02, -0.583] },
+  metNote32ndUp: { bBoxNE: [2.208, 3.708], bBoxSW: [-0.02, -0.583] },
+  metAugmentationDot: { bBoxNE: [0.458, 0.27], bBoxSW: [-0.02, -0.27] },
 };
 
 const BY_CHAR = new Map();

@@ -51,6 +51,21 @@ export function staffPosition(pitchStr, clef = 'treble') {
   return diatonicIndex(p) - ref;
 }
 
+/**
+ * Displayed staff position of a note: staffPosition of its written pitch
+ * plus its ottava display shift (`note.ottavaShift`, set by normalize.js
+ * inside ottava runs only; expression.js).
+ */
+export function notePosition(note, clef = 'treble') {
+  return staffPosition(note.pitch, clef) + (note.ottavaShift || 0);
+}
+
+/** Parsed displayed pitch of a note: its written pitch moved by `note.ottavaShift` / 7 octaves (when non-zero). */
+export function displayPitch(note) {
+  const p = parsePitch(note.pitch);
+  return note.ottavaShift ? { ...p, octave: p.octave + note.ottavaShift / 7 } : p;
+}
+
 /** Convert a staff position (see staffPosition) to a y-offset in px above the bottom staff line. */
 export function staffPositionToY(position, lineSpacing) {
   return -(position * (lineSpacing / 2));

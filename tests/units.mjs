@@ -2040,7 +2040,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   // the 52 pre-1.4 cases (the 1.4.0 two-voice fixtures char-voices-*, the 1.5.0 char-note-effects-*, the 1.6.0
   // char-score-text-*, the 1.7.0 char-ornaments-* and the 1.9.0 char-bends-slides-* came later)
   const isVoices = (id) => id.startsWith('char-voices-');
-  const isPost14 = (id) => /^char-(voices|note-effects|score-text|ornaments|bends-slides)-/.test(id);
+  const isPost14 = (id) => /^char-(voices|note-effects|score-text|ornaments|bends-slides|expression)-/.test(id);
   const cases = (await import('./cases.mjs')).cases.filter((c) => !isPost14(c.id));
   const { computeLayout } = await imp('src/layout/index.js');
   const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
@@ -2511,9 +2511,9 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(sl.length, 2);
     eq([Math.abs(sl[0].x2 - ms[0].elements2[1].x) < 0.01, Math.abs(sl[1].x2 - ms[0].elements[2].x) < 0.01], [true, true]);
   });
-  test('two-voice passes: dynamics and chord symbols on a voice-2 beat are not drawn (voice-1 only)', () => {
+  test('two-voice passes: a voice-2 dynamic is drawn (1.10), a voice-2 chord symbol is not (voice-1 only)', () => {
     const s2 = serialize(full([vm(quarters('C5'), [nb(['E4'], 'whole', { dynamic: 'f', chord: 'C' })])]));
-    eq([s2.includes('class="dynamic"'), s2.includes('chord-symbol')], [false, false]);
+    eq([s2.includes('class="dynamic"'), s2.includes('chord-symbol')], [true, false]);
     const s1 = serialize(full([vm([nb(['C5'], 'quarter', { dynamic: 'f', chord: 'C' }), ...quarters('C5').slice(1)], [nb(['E4'], 'whole')])]));
     eq([s1.includes('class="dynamic"'), s1.includes('chord-symbol')], [true, true]);
   });
@@ -2549,10 +2549,12 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq([a === b, JSON.stringify(score) === before], [true, true]);
   });
   test('voice-1-only beat marks on a voice-2 beat draw nothing: output is byte-identical to the same beat without them (1.8 split)', () => {
-    const marks = { strum: 'up', arpeggio: true, letRing: true, palmMute: true, rake: 'down', whammy: true, dynamic: 'ff', chord: 'Am' };
+    // 1.10: voice-2 dynamics are drawn on notation staves (still nothing on a tab-only track)
+    const marks = { strum: 'up', arpeggio: true, letRing: true, palmMute: true, rake: 'down', whammy: true, chord: 'Am' };
     const mk = (extra, track) => serialize(full([vm([nb([{ string: 3, fret: 2 }, { string: 4, fret: 2 }]), nb([{ string: 3, fret: 3 }]), nb([{ string: 3, fret: 4 }], 'half')],
       [nb([{ string: 5, fret: 2 }, { string: 6, fret: 2 }], 'quarter', extra), rs(), nb([{ string: 5, fret: 3 }], 'half', extra)])], track));
     [{ showTablature: true }, { showStandardNotation: false, showTablature: true }, {}].forEach((track, i) => eq(mk(marks, track) === mk({}, track), true, `track ${i}`));
+    eq(mk({ ...marks, dynamic: 'ff' }, { showStandardNotation: false, showTablature: true }) === mk({}, { showStandardNotation: false, showTablature: true }), true, 'tab-only dynamic');
     // 1.8 (R1): pick stroke, vibrato, fermata, tap / slap / pop and trill on voice 2 now draw on every kind of track
     for (const extra of [{ pickStroke: 'down' }, { vibrato: true }, { tap: true }, { trill: true }]) {
       const n = extra;
@@ -2658,7 +2660,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   const { group: svgGroup } = await imp('src/draw/svgUtil.js');
   // the 57 pre-1.6 cases (the 1.6.0 char-score-text-* fixtures use the new fields on purpose; the 1.7.0
   // char-ornaments-* and the 1.9.0 char-bends-slides-* came later)
-  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides)-/.test(c.id));
+  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression)-/.test(c.id));
   const thm = resolveTheme({});
   const s = thm.staffLineSpacing;
   const ok = (c, m) => { if (!c) throw new Error(m); };
@@ -3848,7 +3850,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     return r;
   };
   // The pins describe the 63 pre-1.8 cases (the 1.8 fixtures exercise these triggers on purpose; the 1.9 char-bends-slides-* came later).
-  const pre18 = cases.filter((c) => !/^char-(voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides)-/.test(c.id));
+  const pre18 = cases.filter((c) => !/^char-(voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression)-/.test(c.id));
   const scans = new Map(pre18.map((c) => [c.id, scan(c)]));
   const twoVoiceIds = [...scans].filter(([, r]) => r.two.length).map(([id]) => id);
 
@@ -4587,7 +4589,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
 
   test('pre-1.9 scan: none of the 67 cases (raw or normalized) uses a compound bend, legato slide, feedback harmonic, trill tied forward, whammyScoop / whammyBar key', () => {
     // the 1.9.0 char-bends-slides-* fixtures use them on purpose
-    const pre19 = cases.filter((c) => !/^char-bends-slides-/.test(c.id));
+    const pre19 = cases.filter((c) => !/^char-(bends-slides|expression)-/.test(c.id));
     eq(pre19.length, 67);
     const zero = { compound: 0, legato: 0, feedback: 0, trillTie: 0, whammyKeys: 0 };
     for (const c of pre19) {
@@ -4660,6 +4662,94 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
       const heads = walk(svg).filter((n) => n.tag === 'text' && n.getAttribute('text-anchor') === 'middle' && n.getAttribute('y') === '40').map((n) => n.getAttribute('x'));
       eq(heads, ['115.74', '165.24']);
     }
+  });
+}
+
+// ---------- pre-1.10 characterization: dynamics, tempoText and staff positions (pins taken before the 1.10.0 change) ----------
+{
+  // the 1.10.0 char-expression-* fixtures use the new keys on purpose
+  const cases = (await import('./cases.mjs')).cases.filter((c) => !/^char-expression-/.test(c.id));
+  const { createHash } = await import('node:crypto');
+  const { staffPosition } = await imp('src/pitch.js');
+  const sha = (v) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const renderCase = (c) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(c.score)), { width: c.width, ...(c.options || {}) }).render();
+    return box.children[0];
+  };
+  const byClass = (svg, k) => walk(svg).filter((n) => (n.getAttribute('class') || '').split(/\s+/).includes(k));
+  const streams = (sc) => (sc.tracks || []).flatMap((t) => {
+    const out = [[], []];
+    for (const m of t.measures || []) {
+      if (m.voices) m.voices.forEach((v, i) => out[Math.min(i, 1)].push(...(v.beats || [])));
+      else { out[0].push(...(m.beats || [])); out[1].push(...(m.voice2Beats || [])); }
+    }
+    return out;
+  });
+  const NEW_KEYS = ['hairpin', 'fade', 'wah', 'ottava', 'tempo'];
+
+  test('pre-1.10 scan: none of the 70 cases (raw or normalized) has a hairpin/fade/wah/ottava/tempo beat key, and no voice-2 beat has a dynamic', () => {
+    eq(cases.length, 70);
+    for (const c of cases) {
+      for (const [label, sc] of [['raw', c.score], ['normalized', normalizeScore(c.score)]]) {
+        (sc.tracks || []).forEach((t) => (t.measures || []).forEach((m) => {
+          const lists = m.voices ? m.voices.map((v, i) => [i, v.beats || []]) : [[0, m.beats || []], [1, m.voice2Beats || []]];
+          for (const [vi, beats] of lists) for (const b of beats) {
+            for (const k of NEW_KEYS) if (k in b) throw new Error(`${c.id} ${label}: beat has key ${k}`);
+            if (vi >= 1 && b.dynamic != null) throw new Error(`${c.id} ${label}: voice-2 beat has a dynamic`);
+          }
+        }));
+      }
+    }
+  });
+  test('pre-1.10 scan: the scan is not vacuous (it sees voice-2 beats and voice-1 dynamics in the cases)', () => {
+    let v2 = 0, dyn = 0;
+    for (const c of cases) for (const [i, beats] of streams(c.score).entries()) { if (i % 2) v2 += beats.length; else dyn += beats.filter((b) => b.dynamic != null).length; }
+    if (!v2 || !dyn) throw new Error(`v2=${v2} dyn=${dyn}`);
+  });
+
+  let rendered = null;
+  const renders = () => (rendered ||= cases.map((c) => [c, renderCase(c)]));
+  test('pre-1.10 pin: y of every class="dynamic" node across the 70 cases (sha256)', () => {
+    const ys = renders().map(([c, svg]) => [c.id, byClass(svg, 'dynamic').map((n) => n.getAttribute('y'))]);
+    if (!ys.some(([, a]) => a.length)) throw new Error('no dynamics rendered');
+    eq(sha(ys), '0bcbeb534d0fead81851a162300cc68284b28ae9d8590579b622f3a9b982d4b4');
+  });
+  test('pre-1.10 pin: x,y of every class="tempo" node across the 70 cases (sha256)', () => {
+    const xy = renders().map(([c, svg]) => [c.id, byClass(svg, 'tempo').map((n) => [n.getAttribute('x'), n.getAttribute('y')])]);
+    if (!xy.some(([, a]) => a.length)) throw new Error('no tempoText rendered');
+    eq(sha(xy), '208ee5f9cead36bdcca86fec4f56e8c1f05389b72308de8287c0a80fc763c858');
+  });
+  test('pre-1.10 pin: staffPosition of every note (voice 1, voice 2, graces) of the 70 normalized cases (sha256)', () => {
+    const all = [];
+    for (const c of cases) {
+      const sc = normalizeScore(c.score);
+      for (const t of sc.tracks) {
+        const per = [];
+        for (const m of t.measures || []) {
+          const lists = m.voices ? m.voices.map((v) => v.beats || []) : [m.beats || [], m.voice2Beats || []];
+          lists.forEach((beats, vi) => beats.forEach((b) => (b.notes || []).forEach((n) => {
+            if (n.pitch != null) per.push([vi, b.type, n.pitch, staffPosition(n.pitch, t.clef)]);
+          })));
+        }
+        all.push([c.id, t.clef, per]);
+      }
+    }
+    if (!all.some(([, , p]) => p.some((e) => e[1] === 'grace'))) throw new Error('no grace notes covered');
+    if (!all.some(([, , p]) => p.some((e) => e[0] === 1))) throw new Error('no voice-2 notes covered');
+    eq(sha(all), 'dc6a8c0a51e3cfb20ccb63a2f2f3b90004d8fd636288ff663839a1ce6b3fb242');
+  });
+  test('pre-1.10 pin: staffPosition hand table (treble, bass, octave clefs fall back to treble)', () => {
+    const table = [
+      ['E4', 'treble', 0], ['G4', 'treble', 2], ['F5', 'treble', 8], ['C4', 'treble', -2], ['E3', 'treble', -7], ['C6', 'treble', 12],
+      ['G2', 'bass', 0], ['A3', 'bass', 8], ['C4', 'bass', 10], ['E2', 'bass', -2], ['G1', 'bass', -7],
+      ['E4', undefined, 0],
+      ['E4', 'treble8vb', 0], ['G2', 'bass8vb', -12], ['E4', 'alto', 0], ['C4', 'nonsense', -2],
+    ];
+    table.forEach(([p, clef, want]) => eq(staffPosition(p, clef), want, `${p} ${clef}`));
+    eq(staffPosition('F#4'), 1);
+    eq(staffPosition('Bb3', 'treble'), -3);
   });
 }
 
@@ -5194,6 +5284,579 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const s = normalizeScore({ tracks: [{ showTablature: true, measures: [{ beats: [
       { type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 5, slide: ' Legato ' }] }, { type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 7, slide: 'up' }] }] }] }] });
     eq(s.tracks[0].measures[0].beats.map((b) => b.notes[0].slide), [' Legato ', 'up']);
+  });
+}
+
+// ---------- 1.10.0: fade, wah, ottava and metronome glyphs (glyphs.js, glyphMetrics.js) ----------
+{
+  const { glyphBox, hasGlyphBox } = await imp('src/glyphMetrics.js');
+  const G = await imp('src/glyphs.js');
+  const cpOf = (name) => Glyph[name].codePointAt(0).toString(16).toUpperCase();
+  const NAMES = {
+    guitarFadeIn: 'E843', guitarFadeOut: 'E844', guitarVolumeSwell: 'E845', guitarOpenPedal: 'E83D', guitarClosePedal: 'E83F',
+    ottava: 'E510', ottavaAlta: 'E511', ottavaBassa: 'E512', quindicesima: 'E514', quindicesimaAlta: 'E515', quindicesimaBassa: 'E516',
+    octaveParensLeft: 'E51A', octaveParensRight: 'E51B', ottavaBassaVb: 'E51C', quindicesimaBassaMb: 'E51D',
+    metNoteWhole: 'ECA2', metNoteHalfUp: 'ECA3', metNoteQuarterUp: 'ECA5', metNote8thUp: 'ECA7', metNote16thUp: 'ECA9',
+    metNote32ndUp: 'ECAB', metAugmentationDot: 'ECB7',
+  };
+  test('1.10 glyphs: 22 code points (verified in the bundled Bravura cmap), each with a measured box', () => {
+    eq(Object.keys(NAMES).map(cpOf), Object.values(NAMES));
+    eq(Object.keys(NAMES).filter((n) => !hasGlyphBox(n) || !hasGlyphBox(Glyph[n])), []);
+  });
+  test('1.10 glyphs: boxes are the measured ink padded outward 0.02 sp', () => {
+    const b = (n) => { const x = glyphBox(n); return [x.left, x.right, x.top, x.bottom]; };
+    eq(b('guitarFadeIn'), [-0.02, 1.52, 1.52, -0.02]);
+    eq(b('guitarVolumeSwell'), [-0.02, 2.958, 1.52, -0.02]);
+    eq(b('guitarOpenPedal'), [-0.02, 1.208, 1.208, -0.02]);
+    eq(b('ottavaAlta'), [-0.02, 3.583, 1.895, -0.083]);
+    eq(b('octaveParensRight'), [-0.145, 0.583, 1.958, -0.083]);
+    eq(b('metNoteQuarterUp'), [-0.02, 1.395, 2.77, -0.583]);
+    eq(b('metAugmentationDot'), [-0.02, 0.458, 0.27, -0.27]);
+  });
+  test('1.10 glyphs: fadeGlyph / wahGlyph / ottavaGlyph / metNoteGlyph lookups', () => {
+    eq([G.fadeGlyph('in'), G.fadeGlyph('out'), G.fadeGlyph('swell'), G.fadeGlyph('x')],
+      [Glyph.guitarFadeIn, Glyph.guitarFadeOut, Glyph.guitarVolumeSwell, null]);
+    eq([G.wahGlyph('open'), G.wahGlyph('closed'), G.wahGlyph('o')], [Glyph.guitarOpenPedal, Glyph.guitarClosePedal, null]);
+    eq(['8va', '8vb', '15ma', '15mb', '22ma'].map((k) => G.ottavaGlyph(k)),
+      [Glyph.ottavaAlta, Glyph.ottavaBassaVb, Glyph.quindicesimaAlta, Glyph.quindicesimaBassaMb, null]);
+    eq([G.ottavaGlyph('8vb', true), G.ottavaGlyph('15ma', true), G.ottavaGlyph('22ma', true)],
+      [Glyph.octaveParensLeft + Glyph.ottava + Glyph.octaveParensRight, Glyph.octaveParensLeft + Glyph.quindicesima + Glyph.octaveParensRight, null]);
+    eq(['whole', 'half', 'quarter', '8th', '16th', '32nd', 'bogus'].map(G.metNoteGlyph),
+      [Glyph.metNoteWhole, Glyph.metNoteHalfUp, Glyph.metNoteQuarterUp, Glyph.metNote8thUp, Glyph.metNote16thUp, Glyph.metNote32ndUp, Glyph.metNoteQuarterUp]);
+  });
+}
+
+// ---------- 1.10.0: expression field canonicalizers (src/expression.js) ----------
+{
+  const X = await imp('src/expression.js');
+  test('1.10 hairpinOf: aliases, case and spaces; anything else -> null', () => {
+    eq(['cresc', ' Crescendo ', '<', 'dim', 'DIMINUENDO', 'decresc', 'decrescendo', '>'].map(X.hairpinOf),
+      ['cresc', 'cresc', 'cresc', 'dim', 'dim', 'dim', 'dim', 'dim']);
+    eq(['', 'cres', 'toString', '<<', null, undefined, true, 1, {}].map(X.hairpinOf), Array(9).fill(null));
+  });
+  test('1.10 fadeOf / wahOf / ottavaOf: tables, aliases and invalid -> null', () => {
+    eq(['in', ' OUT ', 'Swell', 'fade', '', null].map(X.fadeOf), ['in', 'out', 'swell', null, null, null]);
+    eq(['open', 'o', 'O', 'closed', 'close', ' + ', 'half', 'hasOwnProperty', 0].map(X.wahOf),
+      ['open', 'open', 'open', 'closed', 'closed', 'closed', null, null, null]);
+    eq(['8va', '8VB', ' 15ma ', '15mb', '22ma', '8', 'va', 8, null].map(X.ottavaOf),
+      ['8va', '8vb', '15ma', '15mb', null, null, null, null, null]);
+    eq(X.OTTAVA_SHIFT, { '8va': -7, '15ma': -14, '8vb': 7, '15mb': 14 });
+  });
+  test('1.10 tempoOf: numbers and objects; bpm in (0, 1000]; unit default quarter; dots clamped 0-2; text trimmed', () => {
+    eq(X.tempoOf(120), { bpm: 120, unit: 'quarter', dots: 0, text: null });
+    eq(X.tempoOf('96'), { bpm: 96, unit: 'quarter', dots: 0, text: null });
+    eq(X.tempoOf({ bpm: 60, unit: ' Half ', dots: 1, text: '  Slower ' }), { bpm: 60, unit: 'half', dots: 1, text: 'Slower' });
+    eq(X.tempoOf({ bpm: 1000, unit: 'breve', dots: 5, text: '   ' }), { bpm: 1000, unit: 'quarter', dots: 2, text: null });
+    eq(X.tempoOf({ bpm: 80, dots: -1, text: 7 }), { bpm: 80, unit: 'quarter', dots: 0, text: null });
+    eq(X.tempoOf({ bpm: 80, dots: 1.7 }).dots, 1);
+    eq([0, 1001, -5, NaN, Infinity, '', 'fast', null, undefined, true, [], [120], {}, { bpm: 0 }, { bpm: 1001 }, { unit: 'half' }].map(X.tempoOf),
+      Array(16).fill(null));
+  });
+  test('1.10 formatBpm: up to 2 decimals, trailing zeros stripped', () => {
+    eq([120, 92.5, 60.333, 72.10, 0.004, 99.999].map(X.formatBpm), ['120', '92.5', '60.33', '72.1', '0', '100']);
+  });
+}
+
+// ---------- 1.10.0: ottava display shift (expression.js ottavaKinds / withOttavaShifts, pitch.js, layout) ----------
+{
+  const X = await imp('src/expression.js');
+  const { notePosition, displayPitch, staffPosition } = await imp('src/pitch.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { drawSystem } = await imp('src/draw/system.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
+  const { cases } = await import('./cases.mjs');
+  const th = resolveTheme();
+  const nt = (ps, x = {}, duration = 'quarter') => ({ type: 'note', duration, notes: ps.map((p) => (typeof p === 'string' ? { pitch: p } : p)), ...x });
+  const gr = (p, x = {}) => ({ type: 'grace', duration: '16th', notes: [{ pitch: p }], ...x });
+  const rs = (x = {}, duration = 'quarter') => ({ type: 'rest', duration, ...x });
+  const tie = (p, x = {}) => ({ pitch: p, ...x });
+  const kindsOf = (measures) => X.ottavaKinds(normalizeScore({ tracks: [{ measures }] }).tracks[0]);
+
+  test('1.10 ottavaKinds: own kinds per voice-1 beat; rests (hidden too) count; invalid kinds are no run', () => {
+    const k = kindsOf([{ beats: [nt(['C6'], { ottava: '8va' }), rs({ ottava: '8va' }), rs({ ottava: ' 8VA ', hidden: true }), nt(['C6'], { ottava: '22ma' })] }]);
+    eq(k, [{ v1: ['8va', '8va', '8va', null], v2: [] }]);
+  });
+  test('1.10 ottavaKinds: graces take the kind of the main beat they lead into; trailing graces the last main beat\'s', () => {
+    const k = kindsOf([{ beats: [gr('D6', { ottava: '15ma' }), nt(['C6']), gr('D6'), nt(['C6'], { ottava: '8vb' }), nt(['C6'], { ottava: '8va' }), gr('B5')] }]);
+    eq(k[0].v1, [null, null, '8vb', '8vb', '8va', '8va']);
+  });
+  test('1.10 ottavaKinds: an all-tied beat inherits (chains across barlines); a partially tied chord or a rest does not', () => {
+    const k = kindsOf([
+      { beats: [nt(['C6'], {}, 'half'), nt([tie('C6', { tieStart: true })], { ottava: '8va' }, 'half')] },
+      { beats: [nt([tie('C6', { tieEnd: true, tieStart: true })], {}, 'half'), nt([tie('C6', { tieEnd: true })], {}, 'half')] },
+      { beats: [nt([tie('C6', { tieStart: true }), tie('E6', { tieStart: true })], { ottava: '15mb' }, 'half'),
+        nt([tie('C6', { tieEnd: true }), 'E6'], {}, 'half')] },
+      { beats: [nt(['C6'], { ottava: '8va' }), rs(), nt([tie('C6', { tieEnd: true })]), rs()] },
+    ]);
+    eq(k.map((m) => m.v1), [[null, '8va'], ['8va', '8va'], ['15mb', null], ['8va', null, null, null]]);
+  });
+  test('1.10 ottavaKinds: an empty measure ends a run (no inheritance across it)', () => {
+    const k = kindsOf([
+      { beats: [nt([tie('C6', { tieStart: true })], { ottava: '8va' }, 'whole')] },
+      { beats: [] },
+      { beats: [nt([tie('C6', { tieEnd: true })], {}, 'whole')] },
+    ]);
+    eq(k.map((m) => m.v1), [['8va'], [], [null]]);
+  });
+  test('1.10 ottavaKinds: voice 2 takes the kind of the voice-1 beat covering its onset, else inherits through its own ties', () => {
+    const k = kindsOf([
+      { voices: [{ beats: [nt(['C6'], { ottava: '8va' }, 'half'), nt(['C6'], {}, 'half')] },
+        { beats: [nt(['E4']), gr('F4'), nt(['E4']), nt([tie('E4', { tieStart: true })]), nt([tie('E4', { tieEnd: true })])] }] },
+      { voices: [{ beats: [nt(['C6'], { ottava: '8vb' }), nt(['C6'], {}, 'half', ), nt(['C6'])] },
+        { beats: [nt([tie('E4', { tieStart: true })], {}, 'half'), nt([tie('E4', { tieEnd: true })], {}, 'half')] }] },
+    ]);
+    eq(k[0], { v1: ['8va', null], v2: ['8va', '8va', '8va', null, null] });
+    eq(k[1], { v1: ['8vb', null, null], v2: ['8vb', '8vb'] });
+  });
+  test('1.10 withOttavaShifts: identity without a valid voice-1 ottava; shifts pitched notes only, model pitch untouched', () => {
+    const plain = normalizeScore({ tracks: [{ measures: [{ beats: [nt(['C6'], { ottava: '22ma' }), gr('C6', { ottava: '8va' })] }] }] }).tracks[0];
+    eq(X.withOttavaShifts(plain) === plain, true);
+    const raw = { tracks: [{ showTablature: true, measures: [{ voices: [
+      { beats: [nt(['C6', 'E6'], { ottava: '8va' }), nt(['C6'], { ottava: '15mb' }), nt([{ string: 1, fret: 5 }], { ottava: '15ma' }), nt(['C6'])] },
+      { beats: [nt(['E4'], {}, 'half'), nt(['E4'], {}, 'half')] }] }] }] };
+    const t = normalizeScore(raw).tracks[0];
+    const m = t.measures[0];
+    eq(m.beats.map((b) => b.notes.map((n) => n.ottavaShift ?? 0)), [[-7, -7], [14], [-14], [0]]);
+    eq(m.voice2Beats.map((b) => b.notes.map((n) => n.ottavaShift ?? 0)), [[-7], [-14]]);
+    eq(m.beats.map((b) => b.notes.map((n) => n.pitch)), [['C6', 'E6'], ['C6'], ['A5'], ['C6']]);
+    eq([m.beats[2].notes[0].fret, m.beats[2].notes[0].soundingPitch, m.beats[0].ottava], [5, 'A4', '8va']);
+    eq(raw.tracks[0].measures[0].voices[0].beats[0].notes[0].ottavaShift, undefined, 'source untouched');
+  });
+  test('1.10 notePosition / displayPitch: written position plus the shift; parsed pitch unchanged without one', () => {
+    eq([notePosition({ pitch: 'C6' }), notePosition({ pitch: 'C6', ottavaShift: -7 }), notePosition({ pitch: 'C6', ottavaShift: -14 }),
+      notePosition({ pitch: 'E2', ottavaShift: 7 }, 'bass'), notePosition({ pitch: 'E2', ottavaShift: 14 }, 'bass')], [12, 5, -2, 5, 12]);
+    eq([displayPitch({ pitch: 'F#6' }), displayPitch({ pitch: 'F#6', ottavaShift: -7 }), displayPitch({ pitch: 'Bb1', ottavaShift: 14 })],
+      [{ step: 'F', alter: 1, octave: 6 }, { step: 'F', alter: 1, octave: 5 }, { step: 'B', alter: -1, octave: 3 }]);
+  });
+  test('1.10 accidentals: carry is keyed by the displayed octave (F#6 under 8va then a plain F#5 needs none)', () => {
+    const acc = (beats) => resolveMeasureAccidentals(normalizeScore({ tracks: [{ measures: [{ beats }] }] }).tracks[0], 0).map((r) => r.names[0]);
+    eq(acc([nt(['F#6'], { ottava: '8va' }), nt(['F#5']), nt(['F6'], { ottava: '8va' }), nt(['F5'])]), ['sharp', null, 'natural', null]);
+    eq(acc([nt(['F#6']), nt(['F#5']), nt(['F6']), nt(['F5'])]), ['sharp', 'sharp', 'natural', 'natural']);
+  });
+  test('1.10 the 70 snapshot cases: no note gets ottavaShift; notePosition === staffPosition everywhere', () => {
+    let count = 0;
+    for (const c of cases.filter((x) => !x.id.startsWith('char-expression'))) {
+      for (const t of normalizeScore(c.score).tracks) for (const m of t.measures) for (const b of [...m.beats, ...(m.voice2Beats || [])]) {
+        for (const n of b.notes || []) {
+          if ('ottavaShift' in n) throw new Error(`${c.id}: ottavaShift`);
+          if (n.pitch != null && notePosition(n, t.clef) !== staffPosition(n.pitch, t.clef)) throw new Error(`${c.id}: position`);
+          count++;
+        }
+      }
+    }
+    if (count < 1000) throw new Error(`only ${count} notes`);
+  });
+  test('1.10 drawing: heads inside an 8va run sit 3.5 sp lower (15mb 7 sp higher), with fewer ledger lines; outside unchanged', () => {
+    const local = (measures) => {
+      const sc = normalizeScore({ tracks: [{ measures }] });
+      const sys = computeLayout(sc, th, 900).systems[0];
+      drawSystem(makeContainer(), sys, 0, sc, th);
+      const els = sys.tracks[0].measures.flatMap((mm) => mm.elements);
+      return els.map((le) => le.rendered.noteheads.map((h) => h.y));
+    };
+    const base = [nt(['C7']), nt(['A6']), nt(['C2']), nt(['C5'])];
+    const marked = [nt(['C7'], { ottava: '8va' }), nt(['A6'], { ottava: '8va' }), nt(['C2'], { ottava: '15mb' }), nt(['C5'])];
+    const a = local([{ beats: base }]); const b = local([{ beats: marked }]);
+    const S = th.staffLineSpacing;
+    eq(b.map((ys, i) => ys.map((y, j) => +(y - a[i][j]).toFixed(2))), [[3.5 * S], [3.5 * S], [-7 * S], [0]]);
+    const ledgers = (measures) => {
+      const sc = normalizeScore({ tracks: [{ measures }] });
+      const d = drawSystem(makeContainer(), computeLayout(sc, th, 900).systems[0], 0, sc, th);
+      const out = []; const visit = (nd) => { out.push(nd); (nd.children || []).forEach(visit); };
+      visit(d.staves[0].g);
+      return out.filter((nd) => nd.tag === 'line' && nd.getAttribute('y1') === nd.getAttribute('y2')
+        && (+nd.getAttribute('y1') < -0.1 || +nd.getAttribute('y1') > 4 * S + 0.1)).length;
+    };
+    if (!(ledgers([{ beats: marked }]) < ledgers([{ beats: base }]))) throw new Error('ledger lines not reduced');
+  });
+}
+
+// ---------- 1.10.0: hairpins and voice-2 dynamics on the dynamics line (draw/dynamicsLine.js, pass 6) ----------
+{
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { glyphStringBox } = await imp('src/glyphMetrics.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const U = (th.dynamicFontSize + 1.4 * S) / 4;
+  const nt = (ps, x = {}, duration = 'quarter') => ({ type: 'note', duration, notes: ps.map((p) => ({ pitch: p })), ...x });
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const hasCls = (nd, k) => (nd.getAttribute?.('class') || '').split(/\s+/).includes(k);
+  const draw = (measures, width = 900, track = {}) => {
+    const score = { tracks: [{ ...track, measures }] };
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    const svg = box.children[0];
+    const lay = computeLayout(normalizeScore(score), th, width);
+    const nodes = all(svg);
+    const pins = nodes.filter((n) => hasCls(n, 'hairpin')).map((n) => ({
+      cls: n.getAttribute('class'), d: n.getAttribute('d'), p: n.getAttribute('d').match(/-?\d+(\.\d+)?/g).map(Number),
+    }));
+    const dyns = nodes.filter((n) => hasCls(n, 'dynamic')).map((n) => ({ x: +n.getAttribute('x'), y: +n.getAttribute('y'), t: n.textContent }));
+    return { svg, lay, pins, dyns, els: lay.systems.flatMap((s) => s.tracks[0].measures.flatMap((m) => m.elements)), ser: serialize(svg) };
+  };
+  const near = (a, b, tol = 0.02) => Math.abs(a - b) <= tol;
+  const edges = (mark, x) => { const b = glyphStringBox(dynamicGlyph(mark)); const x1 = x + b.left * U - (b.width * U) / 2; return [x1, x1 + b.width * U]; };
+
+  test('1.10 hairpin: a cresc run from a dynamic to the next onset\'s dynamic, centre 0.38 u above the dynamics baseline, opening 1 sp', () => {
+    const { pins, dyns, els } = draw([{ beats: [nt(['C5'], { hairpin: 'cresc', dynamic: 'p' }), nt(['C5'], { hairpin: '<' }), nt(['C5'], { hairpin: 'Crescendo' }), nt(['C5'], { dynamic: 'f' })] }]);
+    eq([pins.length, pins[0].cls], [1, 'hairpin hairpin-cresc']);
+    const [x2a, ya, x1, c, x2b, yb] = pins[0].p;
+    const y = dyns[0].y;
+    eq([near(x1, edges('p', els[0].x)[1] + 0.4 * S), near(x2a, edges('f', els[3].x)[0] - 0.4 * S), x2a === x2b], [true, true, true]);
+    eq([near(c, y - 0.38 * U), near(yb - ya, 1 * S), near(c - ya, 0.5 * S), dyns.every((d) => d.y === y)], [true, true, true, true]);
+  });
+  test('1.10 hairpin: without dynamics it starts at the head\'s left edge and ends 0.8 sp before the next onset; a dim closes on the right', () => {
+    const { pins, els } = draw([{ beats: [nt(['C5']), nt(['C5'], { hairpin: 'dim' }), nt(['C5'], { hairpin: 'dim' }), nt(['C5'])] }]);
+    eq(pins.length, 1);
+    const [x1, ya, x2, c, x1b, yb] = pins[0].p;
+    eq([near(x1, els[1].x - 0.59 * S), near(x2, els[3].x - 0.8 * S), x1 === x1b, near(yb - ya, S), near(c, (ya + yb) / 2)], [true, true, true, true, true]);
+  });
+  test('1.10 hairpin: a dynamic inside a run splits it; another kind starts a new one; graces do not break it; a beat without one ends it', () => {
+    const g = { type: 'grace', duration: '16th', notes: [{ pitch: 'D5' }] };
+    const { pins } = draw([{ beats: [nt(['C5'], { hairpin: 'dim' }), nt(['C5'], { hairpin: 'dim', dynamic: 'mf' }), g, nt(['C5'], { hairpin: 'dim' }), nt(['C5'], { hairpin: 'cresc' })] },
+      { beats: [nt(['C5'], { hairpin: 'cresc' }), nt(['C5']), nt(['C5'], { hairpin: 'cresc' }), nt(['C5'], { hairpin: 'bogus' })] }]);
+    eq(pins.map((p) => p.cls.replace('hairpin ', '')), ['hairpin-dim', 'hairpin-dim', 'hairpin-cresc', 'hairpin-cresc']);
+  });
+  test('1.10 hairpin: at least 2 sp long (extended right); the last beat of the score ends at breakEndX', () => {
+    const { pins, lay } = draw([{ beats: [nt(['C5'], { hairpin: 'cresc' }, '16th'), ...Array(15).fill(0).map(() => nt(['C5'], {}, '16th'))] },
+      { beats: [nt(['C5'], {}, 'half'), nt(['C5'], { hairpin: 'dim' }, 'half')] }]);
+    eq(pins.length, 2);
+    eq(near(pins[0].p[0] - pins[0].p[2], 2 * S), true, 'min length');
+    eq(near(pins[1].p[2], lay.systems[0].lastBarlineX - 0.5 * S), true, 'breakEndX');
+  });
+  test('1.10 hairpin: split at system breaks; continuations start at breakStartX with the break-side end opened 0.3 sp', () => {
+    const bars = (kind) => Array(8).fill(0).map(() => ({ beats: Array(4).fill(0).map(() => nt(['C5'], { hairpin: kind })) }));
+    for (const kind of ['cresc', 'dim']) {
+      const { pins, lay } = draw(bars(kind), 600);
+      const n = lay.systems.length;
+      if (n < 2) throw new Error('no break');
+      eq(pins.length, n);
+      eq(pins.map((p) => p.cls.includes('hairpin-cont')), [false, ...Array(n - 1).fill(true)]);
+      const open = (p) => (p.p.length === 6 ? (kind === 'cresc' ? [0, p.p[5] - p.p[1]] : [p.p[5] - p.p[1], 0]) : [p.p[5] - p.p[1], p.p[7] - p.p[3]]);
+      const opens = pins.map((p) => open(p).map((v) => +(v / S).toFixed(2)));
+      const want = kind === 'cresc' ? [[0, 1], ...Array(n - 1).fill([0.3, 1])] : [...Array(n - 1).fill([1, 0.3]), [1, 0]];
+      eq(opens, want, kind);
+      eq(pins.slice(1).every((p, i) => near(p.p[0], lay.systems[i + 1].contentStartX + 0.5 * S)), true, 'breakStartX');
+      eq(pins.slice(0, -1).every((p, i) => near(Math.max(p.p[0], p.p[2]), lay.systems[i].lastBarlineX - 0.5 * S)), true, 'breakEndX');
+    }
+  });
+  test('1.10 dynamics baseline: a hairpin lowers it only when its top edge is higher than the glyphs\' top; hairpins alone still get a line', () => {
+    const low = (x = {}) => nt(['G3'], x);
+    const a = draw([{ beats: [low({ dynamic: 'p' }), low(), low(), low()] }]);
+    const b = draw([{ beats: [low({ dynamic: 'p' }), low(), low({ hairpin: 'cresc' }), low()] }]);
+    const d = b.dyns[0].y - a.dyns[0].y;
+    eq(near(d, (0.38 * U + 0.5 * S) - 1.0 * U, 0.02), true, `p lowered by ${d}`);
+    const f = draw([{ beats: [low({ dynamic: 'f' }), low(), low(), low()] }]);
+    const g = draw([{ beats: [low({ dynamic: 'f' }), low(), low({ hairpin: 'cresc' }), low()] }]);
+    eq(f.dyns[0].y, g.dyns[0].y, 'f glyph top is higher than the hairpin');
+    const h = draw([{ beats: [low(), low(), low({ hairpin: 'cresc' }), low()] }]);
+    eq([h.pins.length, h.dyns.length, near(h.pins[0].p[3] + 0.38 * U, b.dyns[0].y)], [1, 0, true]);
+  });
+  test('1.10 voice-2 dynamics: centred on the voice-2 element on the shared line; voice 1 wins a shared onset; v2 graces not drawn', () => {
+    const vm = (b1, b2) => ({ voices: [{ beats: b1 }, { beats: b2 }] });
+    const { dyns, lay } = draw([vm([nt(['C5'], { dynamic: 'f' }), nt(['C5']), nt(['C5'], {}, 'half')],
+      [nt(['E4'], { dynamic: 'p' }), nt(['E4'], { dynamic: 'mp' }), { type: 'grace', duration: '16th', notes: [{ pitch: 'F4' }], dynamic: 'ff' }, nt(['E4'], {}, 'half')])]);
+    const m = lay.systems[0].tracks[0].measures[0];
+    eq(dyns.map((d) => [d.t, d.x]), [[dynamicGlyph('f'), +m.elements[0].x.toFixed(2)], [dynamicGlyph('mp'), +m.elements2[1].x.toFixed(2)]]);
+    eq(dyns[0].y, dyns[1].y);
+  });
+  test('1.10 hairpins: not drawn on a tab-only track', () => {
+    const t = (x = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 5 }], ...x });
+    const r = draw([{ beats: [t({ hairpin: 'cresc' }), t({ hairpin: 'cresc' }), t(), t()] }], 900, { showStandardNotation: false, showTablature: true });
+    eq(r.pins.length, 0);
+  });
+}
+
+// ---------- 1.10.0: fade and wah marks above the staff (draw/expressionMarks.js) ----------
+{
+  const { resolveTheme } = await imp('src/theme.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const nt = (ps, x = {}, duration = 'quarter') => ({ type: 'note', duration, notes: ps.map((p) => ({ pitch: p })), ...x });
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const draw = (measures, track = {}) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, { tracks: [{ ...track, measures }] }, { width: 900 }).render();
+    return all(box.children[0]);
+  };
+  // ink bottom / top of a full-size glyph text node, in its staff group's coordinates
+  const glyphInk = (nd) => {
+    const name = Object.keys(Glyph).find((k) => Glyph[k] === nd.textContent);
+    const b = glyphBox(name); const y = +nd.getAttribute('y');
+    return { bottom: y - b.bottom * S, top: y - b.top * S, x: +nd.getAttribute('x') };
+  };
+  const of = (nodes, k) => nodes.filter((n) => cls(n).split(/\s+/).includes(k));
+
+  test('1.10 fade / wah: glyphs and classes; ink bottom at least 1 sp above the top line; a wah lands 0.4 sp above a fade on its beat', () => {
+    const nodes = draw([{ beats: [nt(['C5'], { fade: 'in' }), nt(['C5'], { fade: ' OUT ' }), nt(['C5'], { fade: 'swell', wah: '+' }), nt(['C5'], { wah: 'o', fade: 'x' })] }]);
+    const fades = of(nodes, 'fade'); const wahs = of(nodes, 'wah');
+    eq(fades.map(cls), ['fade fade-in', 'fade fade-out', 'fade fade-swell']);
+    eq(wahs.map(cls), ['wah wah-closed', 'wah wah-open']);
+    eq(fades.map((n) => n.textContent).concat(wahs.map((n) => n.textContent)),
+      [Glyph.guitarFadeIn, Glyph.guitarFadeOut, Glyph.guitarVolumeSwell, Glyph.guitarClosePedal, Glyph.guitarOpenPedal]);
+    eq(fades.concat(wahs).every((n) => glyphInk(n).bottom <= -1 * S + 0.01), true);
+    eq(new Set(fades.map((n) => n.getAttribute('y'))).size, 1, 'consecutive fades share one bottom');
+    const fadeTop = glyphInk(fades[2]).top;
+    eq(Math.abs(glyphInk(wahs[0]).bottom - (fadeTop - 0.4 * S)) < 0.02, true, 'wah above the fade');
+  });
+  test('1.10 fade / wah: clear high notes; non-consecutive marks each keep their own height', () => {
+    const nodes = draw([{ beats: [nt(['C5'], { fade: 'in' }), nt(['C5']), nt(['C7'], { fade: 'in' }), nt(['C5'])] }]);
+    const [a, b] = of(nodes, 'fade').map(glyphInk);
+    eq([Math.abs(a.bottom + 1 * S) < 0.01, b.bottom < a.bottom - 2 * S], [true, true]);
+  });
+  test('1.10 fade / wah: chord symbols rise above them; a fermata clears them at 0.5 sp', () => {
+    const nodes = draw([{ beats: [nt(['C5'], { fade: 'in', wah: 'open', chord: 'Am', fermata: true }), nt(['C5']), nt(['C5']), nt(['C5'])] }]);
+    const wah = glyphInk(of(nodes, 'wah')[0]);
+    const chord = of(nodes, 'chord-symbol')[0];
+    eq(+chord.getAttribute('y') + 0.25 * th.dynamicFontSize < wah.top, true, 'chord symbol above the wah');
+    const ferm = nodes.find((n) => n.textContent === Glyph.fermataAbove);
+    const fb = +ferm.getAttribute('y') - glyphBox('fermataAbove').bottom * S;
+    eq(fb <= wah.top - 0.5 * S + 0.01, true, 'fermata above the wah');
+  });
+  test('1.10 fade / wah: above the TAB staff of a tab-only track; voice-1 main beats only', () => {
+    const t = (x = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 5 }], ...x });
+    const nodes = draw([{ beats: [t({ fade: 'in' }), { type: 'grace', duration: '16th', notes: [{ string: 1, fret: 7 }], wah: 'open' }, t({ wah: 'closed' }), t(), t()] }],
+      { showStandardNotation: false, showTablature: true });
+    eq([of(nodes, 'fade').length, of(nodes, 'wah').length], [1, 1]);
+    const lines = nodes.filter((n) => n.tag === 'line' && n.getAttribute('y1') === n.getAttribute('y2') && +n.getAttribute('x2') - +n.getAttribute('x1') > 200);
+    const top = Math.min(...lines.map((n) => +n.getAttribute('y1')));
+    eq(lines.length >= 6, true, 'TAB lines found');
+    eq(of(nodes, 'fade').concat(of(nodes, 'wah')).every((n) => glyphInk(n).bottom <= top - 1 * S + 0.01), true);
+  });
+}
+
+// ---------- 1.10.0: ottava brackets (draw/ottava.js) ----------
+{
+  const { resolveTheme } = await imp('src/theme.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const nt = (ps, x = {}, duration = 'quarter') => ({ type: 'note', duration, notes: ps.map((p) => (typeof p === 'string' ? { pitch: p } : p)), ...x });
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const draw = (measures, width = 900, track = {}) => {
+    const score = { tracks: [{ ...track, measures }] };
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    const nodes = all(box.children[0]);
+    const brackets = nodes.filter((n) => cls(n).split(/\s+/).includes('ottava')).map((g) => {
+      const [glyph, dash, hook] = g.children;
+      const n = (nd, a) => +nd.getAttribute(a);
+      return {
+        cls: cls(g), glyph: glyph.textContent, gx: n(glyph, 'x'), gy: n(glyph, 'y'),
+        dash: { x1: n(dash, 'x1'), x2: n(dash, 'x2'), y: n(dash, 'y1'), da: dash.getAttribute('stroke-dasharray') },
+        hook: hook ? { x: n(hook, 'x1'), y1: n(hook, 'y1'), y2: n(hook, 'y2') } : null,
+      };
+    });
+    return { nodes, brackets, lay: computeLayout(normalizeScore(score), th, width) };
+  };
+
+  test('1.10 ottava: 8va above the staff: glyph at the first head\'s left edge, dashed line, hook down 1 sp before the next beat', () => {
+    const { brackets, lay } = draw([{ beats: [nt(['C6'], { ottava: '8va' }), nt(['D6'], { ottava: '8va' }), nt(['C5']), nt(['C5'])] }]);
+    const els = lay.systems[0].tracks[0].measures[0].elements;
+    eq(brackets.length, 1);
+    const b = brackets[0];
+    eq([b.cls, b.glyph, b.dash.da], ['ottava ottava-8va', Glyph.ottavaAlta, '6 5']);
+    eq([Math.abs(b.gx - (els[0].x - 0.59 * S)) < 0.02, Math.abs(b.dash.x1 - (b.gx + glyphBox('ottavaAlta').width * S + 0.3 * S)) < 0.02], [true, true]);
+    eq([Math.abs(b.hook.x - Math.max(els[1].x + 0.89 * S, els[2].x - 0.5 * S)) < 0.02, Math.abs(b.hook.y2 - b.hook.y1 - S) < 0.01, b.hook.x === b.dash.x2], [true, true, true]);
+    eq(b.gy - glyphBox('ottavaAlta').bottom * S <= -S + 0.01, true, 'glyph bottom at least 1 sp above the top line');
+  });
+  test('1.10 ottava: 15mb below the staff and below the dynamics line, hook up; 8vb uses the "vb" glyph', () => {
+    const { brackets, nodes } = draw([{ beats: [nt(['C3'], { ottava: '15mb', dynamic: 'p' }), nt(['C3'], { ottava: '15mb' }), nt(['C3'], { ottava: '8vb' }), nt(['C4'])] }]);
+    eq(brackets.map((b) => [b.cls, b.glyph]), [['ottava ottava-15mb', Glyph.quindicesimaBassaMb], ['ottava ottava-8vb', Glyph.ottavaBassaVb]]);
+    const dyn = nodes.find((n) => cls(n) === 'dynamic');
+    const dynBottom = +dyn.getAttribute('y') - glyphBox('dynamicPiano').bottom * ((th.dynamicFontSize + 1.4 * S) / 4);
+    const top15 = brackets[0].gy - glyphBox('quindicesimaBassaMb').top * S;
+    eq([top15 >= dynBottom + 0.5 * S - 0.02, brackets.every((b) => b.hook.y2 < b.hook.y1)], [true, true]);
+  });
+  test('1.10 ottava: a tied note past the run extends the bracket; the next beat ends it', () => {
+    const { brackets, lay } = draw([{ beats: [nt(['C6'], { ottava: '8va' }), nt([{ pitch: 'C6', tieStart: true }], { ottava: '8va' }), nt([{ pitch: 'C6', tieEnd: true }]), nt(['C5'])] }]);
+    const els = lay.systems[0].tracks[0].measures[0].elements;
+    eq(Math.abs(brackets[0].hook.x - Math.max(els[2].x + 0.89 * S, els[3].x - 0.5 * S)) < 0.02, true);
+  });
+  test('1.10 ottava: across a system break the first segment ends at breakEndX without a hook; the next starts with "(8)" at breakStartX', () => {
+    const bars = Array(8).fill(0).map(() => ({ beats: Array(4).fill(0).map(() => nt(['C6'], { ottava: '8va' })) }));
+    bars.push({ beats: [nt(['C5'], {}, 'whole')] });
+    const { brackets, lay } = draw(bars, 600);
+    if (lay.systems.length < 2) throw new Error('no break');
+    eq(brackets.map((b) => b.cls.includes('ottava-cont')), [false, ...Array(brackets.length - 1).fill(true)]);
+    eq(brackets.slice(0, -1).every((b, i) => !b.hook && Math.abs(b.dash.x2 - (lay.systems[i].lastBarlineX - 0.5 * S)) < 0.02), true);
+    eq(brackets.slice(1).every((b, i) => b.glyph === Glyph.octaveParensLeft + Glyph.ottava + Glyph.octaveParensRight
+      && Math.abs(b.gx - (lay.systems[i + 1].contentStartX + 0.5 * S)) < 0.02), true);
+    eq(!!brackets[brackets.length - 1].hook, true);
+  });
+  test('1.10 ottava: chord symbols and fermatas sit above an 8va bracket; not drawn on TAB-only tracks; TAB frets unchanged', () => {
+    const { brackets, nodes } = draw([{ beats: [nt(['C6'], { ottava: '8va', chord: 'C', fermata: true }), nt(['C6'], { ottava: '8va' }), nt(['C5']), nt(['C5'])] }]);
+    const top = Math.min(brackets[0].gy - glyphBox('ottavaAlta').top * S, brackets[0].dash.y);
+    const chord = nodes.find((n) => cls(n) === 'chord-symbol');
+    eq(+chord.getAttribute('y') + 0.25 * th.dynamicFontSize < top, true, 'chord above');
+    const ferm = nodes.find((n) => n.textContent === Glyph.fermataAbove);
+    eq(+ferm.getAttribute('y') - glyphBox('fermataAbove').bottom * S <= top - 0.5 * S + 0.01, true, 'fermata above');
+    const t = (x = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 17 }], ...x });
+    const tabOnly = draw([{ beats: [t({ ottava: '8va' }), t({ ottava: '8va' }), t(), t()] }], 900, { showStandardNotation: false, showTablature: true });
+    eq(tabOnly.brackets.length, 0);
+    const frets = (o) => draw([{ beats: [t(o), t(o), t(), t()] }], 900, { showTablature: true }).nodes
+      .filter((n) => n.tag === 'text' && /^\d+$/.test(n.textContent || '')).map((n) => [n.textContent, n.getAttribute('x')]);
+    eq(frets({ ottava: '8va' }), frets({}));
+  });
+}
+
+// ---------- 1.10.0: tempo changes with a metronome mark (draw/tempoMarks.js) ----------
+{
+  const { resolveTheme } = await imp('src/theme.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const nt = (ps, x = {}, duration = 'quarter') => ({ type: 'note', duration, notes: ps.map((p) => ({ pitch: p })), ...x });
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const draw = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    const nodes = all(box.children[0]);
+    const marks = nodes.filter((n) => cls(n) === 'tempo-change').map((g) => {
+      const part = (k) => g.children.filter((c) => cls(c) === k);
+      const p = (n) => ({ x: +n.getAttribute('x'), y: +n.getAttribute('y'), t: n.textContent });
+      return { text: part('tempo-change-text').map(p)[0], note: p(part('tempo-change-note')[0]), dots: part('tempo-change-dot').map(p), bpm: p(part('tempo-change-bpm')[0]) };
+    });
+    return { nodes, marks, lay: computeLayout(normalizeScore(score), th, width), tempo: nodes.filter((n) => cls(n) === 'tempo') };
+  };
+  const bars = (first = {}, later = {}) => [{ beats: [nt(['C5'], first), nt(['C5']), nt(['C5'], later), nt(['C5'])] }, { beats: [nt(['C5'], {}, 'whole')] }];
+
+  test('1.10 tempo change: metronome note (code point per unit), dots, "= N"; note ink bottom on the baseline, at the head\'s left edge', () => {
+    const { marks, lay } = draw({ tracks: [{ measures: bars({}, { tempo: { bpm: 92.5, unit: '8th', dots: 2, text: 'Faster' } }) }] });
+    const el = lay.systems[0].tracks[0].measures[0].elements[2];
+    eq(marks.length, 1);
+    const m = marks[0];
+    eq([m.text.t, m.note.t, m.dots.map((d) => d.t), m.bpm.t], ['Faster', Glyph.metNote8thUp, [Glyph.metAugmentationDot, Glyph.metAugmentationDot], '= 92.5']);
+    eq([Math.abs(m.text.x - (el.x - 0.59 * S)) < 0.02, m.note.x > m.text.x, m.dots[0].x > m.note.x, m.bpm.x > m.dots[1].x], [true, true, true, true]);
+    eq(Math.abs(m.note.y - glyphBox('metNote8thUp').bottom * 0.6 * S - m.bpm.y) < 0.02, true, 'ink bottom on the baseline');
+    eq(m.bpm.y <= -2.5 * S, true);
+  });
+  test('1.10 tempo change: a number is a quarter = N; invalid values draw nothing; the first track wins an onset', () => {
+    const t1 = { measures: bars({}, { tempo: 120 }) };
+    const t2 = { measures: bars({}, { tempo: { bpm: 60, unit: 'half' } }) };
+    const { marks } = draw({ tracks: [t1, t2] });
+    eq(marks.map((m) => [m.note.t, m.bpm.t]), [[Glyph.metNoteQuarterUp, '= 120']]);
+    eq(draw({ tracks: [{ measures: bars({ tempo: 0 }, { tempo: { bpm: 1001 } }) }] }).marks.length, 0);
+  });
+  test('1.10 tempo change: at the first onset it follows the tempoText on one shared baseline; without tempoText it starts at the time signature', () => {
+    const a = draw({ tempoText: 'Allegro', tracks: [{ measures: bars({ tempo: 132 }) }] });
+    const plain = draw({ tempoText: 'Allegro', tracks: [{ measures: bars() }] });
+    const t = a.tempo[0];
+    eq([a.marks.length, +t.getAttribute('y') === a.marks[0].bpm.y, +t.getAttribute('x') === +plain.tempo[0].getAttribute('x')], [1, true, true]);
+    eq(+t.getAttribute('y') <= +plain.tempo[0].getAttribute('y'), true);
+    eq(a.marks[0].note.x > +t.getAttribute('x') + 3 * S, true, 'right of the tempoText');
+    const b = draw({ tracks: [{ measures: bars({ tempo: 132 }) }] });
+    eq(Math.abs(b.marks[0].note.x - b.lay.systems[0].header.timeX) < 0.2, true);
+  });
+  test('1.10 tempo change: above voltas / sections and on later systems, above a tab-only staff', () => {
+    const ms = Array(8).fill(0).map((_, i) => ({ beats: [nt(['C5'], i === 6 ? { tempo: 100 } : {}), nt(['C5']), nt(['C5']), nt(['C5'])], ...(i === 6 ? { section: 'B', ending: 1 } : {}) }));
+    const { marks, nodes, lay } = draw({ tracks: [{ measures: ms }] }, 600);
+    if (lay.systems.length < 2) throw new Error('no break');
+    eq(marks.length, 1);
+    const nav = nodes.filter((n) => cls(n) === 'navigation');
+    eq(nav.length >= 1, true);
+    const navTexts = all(nav[nav.length - 1]).filter((n) => n.tag === 'text').map((n) => +n.getAttribute('y'));
+    eq(marks[0].bpm.y < Math.min(...navTexts), true, 'above the section / volta');
+    const tab = draw({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: [{ type: 'note', duration: 'whole', notes: [{ string: 1, fret: 0 }], tempo: 80 }] }] }] });
+    eq(tab.marks.length, 1);
+  });
+}
+
+// ---------- 1.10.0: expression edge cases (verification audit) ----------
+{
+  const { resolveTheme } = await imp('src/theme.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const nt = (ps, x = {}, duration = 'quarter') => ({ type: 'note', duration, notes: ps.map((p) => ({ pitch: p })), ...x });
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const has = (nd, k) => cls(nd).split(/\s+/).includes(k);
+  const draw = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    const svg = box.children[0];
+    return { svg, nodes: all(svg), ser: serialize(svg), lay: computeLayout(normalizeScore(score), th, width) };
+  };
+  const NEW = ['hairpin', 'fade', 'wah', 'ottava', 'tempo-change'];
+  const count = (nodes) => NEW.map((k) => nodes.filter((n) => has(n, k)).length);
+  const near = (a, b, tol = 0.02) => Math.abs(a - b) <= tol;
+
+  test('1.10 invalid hairpin / fade / wah / ottava / tempo values are ignored silently: output identical to the plain score', () => {
+    const bad = [{ hairpin: 'bogus' }, { fade: 'x' }, { wah: 'half' }, { ottava: '22ma' }, { tempo: 0 }, { tempo: 'fast' }, { tempo: {} }, { tempo: { bpm: 1001 } },
+      { hairpin: 5, fade: null, wah: {}, ottava: 8, tempo: [] }, { hairpin: '', fade: '', wah: '', ottava: '' }];
+    const mk = (extra) => ({ tracks: [{ measures: [{ beats: [0, 1, 2, 3].map((i) => nt(['C5'], extra[i % extra.length])) }, { beats: [nt(['C5'], {}, 'whole')] }] }] });
+    const plain = draw(mk([{}]));
+    for (const b of bad) {
+      const r = draw(mk([b]));
+      eq(r.ser, plain.ser, JSON.stringify(b));
+      eq(count(r.nodes), [0, 0, 0, 0, 0]);
+    }
+  });
+  test('1.10 voice-2 beats ignore hairpin / fade / wah / ottava / tempo (voice-1 marks only)', () => {
+    const v2 = (x) => ({ voices: [{ beats: [nt(['C5'], {}, 'whole')] }, { beats: [nt(['E4'], x, 'whole')] }] });
+    const plain = draw({ tracks: [{ measures: [v2({})] }] });
+    const r = draw({ tracks: [{ measures: [v2({ hairpin: 'cresc', fade: 'in', wah: 'open', ottava: '8va', tempo: 90 })] }] });
+    eq(count(r.nodes), [0, 0, 0, 0, 0]);
+    eq(r.ser, plain.ser);
+  });
+  test('1.10 hairpin / ottava run ending exactly on a system\'s last beat: no continuation on the next system', () => {
+    const plainBars = Array(8).fill(0).map(() => ({ beats: Array(4).fill(0).map(() => nt(['C6'])) }));
+    const n0 = draw({ tracks: [{ measures: plainBars }] }, 600).lay.systems[0].tracks[0].measures.length;
+    if (n0 >= 8) throw new Error('no break');
+    const bars = (extra) => plainBars.map((m, i) => ({ beats: m.beats.map((b) => (i < n0 ? { ...b, ...extra } : b)) }));
+    const o = draw({ tracks: [{ measures: bars({ ottava: '8va' }) }] }, 600);
+    const oc = o.nodes.filter((n) => has(n, 'ottava'));
+    eq(oc.length, 1);
+    eq(has(oc[0], 'ottava-cont'), false);
+    eq(oc[0].children.length, 3, 'glyph + dash + hook');
+    const h = draw({ tracks: [{ measures: bars({ hairpin: 'cresc' }) }] }, 600);
+    const hp = h.nodes.filter((n) => has(n, 'hairpin'));
+    eq(hp.length, 1);
+    eq(has(hp[0], 'hairpin-cont'), false);
+  });
+  test('1.10 ottava: a single-beat run is drawn with a dashed line of at least 1 sp; at the last beat of the score the hook stays inside the SVG', () => {
+    const one = draw({ tracks: [{ measures: [{ beats: [nt(['C6'], { ottava: '8va' }, '16th'), ...Array(15).fill(0).map(() => nt(['C6'], {}, '16th'))] }] }] });
+    const [g1, d1] = one.nodes.find((n) => has(n, 'ottava')).children;
+    eq(+d1.getAttribute('x2') - +d1.getAttribute('x1') >= 1 * S - 0.01, true, 'min line length');
+    eq(g1.textContent, Glyph.ottavaAlta);
+    const last = draw({ tracks: [{ measures: [{ beats: [nt(['C5']), nt(['C5']), nt(['C5']), nt(['C6'], { ottava: '8va' })] }] }] });
+    const m = last.lay.systems[0].tracks[0].measures[0];
+    const br = last.nodes.find((n) => has(n, 'ottava'));
+    const hook = br.children[2];
+    const le = m.elements[3];
+    // the 3.6 sp glyph is wider than the last beat's room, so the 1 sp minimum line pushes the hook past the barline-gap point (by design)
+    const hx = +hook.getAttribute('x1');
+    eq([hx >= Math.max(le.x + 0.89 * S, m.endX - 0.5 * S) - 0.02, hx <= +last.svg.getAttribute('width'), +hook.getAttribute('y2') > +hook.getAttribute('y1')], [true, true, true]);
+  });
+  test('1.10 tempo: several tracks draw one mark above the system\'s top staff; a mark from the second track alone is drawn once at the same height', () => {
+    const ms = (t) => [{ beats: [nt(['C5']), nt(['C5']), nt(['C5'], t), nt(['C5'])] }, { beats: [nt(['C5'], {}, 'whole')] }];
+    const one = draw({ tracks: [{ measures: ms({ tempo: 100 }) }] });
+    const two = draw({ tracks: [{ measures: ms({}) }, { measures: ms({ tempo: 100 }) }] });
+    const mk = (r) => r.nodes.filter((n) => has(n, 'tempo-change'));
+    eq(mk(two).length, 1);
+    const yOf = (r) => +mk(r)[0].children.find((c) => has(c, 'tempo-change-bpm')).getAttribute('y');
+    eq(yOf(two), yOf(one), 'same baseline as with a single track');
+    const both = draw({ tracks: [{ measures: ms({ tempo: 100 }) }, { measures: ms({ tempo: 70 }) }] });
+    eq(mk(both).length, 1);
+    eq(mk(both)[0].children.find((c) => has(c, 'tempo-change-bpm')).textContent, '= 100');
+  });
+  test('1.10 tempoText is unchanged by a mid-score tempo mark (x and text); without any tempo mark nothing is added', () => {
+    const ms = (t) => [{ beats: [nt(['C5']), nt(['C5']), nt(['C5'], t), nt(['C5'])] }];
+    const base = draw({ tempoText: 'Allegro', tracks: [{ measures: ms({}) }] });
+    const mid = draw({ tempoText: 'Allegro', tracks: [{ measures: ms({ tempo: 90 }) }] });
+    const tt = (r) => r.nodes.filter((n) => cls(n) === 'tempo');
+    eq(tt(mid).length, 1);
+    eq([tt(mid)[0].textContent, tt(mid)[0].getAttribute('x')], [tt(base)[0].textContent, tt(base)[0].getAttribute('x')]);
+    eq(count(base.nodes), [0, 0, 0, 0, 0]);
   });
 }
 

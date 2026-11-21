@@ -6,14 +6,14 @@
  * collectBeats) and `info.directionTopY` (pass 5).
  */
 import {
-  renderFermata, fermataGlyph, curveBow, renderChordSymbol, renderDynamic, chordSymbolFontSize, dynamicFontSizePx,
+  renderFermata, fermataGlyph, curveBow, renderChordSymbol, chordSymbolFontSize,
 } from '../notation.js';
 import { inkBounds, TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../../layout/ink.js';
 import { estimateTextWidth } from '../../textMetrics.js';
-import { glyphBox, glyphStringBox } from '../../glyphMetrics.js';
-import { dynamicGlyph } from '../../glyphs.js';
+import { glyphBox } from '../../glyphMetrics.js';
 import { resolveShape } from '../../chordShapes.js';
 import { renderChordDiagram, chordDiagramMetrics, NAME_GAP_SP } from '../chordDiagram.js';
+import { hairpinsByRun, dynamicsLineOf, renderDynamicsLine } from '../dynamicsLine.js';
 import { breakEndX, breakStartX, tabTopY } from './common.js';
 import { collectBeats, findSlurs, beatClearTop } from './notationBeats.js';
 import { fermataOf } from '../../noteEffects.js';
@@ -27,11 +27,6 @@ const CHORD_CLEARANCE_SP = 0.75;
 // bottom (fingers included) at least DIAGRAM_MIN_CLEAR_SP above the top line
 // and CHORD_CLEARANCE_SP above the highest ink of the staff's music.
 const DIAGRAM_MIN_CLEAR_SP = 1.5;
-// Dynamics: one baseline per system staff, at least DYNAMIC_MIN_BASELINE_SP
-// below the bottom line and with the glyphs' top DYNAMIC_CLEARANCE_SP below
-// the lowest ink of the staff's music.
-const DYNAMIC_MIN_BASELINE_SP = 2;
-const DYNAMIC_CLEARANCE_SP = 0.75;
 // Fermata order above a beat: notes / articulations / tuplet / slur, then the
 // chord-symbol line, then the fermata, its bottom this far above any chord
 // symbol it overlaps horizontally.
@@ -58,9 +53,13 @@ const FERMATA_DIRECTION_GAP_SP = 0.5; // fermata bottom -> top of a beat's pick 
  * gets its diagrams (and their names) above the TAB staff, clear of the
  * TAB ink drawn so far (pick strokes, technique labels, bends); it draws
  * no plain chord symbols and no dynamics.
+ *
+ * The dynamics line (voice-1 and voice-2 dynamics, hairpins) is laid out
+ * and drawn by ../dynamicsLine.js.
  */
 export function renderChordSymbolsAndDynamics(score, trackRuns, theme, systems) {
   const s = theme.staffLineSpacing;
+  const pins = hairpinsByRun(score, trackRuns, systems, theme);
   trackRuns.forEach((run) => {
     run.chordBoxes = [];
     const staffG = run.notationG || run.tabG;
@@ -69,7 +68,8 @@ export function renderChordSymbolsAndDynamics(score, trackRuns, theme, systems) 
     const shapes = chordShapesOf(run, score);
     const items = run.measures.flatMap((m) => m.elements)
       .filter((le) => shapes.has(le) || (!onTab && (le.el.chord || le.el.dynamic)));
-    if (!items.length) return;
+    const dyn = onTab ? null : dynamicsLineOf(run, pins);
+    if (!items.length && !dyn) return;
     const sys = systems[run.sysIdx];
     const ink = inkBounds(staffG, theme, { xMin: sys.contentStartX });
     const lineBottom = run.notationBaselineY;
@@ -99,14 +99,7 @@ export function renderChordSymbolsAndDynamics(score, trackRuns, theme, systems) 
       });
     }
 
-    const dynamics = items.filter((le) => le.el.dynamic);
-    if (dynamics.length) {
-      const scale = dynamicFontSizePx(theme) / 4; // px per glyph unit (1 sp = font-size / 4)
-      const glyphTop = Math.max(...dynamics.map((le) => glyphStringBox(dynamicGlyph(le.el.dynamic)).top)) * scale;
-      const bottom = Number.isFinite(ink.bottom) ? ink.bottom : lineBottom;
-      const y = Math.max(lineBottom + DYNAMIC_MIN_BASELINE_SP * s, bottom + DYNAMIC_CLEARANCE_SP * s + glyphTop);
-      dynamics.forEach((le) => renderDynamic(run.notationG, le.x, y, le.el.dynamic, theme));
-    }
+    if (dyn) renderDynamicsLine(run.notationG, dyn, ink, lineBottom, theme);
   });
 }
 
@@ -187,8 +180,9 @@ function slurAboveLimits(beats, systems, theme) {
  * that can sit above the note: the staff itself, the note's stem/
  * noteheads/articulations, a vibrato or whole-note tremolo, a tuplet
  * bracket, any slur drawn above the beat, the beat's pick stroke / tap "T"
- * (`info.directionTopY`, FERMATA_DIRECTION_GAP_SP) and any chord symbol it
- * overlaps (the chord-symbol line sits below fermatas). Runs after every
+ * (`info.directionTopY`, FERMATA_DIRECTION_GAP_SP) and any chord symbol,
+ * fade / wah mark or ottava bracket (`item.aboveBoxes`) it overlaps (the
+ * chord-symbol line sits below fermatas). Runs after every
  * system is drawn (a slur can start in an earlier measure) and after
  * renderPlayingDirections and renderChordSymbolsAndDynamics.
  */
@@ -208,7 +202,7 @@ export function renderFermatas(score, trackRuns, theme, systems) {
       const bottomY = Math.min(
         beatClearTop(item, sp),
         info.directionTopY != null ? info.directionTopY - FERMATA_DIRECTION_GAP_SP * sp : Infinity,
-        ...item.chordBoxes
+        ...[...item.chordBoxes, ...item.aboveBoxes]
           .filter((b) => b.x1 < item.x + halfFermata && b.x2 > item.x - halfFermata)
           .map((b) => b.top - FERMATA_CHORD_GAP_SP * sp),
       );
