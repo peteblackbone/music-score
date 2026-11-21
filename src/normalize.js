@@ -69,6 +69,12 @@
  * normalized like voice 1 and kept as `voice2Beats` only when it has a
  * beat that is not a hidden rest (`{ type: 'rest', hidden: true }`); such a
  * measure is a two-voice measure for layout and drawing.
+ *
+ * Expression (see expression.js): `beat.hairpin`, `fade`, `wah`, `ottava`
+ * and `tempo` pass through untouched (canonicalized when drawing). A track
+ * with a valid `beat.ottava` gets `ottavaShift` on the notes inside its
+ * ottava runs (withOttavaShifts: their displayed staff position); other
+ * tracks are returned as they are.
  */
 import { pitchFromFret, transposeOctaves } from './pitch.js';
 import { harmonicKind } from './harmonics.js';
@@ -77,6 +83,7 @@ import { withHandBeat, withHandNote } from './hands.js';
 import { mergeNavigation } from './navigation.js';
 import { isTwoVoiceBeats } from './twoVoice.js';
 import { tiedFretsMode } from './textMetrics.js';
+import { withOttavaShifts } from './expression.js';
 
 const sameTime = (a, b) => a.beats === b.beats && a.beatType === b.beatType;
 
@@ -183,7 +190,7 @@ export function normalizeScore(score) {
     out.tabRhythm = resolveTabRhythm(track.tabRhythm, out);
     out.showChordDiagrams = track.showChordDiagrams === undefined ? out.showTablature : !!track.showChordDiagrams;
     if (track.tiedFrets !== undefined) out.tiedFrets = tiedFretsMode(track.tiedFrets);
-    return out;
+    return withOttavaShifts(out);
   });
   return { ...score, measureCount, tracks, navigation: mergeNavigation(rawTracks, measureCount) };
 }

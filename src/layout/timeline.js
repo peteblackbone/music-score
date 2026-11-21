@@ -31,7 +31,7 @@
  */
 import { R, ZERO, add, sub, cmp, key, toNumber, max as rmax } from '../rational.js';
 import { durationR, isHiddenRest } from '../duration.js';
-import { staffPosition } from '../pitch.js';
+import { notePosition } from '../pitch.js';
 import { noteheadForDuration, restForDuration, flagForDuration } from '../glyphs.js';
 import { glyphBox } from '../glyphMetrics.js';
 import { groupBeams } from './beams.js';
@@ -155,7 +155,7 @@ function trackEvents(track, mi, theme) {
  */
 function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, arpeggio, fingers, merged = null }) {
   const beams = groupBeams(beats, measure.timeSignature);
-  const positionsOf = (el) => (el.notes || []).map((n) => (n.pitch == null ? 4 : staffPosition(n.pitch, track.clef)));
+  const positionsOf = (el) => (el.notes || []).map((n) => (n.pitch == null ? 4 : notePosition(n, track.clef)));
   // Final stem direction per beat: a beam group's shared direction (its overall range), else the beat's own.
   const groupStem = new Map();
   beams.forEach((grp) => {

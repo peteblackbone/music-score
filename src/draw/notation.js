@@ -7,7 +7,7 @@ import {
   Glyph, restForDuration, flagForDuration, accidentalGlyph, dynamicGlyph, pickStrokeGlyph,
 } from '../glyphs.js';
 import { layoutHeadGlyph } from '../harmonics.js';
-import { staffPosition, staffPositionToY } from '../pitch.js';
+import { notePosition, staffPositionToY } from '../pitch.js';
 import { smuflFontSizePx } from '../theme.js';
 import { beamCount } from '../duration.js';
 import {
@@ -92,7 +92,7 @@ export function renderNotationElement(g, layoutEl, measure, track, theme, opts =
   if (el.type === 'grace') return renderGraceNote(g, layoutEl, track, theme);
 
   const notes = el.notes || [];
-  const positions = notes.map((n) => staffPosition(n.pitch, clef));
+  const positions = notes.map((n) => notePosition(n, clef));
   const minPos = Math.min(...positions);
   const maxPos = Math.max(...positions);
   const chord = layoutEl.chord;
@@ -225,7 +225,7 @@ function renderGraceNote(g, layoutEl, track, theme) {
   const clef = track.clef;
 
   const notes = el.notes || [];
-  const positions = notes.map((n) => staffPosition(n.pitch, clef));
+  const positions = notes.map((n) => notePosition(n, clef));
   const minPos = Math.min(...positions);
   const maxPos = Math.max(...positions);
   // Two-voice measures: voice 1's graces stem up, voice 2's down.

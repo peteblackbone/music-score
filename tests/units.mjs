@@ -5354,6 +5354,121 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.10.0: ottava display shift (expression.js ottavaKinds / withOttavaShifts, pitch.js, layout) ----------
+{
+  const X = await imp('src/expression.js');
+  const { notePosition, displayPitch, staffPosition } = await imp('src/pitch.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { drawSystem } = await imp('src/draw/system.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
+  const { cases } = await import('./cases.mjs');
+  const th = resolveTheme();
+  const nt = (ps, x = {}, duration = 'quarter') => ({ type: 'note', duration, notes: ps.map((p) => (typeof p === 'string' ? { pitch: p } : p)), ...x });
+  const gr = (p, x = {}) => ({ type: 'grace', duration: '16th', notes: [{ pitch: p }], ...x });
+  const rs = (x = {}, duration = 'quarter') => ({ type: 'rest', duration, ...x });
+  const tie = (p, x = {}) => ({ pitch: p, ...x });
+  const kindsOf = (measures) => X.ottavaKinds(normalizeScore({ tracks: [{ measures }] }).tracks[0]);
+
+  test('1.10 ottavaKinds: own kinds per voice-1 beat; rests (hidden too) count; invalid kinds are no run', () => {
+    const k = kindsOf([{ beats: [nt(['C6'], { ottava: '8va' }), rs({ ottava: '8va' }), rs({ ottava: ' 8VA ', hidden: true }), nt(['C6'], { ottava: '22ma' })] }]);
+    eq(k, [{ v1: ['8va', '8va', '8va', null], v2: [] }]);
+  });
+  test('1.10 ottavaKinds: graces take the kind of the main beat they lead into; trailing graces the last main beat\'s', () => {
+    const k = kindsOf([{ beats: [gr('D6', { ottava: '15ma' }), nt(['C6']), gr('D6'), nt(['C6'], { ottava: '8vb' }), nt(['C6'], { ottava: '8va' }), gr('B5')] }]);
+    eq(k[0].v1, [null, null, '8vb', '8vb', '8va', '8va']);
+  });
+  test('1.10 ottavaKinds: an all-tied beat inherits (chains across barlines); a partially tied chord or a rest does not', () => {
+    const k = kindsOf([
+      { beats: [nt(['C6'], {}, 'half'), nt([tie('C6', { tieStart: true })], { ottava: '8va' }, 'half')] },
+      { beats: [nt([tie('C6', { tieEnd: true, tieStart: true })], {}, 'half'), nt([tie('C6', { tieEnd: true })], {}, 'half')] },
+      { beats: [nt([tie('C6', { tieStart: true }), tie('E6', { tieStart: true })], { ottava: '15mb' }, 'half'),
+        nt([tie('C6', { tieEnd: true }), 'E6'], {}, 'half')] },
+      { beats: [nt(['C6'], { ottava: '8va' }), rs(), nt([tie('C6', { tieEnd: true })]), rs()] },
+    ]);
+    eq(k.map((m) => m.v1), [[null, '8va'], ['8va', '8va'], ['15mb', null], ['8va', null, null, null]]);
+  });
+  test('1.10 ottavaKinds: an empty measure ends a run (no inheritance across it)', () => {
+    const k = kindsOf([
+      { beats: [nt([tie('C6', { tieStart: true })], { ottava: '8va' }, 'whole')] },
+      { beats: [] },
+      { beats: [nt([tie('C6', { tieEnd: true })], {}, 'whole')] },
+    ]);
+    eq(k.map((m) => m.v1), [['8va'], [], [null]]);
+  });
+  test('1.10 ottavaKinds: voice 2 takes the kind of the voice-1 beat covering its onset, else inherits through its own ties', () => {
+    const k = kindsOf([
+      { voices: [{ beats: [nt(['C6'], { ottava: '8va' }, 'half'), nt(['C6'], {}, 'half')] },
+        { beats: [nt(['E4']), gr('F4'), nt(['E4']), nt([tie('E4', { tieStart: true })]), nt([tie('E4', { tieEnd: true })])] }] },
+      { voices: [{ beats: [nt(['C6'], { ottava: '8vb' }), nt(['C6'], {}, 'half', ), nt(['C6'])] },
+        { beats: [nt([tie('E4', { tieStart: true })], {}, 'half'), nt([tie('E4', { tieEnd: true })], {}, 'half')] }] },
+    ]);
+    eq(k[0], { v1: ['8va', null], v2: ['8va', '8va', '8va', null, null] });
+    eq(k[1], { v1: ['8vb', null, null], v2: ['8vb', '8vb'] });
+  });
+  test('1.10 withOttavaShifts: identity without a valid voice-1 ottava; shifts pitched notes only, model pitch untouched', () => {
+    const plain = normalizeScore({ tracks: [{ measures: [{ beats: [nt(['C6'], { ottava: '22ma' }), gr('C6', { ottava: '8va' })] }] }] }).tracks[0];
+    eq(X.withOttavaShifts(plain) === plain, true);
+    const raw = { tracks: [{ showTablature: true, measures: [{ voices: [
+      { beats: [nt(['C6', 'E6'], { ottava: '8va' }), nt(['C6'], { ottava: '15mb' }), nt([{ string: 1, fret: 5 }], { ottava: '15ma' }), nt(['C6'])] },
+      { beats: [nt(['E4'], {}, 'half'), nt(['E4'], {}, 'half')] }] }] }] };
+    const t = normalizeScore(raw).tracks[0];
+    const m = t.measures[0];
+    eq(m.beats.map((b) => b.notes.map((n) => n.ottavaShift ?? 0)), [[-7, -7], [14], [-14], [0]]);
+    eq(m.voice2Beats.map((b) => b.notes.map((n) => n.ottavaShift ?? 0)), [[-7], [-14]]);
+    eq(m.beats.map((b) => b.notes.map((n) => n.pitch)), [['C6', 'E6'], ['C6'], ['A5'], ['C6']]);
+    eq([m.beats[2].notes[0].fret, m.beats[2].notes[0].soundingPitch, m.beats[0].ottava], [5, 'A4', '8va']);
+    eq(raw.tracks[0].measures[0].voices[0].beats[0].notes[0].ottavaShift, undefined, 'source untouched');
+  });
+  test('1.10 notePosition / displayPitch: written position plus the shift; parsed pitch unchanged without one', () => {
+    eq([notePosition({ pitch: 'C6' }), notePosition({ pitch: 'C6', ottavaShift: -7 }), notePosition({ pitch: 'C6', ottavaShift: -14 }),
+      notePosition({ pitch: 'E2', ottavaShift: 7 }, 'bass'), notePosition({ pitch: 'E2', ottavaShift: 14 }, 'bass')], [12, 5, -2, 5, 12]);
+    eq([displayPitch({ pitch: 'F#6' }), displayPitch({ pitch: 'F#6', ottavaShift: -7 }), displayPitch({ pitch: 'Bb1', ottavaShift: 14 })],
+      [{ step: 'F', alter: 1, octave: 6 }, { step: 'F', alter: 1, octave: 5 }, { step: 'B', alter: -1, octave: 3 }]);
+  });
+  test('1.10 accidentals: carry is keyed by the displayed octave (F#6 under 8va then a plain F#5 needs none)', () => {
+    const acc = (beats) => resolveMeasureAccidentals(normalizeScore({ tracks: [{ measures: [{ beats }] }] }).tracks[0], 0).map((r) => r.names[0]);
+    eq(acc([nt(['F#6'], { ottava: '8va' }), nt(['F#5']), nt(['F6'], { ottava: '8va' }), nt(['F5'])]), ['sharp', null, 'natural', null]);
+    eq(acc([nt(['F#6']), nt(['F#5']), nt(['F6']), nt(['F5'])]), ['sharp', 'sharp', 'natural', 'natural']);
+  });
+  test('1.10 the 70 snapshot cases: no note gets ottavaShift; notePosition === staffPosition everywhere', () => {
+    let count = 0;
+    for (const c of cases.filter((x) => !x.id.startsWith('char-expression'))) {
+      for (const t of normalizeScore(c.score).tracks) for (const m of t.measures) for (const b of [...m.beats, ...(m.voice2Beats || [])]) {
+        for (const n of b.notes || []) {
+          if ('ottavaShift' in n) throw new Error(`${c.id}: ottavaShift`);
+          if (n.pitch != null && notePosition(n, t.clef) !== staffPosition(n.pitch, t.clef)) throw new Error(`${c.id}: position`);
+          count++;
+        }
+      }
+    }
+    if (count < 1000) throw new Error(`only ${count} notes`);
+  });
+  test('1.10 drawing: heads inside an 8va run sit 3.5 sp lower (15mb 7 sp higher), with fewer ledger lines; outside unchanged', () => {
+    const local = (measures) => {
+      const sc = normalizeScore({ tracks: [{ measures }] });
+      const sys = computeLayout(sc, th, 900).systems[0];
+      drawSystem(makeContainer(), sys, 0, sc, th);
+      const els = sys.tracks[0].measures.flatMap((mm) => mm.elements);
+      return els.map((le) => le.rendered.noteheads.map((h) => h.y));
+    };
+    const base = [nt(['C7']), nt(['A6']), nt(['C2']), nt(['C5'])];
+    const marked = [nt(['C7'], { ottava: '8va' }), nt(['A6'], { ottava: '8va' }), nt(['C2'], { ottava: '15mb' }), nt(['C5'])];
+    const a = local([{ beats: base }]); const b = local([{ beats: marked }]);
+    const S = th.staffLineSpacing;
+    eq(b.map((ys, i) => ys.map((y, j) => +(y - a[i][j]).toFixed(2))), [[3.5 * S], [3.5 * S], [-7 * S], [0]]);
+    const ledgers = (measures) => {
+      const sc = normalizeScore({ tracks: [{ measures }] });
+      const d = drawSystem(makeContainer(), computeLayout(sc, th, 900).systems[0], 0, sc, th);
+      const out = []; const visit = (nd) => { out.push(nd); (nd.children || []).forEach(visit); };
+      visit(d.staves[0].g);
+      return out.filter((nd) => nd.tag === 'line' && nd.getAttribute('y1') === nd.getAttribute('y2')
+        && (+nd.getAttribute('y1') < -0.1 || +nd.getAttribute('y1') > 4 * S + 0.1)).length;
+    };
+    if (!(ledgers([{ beats: marked }]) < ledgers([{ beats: base }]))) throw new Error('ledger lines not reduced');
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
