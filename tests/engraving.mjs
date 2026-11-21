@@ -2961,7 +2961,8 @@ test('tab-rhythm', 'AC7: number vs bracket (all SCORES x 600/900): number iff on
       const { beats, top, sp } = beatsOf(stv, m.theme);
       const tag = `${name}@${width} sys${stv.si}`;
       const want = [];
-      stv.measures.forEach((mm, mi) => mm.tupletGroups.forEach(({ indices, count }) => {
+      stv.measures.forEach((mm, mi) => mm.tupletGroups.forEach(({ indices, count, depth }) => {
+        if (depth === 0) return; // 1.12 nested outer brackets (class tab-tuplet tab-tuplet-outer) are checked by the 1.12 tests
         const bs = indices.map((i) => beats.find((b) => b.mi === mi && b.le.index === i)).filter(Boolean);
         if (!bs.length) return;
         const exact = mm.beamGroups.some((grp) => grp.length >= 2 && grp.length === indices.length && grp.every((i, k) => i === indices[k]));
@@ -5706,8 +5707,8 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
   });
 
   test('scoreText', 'G4: every pre-1.6 case with all new fields set to garbage renders byte-identical to its snapshot', () => {
-    const pre = cases.filter((c) => !/^char-(score-text|clefs|multirest|slashes|tab-articulations)-/.test(c.id));
-    const snaps = fs.readdirSync(path.join(root0, 'tests/snapshots')).filter((f) => f.endsWith('.svg') && !/^char-(score-text|clefs|multirest|slashes|tab-articulations)-/.test(f));
+    const pre = cases.filter((c) => !/^char-(score-text|clefs|multirest|slashes|tab-articulations|tuplets-nested|graces-onbeat|lyrics)-/.test(c.id));
+    const snaps = fs.readdirSync(path.join(root0, 'tests/snapshots')).filter((f) => f.endsWith('.svg') && !/^char-(score-text|clefs|multirest|slashes|tab-articulations|tuplets-nested|graces-onbeat|lyrics)-/.test(f));
     ok(pre.length > 0 && pre.length === snaps.length, `${pre.length} pre-1.6 cases vs ${snaps.length} pre-1.6 snapshots`);
     const GARB = [null, '', '  ', {}, 0, { below: true }, { letter: 'ABCD' }];
     for (const c of pre) {
@@ -5856,8 +5857,8 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
 
   test('hands17', 'G2: every pre-1.7 case with every new field set to garbage renders byte-identical to its snapshot', () => {
     // 1.8: the voices-marks / voices-tab-rhythm(-break) / voices-tied-frets fixtures are not pre-1.7 either; 1.9: nor bends-slides-*; 1.10: nor expression-*
-    const pre = cases.filter((c) => !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression|clefs|multirest|slashes|tab-articulations)-/.test(c.id));
-    const snaps = fs.readdirSync(path.join(root0, 'tests/snapshots')).filter((f) => f.endsWith('.svg') && !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression|clefs|multirest|slashes|tab-articulations)-/.test(f));
+    const pre = cases.filter((c) => !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression|clefs|multirest|slashes|tab-articulations|tuplets-nested|graces-onbeat|lyrics)-/.test(c.id));
+    const snaps = fs.readdirSync(path.join(root0, 'tests/snapshots')).filter((f) => f.endsWith('.svg') && !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression|clefs|multirest|slashes|tab-articulations|tuplets-nested|graces-onbeat|lyrics)-/.test(f));
     ok(pre.length === 60 && snaps.length === 60, `${pre.length} pre-1.7 cases vs ${snaps.length} pre-1.7 snapshots`);
     const NOTE = [{ ornament: 'trill', finger: 9, rightFinger: 'q', leftHandTap: false }, { ornament: 5, finger: 'x', rightFinger: 1, leftHandTap: 0 },
       { ornament: {}, finger: -1, rightFinger: 'pi', leftHandTap: '' }, { ornament: '', finger: 1.5, rightFinger: null, leftHandTap: null }];
@@ -6669,6 +6670,104 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
       ok(out === serialize(renderTree(f.score, width)), `${f.name}@${width}: two renders differ`);
       ok(JSON.stringify(f.score) === before, `${f.name}: input mutated`);
     }
+  });
+}
+
+// ======================= nested tuplets, on-beat graces, lyrics (1.12.0) =======================
+// Fixtures tuplets-nested, graces-onbeat, lyrics, lyrics-break, lyrics-tab-only (characterization.js describes each measure).
+{
+  const fx = (name) => characterizationCases.find((c) => c.name === name);
+  const S12 = DEF.staffLineSpacing;
+  const has = (n, k) => cls(n).split(/\s+/).includes(k);
+  const withParent = (root) => all(root).map(({ n, parents }) => ({ n, parent: parents[parents.length - 1] }));
+  const lineY = (g) => nums(g.children.find((c) => c.tag === 'path').getAttribute('d'))[3];
+  const xSpan = (g) => { const ps = g.children.filter((c) => c.tag === 'path').map((p) => nums(p.getAttribute('d'))); return [ps[0][0], ps[1][4]]; };
+  const tickDir = (g) => Math.sign(nums(g.children.find((c) => c.tag === 'path').getAttribute('d'))[1] - lineY(g));
+  const nodeInk = (n) => inkBounds({ tag: 'g', getAttribute: () => null, children: [n] }, DEF);
+  const without = (g, drop) => {
+    const strip = (n) => ({ tag: n.tag, getAttribute: (a) => n.getAttribute(a), textContent: n._text, children: n.children.filter((k) => !drop(k)).map(strip) });
+    return strip(g);
+  };
+  // every outer bracket with the plain brackets drawn in the same parent inside its x span
+  const outerSets = (tree, outerCls, innerCls) => withParent(tree).filter(({ n }) => cls(n) === outerCls).map(({ n, parent }) => {
+    const [a, b] = xSpan(n);
+    const inner = parent.children.filter((k) => cls(k) === innerCls && k.children.some((c) => c.tag === 'path')
+      && xSpan(k)[0] >= a - EPS && xSpan(k)[1] <= b + EPS);
+    return { g: n, parent, inner };
+  });
+
+  const TN = fx('tuplets-nested');
+  test('struct112', 'nested tuplets (notation): outer 1.2 sp beyond its inner bracket (above, ticks down; voice 2 below, ticks up), class tuplet tuplet-outer, count only', () => {
+    for (const width of [600, 900]) {
+      const tree = renderTree(TN.score, width);
+      const sets = outerSets(tree, 'tuplet tuplet-outer', 'tuplet');
+      ok(sets.length === 4, `${width}: ${sets.length} outer brackets`);
+      let v2 = 0;
+      sets.forEach(({ g, parent, inner }) => {
+        ok(inner.length >= 1, `${width}: outer without inner`);
+        const below = has(parent, 'voice-2');
+        if (below) v2++;
+        const ys = inner.map(lineY);
+        const want = below ? Math.max(...ys) + 1.2 * S12 : Math.min(...ys) - 1.2 * S12;
+        near(lineY(g), want, EPS, `${width}: outer line ${below ? 'below' : 'above'} the inner`);
+        ok(tickDir(g) === (below ? -1 : 1), `${width}: outer ticks ${below ? 'up' : 'down'}`);
+        inner.forEach((k) => ok(tickDir(k) === (below ? -1 : 1), `${width}: inner ticks`));
+        const label = g.children.find((c) => c.tag === 'text');
+        ok(/^\d+$/.test(label._text) && g.children.length === 3, `${width}: count only (${label._text})`);
+      });
+      ok(v2 === 1, `${width}: one voice-2 outer bracket`);
+    }
+  });
+  test('struct112', 'nested tuplets (notation): labels are the outer and inner counts (m1 3/3, m2 5/3, m3 voice 2 3/3, m6 3/3); m4 override shows 3, m5 fallback shows 3', () => {
+    const tree = renderTree(TN.score, 900);
+    const sets = outerSets(tree, 'tuplet tuplet-outer', 'tuplet');
+    const labels = sets.map(({ g, inner }) => [g, ...inner].map((k) => k.children.find((c) => c.tag === 'text')._text).join('/'));
+    ok(JSON.stringify(labels) === JSON.stringify(['3/3', '5/3', '3/3', '3/3']), `labels ${JSON.stringify(labels)}`);
+    const plain = byClass(tree, 'tuplet').map(({ n }) => n.children.find((c) => c.tag === 'text')._text);
+    ok(plain.length === 7 && plain.every((t) => t === '3'), `plain labels ${plain}`);
+  });
+  test('struct112', 'nested tuplets (notation): fermatas and the H/P slur over a nested group clear the outer bracket', () => {
+    for (const width of [600, 900]) {
+      const tree = renderTree(TN.score, width);
+      const last = outerSets(tree, 'tuplet tuplet-outer', 'tuplet').filter(({ parent }) => !has(parent, 'voice-2')).pop();
+      const y = lineY(last.g); const [a, b] = xSpan(last.g);
+      const labelTop = nodeInk(last.g).top;
+      const fer = byClass(last.parent, 'fermata').map(({ n }) => n);
+      ok(fer.length === 2, `${width}: two fermatas`);
+      fer.forEach((f) => ok(nodeInk(f).bottom <= labelTop + EPS, `${width}: fermata bottom ${nodeInk(f).bottom} above the outer bracket ${labelTop}`));
+      const slur = byClass(last.parent, 'slur').map(({ n }) => n);
+      ok(slur.length === 1, `${width}: one notation slur`);
+      const ink = nodeInk(slur[0]);
+      ok(ink.bottom < y, `${width}: slur ${ink.bottom} above the outer line ${y}`);
+      ok(a < b, 'span');
+    }
+  });
+  test('struct112', 'nested tuplets (TAB band): inner as before; outer always a bracket (tab-tuplet tab-tuplet-outer, ticks up) 0.6 sp below the band ink under its span', () => {
+    for (const width of [600, 900]) {
+      const tree = renderTree(TN.score, width);
+      const sets = outerSets(tree, 'tab-tuplet tab-tuplet-outer', 'tab-tuplet');
+      ok(sets.length === 4, `${width}: ${sets.length} TAB outer brackets`);
+      sets.forEach(({ g, parent }) => {
+        ok(has(parent, 'tab-rhythm'), 'inside the band');
+        ok(g.children.filter((c) => c.tag === 'path').length === 2 && tickDir(g) === -1, `${width}: bracket with up-ticks`);
+        const [a, b] = xSpan(g);
+        const ink = inkBounds(without(parent, (k) => k === g), DEF, { xMin: a, xMax: b, overlap: true }).bottom;
+        near(lineY(g), ink + 0.6 * S12, EPS, `${width}: TAB outer 0.6 sp below the ink`);
+        const inner = parent.children.filter((k) => cls(k) === 'tab-tuplet' && nodeInk(k).bottom > 0);
+        ok(inner.every((k) => { const [l, r] = k.children.some((c) => c.tag === 'path') ? xSpan(k) : [num(k.children[0], 'x'), num(k.children[0], 'x')]; return r < a - EPS || l > b + EPS || nodeInk(k).bottom <= lineY(g) - 0.6 * S12 + EPS; }), `${width}: inner ink above the outer`);
+      });
+    }
+  });
+  test('struct112', 'nested tuplets: a score without 2-entry tuplets draws no outer bracket; 1-entry tuplets draws exactly like tuplet', () => {
+    const base = TN.score.tracks[0].measures;
+    const flat = clone(TN.score);
+    flat.tracks[0].measures = base.map((m) => JSON.parse(JSON.stringify(m), (k, v) => (k === 'tuplets' ? undefined : v)));
+    const one = clone(flat);
+    const swap = (b) => { if (b.tuplet !== undefined && b.tuplets === undefined) { b.tuplets = [b.tuplet]; } return b; };
+    one.tracks[0].measures.forEach((m) => (m.voices ? m.voices.flatMap((v) => v.beats) : m.beats).forEach(swap));
+    const a = serialize(renderTree(flat, 900)); const b = serialize(renderTree(one, 900));
+    ok(!/tuplet-outer/.test(a), 'no outer class');
+    ok(a === b, 'tuplets: [n] renders exactly like tuplet: n');
   });
 }
 

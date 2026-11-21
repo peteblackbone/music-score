@@ -271,14 +271,20 @@ function drawBeams(g, row, groupOf, drawn, theme) {
 /**
  * Tuplets: a number under a beam group that covers exactly the tuplet's
  * beats, else a bracket (up-ticks, number in a gap) below the band's
- * lowest ink, as notation's renderTupletBracket but upside down.
+ * lowest ink, as notation's renderTupletBracket but upside down. Nested
+ * tuplets: inner and plain groups first, as above; then each outer group
+ * (`depth: 0`) always as a bracket (`tab-tuplet tab-tuplet-outer`),
+ * TUPLET_BRACKET_GAP_SP below the ink under its span, inner tuplets included.
  */
 function drawTuplets(g, row, groupOf, drawn, theme) {
   const s = theme.staffLineSpacing;
   const color = theme.tabFretColor;
   const size = TUPLET_LABEL_SIZE_SP * s;
-  row.tupletGroups.forEach(({ indices, count }) => {
-    const items = indices.filter((i) => drawn.has(i)).map((i) => drawn.get(i));
+  const bracketY = (items) => Math.max(row.stemTop + theme.tabStemLengthSp * s, ...items.map((it) => it.bottom)) + TUPLET_BRACKET_GAP_SP * s;
+  const itemsOf = (indices) => indices.filter((i) => drawn.has(i)).map((i) => drawn.get(i));
+  row.tupletGroups.forEach(({ indices, count, depth }) => {
+    if (depth === 0) return;
+    const items = itemsOf(indices);
     if (!items.length) return;
     const beam = groupOf.get(indices[0]);
     if (beam && beam.grp.length === indices.length && beam.grp.every((i, k) => i === indices[k])) {
@@ -287,8 +293,16 @@ function drawTuplets(g, row, groupOf, drawn, theme) {
       gEl.appendChild(tupletLabel(midX, items[0].stemEnd + TUPLET_NUMBER_GAP_SP * s + TEXT_ASCENT_EM * size, count, color, theme));
       g.appendChild(gEl);
     } else {
-      const y = Math.max(row.stemTop + theme.tabStemLengthSp * s, ...items.map((it) => it.bottom)) + TUPLET_BRACKET_GAP_SP * s;
-      tupletBracket(g, items[0].left, items[items.length - 1].right, y, count, { tickDir: -1, color, className: 'tab-tuplet' }, theme);
+      tupletBracket(g, items[0].left, items[items.length - 1].right, bracketY(items), count, { tickDir: -1, color, className: 'tab-tuplet' }, theme);
     }
+  });
+  row.tupletGroups.forEach(({ indices, count, depth }) => {
+    if (depth !== 0) return;
+    const items = itemsOf(indices);
+    if (!items.length) return;
+    const left = items[0].left; const right = items[items.length - 1].right;
+    const ink = inkBounds(g, theme, { xMin: left, xMax: right, overlap: true }).bottom;
+    const y = Math.max(bracketY(items), Number.isFinite(ink) ? ink + TUPLET_BRACKET_GAP_SP * s : -Infinity);
+    tupletBracket(g, left, right, y, count, { tickDir: -1, color, className: 'tab-tuplet tab-tuplet-outer' }, theme);
   });
 }

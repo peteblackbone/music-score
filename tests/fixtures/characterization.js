@@ -1835,3 +1835,34 @@ const rhythmOffCase = (name) => {
   characterizationCases.push({ name: 'release-adjacent', width: 600, score: ra.score });
 }
 characterizationCases.push(...['tab-only', 'harmonics', 'tab-marks', 'directions'].map(rhythmOffCase));
+
+// ---------- 1.12.0 fixtures (appended so the earlier cases keep their order) ----------
+{
+  // 1.12.0 nested tuplets (beat.tuplets, outer first) on notation + TAB with TAB rhythm: m1 a quarter triplet
+  // holding an 8th triplet; m2 5:4 eighths holding a triplet; m3 two voices, voice 2 nested (mirrored below);
+  // m4 tuplets: [3] overrides tuplet: 5; m5 invalid tuplets ([3,3,3], [{count:1}], ['3']) fall back to tuplet;
+  // m6 a fermata and an H/P slur over a nested group.
+  const t = (d, string, fret, extra = {}, note = {}) => ({ type: 'note', duration: d, notes: [{ string, fret, ...note }], ...extra });
+  const N = { tuplets: [3, 3] }; const T3 = { tuplet: 3 }; const O54 = { count: 5, of: 4 };
+  characterizationCases.push({
+    name: 'tuplets-nested', width: 900,
+    score: {
+      tracks: [{
+        name: 'Gtr', showStandardNotation: true, showTablature: true, tabRhythm: true,
+        measures: [
+          { beats: [t('quarter', 2, 0, T3), t('8th', 2, 1, N), t('8th', 2, 3, N), t('8th', 1, 0, N), t('quarter', 1, 2, T3), t('half', 3, 2)] },
+          { beats: [t('8th', 3, 0, { tuplets: [O54] }), t('8th', 3, 2, { tuplets: [O54] }), t('8th', 2, 0, { tuplets: [O54, 3] }),
+            t('8th', 2, 1, { tuplets: [O54, 3] }), t('8th', 2, 3, { tuplets: [O54, 3] }), t('8th', 1, 0, { tuplets: [O54] }), t('half', 3, 2)] },
+          vm([t('quarter', 1, 0, T3), t('quarter', 1, 1, T3), t('quarter', 1, 3, T3), t('half', 2, 3)],
+            [t('quarter', 5, 3, T3), t('8th', 4, 0, N), t('8th', 4, 2, N), t('8th', 4, 3, N), t('quarter', 5, 2, T3), t('half', 5, 0)]),
+          { beats: [t('8th', 3, 0, { tuplets: [3], tuplet: 5 }), t('8th', 3, 2, { tuplets: [3], tuplet: 5 }), t('8th', 3, 4, { tuplets: [3], tuplet: 5 }),
+            t('quarter', 2, 0), t('half', 2, 1)] },
+          { beats: [t('8th', 3, 0, { tuplets: [3, 3, 3], tuplet: 3 }), t('8th', 3, 2, { tuplets: [{ count: 1 }], tuplet: 3 }), t('8th', 3, 4, { tuplets: ['3'], tuplet: 3 }),
+            t('quarter', 2, 0), t('half', 2, 1)] },
+          { beats: [t('quarter', 1, 3, T3), t('8th', 1, 5, { ...N, fermata: true }, { hammerPull: true }), t('8th', 1, 7, N, { hammerPull: true }), t('8th', 1, 8, N),
+            t('quarter', 1, 7, { ...T3, fermata: true }), t('half', 2, 5)] },
+        ],
+      }],
+    },
+  });
+}

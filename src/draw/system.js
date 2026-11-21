@@ -38,6 +38,7 @@ import { renderMultiRest } from './multiRest.js';
 // (Voice-2 brackets below the staff mirror this from the bottom line.)
 const TUPLET_STAFF_CLEAR_SP = 1;
 const TUPLET_CLEARANCE_SP = 1.6;
+const OUTER_TUPLET_STEP_SP = 1.2; // inner tuplet bracket line -> outer bracket line (nested tuplets)
 
 /** Local y of a staff's bottom line (its top line is y = 0). */
 export function staffLineBottom(track, kind, theme) {
@@ -257,21 +258,26 @@ function drawVoice(g, measure, elements, beamGroups, tupletGroups, track, notati
  * edge. Records the bracket height as `info.tupletY` for the fermata pass.
  * `below` (voice 2): mirrored below the group's lowest point, ticks up,
  * recorded as `info.tupletBottomY` for the marks below (draw/voice2Marks.js).
+ * Nested tuplets (layout/tuplets.js): inner and plain groups first, as
+ * above; then each outer group (`depth: 0`) OUTER_TUPLET_STEP_SP further
+ * from the staff than its inner brackets (and at least at its own rule
+ * height), class `tuplet tuplet-outer`, its height recorded on every member.
  */
 function drawTupletBrackets(g, tupletGroups, elements, notationBaselineY, theme, below) {
   const s = theme.staffLineSpacing;
   const halfHead = (le) => (glyphBox(noteheadForDuration(le.el.duration)).width / 2) * s;
-  tupletGroups.forEach(({ indices, count }) => {
+  const spanOf = (indices) => {
     const grp = indices.map((i) => elements[i]);
-    const infos = grp.map((le) => le.rendered).filter(Boolean);
-    const x1 = grp[0].x - halfHead(grp[0]);
-    const x2 = grp[grp.length - 1].x + halfHead(grp[grp.length - 1]);
+    return {
+      infos: grp.map((le) => le.rendered).filter(Boolean),
+      x1: grp[0].x - halfHead(grp[0]),
+      x2: grp[grp.length - 1].x + halfHead(grp[grp.length - 1]),
+    };
+  };
+  const bracketY = (infos) => {
     if (below) {
       const bottomY = Math.max(-Infinity, ...infos.map(elementBottom));
-      const y = Math.max(bottomY + s * TUPLET_CLEARANCE_SP, notationBaselineY + s * TUPLET_STAFF_CLEAR_SP);
-      tupletBracket(g, x1, x2, y, count, { tickDir: -1, color: theme.noteColor, className: 'tuplet' }, theme);
-      infos.forEach((info) => { info.tupletBottomY = y; });
-      return;
+      return Math.max(bottomY + s * TUPLET_CLEARANCE_SP, notationBaselineY + s * TUPLET_STAFF_CLEAR_SP);
     }
     const clearance = s * TUPLET_CLEARANCE_SP;
     const topY = infos.length
@@ -279,9 +285,31 @@ function drawTupletBrackets(g, tupletGroups, elements, notationBaselineY, theme,
       : notationBaselineY - s * 4;
     // Keep the bracket (line, end ticks and number) outside the staff: never lower than
     // TUPLET_STAFF_CLEAR_SP above the top line, even over low notes with stems down.
-    const y = Math.min(topY - clearance, notationBaselineY - s * 4 - s * TUPLET_STAFF_CLEAR_SP);
+    return Math.min(topY - clearance, notationBaselineY - s * 4 - s * TUPLET_STAFF_CLEAR_SP);
+  };
+  const innerY = new Map();
+  tupletGroups.forEach((tg) => {
+    if (tg.depth === 0) return;
+    const { indices, count } = tg;
+    const { infos, x1, x2 } = spanOf(indices);
+    const y = bracketY(infos);
+    innerY.set(tg, y);
+    if (below) {
+      tupletBracket(g, x1, x2, y, count, { tickDir: -1, color: theme.noteColor, className: 'tuplet' }, theme);
+      infos.forEach((info) => { info.tupletBottomY = y; });
+      return;
+    }
     infos.forEach((info) => { info.tupletY = y; }); // for the fermata pass
     renderTupletBracket(g, x1, x2, y, count, theme);
+  });
+  tupletGroups.forEach((tg) => {
+    if (tg.depth !== 0) return;
+    const { infos, x1, x2 } = spanOf(tg.indices);
+    const inner = tupletGroups.filter((o) => o.depth === 1 && o.indices.every((i) => tg.indices.includes(i))).map((o) => innerY.get(o));
+    const step = OUTER_TUPLET_STEP_SP * s;
+    const y = below ? Math.max(bracketY(infos), ...inner.map((v) => v + step)) : Math.min(bracketY(infos), ...inner.map((v) => v - step));
+    tupletBracket(g, x1, x2, y, tg.count, { tickDir: below ? -1 : 1, color: theme.noteColor, className: 'tuplet tuplet-outer' }, theme);
+    infos.forEach((info) => { if (below) info.tupletBottomY = y; else info.tupletY = y; });
   });
 }
 
