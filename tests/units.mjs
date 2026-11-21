@@ -6612,6 +6612,103 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.11.0: verification audit — extra edge cases (clef sites, multi-rest keys, slash marks) ----------
+{
+  const M = await imp('src/layout/multiRest.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const nt = (ps, duration = 'quarter', x = {}) => ({ type: 'note', duration, notes: ps.map((p) => ({ pitch: p })), ...x });
+  const W = { type: 'rest', duration: 'whole' };
+  const rest = (x = {}) => ({ beats: [W], ...x });
+  const q4 = (p) => [nt([p]), nt([p]), nt([p]), nt([p])];
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const render = (sc, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(sc)), { width }).render();
+    return all(box.children[0]);
+  };
+  const posOf = (n) => Math.round(((4 * S - +n.getAttribute('y')) / (S / 2)) * 1000) / 1000;
+  const wholes = (nodes) => nodes.filter((n) => n.tag === 'text' && n.textContent === Glyph.noteheadWhole).map(posOf);
+
+  test('1.11 audit clef: two voices under alto and tenor take the C-clef positions in both voices', () => {
+    for (const [clef, p1, p2, want] of [['alto', 'C4', 'F3', [4, 0]], ['TENOR ', 'C4', 'D3', [6, 0]]]) {
+      const nodes = render({ tracks: [{ clef, measures: [{ voices: [{ beats: [nt([p1], 'whole')] }, { beats: [nt([p2], 'whole')] }] }] }] });
+      eq(wholes(nodes), want, clef);
+    }
+  });
+  test('1.11 audit clef: an 8va ottava under alto shifts the head by 7 positions and draws the bracket', () => {
+    const plain = render({ tracks: [{ clef: 'alto', measures: [{ beats: [nt(['C4'], 'whole')] }] }] });
+    const ott = render({ tracks: [{ clef: 'alto', measures: [{ beats: [nt(['C4'], 'whole', { ottava: '8va' })] }] }] });
+    eq([wholes(plain), wholes(ott)], [[4], [-3]]);
+    eq(ott.some((n) => /\bottava\b/.test(cls(n))), true);
+  });
+  test('1.11 audit clef: a measure-0 clef replaces the header clef (no clef-change drawn, header glyph is the new clef)', () => {
+    const nodes = render({ tracks: [{ clef: 'treble', measures: [{ clef: 'bass', beats: [nt(['G2'], 'whole')] }, { beats: [nt(['G2'], 'whole')] }] }] });
+    const st = all(nodes.find((n) => /\bstaff-notation\b/.test(cls(n))));
+    eq(st.filter((n) => n.tag === 'text' && n.textContent === Glyph.fClef).length, 1);
+    eq(st.filter((n) => n.tag === 'text' && n.textContent === Glyph.gClef).length, 0);
+    eq(nodes.some((n) => /clef-change|courtesy-clef/.test(cls(n))), false);
+    eq(wholes(st), [0, 0]);
+  });
+  test('1.11 audit clef: a mid-system change draws no courtesy clef; restating it (any case) draws no second change', () => {
+    const sc = { tracks: [{ measures: [{ beats: q4('C4') }, { clef: 'alto', beats: q4('C4') }, { clef: 'ALTO', beats: q4('C4') }, { beats: q4('C4') }] }] };
+    eq(computeLayout(normalizeScore(sc), th, 1400).systems.length, 1);
+    const nodes = render(sc, 1400);
+    eq([nodes.filter((n) => cls(n) === 'clef clef-change').length, nodes.some((n) => /courtesy-clef/.test(cls(n)))], [1, false]);
+    const long = (k) => ({ tracks: [{ measures: Array.from({ length: 12 }, (_, i) => ({ ...(i === k ? { clef: 'alto' } : {}), beats: q4('C4') })) }] });
+    const first = computeLayout(normalizeScore(long(-1)), th, 700).systems[0].measureIndices;
+    if (first.length < 3) throw new Error('fixture: system 1 too short');
+    const l2 = computeLayout(normalizeScore(long(first[1])), th, 700);
+    eq(l2.systems.some((s) => s.tracks[0].courtesy?.clef), false);
+  });
+  test('1.11 audit clef: an unknown measure clef draws like none; a clef on a tab-only measure draws like none', () => {
+    const base = { tracks: [{ measures: [{ beats: [nt(['C4'], 'whole')] }, { beats: [nt(['C4'], 'whole')] }] }] };
+    const bogus = JSON.parse(JSON.stringify(base)); bogus.tracks[0].measures[1].clef = 'soprano';
+    eq(serialize(render(bogus)[0]), serialize(render(base)[0]));
+    const f = { type: 'note', duration: 'whole', notes: [{ string: 3, fret: 2 }] };
+    const tabOnly = { tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: [f] }, { clef: 'bass', beats: [f] }] }] };
+    const noClef = JSON.parse(JSON.stringify(tabOnly)); delete noClef.tracks[0].measures[1].clef;
+    eq(serialize(render(tabOnly)[0]), serialize(render(noClef)[0]));
+  });
+
+  test('1.11 audit multi-rest: any other beat key (ottava, hairpin, fade, wah, tuplet, articulations, fermata) keeps a measure out of a run', () => {
+    const one = (extra) => M.isRestMeasure(normalizeScore({ tracks: [{ measures: [{ beats: [{ ...W, ...extra }] }] }] }), 0);
+    eq([one({}), one({ slash: true })], [true, true], 'slash is ignored on rests');
+    for (const extra of [{ ottava: '8va' }, { hairpin: 'cresc' }, { fade: 'in' }, { wah: 'open' }, { tuplet: 3 }, { articulations: ['accent'] }, { fermata: 'long' }]) {
+      eq(one(extra), false, JSON.stringify(extra));
+    }
+  });
+  test('1.11 audit multi-rest: a run longer than a system is still one column inside one system', () => {
+    const sc = { multiMeasureRests: true, tracks: [{ measures: [{ beats: [nt(['C5'])] }, ...Array(30).fill(0).map(() => rest()), { beats: [nt(['C5'])] }] }] };
+    const lay = computeLayout(normalizeScore(sc), th, 300);
+    const cols = lay.systems.flatMap((s) => s.tracks[0].measures.filter((m) => m.multiRest).map((m) => [s.measureIndices.includes(m.measureIndex), m.multiRest.count]));
+    eq(cols, [[true, 30]]);
+    eq(lay.systems.flatMap((s) => s.measureIndices), [0, 1, 31]);
+  });
+  test('1.11 audit multi-rest: a lone rest between runs is drawn as a plain rest; only runs of two or more get a bar and count', () => {
+    const q = { beats: [nt(['C5'])] };
+    const nodes = render({ multiMeasureRests: true, tracks: [{ measures: [q, rest(), q, rest(), rest(), q] }] }, 1000);
+    eq([nodes.filter((n) => cls(n) === 'multi-rest').length, nodes.filter((n) => cls(n) === 'multi-rest-count').length], [1, 1]);
+  });
+
+  test('1.11 audit slash: beat-level marks (fermata, text) draw on a slash beat; no tie or arpeggio is drawn', () => {
+    const nodes = render({ tracks: [{ measures: [{ beats: [{ type: 'note', duration: 'quarter', slash: true, fermata: true, text: 'hit', arpeggio: 'up', notes: [{ pitch: 'C4', tieStart: true }] }, nt(['C4'])] }] }] });
+    const st = all(nodes.find((n) => /\bstaff-notation\b/.test(cls(n))));
+    eq(st.some((n) => /\bfermata\b/.test(cls(n))), true, 'fermata');
+    eq(nodes.some((n) => n.tag === 'text' && n.textContent === 'hit'), true, 'text');
+    eq(nodes.some((n) => /\btie\b|\barpeggio\b/.test(cls(n))), false, 'no tie / arpeggio');
+    eq(st.filter((n) => cls(n) === 'slash').length, 1);
+  });
+  test('1.11 audit slash: a slash on a rest changes nothing', () => {
+    const base = { tracks: [{ measures: [{ beats: [nt(['C4'], 'half'), { type: 'rest', duration: 'half' }] }] }] };
+    const slashed = JSON.parse(JSON.stringify(base)); slashed.tracks[0].measures[0].beats[1].slash = true;
+    eq(serialize(render(slashed)[0]), serialize(render(base)[0]));
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
