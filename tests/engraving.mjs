@@ -6769,6 +6769,42 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
     ok(!/tuplet-outer/.test(a), 'no outer class');
     ok(a === b, 'tuplets: [n] renders exactly like tuplet: n');
   });
+
+  const GO = fx('graces-onbeat');
+  const dropOnBeat = (score) => JSON.parse(JSON.stringify(score), (k, v) => (k === 'onBeat' ? undefined : v));
+  const leaves = (root, skip = () => false) => all(root).filter(({ n }) => n.tag !== 'g' && n.tag !== 'svg' && !skip(n))
+    .map(({ n }) => [n.tag, n.attrs, n._text ?? null]);
+  const isSlash = (n) => n.tag === 'line' && n.getAttribute('stroke-width') === '1.3' && num(n, 'x1') !== num(n, 'x2');
+  test('struct112', 'on-beat graces: one <g class="grace-on-beat"> per onBeat === true grace, no slash line in it; onBeat: \'yes\' stays slashed', () => {
+    const tree = renderTree(GO.score, 900);
+    const groups = byClass(tree, 'grace-on-beat').map(({ n }) => n);
+    ok(groups.length === 6, `${groups.length} on-beat groups`);
+    groups.forEach((g) => {
+      ok(!g.children.some(isSlash), 'no slash in an on-beat grace');
+      ok(g.children.some((c) => c.tag === 'line') && g.children.some((c) => c.tag === 'text'), 'head, stem and flag inside');
+    });
+    const slashes = all(tree).filter(({ n }) => isSlash(n)).length;
+    ok(slashes === 3, `${slashes} slashes (m1, m2 before-beat graces, m5 'yes')`);
+  });
+  test('struct112', 'on-beat graces: drawn exactly as the same grace without onBeat minus the slash (same x, size, accidental, voice-2 stem); TAB identical', () => {
+    for (const width of [600, 900]) {
+      const a = renderTree(GO.score, width); const b = renderTree(dropOnBeat(GO.score), width);
+      const notA = staffGroups(systemsOf(a)[0]).concat(...systemsOf(a).slice(1).map(staffGroups));
+      const notB = staffGroups(systemsOf(b)[0]).concat(...systemsOf(b).slice(1).map(staffGroups));
+      ok(notA.length === notB.length, 'staff count');
+      notA.forEach((ga, i) => {
+        const gb = notB[i];
+        if (cls(ga).includes('staff-tab')) { ok(serialize(ga) === serialize(gb), `${width}: TAB staff ${i} identical`); return; }
+        const la = leaves(ga); const lb = leaves(gb);
+        const slashed = all(gb).filter(({ n }) => isSlash(n)).length;
+        const lbNoSlash = leaves(gb, isSlash);
+        ok(lb.length - lbNoSlash.length === slashed, 'slash count');
+        // the before-beat graces (m1, m2, m5 'yes') keep their slash in both renders: drop every slash, then compare
+        ok(JSON.stringify(leaves(ga, isSlash)) === JSON.stringify(lbNoSlash), `${width}: staff ${i} differs beyond the slash`);
+        ok(la.length === lbNoSlash.length + (all(ga).filter(({ n }) => isSlash(n)).length), 'only slashes removed');
+      });
+    }
+  });
 }
 
 // ---------- report ----------

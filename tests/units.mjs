@@ -6981,6 +6981,57 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.12.0: on-beat grace notes (draw/notation.js renderGraceNote) ----------
+{
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { renderNotationElement } = await imp('src/draw/notation.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { group } = await imp('src/draw/svgUtil.js');
+  const theme = resolveTheme({});
+  const graceInfos = (score) => {
+    const sc = normalizeScore(JSON.parse(JSON.stringify(score)));
+    const layout = computeLayout(sc, theme, 900);
+    const out = [];
+    layout.systems.forEach((system) => system.tracks.forEach((tr, ti) => tr.measures.forEach((m) => {
+      for (const key of ['elements', 'elements2']) (m[key] || []).forEach((le) => {
+        if (le.el.type !== 'grace') return;
+        const g = group({});
+        out.push({ info: renderNotationElement(g, { ...le, baselineY: 100 }, m, sc.tracks[ti], theme, {}), g, onBeat: le.el.onBeat });
+      });
+    })));
+    return out;
+  };
+  const gr = (pitch, extra = {}) => ({ type: 'grace', duration: '16th', notes: [{ pitch }], ...extra });
+  const qn = (pitch) => ({ type: 'note', duration: 'quarter', notes: [{ pitch }] });
+  const score = (onBeat) => ({ tracks: [{ measures: [
+    { beats: [gr('F#5', onBeat), qn('G5'), gr('C4', onBeat), qn('D4'), gr('A3', onBeat), qn('B3'), qn('C5')] },
+    { voices: [{ beats: [qn('E5'), gr('G5', onBeat), qn('A5'), { type: 'note', duration: 'half', notes: [{ pitch: 'B5' }] }] },
+      { beats: [qn('E4'), gr('D4', onBeat), qn('C4'), { type: 'note', duration: 'half', notes: [{ pitch: 'B3' }] }] }] },
+  ] }] });
+  test('1.12 on-beat grace: same returned info and the same children minus the slash, wrapped in <g class="grace-on-beat">', () => {
+    const a = graceInfos(score({ onBeat: true })); const b = graceInfos(score({}));
+    eq(a.length, 5);
+    a.forEach((x, i) => {
+      eq(x.info, b[i].info);
+      eq(x.g.children.length, 1);
+      const w = x.g.children[0];
+      eq([w.tag, w.getAttribute('class')], ['g', 'grace-on-beat']);
+      const plain = b[i].g.children;
+      eq(serialize(w).includes('stroke-width="1.3"'), false);
+      eq(w.children.length, plain.length - 1);
+      eq(w.children.map((c) => serialize(c)), plain.slice(0, -1).map((c) => serialize(c)));
+      eq([plain[plain.length - 1].tag, plain[plain.length - 1].getAttribute('stroke-width')], ['line', '1.3']);
+    });
+  });
+  test('1.12 on-beat grace: only onBeat === true counts (truthy non-true values draw the slashed grace unwrapped)', () => {
+    const b = graceInfos(score({}));
+    for (const v of ['yes', 1, 'true', {}, false, null]) {
+      const a = graceInfos(score({ onBeat: v }));
+      a.forEach((x, i) => eq(serialize(x.g), serialize(b[i].g), JSON.stringify(v)));
+    }
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

@@ -209,6 +209,8 @@ export function renderWholeMeasureRest(g, x, baselineY, theme, pos = 6) {
  * into its own tiny slot just before the note it decorates, drawn at
  * `theme.graceNoteScale` size with a diagonal slash across its stem (the
  * standard mark distinguishing a grace note from a normal short note).
+ * An on-beat grace (`el.onBeat === true`) is drawn the same way without
+ * the slash, inside `<g class="grace-on-beat">`; it still takes no time.
  * Most often used to notate a fast hammer-on/pull-off in standard
  * notation when there's no spare rhythmic value to give it a full note —
  * the tab staff shows the same technique via the target note's ordinary
@@ -228,6 +230,10 @@ function renderGraceNote(g, layoutEl, clef, theme) {
   const fontSize = smuflFontSizePx(theme) * scale;
   const el = layoutEl.el;
   const x = layoutEl.x;
+  // On-beat grace (`onBeat: true`): the same drawing without the slash, in its own group.
+  const onBeat = el.onBeat === true;
+  const gg = onBeat ? group({ class: 'grace-on-beat' }) : g;
+  if (onBeat) g.appendChild(gg);
 
   const notes = el.notes || [];
   const positions = notes.map((n) => clefNotePosition(n, clef));
@@ -241,16 +247,16 @@ function renderGraceNote(g, layoutEl, clef, theme) {
     const pos = positions[i];
     const y = layoutEl.baselineY + staffPositionToY(pos, spacing);
     const headGlyph = layoutHeadGlyph(note, '8th'); // black head; black diamond for a natural harmonic
-    g.appendChild(glyphText(x, y, headGlyph, theme.fontFamily, fontSize, {
+    gg.appendChild(glyphText(x, y, headGlyph, theme.fontFamily, fontSize, {
       fill: theme.noteColor, 'text-anchor': 'middle',
     }));
     const ledgerHalf = (glyphBox(headGlyph).width / 2 + 0.3) * spacing * scale;
-    drawLedgerLines(g, x - ledgerHalf, x + ledgerHalf, pos, pos, layoutEl.baselineY, theme);
+    drawLedgerLines(gg, x - ledgerHalf, x + ledgerHalf, pos, pos, layoutEl.baselineY, theme);
     const acc = layoutEl.accidentals?.[i];
     if (acc) {
       const glyph = accidentalGlyph(acc);
       const right = x + graceAccidentalRight(glyphBox(headGlyph).width, stemUp, theme) * spacing;
-      g.appendChild(glyphText(right - glyphBox(glyph).width * spacing * scale, y, glyph, theme.fontFamily, fontSize, {
+      gg.appendChild(glyphText(right - glyphBox(glyph).width * spacing * scale, y, glyph, theme.fontFamily, fontSize, {
         fill: theme.noteColor,
       }));
     }
@@ -262,22 +268,24 @@ function renderGraceNote(g, layoutEl, clef, theme) {
   const stemAttachX = x + (stemUp ? GRACE_STEM_DX_SP : -GRACE_STEM_DX_SP) * spacing;
   const stemLen = STEM_LENGTH_SPACES * spacing * scale;
   const stemEndY = noteY + (stemUp ? -1 : 1) * stemLen;
-  g.appendChild(line(stemAttachX, noteY, stemAttachX, stemEndY, {
+  gg.appendChild(line(stemAttachX, noteY, stemAttachX, stemEndY, {
     stroke: theme.noteColor, 'stroke-width': theme.stemWidth * 0.9,
   }));
-  g.appendChild(glyphText(stemAttachX, stemEndY, flagForDuration('8th', stemUp), theme.fontFamily, fontSize, {
+  gg.appendChild(glyphText(stemAttachX, stemEndY, flagForDuration('8th', stemUp), theme.fontFamily, fontSize, {
     fill: theme.noteColor,
   }));
-  // The slash: a short diagonal stroke crossing the stem partway up,
-  // marking this as a crushed grace note rather than a plain short note.
-  const slashMidY = noteY + (stemEndY - noteY) * 0.5;
-  const slashDx = GRACE_SLASH_DX_SP * spacing;
-  const slashDy = 0.45 * spacing * (stemUp ? 1 : -1);
-  g.appendChild(line(
-    stemAttachX - slashDx, slashMidY + slashDy,
-    stemAttachX + slashDx, slashMidY - slashDy,
-    { stroke: theme.noteColor, 'stroke-width': 1.3 }
-  ));
+  if (!onBeat) {
+    // The slash: a short diagonal stroke crossing the stem partway up,
+    // marking this as a crushed grace note rather than a plain short note.
+    const slashMidY = noteY + (stemEndY - noteY) * 0.5;
+    const slashDx = GRACE_SLASH_DX_SP * spacing;
+    const slashDy = 0.45 * spacing * (stemUp ? 1 : -1);
+    g.appendChild(line(
+      stemAttachX - slashDx, slashMidY + slashDy,
+      stemAttachX + slashDx, slashMidY - slashDy,
+      { stroke: theme.noteColor, 'stroke-width': 1.3 }
+    ));
+  }
 
   const stemTopY = stemUp ? stemEndY : noteY;
   const stemBottomY = stemUp ? noteY : stemEndY;

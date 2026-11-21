@@ -1866,3 +1866,28 @@ characterizationCases.push(...['tab-only', 'harmonics', 'tab-marks', 'directions
     },
   });
 }
+{
+  // 1.12.0 on-beat grace notes (grace.onBeat === true: no slash, same place and no time) on notation + TAB:
+  // m1 a single on-beat grace, then a before-beat one for comparison; m2 a mixed run (before-beat then on-beat);
+  // m3 an on-beat grace with an accidental and one into a chord; m4 two voices with a voice-2 on-beat grace;
+  // m5 onBeat: 'yes' (not true -> before-beat, slashed).
+  const gr = (frets, extra = {}) => ({ type: 'grace', duration: '16th', notes: frets.map(([string, fret]) => ({ string, fret })), ...extra });
+  const ob = { onBeat: true };
+  const t = (d, frets, extra = {}) => ({ type: 'note', duration: d, notes: frets.map(([string, fret]) => ({ string, fret })), ...extra });
+  characterizationCases.push({
+    name: 'graces-onbeat', width: 900,
+    score: {
+      tracks: [{
+        name: 'Gtr', showStandardNotation: true, showTablature: true,
+        measures: [
+          { beats: [gr([[2, 3]], ob), t('quarter', [[2, 5]]), t('quarter', [[2, 3]]), gr([[2, 3]]), t('quarter', [[2, 5]]), t('quarter', [[1, 0]])] },
+          { beats: [t('quarter', [[3, 2]]), gr([[3, 0]]), gr([[3, 2]], ob), t('quarter', [[3, 4]]), t('half', [[2, 3]])] },
+          { beats: [gr([[1, 2]], ob), t('quarter', [[1, 3]]), t('quarter', [[2, 1]]), gr([[3, 0]], ob), t('half', [[4, 2], [3, 2], [2, 3]])] },
+          vm([t('quarter', [[1, 0]]), t('quarter', [[1, 2]]), t('half', [[1, 3]])],
+            [t('quarter', [[5, 3]]), gr([[4, 0]], ob), t('quarter', [[4, 2]]), t('half', [[5, 2]])]),
+          { beats: [gr([[2, 3]], { onBeat: 'yes' }), t('quarter', [[2, 5]]), gr([[2, 3]], ob), t('quarter', [[2, 5]]), t('half', [[3, 2]])] },
+        ],
+      }],
+    },
+  });
+}
