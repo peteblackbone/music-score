@@ -4753,6 +4753,122 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- pre-1.11 characterization: clef, key signature and header output (pins taken before the 1.11.0 change) ----------
+{
+  // the 1.11.0 char-clefs-*, char-multirest-*, char-slashes-* and char-tab-articulations-* fixtures use the new keys on purpose
+  const NEW_FIXTURE = /^char-(clefs|multirest|slashes|tab-articulations)-/;
+  const cases = (await import('./cases.mjs')).cases.filter((c) => !NEW_FIXTURE.test(c.id));
+  const { createHash } = await import('node:crypto');
+  const { keySignatureLayout } = await imp('src/pitch.js');
+  const { headerLayout } = await imp('src/layout/systems.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const theme = resolveTheme({});
+  const sha = (v) => createHash('sha256').update(typeof v === 'string' ? v : JSON.stringify(v)).digest('hex');
+  const lists = (m) => (m.voices ? m.voices.map((v, i) => [i, v.beats || []]) : [[0, m.beats || []], [1, m.voice2Beats || []]]);
+
+  test('pre-1.11 scan: none of the 73 cases (raw or normalized) has a 1.11 key (clef values, measure clef, multiMeasureRests, slash, tabArticulations)', () => {
+    eq(cases.length, 73);
+    for (const c of cases) {
+      for (const [label, sc] of [['raw', c.score], ['normalized', normalizeScore(c.score)]]) {
+        if ('multiMeasureRests' in sc) throw new Error(`${c.id} ${label}: multiMeasureRests`);
+        (sc.tracks || []).forEach((t) => {
+          if (![undefined, 'treble', 'bass'].includes(t.clef)) throw new Error(`${c.id} ${label}: track clef ${t.clef}`);
+          if ('tabArticulations' in t) throw new Error(`${c.id} ${label}: tabArticulations`);
+          (t.measures || []).forEach((m) => {
+            if ('clef' in m) throw new Error(`${c.id} ${label}: measure has clef`);
+            for (const [, beats] of lists(m)) for (const b of beats) {
+              if ('slash' in b) throw new Error(`${c.id} ${label}: beat has slash`);
+              (b.graces || []).forEach((g) => { if ('slash' in g) throw new Error(`${c.id} ${label}: grace has slash`); });
+            }
+          });
+        });
+      }
+    }
+  });
+  test('pre-1.11 scan: the scan is not vacuous (it sees treble and bass track clefs, two voices and graces)', () => {
+    const clefs = new Set(); let v2 = 0, graces = 0;
+    for (const c of cases) (c.score.tracks || []).forEach((t) => {
+      clefs.add(t.clef);
+      (t.measures || []).forEach((m) => lists(m).forEach(([vi, beats]) => { if (vi) v2 += beats.length; graces += beats.filter((b) => b.type === 'grace' || (b.graces || []).length).length; }));
+    });
+    if (!clefs.has('bass') || !clefs.has('treble') || !v2 || !graces) throw new Error(`clefs=${[...clefs]} v2=${v2} graces=${graces}`);
+  });
+
+  const variants = [];
+  for (const clef of [null, 'treble', 'bass', 'nonsense']) for (const up of [false, true]) for (const key of [0, 3, -4]) {
+    const track = { showStandardNotation: true, showTablature: true, ...(clef ? { clef } : {}), ...(up ? { writtenOctaveUp: true } : {}),
+      measures: [{ keySignature: key, timeSignature: { beats: 4, beatType: 4 }, beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'C4' }] }] }] };
+    variants.push({ id: `${clef}|${up}|${key}`, score: { tracks: [track] } });
+  }
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  const byClefGroup = (fn) => {
+    const out = {};
+    for (const v of variants) (out[v.id.split('|')[0]] ||= []).push([v.id, fn(v)]);
+    return Object.fromEntries(Object.entries(out).map(([k, a]) => [k, sha(a)]));
+  };
+  const HEADER_HASHES = {
+    null: "b64a08ce2e209e38ab693f4d228b90de302dddc15a562d8bb25f3cb1a9196f8e",
+    treble: "18de9fe0fbc5a9daa6858c857105663bcaea9308a519e1f1eb438bfe40b820ed",
+    bass: "65e6f6b213ef05cafcb1ef12665e42b45f31eb710a930e9db641f50eab1d0d19",
+    nonsense: "7115bf3b12a73935b8a70916e9da6e543db172eb586573bb35805b73dbeb57f7",
+  };
+  const SVG_HASHES = {
+    null: "710c993ce645cca88e7b341afa560a460ade7e568a3fbd9191bea0a6fd24685e",
+    treble: "3ea4d6f03c405372a612c1bc9fedfd9cd37e8eb72ca10fa7e849c9a5e3bbc487",
+    bass: "aa3ed461657d85ea5fd3e9bef6fbd844df7a0cf532cdc5bf3f4083dbae121bb4",
+    nonsense: "d3d8e81c3cb71425a36601063811360da88a0358b80ba181b04968aa1cd67a9f",
+  };
+  test('pre-1.11 pin: headerLayout(0, normalized, theme, true) of single-measure scores, per track clef (null/treble/bass/nonsense) x writtenOctaveUp x key (sha256)', () => {
+    eq(variants.length, 24);
+    eq(byClefGroup((v) => headerLayout(0, normalizeScore(v.score), theme, true)), HEADER_HASHES);
+  });
+  test('pre-1.11 pin: serialized SVG of single-measure scores, per track clef x writtenOctaveUp x key (sha256)', () => {
+    eq(byClefGroup((v) => serialize(render(v.score))), SVG_HASHES);
+  });
+  test('pre-1.11 pin: an unrecognised clef name draws exactly like treble (SVG and header)', () => {
+    for (const up of [false, true]) for (const key of [0, 3, -4]) {
+      const a = variants.find((v) => v.id === `nonsense|${up}|${key}`), b = variants.find((v) => v.id === `treble|${up}|${key}`);
+      eq(serialize(render(a.score)), serialize(render(b.score)));
+      eq(headerLayout(0, normalizeScore(a.score), theme, true), headerLayout(0, normalizeScore(b.score), theme, true));
+    }
+  });
+
+  test('pre-1.11 pin: keySignatureLayout hand table, key -7..7 x treble/bass/undefined (letters, alter, staff position)', () => {
+    const L = { sharp: 'FCGDAEB'.split(''), flat: 'BEADGCF'.split('') };
+    const P = {
+      treble: { sharp: [8, 5, 9, 6, 3, 7, 4], flat: [4, 7, 3, 6, 2, 5, 1] },
+      bass: { sharp: [6, 3, 7, 4, 1, 5, 2], flat: [2, 5, 1, 4, 0, 3, -1] },
+    };
+    for (const clef of ['treble', 'bass', undefined]) for (let k = -7; k <= 7; k++) {
+      const kind = k > 0 ? 'sharp' : 'flat', n = Math.abs(k);
+      const want = Array.from({ length: n }, (_, i) => ({ letter: L[kind][i], alter: k > 0 ? 1 : -1, position: P[clef || 'treble'][kind][i] }));
+      eq(keySignatureLayout(k, clef), want, `key ${k} clef ${clef}`);
+    }
+    eq(keySignatureLayout(), []);
+    eq(keySignatureLayout(2, 'nonsense'), keySignatureLayout(2, 'treble'));
+  });
+
+  test('pre-1.11 pin: none of the 73 snapshot SVGs has a clef, clef-change, courtesy-clef, multi-rest, multi-rest-count, slash, tab-slash, tab-articulations, or tab-fermata class token', () => {
+    const dir = path.join(root0, 'tests', 'snapshots');
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.svg') && !NEW_FIXTURE.test(f));
+    eq(files.length, 73);
+    const BAN = new Set(['clef', 'clef-change', 'courtesy-clef', 'multi-rest', 'multi-rest-count', 'slash', 'tab-slash', 'tab-articulations', 'tab-fermata']);
+    let seen = 0;
+    for (const f of files) {
+      const svg = fs.readFileSync(path.join(dir, f), 'utf8');
+      for (const m of svg.matchAll(/class="([^"]*)"/g)) for (const tok of m[1].split(/\s+/)) {
+        seen++;
+        if (BAN.has(tok)) throw new Error(`${f}: class token ${tok}`);
+      }
+    }
+    if (!seen) throw new Error('no class attributes scanned');
+  });
+}
+
 // ---------- 1.9.0: compound bends (directions.js bendOf, draw/bend.js) ----------
 {
   const { bendOf } = await imp('src/directions.js');
