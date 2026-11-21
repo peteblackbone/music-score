@@ -64,50 +64,79 @@ function trackItems(trackRuns, track) {
   return items;
 }
 
+/** The first item after index `i` with a verse-`v` syllable, or null (an index loop: no per-syllable array copies). */
+function nextSyllable(items, i, v) {
+  for (let j = i + 1; j < items.length; j++) if (items[j].syl?.[v]) return items[j];
+  return null;
+}
+
 /**
- * Draw every track's lyrics (see the module header). `systems` are the
- * layout systems (contentStartX / lastBarlineX).
+ * The extender segments `{ run, x1, x2 }` of item `it` (index `i`, verse
+ * `v`) starting at `x1`: to the head right edge of the last note item
+ * before the next verse-`v` syllable / stop / end, split at system breaks
+ * (to the last barline; whole intermediate systems; then from the content
+ * start). `runAt` maps sysIdx → the track's run. Segments of length ≤ 0
+ * are dropped.
  */
-export function renderLyrics(score, trackRuns, theme, systems) {
+function extenderSegments(items, i, v, x1, runAt, systems, theme) {
   const s = theme.staffLineSpacing;
-  const size = theme.lyricFontSize;
-  const width = (t) => estimateTextWidth(t, size);
-  const ops = new Map(); // run -> { syllables, hyphens, extenders } (each [verse, ...])
+  const { run } = items[i];
+  let last = items[i];
+  for (let j = i + 1; j < items.length && !items[j].stop && !items[j].syl?.[v]; j++) last = items[j];
+  const x2 = last.le.x + HEAD_HALF_SP * s;
+  const segs = [];
+  const seg = (r, a, b) => { if (r && b - a > 0) segs.push({ run: r, x1: a, x2: b }); };
+  if (last.run.sysIdx === run.sysIdx) { seg(run, x1, x2); return segs; }
+  seg(run, x1, systems[run.sysIdx].lastBarlineX);
+  for (let k = run.sysIdx + 1; k < last.run.sysIdx; k++) seg(runAt.get(k), systems[k].contentStartX, systems[k].lastBarlineX);
+  seg(last.run, systems[last.run.sysIdx].contentStartX, x2);
+  return segs;
+}
+
+/**
+ * What to draw, per track run (Map run → `{ syllables: [{ verse, x, text }],
+ * hyphens: [{ verse, x }], extenders: [{ verse, x1, x2 }] }`, score order;
+ * `verse` 0-based). Hyphens and extenders follow the module header.
+ */
+function collectLyricOps(score, trackRuns, theme, systems) {
+  const s = theme.staffLineSpacing;
+  const width = (t) => estimateTextWidth(t, theme.lyricFontSize);
+  const ops = new Map();
   const opsOf = (run) => {
     if (!ops.has(run)) ops.set(run, { syllables: [], hyphens: [], extenders: [] });
     return ops.get(run);
   };
   score.tracks.forEach((track) => {
-    const runs = trackRuns.filter((r) => r.track === track);
-    const runAt = new Map(runs.map((r) => [r.sysIdx, r]));
+    const runAt = new Map(trackRuns.filter((r) => r.track === track).map((r) => [r.sysIdx, r]));
     const items = trackItems(trackRuns, track);
-    items.forEach((it, i) => (it.syl || []).forEach((syl, v) => {
+    items.forEach((it, i) => (it.syl || []).forEach((syl, verse) => {
       if (!syl) return;
       const { run, le } = it;
-      const w = width(syl.text);
-      const right = le.x + w / 2;
-      opsOf(run).syllables.push([v, le.x, syl.text]);
+      const right = le.x + width(syl.text) / 2;
+      opsOf(run).syllables.push({ verse, x: le.x, text: syl.text });
       if (syl.hyphen) {
-        let next = null;
-        for (let j = i + 1; j < items.length && !next; j++) if (items[j].syl?.[v]) next = items[j];
+        const next = nextSyllable(items, i, verse);
         if (!next) return;
-        const end = next.run.sysIdx === run.sysIdx ? next.le.x - width(next.syl[v].text) / 2 : systems[run.sysIdx].lastBarlineX;
-        opsOf(run).hyphens.push([v, (right + end) / 2]);
+        const end = next.run.sysIdx === run.sysIdx ? next.le.x - width(next.syl[verse].text) / 2 : systems[run.sysIdx].lastBarlineX;
+        opsOf(run).hyphens.push({ verse, x: (right + end) / 2 });
         return;
       }
       if (!syl.extend) return;
-      let last = it;
-      for (let j = i + 1; j < items.length && !items[j].stop && !items[j].syl?.[v]; j++) last = items[j];
-      const x1 = right + EXTENDER_GAP_SP * s;
-      const x2 = last.le.x + HEAD_HALF_SP * s;
-      const seg = (r, a, b) => { if (r && b - a > 0) opsOf(r).extenders.push([v, a, b]); };
-      if (last.run.sysIdx === run.sysIdx) { seg(run, x1, x2); return; }
-      seg(run, x1, systems[run.sysIdx].lastBarlineX);
-      for (let k = run.sysIdx + 1; k < last.run.sysIdx; k++) seg(runAt.get(k), systems[k].contentStartX, systems[k].lastBarlineX);
-      seg(last.run, systems[last.run.sysIdx].contentStartX, x2);
+      extenderSegments(items, i, verse, right + EXTENDER_GAP_SP * s, runAt, systems, theme)
+        .forEach(({ run: r, x1, x2 }) => opsOf(r).extenders.push({ verse, x1, x2 }));
     }));
   });
+  return ops;
+}
 
+/**
+ * Draw the collected ops: per run one `<g class="lyrics">` in the
+ * notation group (else TAB), baselines from the group's ink measured
+ * before it; per verse its syllables, hyphens, then extenders.
+ */
+function drawLyricOps(ops, theme, systems) {
+  const s = theme.staffLineSpacing;
+  const size = theme.lyricFontSize;
   ops.forEach((o, run) => {
     const g = run.notationG ?? run.tabG;
     if (!g) return;
@@ -118,14 +147,23 @@ export function renderLyrics(score, trackRuns, theme, systems) {
       class: cls, 'data-verse': v + 1, 'font-family': theme.textFontFamily, 'font-size': size, 'text-anchor': 'middle', fill: theme.noteColor,
     });
     const lg = group({ class: 'lyrics' });
-    const verses = [...new Set([...o.syllables, ...o.hyphens, ...o.extenders].map((op) => op[0]))].sort((a, b) => a - b);
+    const verses = [...new Set([...o.syllables, ...o.hyphens, ...o.extenders].map((op) => op.verse))].sort((a, b) => a - b);
     verses.forEach((verse) => {
-      o.syllables.filter(([v]) => v === verse).forEach(([v, x, str]) => lg.appendChild(text(x, baseY(v), str, textAttrs('lyric', v))));
-      o.hyphens.filter(([v]) => v === verse).forEach(([v, x]) => lg.appendChild(text(x, baseY(v), '-', textAttrs('lyric-hyphen', v))));
-      o.extenders.filter(([v]) => v === verse).forEach(([v, x1, x2]) => lg.appendChild(line(x1, baseY(v), x2, baseY(v), {
-        class: 'lyric-extender', 'data-verse': v + 1, stroke: theme.noteColor, 'stroke-width': EXTENDER_STROKE_SP * s, 'stroke-linecap': 'butt',
+      const y = baseY(verse);
+      o.syllables.filter((op) => op.verse === verse).forEach((op) => lg.appendChild(text(op.x, y, op.text, textAttrs('lyric', verse))));
+      o.hyphens.filter((op) => op.verse === verse).forEach((op) => lg.appendChild(text(op.x, y, '-', textAttrs('lyric-hyphen', verse))));
+      o.extenders.filter((op) => op.verse === verse).forEach((op) => lg.appendChild(line(op.x1, y, op.x2, y, {
+        class: 'lyric-extender', 'data-verse': verse + 1, stroke: theme.noteColor, 'stroke-width': EXTENDER_STROKE_SP * s, 'stroke-linecap': 'butt',
       })));
     });
     g.appendChild(lg);
   });
+}
+
+/**
+ * Draw every track's lyrics (see the module header). `systems` are the
+ * layout systems (contentStartX / lastBarlineX).
+ */
+export function renderLyrics(score, trackRuns, theme, systems) {
+  drawLyricOps(collectLyricOps(score, trackRuns, theme, systems), theme, systems);
 }

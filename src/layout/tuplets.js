@@ -9,14 +9,11 @@
  * group gets `depth: 0`, each inner group `depth: 1`, any other group no
  * `depth` (drawn exactly like a plain tuplet).
  */
-import { durationR, tupletChain, validTuplets, beamCellValue } from '../duration.js';
+import {
+  durationR, tupletChain, validTuplets, beamCellValue, writtenR, isPow2Value, sameRatio,
+} from '../duration.js';
 import { R, ZERO, add, mul, cmp } from '../rational.js';
 
-/** Written (notated) duration: dots applied, tuplet ratios ignored. */
-const writtenR = (el) => durationR({ duration: el.duration, dots: el.dots });
-/** Whether a reduced rational is 1/2^n (a plain, undotted note value). */
-const isPow2Value = (q) => q.n === 1 && (q.d & (q.d - 1)) === 0;
-const sameRatio = (a, b) => !!a && !!b && a.count === b.count && a.of === b.of;
 const cellIndex = (pos, cell) => Math.floor((pos.n * cell.d) / (pos.d * cell.n));
 
 /** Whether some non-grace beat of the voice has a valid 2-entry `tuplets` chain. */
@@ -32,6 +29,7 @@ export function hasNestedTuplets(beats) {
  * the first beat's cell and a later complete point ends exactly on the cell
  * end; a run that never completes falls back to one group per cell. Every
  * step takes at least one beat, so the loop always ends.
+ * Keep in sync with tupletGroups in layout/beams.js (same rule, generalized).
  */
 function splitRun(run, count, { unit, end, cellOf, cell }) {
   const groups = [];

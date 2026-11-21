@@ -19,9 +19,9 @@
 import { canonicalText } from './scoreText.js';
 import { estimateTextWidth } from './textMetrics.js';
 
-export const MAX_VERSES = 8;
-export const LYRIC_PAD_SP = 0.25;  // half a syllable + this either side of the beat x
-export const HYPHEN_ROOM_SP = 0.6; // extra room right of a hyphenated syllable (+ the hyphen's width)
+const MAX_VERSES = 8;
+const LYRIC_PAD_SP = 0.25;  // half a syllable + this either side of the beat x
+const HYPHEN_ROOM_SP = 0.6; // extra room right of a hyphenated syllable (+ the hyphen's width)
 
 /** One verse entry → `{ text, hyphen, extend }`, or null (see the header). */
 function canonicalSyllable(raw) {

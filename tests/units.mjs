@@ -7055,7 +7055,8 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
 
 /// ---------- 1.12.0: lyrics parsing and room (lyrics.js, layout/timeline.js, layout/multiRest.js) ----------
 {
-  const { canonicalLyrics, lyricsOf, lyricExtents, MAX_VERSES, LYRIC_PAD_SP, HYPHEN_ROOM_SP } = await imp('src/lyrics.js');
+  const { canonicalLyrics, lyricsOf, lyricExtents } = await imp('src/lyrics.js');
+  const LYRIC_PAD_SP = 0.25, HYPHEN_ROOM_SP = 0.6; // the spec's numbers (src/lyrics.js keeps them private)
   const { estimateTextWidth } = await imp('src/textMetrics.js');
   const { resolveTheme } = await imp('src/theme.js');
   const { computeLayout } = await imp('src/layout/index.js');
@@ -7086,7 +7087,6 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(canonicalLyrics(['one', null, 'three-']), [S('one'), null, S('three', true)]);
     eq(canonicalLyrics([null, 'two']), [null, S('two')]);
     const ten = Array.from({ length: 10 }, (_, i) => `v${i + 1}`);
-    eq(MAX_VERSES, 8);
     eq(canonicalLyrics(ten).length, 8);
     eq(canonicalLyrics([...Array(8).fill(null), 'ninth']), null);
     for (const raw of [undefined, null, '', '   ', '-', '_', ' - ', 3, true, {}, [], [''], ['-', '_'], [5, null]]) eq(canonicalLyrics(raw), null, JSON.stringify(raw));

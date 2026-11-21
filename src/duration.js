@@ -83,6 +83,13 @@ export function tupletChain(el) {
   return t ? [t] : [];
 }
 
+/** Written (notated) duration: dots applied, every tuplet ratio ignored. */
+export const writtenR = (el) => durationR({ duration: el.duration, dots: el.dots });
+/** Whether a reduced rational is 1/2^n (a plain, undotted note value). */
+export const isPow2Value = (q) => q.n === 1 && (q.d & (q.d - 1)) === 0;
+/** Whether two `{ count, of }` ratios are both present and equal. */
+export const sameRatio = (a, b) => !!a && !!b && a.count === b.count && a.of === b.of;
+
 /**
  * Beam/tuplet cell length (rational) for a time signature (ui.md §7):
  * compound meters (beats divisible by 3, more than 3, beat unit 8 or

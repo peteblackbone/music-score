@@ -2,7 +2,9 @@
  * layout/beams.js — rhythmic-cell bucketing of a measure's beats, and the
  * beam and tuplet groupings built on it. Pure functions, no DOM/SVG here.
  */
-import { isBeamable, tupletChain, durationR, beamCellValue } from '../duration.js';
+import {
+  isBeamable, tupletChain, durationR, beamCellValue, writtenR, isPow2Value, sameRatio,
+} from '../duration.js';
 import { R, ZERO, add, mul, cmp } from '../rational.js';
 import { hasNestedTuplets, nestedTupletGroups } from './tuplets.js';
 
@@ -46,11 +48,6 @@ export function groupBeams(beats, timeSignature) {
   return groups;
 }
 
-/** Written (notated) duration: dots applied, tuplet ratio ignored. */
-const writtenR = (el) => durationR({ duration: el.duration, dots: el.dots });
-/** Whether a reduced rational is 1/2^n (a plain, undotted note value). */
-const isPow2Value = (q) => q.n === 1 && (q.d & (q.d - 1)) === 0;
-const sameRatio = (a, b) => !!b && a.count === b.count && a.of === b.of;
 /** A beat's outermost tuplet ratio (its `tuplets` chain head, else its `tuplet`), or null. */
 const outerOf = (b) => tupletChain(b)[0] ?? null;
 
@@ -72,6 +69,8 @@ const outerOf = (b) => tupletChain(b)[0] ?? null;
  *   on that cell's end (so [8th, 16th, 16th, 8th] as a triplet stays one
  *   group). A run that never completes falls back to one bracket per
  *   rhythmic cell (beatCells), as before.
+ * A voice with nested tuplets goes to nestedTupletGroups (layout/tuplets.js);
+ * keep this close rule in sync with splitRun there.
  */
 export function tupletGroups(beats, timeSignature) {
   // a voice with nested tuplets (some 2-entry `tuplets`) is grouped by layout/tuplets.js

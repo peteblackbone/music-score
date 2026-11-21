@@ -6,9 +6,9 @@
  *   renderer.render();
  *
  * render() = resolve theme (constructor) → normalize → layout → draw every
- * staff at a local origin → score-wide passes (lyrics before the dynamics line) → beat text → navigation (voltas,
- * segno / coda / jumps / x3, sections) → tempo → measure ink → place staves →
- * copyright footer → mount.
+ * staff at a local origin → score-wide passes (lyrics before the dynamics
+ * line) → beat text → navigation (voltas, segno / coda / jumps / x3,
+ * sections) → tempo → measure ink → place staves → copyright footer → mount.
  */
 import { ensureBravuraFont } from './font.js';
 import { resolveTheme } from './theme.js';

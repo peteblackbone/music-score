@@ -5,8 +5,8 @@
  * A rest measure is, in every track, a measure without a second voice whose
  * beats are empty (padded ones too) or exactly one visible rest at least a
  * bar long carrying nothing but `type`, `duration`, `dots`, empty `notes`
- * (and `slash: false`; a `lyric` is ignored on rests): any mark (fermata, text, tempo, dynamic, chord,
- * hairpin, …) keeps the measure out. Two or more consecutive rest measures
+ * (and `slash: false`; a `lyric` is ignored on rests): any mark (fermata,
+ * text, tempo, dynamic, chord, hairpin, …) keeps the measure out. Two or more consecutive rest measures
  * collapse into one column, the run's first measure; key/time/clef
  * changes, repeat-starts, segno, coda and sections may only sit on the
  * first measure, non-single barlines, jumps and repeat counts only on the
