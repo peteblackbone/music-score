@@ -81,7 +81,7 @@ const colX = (le) => le.x - (le.dx || 0);
  */
 export function renderTabArticulations(score, trackRuns, theme, systems) {
   const s = theme.staffLineSpacing;
-  trackRuns.forEach((run) => { run.tabInkBoxes = []; run.hpBoxes = []; });
+  trackRuns.forEach((run) => { run.tabInkBoxes = run.tabOnlyBoxes ? [...run.tabOnlyBoxes] : []; run.hpBoxes = []; });
   score.tracks.forEach((track) => {
     if (!track.showTablature) return;
     const stringCount = track.tuning.length;

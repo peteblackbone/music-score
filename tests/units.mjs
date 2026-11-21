@@ -6511,6 +6511,102 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.11.0: articulations and fermatas on tab-only TAB staves (draw/tabOnlyMarks.js) ----------
+{
+  const TM = await imp('src/draw/tabOnlyMarks.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const cases = (await import('./cases.mjs')).cases;
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const f = (s, fr, x = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string: s, fret: fr }], ...x });
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const render = (sc, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(sc)), { width }).render();
+    return all(box.children[0]);
+  };
+  const tabOnly = (measures, x = {}) => ({ showStandardNotation: false, showTablature: true, tabArticulations: true, measures, ...x });
+  const tabTop = 0; // a TAB staff group's top line is y = 0
+  const groups = (nodes, c) => nodes.filter((n) => cls(n) === c);
+
+  test('1.11 tab marks: only tab-only tracks with tabArticulations === true', () => {
+    eq([{ showStandardNotation: false, showTablature: true, tabArticulations: true }, { showStandardNotation: false, showTablature: true, tabArticulations: 'true' },
+      { showStandardNotation: true, showTablature: true, tabArticulations: true }, { showStandardNotation: false, showTablature: false, tabArticulations: true },
+      { showStandardNotation: false, showTablature: true }].map(TM.hasTabOnlyMarks), [true, false, false, false, false]);
+    const ms = [{ beats: [f(3, 2, { articulations: ['accent'], fermata: true }), f(3, 2), { type: 'rest', duration: 'half', fermata: true }] }];
+    const nodes = render({ tracks: [tabOnly(ms), tabOnly(ms, { tabArticulations: false }), { showTablature: true, tabArticulations: true, measures: ms }] });
+    const staves = nodes.filter((n) => /^staff staff-/.test(cls(n)));
+    eq(staves.map((g) => [g.getAttribute('data-track'), cls(g).split(' ')[1], groups(all(g), 'tab-articulations').length, groups(all(g), 'tab-fermata').length]),
+      [['0', 'staff-tab', 1, 2], ['1', 'staff-tab', 0, 0], ['2', 'staff-notation', 0, 0], ['2', 'staff-tab', 0, 0]]);
+  });
+  test('1.11 tab marks: articulation stack (nearest first) above the TAB top line, frets and tremolo; graces and rests get none', () => {
+    const nodes = render({ tracks: [tabOnly([{ beats: [f(3, 2, { articulations: ['accent', 'tenuto', 'staccato'] }), f(1, 12, { articulations: ['marcato'], tremolo: true }),
+      { type: 'grace', duration: '8th', notes: [{ string: 1, fret: 3 }], articulations: ['accent'] }, f(1, 5), { type: 'rest', duration: 'half', articulations: ['accent'] }] }])] });
+    const arts = groups(nodes, 'tab-articulations');
+    eq(arts.length, 2);
+    const glyphs = arts[0].children.map((c) => c.textContent);
+    eq(glyphs, [Glyph.articStaccatoAbove, Glyph.articTenutoAbove, Glyph.articAccentAbove]);
+    const ys = arts[0].children.map((c, i) => +c.getAttribute('y') - glyphBox(glyphs[i]).bottom * S); // ink bottoms
+    eq(ys[0], tabTop - 0.5 * S);
+    eq(ys[1] < ys[0] && ys[2] < ys[1], true);
+    const tab = nodes.find((n) => cls(n) === 'staff staff-tab');
+    const fret12 = all(tab).find((n) => n.tag === 'text' && n.textContent === '12');
+    const marc = arts[1].children[0];
+    const marcBottom = +marc.getAttribute('y') - glyphBox('articMarcatoAbove').bottom * S;
+    const trem = all(tab).filter((n) => /tab-tremolo/.test(cls(n))).flatMap((g) => g.children);
+    const tremTop = Math.min(...trem.map((l) => Math.min(+l.getAttribute('y1'), +l.getAttribute('y2'))));
+    eq(marcBottom < tremTop && marcBottom < +fret12.getAttribute('y') - th.tabFontSize, true);
+  });
+  test('1.11 tab marks: P.M. and let-ring labels, pick strokes and tap T stack outside the articulations', () => {
+    const nodes = render({ tracks: [tabOnly([{ beats: [f(3, 2, { articulations: ['accent'], palmMute: true }), f(3, 2, { articulations: ['accent'], letRing: true, pickStroke: 'down' }),
+      { type: 'note', duration: 'half', notes: [{ string: 2, fret: 5, tap: true }], articulations: ['marcato'] }] }])] });
+    const arts = groups(nodes, 'tab-articulations');
+    const topOf = (g) => Math.min(...g.children.map((c) => +c.getAttribute('y') - glyphBox(c.textContent).top * S));
+    const labelY = (c) => +all(groups(nodes, c)[0]).find((n) => n.tag === 'text').getAttribute('y');
+    eq(labelY('palm-mute') < topOf(arts[0]), true, 'P.M. baseline above the accent');
+    eq(labelY('let-ring') < topOf(arts[1]), true);
+    const pick = all(groups(nodes, 'pick-stroke pick-stroke-down')[0]).find((n) => n.tag === 'text');
+    eq(+pick.getAttribute('y') < labelY('let-ring'), true);
+    const tap = nodes.filter((n) => n.tag === 'text' && n.textContent === 'T');
+    eq(tap.length === 1 && +tap[0].getAttribute('y') < topOf(arts[2]), true, 'tap T above the marcato');
+  });
+  test('1.11 tab marks: fermatas on note and rest beats above every ink of the column, below beat text; voice 1 wins per column', () => {
+    const nodes = render({ tracks: [tabOnly([
+      { beats: [f(3, 2, { fermata: true, articulations: ['accent'] }), { type: 'rest', duration: 'quarter', fermata: 'short' }, f(1, 0, { fermata: 'long', text: 'rit.' }), f(1, 0, { fermata: 'bogus' })] },
+      { voices: [{ beats: [f(3, 2, { articulations: ['accent'] }), f(3, 2, { fermata: true }), { type: 'rest', duration: 'half' }] },
+        { beats: [f(5, 3, { articulations: ['staccato'] }), f(5, 3, { articulations: ['staccato'], fermata: 'short' }), f(6, 3, { duration: 'half', articulations: ['tenuto'], fermata: true })] }] },
+    ])] });
+    const fer = groups(nodes, 'tab-fermata');
+    eq(fer.map((g) => cls(g.children[0])), ['fermata', 'fermata fermata-short', 'fermata fermata-long', 'fermata', 'fermata']);
+    const accTop = Math.min(...groups(nodes, 'tab-articulations')[0].children.map((c) => +c.getAttribute('y') - glyphBox(c.textContent).top * S));
+    eq(Math.abs(+fer[0].children[0].children[0].getAttribute('y') - (accTop - 0.5 * S)) < 0.01, true, 'fermata 0.5 sp above the accent');
+    const restY = +fer[1].children[0].children[0].getAttribute('y');
+    eq(restY <= tabTop - 0.5 * S && restY >= tabTop - 0.5 * S - th.staffLineWidth, true, 'rest fermata 0.5 sp above the top line (and its stroke)');
+    const rit = nodes.find((n) => n.tag === 'text' && n.textContent === 'rit.');
+    eq(+rit.getAttribute('y') < +fer[2].children[0].children[0].getAttribute('y') - glyphBox('fermataLongAbove').top * S, true, 'beat text outside');
+    // two voices: voice 1's accent wins beat 1 (no staccato), voice 2's staccato fills beat 2, v2's own column (v1 rests) draws its tenuto
+    const arts = groups(nodes, 'tab-articulations').slice(1).map((g) => g.children.map((c) => c.textContent));
+    eq(arts, [[Glyph.articAccentAbove], [Glyph.articStaccatoAbove], [Glyph.articTenutoAbove]]);
+  });
+  test('1.11 tab marks: off is byte-identical — every case with tabArticulations: false on every track renders its snapshot', () => {
+    const dir = path.join(root0, 'tests', 'snapshots');
+    let n = 0;
+    for (const c of cases) {
+      const file = path.join(dir, `${c.id}.svg`);
+      if (!fs.existsSync(file)) continue;
+      const sc = JSON.parse(JSON.stringify(c.score));
+      (sc.tracks || []).forEach((t) => { t.tabArticulations = false; });
+      const box = makeContainer();
+      new MusicScoreRenderer(box, sc, { width: c.width, ...(c.options || {}) }).render();
+      if (serialize(box.children[0]) !== fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n')) throw new Error(c.id);
+      n++;
+    }
+    if (n < 73) throw new Error(`only ${n}`);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

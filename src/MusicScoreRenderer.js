@@ -25,6 +25,7 @@ import { renderBeatText } from './draw/beatText.js';
 import { renderFadeWah } from './draw/expressionMarks.js';
 import { ottavaSegments, renderOttavaAlta, renderOttavaBassa } from './draw/ottava.js';
 import { tempoChanges, renderFirstTempoChange, renderTempoChanges } from './draw/tempoMarks.js';
+import { renderTabOnlyArticulations, renderTabOnlyFermatas } from './draw/tabOnlyMarks.js';
 import {
   renderTiesAndSlurs, renderGraceSlurs, renderTabArticulations, renderTechniqueLabelRuns, renderChordSymbolsAndDynamics,
   renderFermatas, renderPlayingDirections,
@@ -88,6 +89,8 @@ export class MusicScoreRenderer {
     // --- Score-wide passes, appended to the staff groups they belong to ---
     renderTiesAndSlurs(score, trackRuns, theme, layout.systems);
     renderGraceSlurs(score, trackRuns, theme);
+    // Articulations above tab-only TAB staves (opt-in; outside the pass barrel): pass 3 seeds its ink boxes with them.
+    renderTabOnlyArticulations(score, trackRuns, theme);
     renderTabArticulations(score, trackRuns, theme, layout.systems);
     renderTechniqueLabelRuns(score, trackRuns, theme, layout.systems);
     // Pick strokes, notation tap "T" / slap / pop and trills (above everything but chord symbols and fermatas).
@@ -103,6 +106,8 @@ export class MusicScoreRenderer {
     renderOttavaBassa(ottavas, theme);
     // Fermatas last so they can clear slurs, tuplets and chord symbols.
     renderFermatas(score, trackRuns, theme, layout.systems);
+    // ...and on tab-only TAB staves (opt-in), above every ink of the column.
+    renderTabOnlyFermatas(score, trackRuns, theme);
     // Beat text above / below the music, clear of all of the above (outside the pass barrel).
     renderBeatText(trackRuns, theme);
 
