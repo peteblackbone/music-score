@@ -2040,7 +2040,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   // the 52 pre-1.4 cases (the 1.4.0 two-voice fixtures char-voices-*, the 1.5.0 char-note-effects-*, the 1.6.0
   // char-score-text-*, the 1.7.0 char-ornaments-* and the 1.9.0 char-bends-slides-* came later)
   const isVoices = (id) => id.startsWith('char-voices-');
-  const isPost14 = (id) => /^char-(voices|note-effects|score-text|ornaments|bends-slides|expression)-/.test(id);
+  const isPost14 = (id) => /^char-(voices|note-effects|score-text|ornaments|bends-slides|expression|clefs|multirest|slashes|tab-articulations)-/.test(id);
   const cases = (await import('./cases.mjs')).cases.filter((c) => !isPost14(c.id));
   const { computeLayout } = await imp('src/layout/index.js');
   const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
@@ -2660,7 +2660,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   const { group: svgGroup } = await imp('src/draw/svgUtil.js');
   // the 57 pre-1.6 cases (the 1.6.0 char-score-text-* fixtures use the new fields on purpose; the 1.7.0
   // char-ornaments-* and the 1.9.0 char-bends-slides-* came later)
-  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression)-/.test(c.id));
+  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression|clefs|multirest|slashes|tab-articulations)-/.test(c.id));
   const thm = resolveTheme({});
   const s = thm.staffLineSpacing;
   const ok = (c, m) => { if (!c) throw new Error(m); };
@@ -3850,7 +3850,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     return r;
   };
   // The pins describe the 63 pre-1.8 cases (the 1.8 fixtures exercise these triggers on purpose; the 1.9 char-bends-slides-* came later).
-  const pre18 = cases.filter((c) => !/^char-(voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression)-/.test(c.id));
+  const pre18 = cases.filter((c) => !/^char-(voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression|clefs|multirest|slashes|tab-articulations)-/.test(c.id));
   const scans = new Map(pre18.map((c) => [c.id, scan(c)]));
   const twoVoiceIds = [...scans].filter(([, r]) => r.two.length).map(([id]) => id);
 
@@ -4589,7 +4589,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
 
   test('pre-1.9 scan: none of the 67 cases (raw or normalized) uses a compound bend, legato slide, feedback harmonic, trill tied forward, whammyScoop / whammyBar key', () => {
     // the 1.9.0 char-bends-slides-* fixtures use them on purpose
-    const pre19 = cases.filter((c) => !/^char-(bends-slides|expression)-/.test(c.id));
+    const pre19 = cases.filter((c) => !/^char-(bends-slides|expression|clefs|multirest|slashes|tab-articulations)-/.test(c.id));
     eq(pre19.length, 67);
     const zero = { compound: 0, legato: 0, feedback: 0, trillTie: 0, whammyKeys: 0 };
     for (const c of pre19) {
@@ -4668,7 +4668,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
 // ---------- pre-1.10 characterization: dynamics, tempoText and staff positions (pins taken before the 1.10.0 change) ----------
 {
   // the 1.10.0 char-expression-* fixtures use the new keys on purpose
-  const cases = (await import('./cases.mjs')).cases.filter((c) => !/^char-expression-/.test(c.id));
+  const cases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(expression|clefs|multirest|slashes|tab-articulations)-/.test(c.id));
   const { createHash } = await import('node:crypto');
   const { staffPosition } = await imp('src/pitch.js');
   const sha = (v) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
@@ -5552,7 +5552,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
   test('1.10 the 70 snapshot cases: no note gets ottavaShift; notePosition === staffPosition everywhere', () => {
     let count = 0;
-    for (const c of cases.filter((x) => !x.id.startsWith('char-expression'))) {
+    for (const c of cases.filter((x) => !/^char-(expression|clefs|multirest|slashes|tab-articulations)-/.test(x.id))) {
       for (const t of normalizeScore(c.score).tracks) for (const m of t.measures) for (const b of [...m.beats, ...(m.voice2Beats || [])]) {
         for (const n of b.notes || []) {
           if ('ottavaShift' in n) throw new Error(`${c.id}: ottavaShift`);
@@ -6038,7 +6038,8 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
   test('1.11 clefNotePosition equals pitch.js notePosition for treble/bass (and their octave labels) over every note of every case', () => {
     let n = 0;
-    for (const c of cases) for (const t of normalizeScore(c.score).tracks) for (const m of t.measures) {
+    // the 1.11 char-clefs fixture uses alto / tenor clefs on purpose
+    for (const c of cases.filter((x) => !x.id.startsWith('char-clefs-'))) for (const t of normalizeScore(c.score).tracks) for (const m of t.measures) {
       for (const b of [...m.beats, ...(m.voice2Beats || [])]) for (const note of b.notes || []) {
         if (note.pitch == null) continue;
         for (const [clef, base] of [['treble', 'treble'], ['bass', 'bass'], ['treble8vb', 'treble'], ['bass15ma', 'bass'], [t.clef, t.clef]]) {
@@ -6195,8 +6196,9 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
         eq(Y.openingLayout(mi, b, th, null), Y.openingLayout(mi, a, th, null), `${c.id} opening ${mi}`);
         eq(Y.openingLayout(mi, b, th, hb), Y.openingLayout(mi, a, th, ha), `${c.id} first opening ${mi}`);
         eq(Y.courtesyWidth(mi, b, th), Y.courtesyWidth(mi, a, th), `${c.id} courtesy ${mi}`);
-        eq(Y.clefChangeWidth(mi, b, th), 0);
-        a.tracks.forEach((t, ti) => eq(Y.trackCourtesy(b.tracks[ti], mi), Y.trackSignatureChange(t, mi), `${c.id} track ${ti}`));
+        eq(Y.clefChangeWidth(mi, b, th), Y.clefChangeWidth(mi, a, th), `${c.id} clef change ${mi}`);
+        // without clef changes the courtesy is exactly trackSignatureChange's (char-clefs has changes on purpose)
+        a.tracks.forEach((t, ti) => eq(Y.trackCourtesy(b.tracks[ti], mi), c.id.startsWith('char-clefs-') ? Y.trackCourtesy(t, mi) : Y.trackSignatureChange(t, mi), `${c.id} track ${ti}`));
         n++;
       }
       eq(JSON.stringify(computeLayout(b, th, w)), JSON.stringify(computeLayout(a, th, w)), c.id);
@@ -6405,6 +6407,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const dir = path.join(root0, 'tests', 'snapshots');
     let n = 0;
     for (const c of cases) {
+      if (c.id.startsWith('char-multirest-')) continue; // the multirest fixture collapses on purpose
       const file = path.join(dir, `${c.id}.svg`);
       if (!fs.existsSync(file)) continue;
       const box = makeContainer();
@@ -6412,7 +6415,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
       if (serialize(box.children[0]) !== fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n')) throw new Error(c.id);
       n++;
     }
-    if (n < 73) throw new Error(`only ${n}`);
+    if (n < 76) throw new Error(`only ${n}`);
   });
 }
 
@@ -6494,6 +6497,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const off = (beats) => (beats || []).map((b) => ({ ...b, slash: false }));
     let n = 0;
     for (const c of cases) {
+      if (c.id.startsWith('char-slashes-')) continue; // the slashes fixture has note beats without notes (they need slash: true)
       const file = path.join(dir, `${c.id}.svg`);
       if (!fs.existsSync(file)) continue;
       const sc = JSON.parse(JSON.stringify(c.score));
@@ -6507,7 +6511,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
       if (serialize(box.children[0]) !== fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n')) throw new Error(c.id);
       n++;
     }
-    if (n < 73) throw new Error(`only ${n}`);
+    if (n < 76) throw new Error(`only ${n}`);
   });
 }
 
@@ -6594,6 +6598,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const dir = path.join(root0, 'tests', 'snapshots');
     let n = 0;
     for (const c of cases) {
+      if (c.id.startsWith('char-tab-articulations-')) continue; // the tab-articulations fixture draws its marks on purpose
       const file = path.join(dir, `${c.id}.svg`);
       if (!fs.existsSync(file)) continue;
       const sc = JSON.parse(JSON.stringify(c.score));
@@ -6603,7 +6608,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
       if (serialize(box.children[0]) !== fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n')) throw new Error(c.id);
       n++;
     }
-    if (n < 73) throw new Error(`only ${n}`);
+    if (n < 76) throw new Error(`only ${n}`);
   });
 }
 
