@@ -42,7 +42,7 @@ import {
 import { navigationLayout } from './navigation.js';
 import { isTwoVoiceMeasure } from '../twoVoice.js';
 import { tabColumnMarks } from './voices.js';
-import { clefChangeAt } from '../clef.js';
+import { notationClefChange } from '../clef.js';
 import { multiRestRuns, multiRestColumn, multiRestBar } from './multiRest.js';
 
 /** Closing barline type of track `track`'s measure `mi` within a system. */
@@ -175,7 +175,7 @@ export function computeLayout(score, theme, containerWidth) {
         const next = placed[li + 1];
         const sig = p.opening.sig ? trackSignatureChange(track, p.mi) : null;
         const barline = closingBarline(track, lastOf(columns, p.mi), next ? next.opening : null);
-        const clef = p.opening.clefX != null && track.showStandardNotation ? clefChangeAt(track, p.mi) : null;
+        const clef = p.opening.clefX != null ? notationClefChange(track, p.mi) : null;
         return {
           measureIndex: p.mi,
           x: p.x,

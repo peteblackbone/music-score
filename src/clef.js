@@ -33,7 +33,8 @@ export function trackClef(track) {
   return clefOf(track?.clef) ?? 'treble';
 }
 
-const TABLES = new WeakMap(); // track -> clef in force per measure index
+// track -> clef in force per measure index; assumes a track (and its measures' clefs) isn't mutated after first use
+const TABLES = new WeakMap();
 
 function clefTable(track) {
   let t = TABLES.get(track);
@@ -58,6 +59,11 @@ export function clefChangeAt(track, mi) {
   if (!(mi > 0)) return null;
   const c = clefAt(track, mi);
   return c !== clefAt(track, mi - 1) ? c : null;
+}
+
+/** The new clef when `track`'s notation staff changes clef at measure `mi` (> 0); null without notation or change. */
+export function notationClefChange(track, mi) {
+  return track.showStandardNotation ? clefChangeAt(track, mi) : null;
 }
 
 /** Base clef without its octave label: treble | bass | alto | tenor. */

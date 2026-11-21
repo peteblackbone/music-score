@@ -30,7 +30,7 @@ export function drawStaffLines(x, endX, baselineY, theme) {
  * `scale` < 1 draws a clef change / courtesy clef (same anchor line).
  */
 export function drawClef(x, baselineY, clef, octave, theme, scale = 1) {
-  const fontSize = scale !== 1 ? smuflFontSizePx(theme) * scale : smuflFontSizePx(theme);
+  const fontSize = smuflFontSizePx(theme) * scale;
   const glyph = clefGlyphFor(clef, octave);
   // Bravura's clef glyphs are designed so the glyph baseline sits on the
   // staff line the clef "wraps": G4 (2nd line, position 2) for treble,

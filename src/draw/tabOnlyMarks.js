@@ -105,7 +105,7 @@ export function renderTabOnlyArticulations(score, trackRuns, theme) {
       });
       run.tabG.appendChild(gEl);
       const top = bottom + TAB_ARTIC_STACK_GAP_SP * s;
-      layoutEl.tabRendered = { fretTopY: r.fretTopY ?? Infinity, marksTopY: Math.min(r.marksTopY ?? Infinity, top) };
+      layoutEl.tabRendered = { ...r, marksTopY: Math.min(r.marksTopY ?? Infinity, top) };
       run.tabOnlyBoxes.push({ x1, x2, top, bottom: first, text: true });
     });
   });

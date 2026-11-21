@@ -17,7 +17,7 @@
  */
 import { glyphBox, glyphStringBox } from '../glyphMetrics.js';
 import { Glyph, accidentalGlyph, timeSigDigits } from '../glyphs.js';
-import { clefAt, clefChangeAt, clefGlyphFor } from '../clef.js';
+import { clefAt, notationClefChange, clefGlyphFor } from '../clef.js';
 import { estimateTextWidth } from '../textMetrics.js';
 
 export const KEY_STEP_SP = 1.1;          // between key-signature accidentals
@@ -157,7 +157,7 @@ export function trackSignatureChange(track, mi) {
 export function clefChangeWidth(mi, score, theme) {
   let w = 0;
   notationTracks(score).forEach((t) => {
-    const c = clefChangeAt(t, mi);
+    const c = notationClefChange(t, mi);
     if (c) w = Math.max(w, glyphBox(clefGlyphFor(c, t.octaveClef)).width * CLEF_CHANGE_SCALE);
   });
   return w * theme.staffLineSpacing;
@@ -166,7 +166,7 @@ export function clefChangeWidth(mi, score, theme) {
 /** Per-track courtesy for a change at measure `mi`: trackSignatureChange plus `clef` when its notation staff changes clef. */
 export function trackCourtesy(track, mi) {
   const sig = trackSignatureChange(track, mi);
-  const clef = track.showStandardNotation ? clefChangeAt(track, mi) : null;
+  const clef = notationClefChange(track, mi);
   if (!clef) return sig;
   return { key: sig ? sig.key : null, time: sig ? sig.time : null, clef };
 }
@@ -307,7 +307,7 @@ export function systemIndents(score, theme) {
 
 /** Last measure index a column stands for (a multi-measure rest's run end, else `mi`). */
 export function lastOf(columns, mi) {
-  return columns[mi].lastMi ?? mi;
+  return Math.max(mi, columns[mi]?.lastMi ?? mi);
 }
 
 /**

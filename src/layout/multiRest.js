@@ -17,7 +17,7 @@
  */
 import { R, cmp } from '../rational.js';
 import { durationR } from '../duration.js';
-import { clefChangeAt } from '../clef.js';
+import { notationClefChange } from '../clef.js';
 import { idealGap } from './timeline.js';
 import { glyphStringBox } from '../glyphMetrics.js';
 import { timeSigDigits } from '../glyphs.js';
@@ -60,7 +60,7 @@ function hasFirstOnly(score, mi) {
   if (n.segno || n.coda || n.section) return true;
   return score.tracks.some((t) => {
     const m = t.measures[mi];
-    return m.keyChanged || m.timeChanged || m.repeatStart || (t.showStandardNotation && clefChangeAt(t, mi));
+    return m.keyChanged || m.timeChanged || m.repeatStart || notationClefChange(t, mi);
   });
 }
 

@@ -169,12 +169,6 @@ export const Glyph = {
   brace:'',
 };
 
-/** Clef name ('treble' | 'bass') -> clef glyph; `octave` picks the 8vb variant (gClef8vb / fClef8vb). */
-export function clefGlyph(clef, octave) {
-  if (clef === 'bass') return octave ? Glyph.fClef8vb : Glyph.fClef;
-  return octave ? Glyph.gClef8vb : Glyph.gClef;
-}
-
 /** Pick stroke ('down' | 'up') -> bowing glyph (down-bow / up-bow), or null */
 export function pickStrokeGlyph(kind) {
   if (kind === 'down') return Glyph.stringsDownBow;

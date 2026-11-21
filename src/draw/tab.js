@@ -14,7 +14,7 @@ import { strokeOffsets } from './noteMarks.js';
 import { glyphBox } from '../glyphMetrics.js';
 import { Glyph } from '../glyphs.js';
 import { smuflFontSizePx } from '../theme.js';
-import { isSlashBeat, slashHeadGlyph, TAB_SLASH_PAD_SP } from '../slash.js';
+import { isSlashBeat, slashHeadGlyph, tabSlashHalf, TAB_SLASH_PAD_SP } from '../slash.js';
 
 /** Draw the tab staff lines for `stringCount` strings, baseline = bottom (highest-numbered) string. */
 export function drawTabStaffLines(x, endX, baselineY, stringCount, theme) {
@@ -133,7 +133,7 @@ function renderTabSlash(g, layoutEl, stringCount, theme) {
   const box = glyphBox(glyph);
   const x = layoutEl.x;
   const y = layoutEl.tabBaselineY - ((stringCount - 1) * theme.tabStaffLineSpacing) / 2;
-  const half = (box.width / 2 + TAB_SLASH_PAD_SP) * s;
+  const half = tabSlashHalf(layoutEl.el, theme);
   const top = y - (box.top + TAB_SLASH_PAD_SP) * s;
   const gEl = group({ class: 'tab-slash' });
   gEl.appendChild(rect(x - half, top, 2 * half, (box.top - box.bottom + 2 * TAB_SLASH_PAD_SP) * s, { fill: theme.background || '#ffffff' }));
