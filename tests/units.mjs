@@ -5284,6 +5284,45 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.10.0: fade, wah, ottava and metronome glyphs (glyphs.js, glyphMetrics.js) ----------
+{
+  const { glyphBox, hasGlyphBox } = await imp('src/glyphMetrics.js');
+  const G = await imp('src/glyphs.js');
+  const cpOf = (name) => Glyph[name].codePointAt(0).toString(16).toUpperCase();
+  const NAMES = {
+    guitarFadeIn: 'E843', guitarFadeOut: 'E844', guitarVolumeSwell: 'E845', guitarOpenPedal: 'E83D', guitarClosePedal: 'E83F',
+    ottava: 'E510', ottavaAlta: 'E511', ottavaBassa: 'E512', quindicesima: 'E514', quindicesimaAlta: 'E515', quindicesimaBassa: 'E516',
+    octaveParensLeft: 'E51A', octaveParensRight: 'E51B', ottavaBassaVb: 'E51C', quindicesimaBassaMb: 'E51D',
+    metNoteWhole: 'ECA2', metNoteHalfUp: 'ECA3', metNoteQuarterUp: 'ECA5', metNote8thUp: 'ECA7', metNote16thUp: 'ECA9',
+    metNote32ndUp: 'ECAB', metAugmentationDot: 'ECB7',
+  };
+  test('1.10 glyphs: 22 code points (verified in the bundled Bravura cmap), each with a measured box', () => {
+    eq(Object.keys(NAMES).map(cpOf), Object.values(NAMES));
+    eq(Object.keys(NAMES).filter((n) => !hasGlyphBox(n) || !hasGlyphBox(Glyph[n])), []);
+  });
+  test('1.10 glyphs: boxes are the measured ink padded outward 0.02 sp', () => {
+    const b = (n) => { const x = glyphBox(n); return [x.left, x.right, x.top, x.bottom]; };
+    eq(b('guitarFadeIn'), [-0.02, 1.52, 1.52, -0.02]);
+    eq(b('guitarVolumeSwell'), [-0.02, 2.958, 1.52, -0.02]);
+    eq(b('guitarOpenPedal'), [-0.02, 1.208, 1.208, -0.02]);
+    eq(b('ottavaAlta'), [-0.02, 3.583, 1.895, -0.083]);
+    eq(b('octaveParensRight'), [-0.145, 0.583, 1.958, -0.083]);
+    eq(b('metNoteQuarterUp'), [-0.02, 1.395, 2.77, -0.583]);
+    eq(b('metAugmentationDot'), [-0.02, 0.458, 0.27, -0.27]);
+  });
+  test('1.10 glyphs: fadeGlyph / wahGlyph / ottavaGlyph / metNoteGlyph lookups', () => {
+    eq([G.fadeGlyph('in'), G.fadeGlyph('out'), G.fadeGlyph('swell'), G.fadeGlyph('x')],
+      [Glyph.guitarFadeIn, Glyph.guitarFadeOut, Glyph.guitarVolumeSwell, null]);
+    eq([G.wahGlyph('open'), G.wahGlyph('closed'), G.wahGlyph('o')], [Glyph.guitarOpenPedal, Glyph.guitarClosePedal, null]);
+    eq(['8va', '8vb', '15ma', '15mb', '22ma'].map((k) => G.ottavaGlyph(k)),
+      [Glyph.ottavaAlta, Glyph.ottavaBassaVb, Glyph.quindicesimaAlta, Glyph.quindicesimaBassaMb, null]);
+    eq([G.ottavaGlyph('8vb', true), G.ottavaGlyph('15ma', true), G.ottavaGlyph('22ma', true)],
+      [Glyph.octaveParensLeft + Glyph.ottava + Glyph.octaveParensRight, Glyph.octaveParensLeft + Glyph.quindicesima + Glyph.octaveParensRight, null]);
+    eq(['whole', 'half', 'quarter', '8th', '16th', '32nd', 'bogus'].map(G.metNoteGlyph),
+      [Glyph.metNoteWhole, Glyph.metNoteHalfUp, Glyph.metNoteQuarterUp, Glyph.metNote8thUp, Glyph.metNote16thUp, Glyph.metNote32ndUp, Glyph.metNoteQuarterUp]);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
