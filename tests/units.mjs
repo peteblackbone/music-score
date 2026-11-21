@@ -4663,6 +4663,93 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- pre-1.10 characterization: dynamics, tempoText and staff positions (pins taken before the 1.10.0 change) ----------
+{
+  const { cases } = await import('./cases.mjs');
+  const { createHash } = await import('node:crypto');
+  const { staffPosition } = await imp('src/pitch.js');
+  const sha = (v) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const renderCase = (c) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(c.score)), { width: c.width, ...(c.options || {}) }).render();
+    return box.children[0];
+  };
+  const byClass = (svg, k) => walk(svg).filter((n) => (n.getAttribute('class') || '').split(/\s+/).includes(k));
+  const streams = (sc) => (sc.tracks || []).flatMap((t) => {
+    const out = [[], []];
+    for (const m of t.measures || []) {
+      if (m.voices) m.voices.forEach((v, i) => out[Math.min(i, 1)].push(...(v.beats || [])));
+      else { out[0].push(...(m.beats || [])); out[1].push(...(m.voice2Beats || [])); }
+    }
+    return out;
+  });
+  const NEW_KEYS = ['hairpin', 'fade', 'wah', 'ottava', 'tempo'];
+
+  test('pre-1.10 scan: none of the 70 cases (raw or normalized) has a hairpin/fade/wah/ottava/tempo beat key, and no voice-2 beat has a dynamic', () => {
+    eq(cases.length, 70);
+    for (const c of cases) {
+      for (const [label, sc] of [['raw', c.score], ['normalized', normalizeScore(c.score)]]) {
+        (sc.tracks || []).forEach((t) => (t.measures || []).forEach((m) => {
+          const lists = m.voices ? m.voices.map((v, i) => [i, v.beats || []]) : [[0, m.beats || []], [1, m.voice2Beats || []]];
+          for (const [vi, beats] of lists) for (const b of beats) {
+            for (const k of NEW_KEYS) if (k in b) throw new Error(`${c.id} ${label}: beat has key ${k}`);
+            if (vi >= 1 && b.dynamic != null) throw new Error(`${c.id} ${label}: voice-2 beat has a dynamic`);
+          }
+        }));
+      }
+    }
+  });
+  test('pre-1.10 scan: the scan is not vacuous (it sees voice-2 beats and voice-1 dynamics in the cases)', () => {
+    let v2 = 0, dyn = 0;
+    for (const c of cases) for (const [i, beats] of streams(c.score).entries()) { if (i % 2) v2 += beats.length; else dyn += beats.filter((b) => b.dynamic != null).length; }
+    if (!v2 || !dyn) throw new Error(`v2=${v2} dyn=${dyn}`);
+  });
+
+  let rendered = null;
+  const renders = () => (rendered ||= cases.map((c) => [c, renderCase(c)]));
+  test('pre-1.10 pin: y of every class="dynamic" node across the 70 cases (sha256)', () => {
+    const ys = renders().map(([c, svg]) => [c.id, byClass(svg, 'dynamic').map((n) => n.getAttribute('y'))]);
+    if (!ys.some(([, a]) => a.length)) throw new Error('no dynamics rendered');
+    eq(sha(ys), '0bcbeb534d0fead81851a162300cc68284b28ae9d8590579b622f3a9b982d4b4');
+  });
+  test('pre-1.10 pin: x,y of every class="tempo" node across the 70 cases (sha256)', () => {
+    const xy = renders().map(([c, svg]) => [c.id, byClass(svg, 'tempo').map((n) => [n.getAttribute('x'), n.getAttribute('y')])]);
+    if (!xy.some(([, a]) => a.length)) throw new Error('no tempoText rendered');
+    eq(sha(xy), '208ee5f9cead36bdcca86fec4f56e8c1f05389b72308de8287c0a80fc763c858');
+  });
+  test('pre-1.10 pin: staffPosition of every note (voice 1, voice 2, graces) of the 70 normalized cases (sha256)', () => {
+    const all = [];
+    for (const c of cases) {
+      const sc = normalizeScore(c.score);
+      for (const t of sc.tracks) {
+        const per = [];
+        for (const m of t.measures || []) {
+          const lists = m.voices ? m.voices.map((v) => v.beats || []) : [m.beats || [], m.voice2Beats || []];
+          lists.forEach((beats, vi) => beats.forEach((b) => (b.notes || []).forEach((n) => {
+            if (n.pitch != null) per.push([vi, b.type, n.pitch, staffPosition(n.pitch, t.clef)]);
+          })));
+        }
+        all.push([c.id, t.clef, per]);
+      }
+    }
+    if (!all.some(([, , p]) => p.some((e) => e[1] === 'grace'))) throw new Error('no grace notes covered');
+    if (!all.some(([, , p]) => p.some((e) => e[0] === 1))) throw new Error('no voice-2 notes covered');
+    eq(sha(all), 'dc6a8c0a51e3cfb20ccb63a2f2f3b90004d8fd636288ff663839a1ce6b3fb242');
+  });
+  test('pre-1.10 pin: staffPosition hand table (treble, bass, octave clefs fall back to treble)', () => {
+    const table = [
+      ['E4', 'treble', 0], ['G4', 'treble', 2], ['F5', 'treble', 8], ['C4', 'treble', -2], ['E3', 'treble', -7], ['C6', 'treble', 12],
+      ['G2', 'bass', 0], ['A3', 'bass', 8], ['C4', 'bass', 10], ['E2', 'bass', -2], ['G1', 'bass', -7],
+      ['E4', undefined, 0],
+      ['E4', 'treble8vb', 0], ['G2', 'bass8vb', -12], ['E4', 'alto', 0], ['C4', 'nonsense', -2],
+    ];
+    table.forEach(([p, clef, want]) => eq(staffPosition(p, clef), want, `${p} ${clef}`));
+    eq(staffPosition('F#4'), 1);
+    eq(staffPosition('Bb3', 'treble'), -3);
+  });
+}
+
 // ---------- 1.9.0: compound bends (directions.js bendOf, draw/bend.js) ----------
 {
   const { bendOf } = await imp('src/directions.js');
