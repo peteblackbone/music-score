@@ -101,3 +101,46 @@ the module:
 This keeps the module testable and reusable on its own (a plain demo page,
 unit tests, or even a completely different host app later) without ever
 being coupled to one backend's schema or API shape.
+
+## Drawing order of the score-wide marks (1.10.0)
+
+`MusicScoreRenderer.render()` draws every system first, then runs the
+score-wide marks. The seven numbered passes live in the `draw/passes.js`
+barrel and must keep their order. The other calls sit between them: they are
+not passes, so they stay out of `passes/`, which keeps each pass small.
+`tests/structure.mjs` checks the order and that the barrel exports stay as
+they are.
+
+1. Passes 1 to 5 (ties and slurs, grace slurs, TAB articulations, technique
+   labels, playing directions).
+2. `renderFadeWah` (`draw/expressionMarks.js`): fade and wah marks above the
+   top staff. Their boxes go into `run.aboveBoxes`.
+3. `ottavaSegments` (`draw/ottava.js`, layout only), then `renderOttavaAlta`:
+   the 8va and 15ma brackets above the notation staff. Their boxes also go
+   into `run.aboveBoxes`.
+4. Pass 6 (`renderChordSymbolsAndDynamics`): chord symbols and diagrams, then
+   the dynamics line from `draw/dynamicsLine.js` (voice 1 and voice 2
+   dynamics, and hairpins). Pass 6 measures the staff's ink first, so chord
+   symbols rise above the marks of step 2 and 3.
+5. `renderOttavaBassa`: the 8vb and 15mb brackets, below the dynamics line.
+6. Pass 7 (`renderFermatas`): fermatas clear the chord boxes and
+   `run.aboveBoxes`. The boxes reach pass 7 through `collectBeats` in
+   `passes/notationBeats.js`.
+7. Beat text (`draw/beatText.js`), then the navigation marks per system
+   (`draw/navigation.js`). Then the tempo: `tempoChanges` and the score's
+   `tempoText` in `MusicScoreRenderer.js` (the `drawTempo` in `draw/decor.js`
+   takes an optional shared baseline), then `renderTempoChanges`
+   (`draw/tempoMarks.js`), so the metronome marks are the outermost marks
+   above each system's top staff.
+
+The expression fields are read in two places, and both use `src/expression.js`
+(pure canonical forms, null for anything unknown):
+
+- Drawing: each draw module canonicalizes its own fields.
+- Layout: `normalize.js` adds `ottavaShift` (-7, -14, +7 or +14 staff
+  positions) to the pitched notes inside an ottava run, and only in tracks
+  that have a valid `beat.ottava`. `src/pitch.js` (`notePosition`,
+  `displayPitch`) adds the shift to the staff position and to the octave of
+  the accidental state. The written pitch, the TAB frets and the chord
+  diagrams never see the shift. Tracks without an ottava get the same track
+  object back, so their output is unchanged.

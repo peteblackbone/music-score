@@ -77,6 +77,7 @@
   <a href="#pitch">Pitch &amp; accidentals</a>
   <a href="#curves">Ties &amp; slurs</a>
   <a href="#marks">Marks</a>
+  <a href="#expression">Expression &amp; tempo</a>
   <a href="#chord-diagrams">Chord diagrams</a>
   <a href="#techniques">Guitar techniques</a>
   <a href="#harmonics">Harmonics</a>
@@ -96,6 +97,7 @@
   <div class="tile"><b>Rhythm on tab</b><span>Tab-only tracks show stems, beams, flags, dots, tuplets and rests on the TAB staff.</span></div>
   <div class="tile"><b>Full notation basics</b><span>Keys, meters, tuplets, dots, ties, slurs, accidentals, chords.</span></div>
   <div class="tile"><b>Marks</b><span>Articulations, fermatas, dynamics, chord symbols, vibrato, tremolo.</span></div>
+  <div class="tile"><b>Expression and tempo</b><span>Hairpins, fades, wah, 8va, 8vb, 15ma and 15mb brackets, and tempo changes with a metronome mark.</span></div>
   <div class="tile"><b>Themeable</b><span>Colours, fonts and spacing; everything scales with one key.</span></div>
   <div class="tile"><b>Accessible SVG</b><span><code>role="img"</code> with a <code>&lt;title&gt;</code> and <code>&lt;desc&gt;</code>.</span></div>
   <div class="tile"><b>Zero dependencies</b><span>Plain ES modules; Bravura font shipped locally.</span></div>
@@ -186,7 +188,7 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 <div class="demo" data-demo="curves" data-width="520"></div>
 
 <h2 id="marks">Articulations, fermatas, dynamics, chord symbols</h2>
-<p>Staccatissimo, staccato, tenuto, marcato and accent go on the side opposite the stem and stack in a fixed order. Fermatas come in normal, short and long forms and sit above everything on the beat. Chord symbols share one line above each system and dynamics one line below, both kept clear of the notes.</p>
+<p>Staccatissimo, staccato, tenuto, marcato and accent go on the side opposite the stem and stack in a fixed order. Fermatas come in normal, short and long forms and sit above everything on the beat. Chord symbols share one line above each system and dynamics and hairpins one line below, both kept clear of the notes.</p>
 <div class="demo" data-demo="marks" data-width="640"></div>
 <ul class="points">
   <li><code>marcato</code> (or <code>heavyAccent</code>) and <code>staccatissimo</code> are drawn as their own marks. When both halves of a pair are given, the stronger one replaces the other: <code>staccatissimo</code> replaces <code>staccato</code>, and <code>marcato</code> replaces <code>accent</code>.</li>
@@ -195,6 +197,29 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <li><code>vibrato: 'wide'</code> draws a taller, heavier wave than <code>true</code>, on notation and TAB. <code>tremolo: '8th'</code> and <code>'16th'</code> draw one and two strokes; <code>'32nd'</code> and <code>true</code> draw three.</li>
 </ul>
 <div class="demo" data-demo="noteEffects" data-width="680"></div>
+
+<h2 id="expression">Expression lines, ottava and tempo</h2>
+<p>Beat fields for the marks along and above the staff: <code>hairpin</code> for crescendo and diminuendo, <code>fade</code> and <code>wah</code> above the staff, <code>ottava</code> for the 8va, 8vb, 15ma and 15mb brackets, and <code>tempo</code> for a tempo change with a metronome mark. None of them change the rhythm, the pitch data or the TAB. Scores that use none of them draw as before.</p>
+<table>
+  <tr><th>Field</th><th>Drawn as</th></tr>
+  <tr><td><code>hairpin</code> (beat)</td><td><code>'cresc'</code> or <code>'dim'</code>: a hairpin on the dynamics line below the notation. Consecutive beats with the same value form one hairpin. Aliases such as <code>'&lt;'</code>, <code>'crescendo'</code>, <code>'&gt;'</code> and <code>'diminuendo'</code> also work</td></tr>
+  <tr><td><code>fade</code> (beat)</td><td><code>'in'</code>, <code>'out'</code> or <code>'swell'</code>: a fade-in, fade-out or volume-swell sign above the staff</td></tr>
+  <tr><td><code>wah</code> (beat)</td><td><code>'open'</code> (or <code>'o'</code>) or <code>'closed'</code> (or <code>'close'</code>, <code>'+'</code>): a wah sign above the staff, above a fade on the same beat</td></tr>
+  <tr><td><code>ottava</code> (beat)</td><td><code>'8va'</code>, <code>'8vb'</code>, <code>'15ma'</code> or <code>'15mb'</code>: a bracket over consecutive beats that each set it. 8va and 15ma sit above the staff, 8vb and 15mb below it</td></tr>
+  <tr><td><code>tempo</code> (beat)</td><td>A number, or <code>{ bpm, unit, dots, text }</code>: a metronome note and <code>= N</code> above the staff. <code>unit</code> is <code>'quarter'</code> by default, and <code>dots</code> is 0 to 2</td></tr>
+</table>
+<ul class="points">
+  <li>Inside an ottava bracket the notes are drawn an octave (8va, 8vb) or two octaves (15ma, 15mb) away from their pitch, as the bracket means, so enter the sounding pitch. The TAB and chord diagrams do not change.</li>
+  <li>A hairpin starts after a dynamic on its first beat, ends before the next dynamic, and continues across a system break with a narrow opening.</li>
+  <li>A rest inside a hairpin or ottava run needs the same field too, or it ends the run.</li>
+  <li>Tempo changes come from voice 1. At a time shared by two tracks, the first track's is drawn. A tempo on the first beat of the score sits after <code>tempoText</code>.</li>
+  <li>Voice 2 dynamics are drawn on the dynamics line. If voice 1 has a dynamic at the same time, voice 2's is not drawn.</li>
+</ul>
+<p>1.10.0 additions: hairpins, fades, wah marks, ottava brackets, tempo changes and voice 2 dynamics.</p>
+<div class="demo" data-demo="expression" data-width="680"></div>
+<div class="demo" data-demo="ottava" data-width="680"></div>
+<div class="demo" data-demo="tempoChange" data-width="680"></div>
+<div class="demo" data-demo="voiceDynamics" data-width="680"></div>
 
 <h2 id="chord-diagrams">Chord diagrams</h2>
 <p>Fretboard boxes above the chord symbols, as in lead sheets and guitar books. List the shapes once in the score's <code>chordShapes</code>, keyed by chord name; every beat whose <code>chord</code> matches gets a diagram with the name centred above it.</p>
@@ -328,10 +353,10 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <li>Ties and slurs stay within their voice: voice 1 above the notes, voice 2 below. Articulations sit on the stem side.</li>
   <li>A unison where both voices play the same note at the same time shares one notehead. Other clashes move voice 2 right, and accidentals are shared between them.</li>
   <li>A rest that both voices take at the same time, for the same length, is drawn once.</li>
-  <li>Voice 2 can carry vibrato, trills, ornaments, right-hand letters, tap letters, golpe, pick strokes and fermatas. On notation they sit below the staff, and a voice 2 fermata is inverted.</li>
+  <li>Voice 2 can carry dynamics, vibrato, trills, ornaments, right-hand letters, tap letters, golpe, pick strokes and fermatas. On notation they sit below the staff, and a voice 2 fermata is inverted.</li>
   <li>On TAB each voice has a rhythm row, voice 2's below voice 1's. An unmerged rest sits in its row, so it never covers the other voice's frets.</li>
   <li>A <code>{ type: 'rest', hidden: true }</code> takes time without drawing anything, which lets a voice start later.</li>
-  <li>Chord symbols, dynamics, left-hand fingering, strums, arpeggios and the other playing marks are read from voice 1 only.</li>
+  <li>Chord symbols, left-hand fingering, strums, arpeggios and the other playing marks are read from voice 1 only. Dynamics on voice 2 are drawn, and voice 1's win at the same time.</li>
 </ul>
 <div class="demo" data-demo="voices" data-width="680"></div>
 <p>A TAB-only track shows each voice's rhythm: voice 1 on the first row under the TAB, voice 2 on a second row below it. A rest that both voices take at the same time is drawn once, in the staff.</p>
@@ -634,6 +659,66 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
       }],
     },
 
+    expression: {
+      tracks: [{
+        measures: [
+          { beats: [
+            n('quarter', 'C4', { dynamic: 'p', hairpin: 'cresc' }),
+            n('quarter', 'D4', { hairpin: 'cresc' }),
+            n('quarter', 'E4', { hairpin: 'cresc' }),
+            n('quarter', 'F4', { dynamic: 'f' }),
+          ] },
+          { beats: [
+            n('quarter', 'G4', { dynamic: 'mf', hairpin: 'dim' }),
+            n('quarter', 'F4', { hairpin: 'dim' }),
+            n('quarter', 'E4', { hairpin: 'dim' }),
+            n('quarter', 'D4', { hairpin: 'dim' }),
+          ] },
+          { beats: [
+            n('quarter', 'C4', { fade: 'in' }),
+            n('quarter', 'D4', { fade: 'swell' }),
+            n('quarter', 'E4', { fade: 'out', wah: 'open' }),
+            n('quarter', 'F4', { wah: 'closed' }),
+          ] },
+        ],
+      }],
+    },
+    ottava: {
+      tracks: [{
+        measures: [
+          { beats: [
+            n('quarter', 'C5', { ottava: '8va' }),
+            n('quarter', 'D5', { ottava: '8va' }),
+            n('quarter', 'E5', { ottava: '8va' }),
+            n('quarter', 'G5', { ottava: '8va' }),
+          ] },
+          { beats: [
+            n('half', 'C3', { ottava: '8vb' }),
+            n('half', 'G2', { ottava: '8vb' }),
+          ] },
+          { beats: [n('whole', 'C2', { ottava: '15mb' })] },
+        ],
+      }],
+    },
+    tempoChange: {
+      tracks: [{
+        measures: [
+          { beats: [n('quarter', 'C5', { tempo: 120 }), n('quarter', 'D5'), n('quarter', 'E5'), n('quarter', 'F5')] },
+          { beats: [n('half', 'G5', { tempo: { bpm: 60, unit: 'half', text: 'Broader' } }), n('half', 'A5')] },
+          { beats: [n('quarter', 'G5', { tempo: { bpm: 92.5, unit: 'quarter', dots: 1 } }), n('quarter', 'F5'), n('half', 'E5')] },
+        ],
+      }],
+    },
+    voiceDynamics: {
+      tracks: [{
+        measures: [
+          { voices: [
+            { beats: [n('half', 'G4', { dynamic: 'f' }), n('half', 'A4')] },
+            { beats: [n('half', 'C3', { dynamic: 'p' }), n('half', 'D3', { dynamic: 'mp' })] },
+          ] },
+        ],
+      }],
+    },
     chordDiagrams: {
       chordShapes: {
         C: { frets: ['x', 3, 2, 0, 1, 0], fingers: [0, 3, 2, 0, 1, 0] },
