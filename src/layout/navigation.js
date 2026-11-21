@@ -96,7 +96,11 @@ export function navigationLayout(systems, score, theme) {
   const where = new Map(); // mi -> { sysIdx, li }
   systems.forEach((sys, sysIdx) => {
     if (!sys.tracks.length) return;
-    sys.measureIndices.forEach((mi, li) => where.set(mi, { sysIdx, li }));
+    // a multi-measure rest's later measures map onto its column (layout/multiRest.js)
+    sys.measureIndices.forEach((mi, li) => {
+      const lastMi = sys.tracks[0].measures[li].multiRest?.lastMi ?? mi;
+      for (let k = mi; k <= lastMi; k++) where.set(k, { sysIdx, li });
+    });
   });
   const measure = (sysIdx, li) => systems[sysIdx].tracks[0].measures[li];
 

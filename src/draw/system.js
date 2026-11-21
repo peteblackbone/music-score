@@ -31,6 +31,7 @@ import { isTwoVoiceMeasure, voiceOf } from '../twoVoice.js';
 import { tiedFretOpts } from '../textMetrics.js';
 import { clefAt } from '../clef.js';
 import { CLEF_CHANGE_SCALE } from '../layout/systems.js';
+import { renderMultiRest } from './multiRest.js';
 
 // Top staff line -> lowest allowed tuplet bracket line. The end ticks hang 0.5 sp below the
 // line and the number is centred on it, so 1 sp keeps both at least 0.5 sp clear of the staff.
@@ -97,7 +98,8 @@ function drawStaff(g, system, sysIdx, staff, theme) {
   const row2Y = twoVoice.length ? tabRow2TopY(twoVoice, track.tuning.length, lineBottom, theme) : null;
   measures.forEach((measure) => drawMeasure(g, measure, staff, theme, row2Y));
   if (system.courtesy) {
-    const next = system.measureIndices[system.measureIndices.length - 1] + 1;
+    const lastM = measures[measures.length - 1];
+    const next = (lastM.multiRest?.lastMi ?? lastM.measureIndex) + 1;
     drawSignatureChange(g, system.courtesy, system.tracks[staff.ti].courtesy, staff, theme, 'courtesy', next);
   }
 }
@@ -191,6 +193,7 @@ function barlineStaff(staff, theme) {
  * voice 2 (stems down, in `<g class="voice-2">`) each on its own.
  */
 function drawNotationMeasure(g, measure, track, notationBaselineY, theme) {
+  if (measure.multiRest) { renderMultiRest(g, measure, 'notation', notationBaselineY, theme); return; }
   if (measure.wholeRest && !measure.elements.length) {
     // Empty measure: an implicit whole-measure rest (ui.md §4, design Q9).
     renderWholeMeasureRest(g, measure.wholeRest.x, notationBaselineY, theme);
@@ -294,6 +297,8 @@ function drawTupletBrackets(g, tupletGroups, elements, notationBaselineY, theme,
  * voice 2's rhythm row (draw/tabRhythm.js tabRow2TopY), two-voice measures only.
  */
 function drawTabMeasure(g, measure, track, tabBaselineY, theme, row2Y) {
+  // A multi-measure rest shows on TAB only with TAB rhythm (else the TAB stays blank).
+  if (measure.multiRest) { if (track.tabRhythm) renderMultiRest(g, measure, 'tab', tabBaselineY, theme); return; }
   measure.elements.forEach((layoutEl) => {
     const labelOpts = tiedFretOpts(track, layoutEl.el);
     layoutEl.tabRendered = renderTabElement(g, { ...layoutEl, tabBaselineY }, track.tuning.length, theme, labelOpts);

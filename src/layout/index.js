@@ -19,6 +19,10 @@
  * clefChange?: { x, clef } (mid-system clef change of this track's notation staff, only when present),
  * wholeRest: { x } | null, padded, showHeader, elements: [{ index, el, x, width, t,
  * chord, accidentals, wholeMeasureRest }], beamGroups, tupletGroups }`.
+ * A multi-measure rest (layout/multiRest.js, `score.multiMeasureRests`) is one
+ * LayoutMeasure for its whole run: `measureIndex` = the run's first measure,
+ * no elements / beam or tuplet groups / wholeRest, the last measure's closing
+ * barline, and `multiRest: { count, lastMi, x1, x2 }` (H-bar ends; only when present).
  * Two-voice measures (normalize.js `voice2Beats`) also get `elements2`,
  * `beamGroups2`, `tupletGroups2` (voice 2, indices into `voice2Beats`) and
  * `wholeRest: null`; every element of such a measure has `voice` (1 | 2),
@@ -32,13 +36,14 @@ import { groupBeams, tupletGroups } from './beams.js';
 import { cmp } from '../rational.js';
 import { buildColumn } from './timeline.js';
 import {
-  breakSystems, justifySystem, openingLayout, courtesyWidth, courtesyLayout, trackSignatureChange, trackCourtesy,
+  breakSystems, justifySystem, openingLayout, courtesyWidth, courtesyLayout, trackSignatureChange, trackCourtesy, lastOf,
   REPEAT_START_WIDTH_SP,
 } from './systems.js';
 import { navigationLayout } from './navigation.js';
 import { isTwoVoiceMeasure } from '../twoVoice.js';
 import { tabColumnMarks } from './voices.js';
 import { clefChangeAt } from '../clef.js';
+import { multiRestRuns, multiRestColumn, multiRestBar } from './multiRest.js';
 
 /** Closing barline type of track `track`'s measure `mi` within a system. */
 function closingBarline(track, mi, nextOpening) {
@@ -112,6 +117,8 @@ export function computeLayout(score, theme, containerWidth) {
   const measureCount = score.measureCount ?? (score.tracks[0]?.measures.length || 0);
   const columns = [];
   for (let mi = 0; mi < measureCount; mi++) columns.push(buildColumn(mi, score, theme));
+  // Multi-measure rests (opt-in): a run's first column stands for the whole run (lastOf).
+  multiRestRuns(score)?.forEach((last, first) => { columns[first] = multiRestColumn(first, last, columns[first], score, theme); });
   const graceW = theme.graceNoteWidthSp * s;
   const pad = theme.measurePaddingSp * s;
 
@@ -140,8 +147,9 @@ export function computeLayout(score, theme, containerWidth) {
       return p;
     });
     const last = placed[placed.length - 1];
-    const courtesy = !isLast && courtesyWidth(last.mi + 1, score, theme) > 0
-      ? courtesyLayout(last.mi + 1, score, theme, last.endX) : null;
+    const nextMi = lastOf(columns, last.mi) + 1;
+    const courtesy = !isLast && courtesyWidth(nextMi, score, theme) > 0
+      ? courtesyLayout(nextMi, score, theme, last.endX) : null;
     const staffEndX = courtesy ? courtesy.endX : last.endX;
     if (just.overflow) {
       overflow = true;
@@ -149,13 +157,14 @@ export function computeLayout(score, theme, containerWidth) {
     }
 
     const tracks = score.tracks.map((track, ti) => ({
-      courtesy: courtesy ? trackCourtesy(track, last.mi + 1) : null,
+      courtesy: courtesy ? trackCourtesy(track, nextMi) : null,
       measures: placed.map((p, li) => {
         const measure = track.measures[p.mi];
         const tev = p.col.tracks[ti];
-        const elements = placeElements(measure.beats, tev.events, p, li, pad, graceW);
+        const run = p.col.lastMi != null;
+        const elements = run ? [] : placeElements(measure.beats, tev.events, p, li, pad, graceW);
         let voice2 = null;
-        if (isTwoVoiceMeasure(measure)) {
+        if (!run && isTwoVoiceMeasure(measure)) {
           voice2 = { elements2: placeElements(measure.voice2Beats, tev.events2, p, li, pad, graceW) };
           tagVoice(elements, tev.events, 1);
           tagVoice(voice2.elements2, tev.events2, 2);
@@ -165,6 +174,7 @@ export function computeLayout(score, theme, containerWidth) {
         }
         const next = placed[li + 1];
         const sig = p.opening.sig ? trackSignatureChange(track, p.mi) : null;
+        const barline = closingBarline(track, lastOf(columns, p.mi), next ? next.opening : null);
         const clef = p.opening.clefX != null && track.showStandardNotation ? clefChangeAt(track, p.mi) : null;
         return {
           measureIndex: p.mi,
@@ -174,16 +184,17 @@ export function computeLayout(score, theme, containerWidth) {
           width: p.endX - p.x,
           timeSignature: measure.timeSignature,
           keySignature: measure.keySignature,
-          barline: closingBarline(track, p.mi, next ? next.opening : null),
+          barline,
           startBarline: p.opening.repeatX != null ? { type: p.opening.repeatType, x: p.x + p.opening.repeatX } : null,
           midSig: sig ? { keyX: p.x + p.opening.sig.keyX, timeX: p.x + p.opening.sig.timeX, ...sig } : null,
           ...(clef ? { clefChange: { x: p.x + p.opening.clefX, clef } } : {}),
-          wholeRest: tev.empty ? { x: (p.contentX + p.endX) / 2 } : null,
+          wholeRest: !run && tev.empty ? { x: (p.contentX + p.endX) / 2 } : null,
           padded: !!measure.padded, // added by normalize to pad a shorter track (not authored)
           showHeader: li === 0,
           elements,
-          beamGroups: groupBeams(measure.beats, measure.timeSignature),
-          tupletGroups: tupletGroups(measure.beats, measure.timeSignature),
+          beamGroups: run ? [] : groupBeams(measure.beats, measure.timeSignature),
+          tupletGroups: run ? [] : tupletGroups(measure.beats, measure.timeSignature),
+          ...(run ? { multiRest: { count: p.col.multiRest, lastMi: p.col.lastMi, ...multiRestBar(p.contentX, p.endX, theme, barline) } } : {}),
           ...voice2,
         };
       }),

@@ -6307,6 +6307,115 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.11.0: multi-measure rests (layout/multiRest.js, layout/index.js, draw/multiRest.js) ----------
+{
+  const M = await imp('src/layout/multiRest.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { timeSigDigits } = await imp('src/glyphs.js');
+  const cases = (await import('./cases.mjs')).cases;
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const q = (p) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: p }] });
+  const W = { type: 'rest', duration: 'whole' };
+  const notes = { beats: [q('C5'), q('D5'), q('E5'), q('F5')] };
+  const rest = (x = {}) => ({ beats: [W], ...x });
+  const score = (measures, x = {}) => ({ multiMeasureRests: true, ...x, tracks: [{ measures }] });
+  const runs = (sc) => { const r = M.multiRestRuns(normalizeScore(sc)); return r && [...r.entries()]; };
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const render = (sc, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(sc)), { width }).render();
+    return box.children[0];
+  };
+
+  test('1.11 multi-rest: isRestMeasure accepts empty / one plain bar-long rest in every track; any mark, hidden rest, second voice, grace or short rest rejects', () => {
+    const one = (beats, x = {}) => M.isRestMeasure(normalizeScore({ tracks: [{ measures: [{ beats, ...x }] }] }), 0);
+    eq([one([]), one([W]), one([{ type: 'rest', duration: 'half', dots: 1 }], { timeSignature: { beats: 3, beatType: 4 } }), one([{ ...W, slash: false }])], [true, true, true, true]);
+    eq([one([{ type: 'rest', duration: 'half' }]), one([W, W]), one([{ ...W, hidden: true }]), one([{ ...W, fermata: true }]),
+      one([{ ...W, text: 'x' }]), one([{ ...W, dynamic: 'p' }]), one([{ ...W, chord: 'C' }]), one([{ ...W, tempo: 90 }]), one([{ ...W, palmMute: true }]),
+      one([{ type: 'grace', duration: '8th', notes: [{ pitch: 'C5' }] }, W]), one([q('C5')]),
+      one([], { voices: [{ beats: [W] }, { beats: [{ ...W }] }] })], Array(12).fill(false));
+    const twoTracks = normalizeScore({ tracks: [{ measures: [rest()] }, { measures: [notes] }] });
+    eq(M.isRestMeasure(twoTracks, 0), false, 'every track must rest');
+  });
+  test('1.11 multi-rest: opt-in only with multiMeasureRests === true', () => {
+    const ms = [rest(), rest(), rest()];
+    for (const v of [undefined, false, 'true', 1, {}]) eq(runs({ ...score(ms), multiMeasureRests: v }), null, String(v));
+    eq(runs(score(ms)), [[0, 2]]);
+  });
+  test('1.11 multi-rest: run rules (first-only, last-only, endings, lone rests, padded measures)', () => {
+    eq(runs(score([notes, rest(), rest(), notes, rest(), notes, rest(), rest()])), [[1, 2], [6, 7]]);
+    eq(runs(score([rest(), rest({ keySignature: 2 }), rest(), rest({ timeSignature: { beats: 3, beatType: 4 }, beats: [{ type: 'rest', duration: 'half', dots: 1 }] }), rest()])), [[1, 2], [3, 4]]);
+    eq(runs(score([rest(), rest({ clef: 'bass' }), rest({ barline: 'repeatStart' }), rest({ segno: true }), rest({ coda: true }), rest({ section: 'A' })])), []);
+    eq(runs(score([rest({ segno: true }), rest(), rest({ barline: 'double' }), rest({ jump: 'D.C.' }), rest(), rest({ barline: 'repeatEnd', repeatCount: 3 }), rest()])), [[0, 2], [4, 5]]);
+    eq(runs(score([rest(), rest({ ending: 1 }), rest(), rest()])), [[2, 3]]);
+    eq(runs({ multiMeasureRests: true, tracks: [{ measures: [notes, rest(), rest()] }, { measures: [notes] }] }), [[1, 2]], 'padded measures rest');
+    eq(runs(score([rest(), rest({ clef: 'treble' })])), [[0, 1]], 'restating the clef is no change');
+  });
+  test('1.11 multi-rest: column and bar geometry (natural 8 sp, min 4 sp or count + 2 sp; inset 1 sp from content start / barline, at least 2 sp)', () => {
+    const col = M.multiRestColumn(1, 3, { onsets: [{}], gaps: [], leadPad: 9, extraIfFirstInSystem: 2, tracks: [] }, normalizeScore(score([rest(), rest(), rest(), rest()])), th);
+    eq([col.onsets, col.leadPad, col.extraIfFirstInSystem, col.lastMi, col.multiRest, col.gaps[0].nat, col.gaps[0].min, col.naturalWidth], [[], 0, 0, 3, 3, 8 * S, 4 * S, 8 * S]);
+    eq(M.multiRestBar(100, 200, th), { x1: 100 + S, x2: 200 - S });
+    eq(M.multiRestBar(100, 200, th, 'repeatEnd'), { x1: 100 + S, x2: 200 - 2.8 * S });
+    eq(M.multiRestBar(100, 100 + 3 * S, th), { x1: 100 + 0.5 * S, x2: 100 + 2.5 * S });
+  });
+  test('1.11 multi-rest: layout model (one measure per run, last barline, measure numbers, navigation at the run column, courtesy after the run)', () => {
+    const ms = [notes, rest({ segno: true }), rest(), rest(), rest({ jump: 'D.S.', barline: 'double' }), notes, notes];
+    const lay = computeLayout(normalizeScore(score(ms)), th, 900);
+    const sys = lay.systems[0];
+    eq(sys.measureIndices, [0, 1, 5, 6]);
+    const m = sys.tracks[0].measures[1];
+    eq([m.measureIndex, m.barline, m.elements, m.wholeRest, m.multiRest.count, m.multiRest.lastMi], [1, 'double', [], null, 4, 4]);
+    eq([m.multiRest.x1, m.multiRest.x2], [m.contentX + S, m.endX - 1.5 * S]);
+    eq(sys.marks.map((k) => [k.kind, k.mi]), [['segno', 1], ['jump', 4]]);
+    eq(sys.marks[1].xEnd, m.endX);
+    eq('multiRest' in sys.tracks[0].measures[0], false);
+    const off = computeLayout(normalizeScore({ ...score(ms), multiMeasureRests: false }), th, 900);
+    eq(off.systems.flatMap((s) => s.measureIndices), [0, 1, 2, 3, 4, 5, 6]);
+    // a run ending a system: the courtesy is for the measure after the run
+    const many = [notes, notes, notes, rest(), rest(), rest({ keySignature: 3, ...notes }), notes, notes, notes, notes];
+    const l2 = computeLayout(normalizeScore(score(many)), th, 520);
+    const s0 = l2.systems.find((s) => s.measureIndices.includes(3));
+    eq([s0.measureIndices, s0.tracks[0].courtesy], [[2, 3], { key: { to: 3, from: 0 }, time: null }]);
+    eq(l2.systems.flatMap((s) => s.measureIndices).includes(4), false);
+  });
+  test('1.11 multi-rest: drawn H-bar on the middle line, end strokes 2nd-4th line, count 0.5 sp above the top line; TAB only with TAB rhythm', () => {
+    const sc = { multiMeasureRests: true, tracks: [
+      { measures: [notes, rest(), rest(), rest(), rest(), rest(), rest(), rest(), rest(), rest(), rest(), rest(), notes] },
+      { showStandardNotation: false, showTablature: true, measures: [notes, ...Array(11).fill({ beats: [] }), notes] },
+      { showTablature: true, measures: [notes, ...Array(11).fill(rest()), notes] },
+      { showTablature: true, tabRhythm: true, measures: [notes, ...Array(11).fill(rest()), notes] },
+    ] };
+    const nodes = all(render(sc, 1200));
+    const staves = nodes.filter((n) => /^staff staff-/.test(cls(n)));
+    const kinds = staves.map((g) => [cls(g), g.getAttribute('data-track'), all(g).filter((n) => cls(n) === 'multi-rest').length]);
+    eq(kinds, [['staff staff-notation', '0', 1], ['staff staff-tab', '1', 1], ['staff staff-notation', '2', 1], ['staff staff-tab', '2', 0],
+      ['staff staff-notation', '3', 1], ['staff staff-tab', '3', 1]]);
+    const bar = all(staves[0]).find((n) => cls(n) === 'multi-rest');
+    const [r, l1, l2] = bar.children;
+    eq([+r.getAttribute('y'), +r.getAttribute('height')], [1.5 * S, S]);
+    eq([+l1.getAttribute('y1'), +l1.getAttribute('y2'), +l2.getAttribute('x1') - +l1.getAttribute('x1') > 2 * S], [S, 3 * S, true]);
+    const count = all(staves[0]).find((n) => cls(n) === 'multi-rest-count').children[0];
+    eq([count.textContent, count.getAttribute('text-anchor'), +count.getAttribute('y')], [timeSigDigits(11), 'middle', -1.5 * S]);
+    eq(+count.getAttribute('x'), (+l1.getAttribute('x1') + +l2.getAttribute('x1')) / 2);
+  });
+  test('1.11 multi-rest: off is byte-identical — every case with multiMeasureRests: false renders its snapshot', () => {
+    const dir = path.join(root0, 'tests', 'snapshots');
+    let n = 0;
+    for (const c of cases) {
+      const file = path.join(dir, `${c.id}.svg`);
+      if (!fs.existsSync(file)) continue;
+      const box = makeContainer();
+      new MusicScoreRenderer(box, { ...JSON.parse(JSON.stringify(c.score)), multiMeasureRests: false }, { width: c.width, ...(c.options || {}) }).render();
+      if (serialize(box.children[0]) !== fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n')) throw new Error(c.id);
+      n++;
+    }
+    if (n < 73) throw new Error(`only ${n}`);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

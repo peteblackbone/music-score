@@ -305,11 +305,18 @@ export function systemIndents(score, theme) {
   };
 }
 
+/** Last measure index a column stands for (a multi-measure rest's run end, else `mi`). */
+export function lastOf(columns, mi) {
+  return columns[mi].lastMi ?? mi;
+}
+
 /**
  * Greedy system breaking. `columns[mi]` from buildColumn. Returns
  * `[{ measureIndices, indent, header, opening[], courtesy }]` where each
  * measure fits with its own header and (if the next system starts with a
- * key/time change) the courtesy signature.
+ * key/time change) the courtesy signature. A multi-measure rest column
+ * (`lastMi`, layout/multiRest.js) stands for its whole run: the loop steps
+ * over the run's other measures.
  */
 export function breakSystems(columns, score, theme, width) {
   const s = theme.staffLineSpacing;
@@ -328,10 +335,10 @@ export function breakSystems(columns, score, theme, width) {
       content: header.width + openingWidth(mi, score, theme, header) + columns[mi].naturalWidth + columns[mi].extraIfFirstInSystem,
     };
   };
-  for (let mi = 0; mi < columns.length; mi++) {
+  for (let mi = 0; mi < columns.length; mi = lastOf(columns, mi) + 1) {
     if (!cur) { open(mi); continue; }
     const add = openingWidth(mi, score, theme, null) + columns[mi].naturalWidth;
-    const courtesyNext = courtesyWidth(mi + 1, score, theme);
+    const courtesyNext = courtesyWidth(lastOf(columns, mi) + 1, score, theme);
     if (cur.content + add + courtesyNext <= cur.usable + 1e-6) {
       cur.measureIndices.push(mi);
       cur.content += add;
@@ -353,7 +360,7 @@ export function breakSystems(columns, score, theme, width) {
 export function justifySystem(sys, columns, score, theme, isLast) {
   const cols = sys.measureIndices.map((mi) => columns[mi]);
   const lastMi = sys.measureIndices[sys.measureIndices.length - 1];
-  const courtesy = isLast ? 0 : courtesyWidth(lastMi + 1, score, theme);
+  const courtesy = isLast ? 0 : courtesyWidth(lastOf(columns, lastMi) + 1, score, theme);
   let fixed = sys.header.width + courtesy;
   sys.measureIndices.forEach((mi, li) => { fixed += openingWidth(mi, score, theme, li === 0 ? sys.header : null) + columns[mi].leadPad + (li === 0 ? columns[mi].extraIfFirstInSystem : 0); });
   const nat = cols.reduce((a, c) => a + c.gaps.reduce((b, g) => b + g.nat, 0), 0);
