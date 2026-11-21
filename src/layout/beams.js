@@ -4,6 +4,7 @@
  */
 import { isBeamable, tupletChain, durationR, beamCellValue } from '../duration.js';
 import { R, ZERO, add, mul, cmp } from '../rational.js';
+import { hasNestedTuplets, nestedTupletGroups } from './tuplets.js';
 
 /**
  * The rhythmic cell index each beat starts in, using `beamCellValue` (one
@@ -73,6 +74,8 @@ const outerOf = (b) => tupletChain(b)[0] ?? null;
  *   rhythmic cell (beatCells), as before.
  */
 export function tupletGroups(beats, timeSignature) {
+  // a voice with nested tuplets (some 2-entry `tuplets`) is grouped by layout/tuplets.js
+  if (hasNestedTuplets(beats)) return nestedTupletGroups(beats, timeSignature);
   const cell = beamCellValue(timeSignature);
   const cells = beatCells(beats, timeSignature);
   const onset = [];

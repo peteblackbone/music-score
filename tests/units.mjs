@@ -6939,6 +6939,46 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(Object.keys(els[1].tabEl), ['type', 'duration', 'dots', 'tuplet', 'tuplets', 'notes']);
     eq(els[1].tabEl.tuplets, [3, 3]);
   });
+  const { nestedTupletGroups, hasNestedTuplets } = await imp('src/layout/tuplets.js');
+  const G = (indices, count, depth) => (depth === undefined ? { indices, count } : { indices, count, depth });
+  const half = { type: 'note', duration: 'half', notes: [{ pitch: 'E4' }] };
+  const grace8 = { type: 'grace', duration: '16th', notes: [{ pitch: 'D4' }], tuplets: [3, 3] };
+  test('1.12 nested tupletGroups m1: quarter triplet with an inner 8th triplet -> outer depth 0, inner depth 1', () => {
+    const m1 = [eq4({ tuplet: 3 }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), eq4({ tuplet: 3 }), half];
+    eq(tupletGroups(m1, T44), [G([0, 1, 2, 3, 4], 3, 0), G([1, 2, 3], 3, 1)]);
+  });
+  test('1.12 nested tupletGroups m2: 5:4 eighths with an inner triplet', () => {
+    const o = { count: 5, of: 4 };
+    const m2 = [e8({ tuplets: [o] }), e8({ tuplets: [o] }), e8({ tuplets: [o, 3] }), e8({ tuplets: [o, 3] }), e8({ tuplets: [o, 3] }), e8({ tuplets: [o] }), half];
+    eq(tupletGroups(m2, T44), [G([0, 1, 2, 3, 4, 5], 5, 0), G([2, 3, 4], 3, 1)]);
+  });
+  test('1.12 nested tupletGroups: a plain triplet in a nested voice keeps no depth; graces are skipped inside the inner run', () => {
+    const v = [e8({ tuplet: 3 }), e8({ tuplet: 3 }), e8({ tuplet: 3 }), e8({ tuplets: [3] }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), half];
+    eq(tupletGroups(v, T44), [G([0, 1, 2], 3), G([3, 4, 5, 6], 3, 0), G([4, 5, 6], 3, 1)]);
+    const g = [eq4({ tuplets: [3] }), e8({ tuplets: [3, 3] }), grace8, e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), eq4({ tuplets: [3] }), half];
+    eq(tupletGroups(g, T44), [G([0, 1, 3, 4, 5], 3, 0), G([1, 3, 4], 3, 1)]);
+  });
+  test('1.12 nested tupletGroups: an incomplete outer run falls back to one group per beat cell; incomplete inner per frame cell', () => {
+    const v = [e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), eq4(), half];
+    eq(tupletGroups(v, T44), [G([0, 1], 3, 0), G([0, 1], 3, 1)]);
+  });
+  test('1.12 nested gate: only a valid 2-entry tuplets on a non-grace beat switches to nestedTupletGroups; otherwise no depth key', () => {
+    eq(hasNestedTuplets([e8({ tuplets: [3, 3, 3] }), e8({ tuplets: [3] }), grace8, e8({ tuplet: 3 })]), false);
+    eq(hasNestedTuplets([e8({ tuplets: [3, { count: 3, of: 2 }] })]), true);
+    const plain = [e8({ tuplets: [3, 3, 3], tuplet: 3 }), e8({ tuplet: 3 }), e8({ tuplet: 3 }), grace8, e8({ tuplets: [5] }), e8({ tuplets: [5] })];
+    const out = tupletGroups(plain, T44);
+    eq(out.some((x) => 'depth' in x), false);
+    eq(out, [G([0, 1, 2], 3), G([4, 5], 5)]);
+    // nestedTupletGroups on a voice without nesting gives today's groups (same rule, unit = written value)
+    const pins = [Array(12).fill(e8({ tuplet: 3 })), [eq4({ tuplet: 3 }), eq4({ tuplet: 3 }), eq4({ tuplet: 3 }), half],
+      Array(6).fill({ ...n16, tuplet: { count: 6, of: 4 } }), [e8({ tuplet: 3 }), { ...n16, tuplet: 3 }, { ...n16, tuplet: 3 }, e8({ tuplet: 3 })]];
+    pins.forEach((b) => eq(nestedTupletGroups(b, T44), tupletGroups(b, T44)));
+  });
+  test('1.12 nested tupletGroups: compound meter cells and a dotted outer member', () => {
+    const T68 = { beats: 6, beatType: 8 };
+    const v = [eq4({ tuplets: [{ count: 2, of: 3 }] }), e8({ tuplets: [{ count: 2, of: 3 }, 3] }), e8({ tuplets: [{ count: 2, of: 3 }, 3] }), e8({ tuplets: [{ count: 2, of: 3 }, 3] }), { ...eq4(), dots: 1 }];
+    eq(tupletGroups(v, T68), [G([0, 1, 2, 3], 2, 0), G([1, 2, 3], 3, 1)]);
+  });
 }
 
 // ---------- report ----------
