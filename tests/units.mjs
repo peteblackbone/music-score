@@ -5323,6 +5323,37 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.10.0: expression field canonicalizers (src/expression.js) ----------
+{
+  const X = await imp('src/expression.js');
+  test('1.10 hairpinOf: aliases, case and spaces; anything else -> null', () => {
+    eq(['cresc', ' Crescendo ', '<', 'dim', 'DIMINUENDO', 'decresc', 'decrescendo', '>'].map(X.hairpinOf),
+      ['cresc', 'cresc', 'cresc', 'dim', 'dim', 'dim', 'dim', 'dim']);
+    eq(['', 'cres', 'toString', '<<', null, undefined, true, 1, {}].map(X.hairpinOf), Array(9).fill(null));
+  });
+  test('1.10 fadeOf / wahOf / ottavaOf: tables, aliases and invalid -> null', () => {
+    eq(['in', ' OUT ', 'Swell', 'fade', '', null].map(X.fadeOf), ['in', 'out', 'swell', null, null, null]);
+    eq(['open', 'o', 'O', 'closed', 'close', ' + ', 'half', 'hasOwnProperty', 0].map(X.wahOf),
+      ['open', 'open', 'open', 'closed', 'closed', 'closed', null, null, null]);
+    eq(['8va', '8VB', ' 15ma ', '15mb', '22ma', '8', 'va', 8, null].map(X.ottavaOf),
+      ['8va', '8vb', '15ma', '15mb', null, null, null, null, null]);
+    eq(X.OTTAVA_SHIFT, { '8va': -7, '15ma': -14, '8vb': 7, '15mb': 14 });
+  });
+  test('1.10 tempoOf: numbers and objects; bpm in (0, 1000]; unit default quarter; dots clamped 0-2; text trimmed', () => {
+    eq(X.tempoOf(120), { bpm: 120, unit: 'quarter', dots: 0, text: null });
+    eq(X.tempoOf('96'), { bpm: 96, unit: 'quarter', dots: 0, text: null });
+    eq(X.tempoOf({ bpm: 60, unit: ' Half ', dots: 1, text: '  Slower ' }), { bpm: 60, unit: 'half', dots: 1, text: 'Slower' });
+    eq(X.tempoOf({ bpm: 1000, unit: 'breve', dots: 5, text: '   ' }), { bpm: 1000, unit: 'quarter', dots: 2, text: null });
+    eq(X.tempoOf({ bpm: 80, dots: -1, text: 7 }), { bpm: 80, unit: 'quarter', dots: 0, text: null });
+    eq(X.tempoOf({ bpm: 80, dots: 1.7 }).dots, 1);
+    eq([0, 1001, -5, NaN, Infinity, '', 'fast', null, undefined, true, [], [120], {}, { bpm: 0 }, { bpm: 1001 }, { unit: 'half' }].map(X.tempoOf),
+      Array(16).fill(null));
+  });
+  test('1.10 formatBpm: up to 2 decimals, trailing zeros stripped', () => {
+    eq([120, 92.5, 60.333, 72.10, 0.004, 99.999].map(X.formatBpm), ['120', '92.5', '60.33', '72.1', '0', '100']);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
