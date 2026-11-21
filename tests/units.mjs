@@ -5705,6 +5705,70 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.10.0: tempo changes with a metronome mark (draw/tempoMarks.js) ----------
+{
+  const { resolveTheme } = await imp('src/theme.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const nt = (ps, x = {}, duration = 'quarter') => ({ type: 'note', duration, notes: ps.map((p) => ({ pitch: p })), ...x });
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const draw = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    const nodes = all(box.children[0]);
+    const marks = nodes.filter((n) => cls(n) === 'tempo-change').map((g) => {
+      const part = (k) => g.children.filter((c) => cls(c) === k);
+      const p = (n) => ({ x: +n.getAttribute('x'), y: +n.getAttribute('y'), t: n.textContent });
+      return { text: part('tempo-change-text').map(p)[0], note: p(part('tempo-change-note')[0]), dots: part('tempo-change-dot').map(p), bpm: p(part('tempo-change-bpm')[0]) };
+    });
+    return { nodes, marks, lay: computeLayout(normalizeScore(score), th, width), tempo: nodes.filter((n) => cls(n) === 'tempo') };
+  };
+  const bars = (first = {}, later = {}) => [{ beats: [nt(['C5'], first), nt(['C5']), nt(['C5'], later), nt(['C5'])] }, { beats: [nt(['C5'], {}, 'whole')] }];
+
+  test('1.10 tempo change: metronome note (code point per unit), dots, "= N"; note ink bottom on the baseline, at the head\'s left edge', () => {
+    const { marks, lay } = draw({ tracks: [{ measures: bars({}, { tempo: { bpm: 92.5, unit: '8th', dots: 2, text: 'Faster' } }) }] });
+    const el = lay.systems[0].tracks[0].measures[0].elements[2];
+    eq(marks.length, 1);
+    const m = marks[0];
+    eq([m.text.t, m.note.t, m.dots.map((d) => d.t), m.bpm.t], ['Faster', Glyph.metNote8thUp, [Glyph.metAugmentationDot, Glyph.metAugmentationDot], '= 92.5']);
+    eq([Math.abs(m.text.x - (el.x - 0.59 * S)) < 0.02, m.note.x > m.text.x, m.dots[0].x > m.note.x, m.bpm.x > m.dots[1].x], [true, true, true, true]);
+    eq(Math.abs(m.note.y - glyphBox('metNote8thUp').bottom * 0.6 * S - m.bpm.y) < 0.02, true, 'ink bottom on the baseline');
+    eq(m.bpm.y <= -2.5 * S, true);
+  });
+  test('1.10 tempo change: a number is a quarter = N; invalid values draw nothing; the first track wins an onset', () => {
+    const t1 = { measures: bars({}, { tempo: 120 }) };
+    const t2 = { measures: bars({}, { tempo: { bpm: 60, unit: 'half' } }) };
+    const { marks } = draw({ tracks: [t1, t2] });
+    eq(marks.map((m) => [m.note.t, m.bpm.t]), [[Glyph.metNoteQuarterUp, '= 120']]);
+    eq(draw({ tracks: [{ measures: bars({ tempo: 0 }, { tempo: { bpm: 1001 } }) }] }).marks.length, 0);
+  });
+  test('1.10 tempo change: at the first onset it follows the tempoText on one shared baseline; without tempoText it starts at the time signature', () => {
+    const a = draw({ tempoText: 'Allegro', tracks: [{ measures: bars({ tempo: 132 }) }] });
+    const plain = draw({ tempoText: 'Allegro', tracks: [{ measures: bars() }] });
+    const t = a.tempo[0];
+    eq([a.marks.length, +t.getAttribute('y') === a.marks[0].bpm.y, +t.getAttribute('x') === +plain.tempo[0].getAttribute('x')], [1, true, true]);
+    eq(+t.getAttribute('y') <= +plain.tempo[0].getAttribute('y'), true);
+    eq(a.marks[0].note.x > +t.getAttribute('x') + 3 * S, true, 'right of the tempoText');
+    const b = draw({ tracks: [{ measures: bars({ tempo: 132 }) }] });
+    eq(Math.abs(b.marks[0].note.x - b.lay.systems[0].header.timeX) < 0.2, true);
+  });
+  test('1.10 tempo change: above voltas / sections and on later systems, above a tab-only staff', () => {
+    const ms = Array(8).fill(0).map((_, i) => ({ beats: [nt(['C5'], i === 6 ? { tempo: 100 } : {}), nt(['C5']), nt(['C5']), nt(['C5'])], ...(i === 6 ? { section: 'B', ending: 1 } : {}) }));
+    const { marks, nodes, lay } = draw({ tracks: [{ measures: ms }] }, 600);
+    if (lay.systems.length < 2) throw new Error('no break');
+    eq(marks.length, 1);
+    const nav = nodes.filter((n) => cls(n) === 'navigation');
+    eq(nav.length >= 1, true);
+    const navTexts = all(nav[nav.length - 1]).filter((n) => n.tag === 'text').map((n) => +n.getAttribute('y'));
+    eq(marks[0].bpm.y < Math.min(...navTexts), true, 'above the section / volta');
+    const tab = draw({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: [{ type: 'note', duration: 'whole', notes: [{ string: 1, fret: 0 }], tempo: 80 }] }] }] });
+    eq(tab.marks.length, 1);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

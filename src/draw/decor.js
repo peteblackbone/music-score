@@ -15,7 +15,7 @@ import { estimateTextWidth } from '../textMetrics.js';
 
 const MEASURE_NUMBER_SIZE_SP = 1.0;
 const MEASURE_NUMBER_BASELINE_SP = 2; // above the top line of the top staff (clears the treble clef top, ~1.4 sp)
-const TEMPO_SIZE_SP = 1.3;
+export const TEMPO_SIZE_SP = 1.3;
 const TEMPO_MIN_BASELINE_SP = 2.5;    // tempo baseline at least this far above the top line
 const TEMPO_CLEARANCE_SP = 0.75;      // ... and this far above anything in the first measure
 const BRACKET_THICK_SP = 0.5;
@@ -44,15 +44,24 @@ export function tempoTextWidth(tempoText, theme) {
 }
 
 /**
+ * Baseline of the tempo mark: ≥ 2.5 sp above the top line and ≥ 0.75 sp
+ * above `firstMeasureTop` (the top ink y of the first measure; 0 when not finite).
+ */
+export function tempoBaseline(firstMeasureTop, theme) {
+  const s = theme.staffLineSpacing;
+  const top = Number.isFinite(firstMeasureTop) ? firstMeasureTop : 0;
+  return Math.min(-TEMPO_MIN_BASELINE_SP * s, top - TEMPO_CLEARANCE_SP * s);
+}
+
+/**
  * Tempo mark above system 1 (ui.md §1): left edge at `x` (the time
  * signature's x), bold, in the top staff group `g` (local coords).
  * `firstMeasureTop` is the top ink y of the first measure in that group;
- * the baseline is ≥ 2.5 sp above the top line and ≥ 0.75 sp above it.
+ * the baseline is `y`, by default tempoBaseline(firstMeasureTop) (a
+ * tempo change at the first onset shares one baseline with it; draw/tempoMarks.js).
  */
-export function drawTempo(g, x, tempoText, firstMeasureTop, theme) {
+export function drawTempo(g, x, tempoText, firstMeasureTop, theme, y = tempoBaseline(firstMeasureTop, theme)) {
   const s = theme.staffLineSpacing;
-  const top = Number.isFinite(firstMeasureTop) ? firstMeasureTop : 0;
-  const y = Math.min(-TEMPO_MIN_BASELINE_SP * s, top - TEMPO_CLEARANCE_SP * s);
   g.appendChild(text(x, y, tempoText, {
     class: 'tempo',
     'font-family': theme.textFontFamily,

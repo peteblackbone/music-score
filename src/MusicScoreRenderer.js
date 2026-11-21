@@ -19,11 +19,12 @@ import { inkBounds } from './layout/ink.js';
 import { el as svgEl, svgD, r2 } from './draw/svgUtil.js';
 import { drawScoreHeader, drawScoreFooter } from './draw/header.js';
 import { drawSystem } from './draw/system.js';
-import { drawTempo, drawSystemDecor, tempoTextWidth } from './draw/decor.js';
+import { drawTempo, drawSystemDecor, tempoTextWidth, tempoBaseline } from './draw/decor.js';
 import { renderNavigation } from './draw/navigation.js';
 import { renderBeatText } from './draw/beatText.js';
 import { renderFadeWah } from './draw/expressionMarks.js';
 import { renderOttavaAlta, renderOttavaBassa } from './draw/ottava.js';
+import { tempoChanges, renderFirstTempoChange, renderTempoChanges } from './draw/tempoMarks.js';
 import {
   renderTiesAndSlurs, renderGraceSlurs, renderTabArticulations, renderTechniqueLabelRuns, renderChordSymbolsAndDynamics,
   renderFermatas, renderPlayingDirections,
@@ -108,6 +109,8 @@ export class MusicScoreRenderer {
     const navGroups = drawn.map((d, sysIdx) => renderNavigation(d.staves[0]?.g ?? null, layout.systems[sysIdx], theme));
 
     // --- Tempo mark above system 1, at the time signature's x, clear of the first measure and of navigation under it ---
+    // (a tempo change at the first onset follows it on one shared baseline)
+    const changes = tempoChanges(drawn);
     if (score.tempoText && drawn.length && drawn[0].staves.length) {
       const sys0 = layout.systems[0];
       const topG = drawn[0].staves[0].g;
@@ -117,8 +120,11 @@ export class MusicScoreRenderer {
       const navTop = navGroups[0]
         ? inkBounds(navGroups[0], theme, { xMin: timeX, xMax: timeX + tempoTextWidth(score.tempoText, theme), overlap: true }).top
         : Infinity;
-      drawTempo(topG, timeX, score.tempoText, Math.min(firstTop, navTop), theme);
+      const y = renderFirstTempoChange(topG, changes, timeX + tempoTextWidth(score.tempoText, theme), tempoBaseline(Math.min(firstTop, navTop), theme), theme);
+      drawTempo(topG, timeX, score.tempoText, Math.min(firstTop, navTop), theme, y);
     }
+    // --- Tempo changes (metronome marks), outermost above each system's top staff ---
+    renderTempoChanges(drawn, layout.systems, changes, theme);
 
     // --- Content-aware vertical placement ---
     const placement = placeStaves(
