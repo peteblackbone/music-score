@@ -16,7 +16,8 @@
  * All widths px. Pure functions, no DOM.
  */
 import { glyphBox, glyphStringBox } from '../glyphMetrics.js';
-import { Glyph, accidentalGlyph, timeSigDigits, clefGlyph } from '../glyphs.js';
+import { Glyph, accidentalGlyph, timeSigDigits } from '../glyphs.js';
+import { clefAt, clefGlyphFor } from '../clef.js';
 import { estimateTextWidth } from '../textMetrics.js';
 
 export const KEY_STEP_SP = 1.1;          // between key-signature accidentals
@@ -76,7 +77,7 @@ const notationTracks = (score) => score.tracks.filter((t) => t.showStandardNotat
 const timeSigTracks = (score) => score.tracks.filter((t) => t.showStandardNotation || t.showTablature);
 
 /**
- * Header of a system starting at measure `mi`: x offsets from the
+ * Header of a system starting at measure `mi` (clefs in force there): x offsets from the
  * system-start x of clef, tab clef (centre), key and time, whether the time
  * signature is shown, and `width` = offset of the first measure's column
  * (its own lead padding then adds measurePaddingSp + left extent, so the
@@ -86,7 +87,7 @@ export function headerLayout(mi, score, theme, isFirstSystem) {
   const s = theme.staffLineSpacing;
   const nTracks = notationTracks(score);
   let clefW = 0;
-  nTracks.forEach((t) => { clefW = Math.max(clefW, glyphBox(clefGlyph(t.clef, t.octaveClef)).width); });
+  nTracks.forEach((t) => { clefW = Math.max(clefW, glyphBox(clefGlyphFor(clefAt(t, mi), t.octaveClef)).width); });
   score.tracks.forEach((t) => {
     if (t.showTablature) clefW = Math.max(clefW, tabClefMetrics(t.tuning.length, theme).width / s);
   });

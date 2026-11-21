@@ -7,7 +7,8 @@ import {
   Glyph, restForDuration, flagForDuration, accidentalGlyph, dynamicGlyph, pickStrokeGlyph,
 } from '../glyphs.js';
 import { layoutHeadGlyph } from '../harmonics.js';
-import { notePosition, staffPositionToY } from '../pitch.js';
+import { staffPositionToY } from '../pitch.js';
+import { clefAt, clefNotePosition } from '../clef.js';
 import { smuflFontSizePx } from '../theme.js';
 import { beamCount } from '../duration.js';
 import {
@@ -60,7 +61,7 @@ export function renderNotationElement(g, layoutEl, measure, track, theme, opts =
   const spacing = theme.staffLineSpacing;
   const el = layoutEl.el;
   const x = layoutEl.x;
-  const clef = track.clef;
+  const clef = clefAt(track, measure.measureIndex);
 
   if (el.type === 'rest') {
     // A voice-2 rest merged with voice 1's (layout/voices.js) is drawn once, by voice 1.
@@ -89,10 +90,10 @@ export function renderNotationElement(g, layoutEl, measure, track, theme, opts =
     return { isRest: true, x, noteheads: [], ...bottomOf(glyph, y) };
   }
 
-  if (el.type === 'grace') return renderGraceNote(g, layoutEl, track, theme);
+  if (el.type === 'grace') return renderGraceNote(g, layoutEl, clef, theme);
 
   const notes = el.notes || [];
-  const positions = notes.map((n) => notePosition(n, clef));
+  const positions = notes.map((n) => clefNotePosition(n, clef));
   const minPos = Math.min(...positions);
   const maxPos = Math.max(...positions);
   const chord = layoutEl.chord;
@@ -216,16 +217,15 @@ export function renderWholeMeasureRest(g, x, baselineY, theme, pos = 6) {
  * enough info (`x`, `noteheads`, `stemTopY`/`stemBottomY`) for that pass
  * and for tremolo/vibrato to build on, same shape as a normal note.
  */
-function renderGraceNote(g, layoutEl, track, theme) {
+function renderGraceNote(g, layoutEl, clef, theme) {
   const spacing = theme.staffLineSpacing;
   const scale = theme.graceNoteScale;
   const fontSize = smuflFontSizePx(theme) * scale;
   const el = layoutEl.el;
   const x = layoutEl.x;
-  const clef = track.clef;
 
   const notes = el.notes || [];
-  const positions = notes.map((n) => notePosition(n, clef));
+  const positions = notes.map((n) => clefNotePosition(n, clef));
   const minPos = Math.min(...positions);
   const maxPos = Math.max(...positions);
   // Two-voice measures: voice 1's graces stem up, voice 2's down.

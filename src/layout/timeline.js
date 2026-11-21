@@ -31,7 +31,7 @@
  */
 import { R, ZERO, add, sub, cmp, key, toNumber, max as rmax } from '../rational.js';
 import { durationR, isHiddenRest } from '../duration.js';
-import { notePosition } from '../pitch.js';
+import { clefAt, clefNotePosition } from '../clef.js';
 import { noteheadForDuration, restForDuration, flagForDuration } from '../glyphs.js';
 import { glyphBox } from '../glyphMetrics.js';
 import { groupBeams } from './beams.js';
@@ -130,14 +130,14 @@ function trackEvents(track, mi, theme) {
   const measure = track.measures[mi];
   if (!isTwoVoiceMeasure(measure)) {
     const accs = track.showStandardNotation ? resolveMeasureAccidentals(track, mi) : null;
-    return voiceEvents(track, measure, measure.beats, accs, null, theme, { tabBand: true, arpeggio: true, fingers: true });
+    return voiceEvents(track, measure, measure.beats, accs, null, theme, { tabBand: true, arpeggio: true, fingers: true, clef: clefAt(track, mi) });
   }
   // Two voices: voice 2 (`events2`) has its own TAB rhythm-band row, no arpeggio and no fingering;
   // rests not merged with the other voice's sit in their voice's band row (`merged`: full-size, in the staff).
   const [a1, a2] = track.showStandardNotation ? resolveVoiceAccidentals(track, mi) : [null, null];
   const merged = mergedRestPairs(measure.beats, measure.voice2Beats, measure.timeSignature);
-  const r1 = voiceEvents(track, measure, measure.beats, a1, true, theme, { tabBand: true, arpeggio: true, fingers: true, merged: merged.v1 });
-  const r2 = voiceEvents(track, measure, measure.voice2Beats, a2, false, theme, { tabBand: true, arpeggio: false, fingers: false, merged: merged.v2 });
+  const r1 = voiceEvents(track, measure, measure.beats, a1, true, theme, { tabBand: true, arpeggio: true, fingers: true, merged: merged.v1, clef: clefAt(track, mi) });
+  const r2 = voiceEvents(track, measure, measure.voice2Beats, a2, false, theme, { tabBand: true, arpeggio: false, fingers: false, merged: merged.v2, clef: clefAt(track, mi) });
   combineVoices(r1.events, r2.events, measure, theme, merged);
   return {
     events: r1.events, events2: r2.events, end: rmax(r1.end, r2.end), wholeMeasureRest: r1.wholeMeasureRest, empty: false,
@@ -151,11 +151,11 @@ function trackEvents(track, mi, theme) {
  * automatic); `tabBand` / `arpeggio` / `fingers` whether TAB rhythm-band
  * extents, arpeggio room and left-hand fingering room count; `merged` (two
  * voices only) the beat indices of merged rests, every other rest being a
- * band-row rest.
+ * band-row rest; `clef` the clef in force (clef.js clefAt).
  */
-function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, arpeggio, fingers, merged = null }) {
+function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, arpeggio, fingers, merged = null, clef }) {
   const beams = groupBeams(beats, measure.timeSignature);
-  const positionsOf = (el) => (el.notes || []).map((n) => (n.pitch == null ? 4 : notePosition(n, track.clef)));
+  const positionsOf = (el) => (el.notes || []).map((n) => (n.pitch == null ? 4 : clefNotePosition(n, clef)));
   // Final stem direction per beat: a beam group's shared direction (its overall range), else the beat's own.
   const groupStem = new Map();
   beams.forEach((grp) => {

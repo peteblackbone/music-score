@@ -20,6 +20,7 @@
  * "⑥ = D" (step and accidental as written, no octave).
  */
 import { parsePitch, midiNumber } from './pitch.js';
+import { clefAt, clefBase } from './clef.js';
 
 /** Canonical text: trimmed, whitespace collapsed; null when not a string or empty. */
 export function canonicalText(raw) {
@@ -118,12 +119,12 @@ function referenceMidi(ref) {
   return REFERENCE_MIDI.get(ref);
 }
 
-/** Tuning chart entries of a track ("⑥ = D", highest string number first); [] when nothing differs. */
+/** Tuning chart entries of a track ("⑥ = D", highest string number first; reference by the base of its first clef); [] when nothing differs. */
 export function tuningChartEntries(track) {
   const tuning = track?.tuning;
   if (!Array.isArray(tuning)) return [];
   const n = tuning.length;
-  const ref = referenceTuning(n, track.clef);
+  const ref = referenceTuning(n, clefBase(clefAt(track, 0)));
   const refMidi = ref && referenceMidi(ref);
   const out = [];
   tuning.forEach((p, i) => {

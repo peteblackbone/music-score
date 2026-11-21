@@ -29,6 +29,7 @@ import { glyphBox } from '../glyphMetrics.js';
 import { noteheadForDuration } from '../glyphs.js';
 import { isTwoVoiceMeasure, voiceOf } from '../twoVoice.js';
 import { tiedFretOpts } from '../textMetrics.js';
+import { clefAt } from '../clef.js';
 
 // Top staff line -> lowest allowed tuplet bracket line. The end ticks hang 0.5 sp below the
 // line and the number is centred on it, so 1 sp keeps both at least 0.5 sp clear of the staff.
@@ -95,7 +96,8 @@ function drawStaff(g, system, sysIdx, staff, theme) {
   const row2Y = twoVoice.length ? tabRow2TopY(twoVoice, track.tuning.length, lineBottom, theme) : null;
   measures.forEach((measure) => drawMeasure(g, measure, staff, theme, row2Y));
   if (system.courtesy) {
-    drawSignatureChange(g, system.courtesy, system.tracks[staff.ti].courtesy, staff, theme, 'courtesy');
+    const next = system.measureIndices[system.measureIndices.length - 1] + 1;
+    drawSignatureChange(g, system.courtesy, system.tracks[staff.ti].courtesy, staff, theme, 'courtesy', next);
   }
 }
 
@@ -111,9 +113,10 @@ function drawSystemHeader(g, system, firstMeasure, staff, theme) {
     }
     return;
   }
-  g.appendChild(drawClef(h.clefX, lineBottom, track.clef, track.octaveClef, theme));
+  const clef = clefAt(track, system.measureIndices[0]);
+  g.appendChild(drawClef(h.clefX, lineBottom, clef, track.octaveClef, theme));
   if (firstMeasure.keySignature) {
-    g.appendChild(drawKeySignature(h.keyX, lineBottom, firstMeasure.keySignature, track.clef, theme).node);
+    g.appendChild(drawKeySignature(h.keyX, lineBottom, firstMeasure.keySignature, clef, theme).node);
   }
   if (h.showTime) g.appendChild(drawTimeSignature(h.timeX, lineBottom, firstMeasure.timeSignature, theme));
 }
@@ -122,9 +125,10 @@ function drawSystemHeader(g, system, firstMeasure, staff, theme) {
  * A key and/or time signature drawn after the start of a measure
  * (mid-system change) or after the system's last barline (courtesy).
  * `pos` gives the x of each part: `{ keyX, timeX }`; `sig` what to draw:
- * `{ key: { to, from } | null, time: ts | null }`.
+ * `{ key: { to, from } | null, time: ts | null }`; `mi` the measure the change
+ * belongs to (its clef in force places the key signature).
  */
-function drawSignatureChange(g, pos, sig, staff, theme, cls) {
+function drawSignatureChange(g, pos, sig, staff, theme, cls, mi) {
   if (!sig) return;
   const { track, lineBottom } = staff;
   const tabOnly = staff.kind === 'tab' && !track.showStandardNotation;
@@ -132,7 +136,7 @@ function drawSignatureChange(g, pos, sig, staff, theme, cls) {
   if (tabOnly && !sig.time) return;
   const parts = cls ? group({ class: cls }) : g;
   if (sig.key && !tabOnly) {
-    parts.appendChild(drawKeySignature(pos.keyX, lineBottom, sig.key.to, track.clef, theme, sig.key.from).node);
+    parts.appendChild(drawKeySignature(pos.keyX, lineBottom, sig.key.to, clefAt(track, mi), theme, sig.key.from).node);
   }
   if (sig.time) parts.appendChild(drawTimeSignature(pos.timeX, tabOnly ? tabTimeBaseline(staff, theme) : lineBottom, sig.time, theme));
   if (parts !== g) g.appendChild(parts);
@@ -152,7 +156,7 @@ function drawMeasure(g, measure, staff, theme, row2Y) {
   if (measure.startBarline) {
     g.appendChild(drawStaffBarline(measure.startBarline.x, barlineStaff(staff, theme), measure.startBarline.type, theme));
   }
-  if (measure.midSig) drawSignatureChange(g, measure.midSig, measure.midSig, staff, theme, null);
+  if (measure.midSig) drawSignatureChange(g, measure.midSig, measure.midSig, staff, theme, null, measure.measureIndex);
 
   if (kind === 'notation') drawNotationMeasure(g, measure, track, lineBottom, theme);
   else drawTabMeasure(g, measure, track, lineBottom, theme, row2Y);

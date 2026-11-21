@@ -6083,6 +6083,84 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.11.0: the clef in force at every clef site (timeline, notation, header, key signatures, tuning chart) ----------
+{
+  const C = await imp('src/clef.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { headerLayout } = await imp('src/layout/systems.js');
+  const { tuningChartEntries, REFERENCE_TUNINGS } = await imp('src/scoreText.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const nt = (ps, x = {}, duration = 'quarter') => ({ type: 'note', duration, notes: ps.map((p) => ({ pitch: p })), ...x });
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const notationNodes = (score, width = 1400) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return all(box.children[0]).filter((n) => /\bstaff-notation\b/.test(cls(n))).flatMap((g) => all(g));
+  };
+  // local y (top line 0) -> staff position (0 = bottom line)
+  const posOf = (n) => Math.round(((4 * S - +n.getAttribute('y')) / (S / 2)) * 1000) / 1000;
+  const glyphs = (nodes, ch) => nodes.filter((n) => n.tag === 'text' && n.textContent === ch);
+  const heads = (nodes) => glyphs(nodes, Glyph.noteheadBlack).map(posOf);
+
+  test('1.11 clef sites: alto / tenor tracks draw their notes, clef glyph and anchor in C-clef positions', () => {
+    const alto = notationNodes({ tracks: [{ clef: 'Alto', measures: [{ beats: [nt(['C4']), nt(['F3']), nt(['G4']), nt(['B4'])] }] }] });
+    eq(heads(alto), [4, 0, 8, 10]);
+    eq(glyphs(alto, Glyph.cClef).map(posOf), [4]);
+    const tenor = notationNodes({ tracks: [{ clef: 'tenor', measures: [{ beats: [nt(['C4']), nt(['D3']), nt(['A3']), nt(['A4'])] }] }] });
+    eq(heads(tenor), [6, 0, 4, 11]);
+    eq(glyphs(tenor, Glyph.cClef).map(posOf), [6]);
+    const auto = notationNodes({ tracks: [{ clef: 'alto', writtenOctaveUp: true, measures: [{ beats: [nt(['C3'], {}, 'whole')] }] }] });
+    eq([glyphs(auto, Glyph.cClef8vb).map(posOf), glyphs(auto, Glyph.noteheadWhole).map(posOf)], [[4], [4]], 'auto 8vb: cClef8vb, written C4 on the middle line');
+    const explicit = notationNodes({ tracks: [{ clef: 'treble15ma', writtenOctaveUp: true, measures: [{ beats: [nt(['E3'], {}, 'whole')] }] }] });
+    eq([glyphs(explicit, Glyph.gClef15ma).map(posOf), glyphs(explicit, Glyph.gClef8vb).length, glyphs(explicit, Glyph.noteheadWhole).map(posOf)], [[2], 0, [0]]);
+  });
+  test('1.11 clef sites: header key signatures follow the clef table (alto, tenor, bass8va)', () => {
+    const acc = (clef, key) => {
+      const nodes = notationNodes({ tracks: [{ clef, measures: [{ keySignature: key, beats: [nt(['C4'], {}, 'whole')] }] }] });
+      const ks = nodes.find((n) => cls(n) === 'key-signature');
+      return ks.children.map(posOf);
+    };
+    eq(acc('alto', 4), [7, 4, 8, 5]);
+    eq(acc('alto', -3), [3, 6, 2]);
+    eq(acc('tenor', 7), [2, 6, 3, 7, 4, 8, 5]);
+    eq(acc('tenor', -2), [5, 8]);
+    eq(acc('bass8va', 2), acc('bass', 2));
+  });
+  test('1.11 clef sites: a measure clef moves the notes of that and later measures (both voices, graces) and not the earlier ones', () => {
+    const nodes = notationNodes({ tracks: [{ clef: 'treble', measures: [
+      { beats: [nt(['E4'], {}, 'whole')] },
+      { clef: 'bass', beats: [{ type: 'grace', duration: '8th', notes: [{ pitch: 'A2' }] }, nt(['G2'], {}, 'whole')] },
+      { voices: [{ beats: [nt(['B3'], {}, 'whole')] }, { beats: [nt(['G2'], {}, 'whole')] }] },
+      { clef: 'alto', beats: [nt(['C4'], {}, 'whole')] },
+    ] }] });
+    eq(glyphs(nodes, Glyph.noteheadWhole).map(posOf), [0, 0, 9, 0, 4]);
+    eq(heads(nodes), [1], 'the grace head (black, grace size) sits on bass A2');
+  });
+  test('1.11 clef sites: a mid-system key change takes the clef of its measure', () => {
+    const nodes = notationNodes({ tracks: [{ measures: [{ beats: [nt(['C4'], {}, 'whole')] }, { clef: 'alto', keySignature: 2, beats: [nt(['C4'], {}, 'whole')] }] }] });
+    const ks = nodes.filter((n) => cls(n) === 'key-signature');
+    eq(ks.map((k) => k.children.map(posOf)), [[7, 4]]);
+  });
+  test('1.11 clef sites: headerLayout sizes the clef in force at the system start (opening clef = its own header)', () => {
+    const later = normalizeScore({ tracks: [{ measures: [{ beats: [] }, { clef: 'treble15ma', beats: [] }] }] });
+    const own = normalizeScore({ tracks: [{ clef: 'treble15ma', measures: [{ beats: [] }, { beats: [] }] }] });
+    eq(headerLayout(1, later, th, false), headerLayout(0, own, th, false));
+    eq(headerLayout(0, later, th, true), headerLayout(0, normalizeScore({ tracks: [{ measures: [{ beats: [] }] }] }), th, true));
+    eq(headerLayout(1, later, th, false).keyX > headerLayout(0, later, th, false).keyX, true, 'the wider glyph pushes the key');
+  });
+  test('1.11 clef sites: tuning chart reference follows the base of the first clef ("Bass ", bass8vb, measure-0 clef)', () => {
+    const tuning = REFERENCE_TUNINGS.bass6;
+    eq(tuningChartEntries({ clef: 'bass', tuning }), []);
+    eq(tuningChartEntries({ clef: 'Bass ', tuning }), []);
+    eq(tuningChartEntries({ clef: 'bass8vb', tuning }), []);
+    eq(tuningChartEntries({ clef: 'treble', tuning, measures: [{ clef: 'bass15mb' }] }), []);
+    eq(tuningChartEntries({ clef: 'treble', tuning }).length, 6);
+    eq(tuningChartEntries({ clef: 'bass', tuning, measures: [{ clef: 'alto' }] }).length, 6);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
