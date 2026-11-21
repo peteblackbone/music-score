@@ -6161,6 +6161,152 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.11.0: mid-score clef changes and courtesy clefs (layout/systems.js, layout/index.js, draw/system.js) ----------
+{
+  const C = await imp('src/clef.js');
+  const Y = await imp('src/layout/systems.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const cases = (await import('./cases.mjs')).cases;
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const nt = (ps, duration = 'quarter') => ({ type: 'note', duration, notes: ps.map((p) => ({ pitch: p })) });
+  const q4 = (p) => [nt([p]), nt([p]), nt([p]), nt([p])];
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const render = (score, width) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    return box.children[0];
+  };
+  // every measure restates the clef in force: no change anywhere
+  const restated = (score) => ({ ...score, tracks: (score.tracks || []).map((t) => ({ ...t,
+    measures: (t.measures || []).map((m, mi) => ({ ...m, clef: C.clefAt(t, mi) })) })) });
+
+  test('1.11 clef changes: restating the clef in force on every measure of every case changes no headerLayout, openingLayout, courtesyWidth or layout model', () => {
+    let n = 0;
+    for (const c of cases) {
+      const a = normalizeScore(c.score), b = normalizeScore(restated(c.score));
+      const w = c.width || 900;
+      for (let mi = 0; mi < a.measureCount; mi++) {
+        const ha = Y.headerLayout(mi, a, th, mi === 0), hb = Y.headerLayout(mi, b, th, mi === 0);
+        eq(hb, ha, `${c.id} header ${mi}`);
+        eq(Y.openingLayout(mi, b, th, null), Y.openingLayout(mi, a, th, null), `${c.id} opening ${mi}`);
+        eq(Y.openingLayout(mi, b, th, hb), Y.openingLayout(mi, a, th, ha), `${c.id} first opening ${mi}`);
+        eq(Y.courtesyWidth(mi, b, th), Y.courtesyWidth(mi, a, th), `${c.id} courtesy ${mi}`);
+        eq(Y.clefChangeWidth(mi, b, th), 0);
+        a.tracks.forEach((t, ti) => eq(Y.trackCourtesy(b.tracks[ti], mi), Y.trackSignatureChange(t, mi), `${c.id} track ${ti}`));
+        n++;
+      }
+      eq(JSON.stringify(computeLayout(b, th, w)), JSON.stringify(computeLayout(a, th, w)), c.id);
+    }
+    if (n < 300) throw new Error(`only ${n} measures`);
+  });
+  test('1.11 clef changes: restated clefs render byte-identical SVG for a sample of cases', () => {
+    for (const c of cases.filter((_, i) => i % 7 === 0)) {
+      eq(serialize(render(restated(c.score), c.width)) === serialize(render(c.score, c.width)), true, c.id);
+    }
+  });
+
+  const two = (m2a, m2b) => ({ tracks: [
+    { clef: 'treble', measures: [{ beats: q4('C5') }, { ...m2a, beats: q4('C4') }, { beats: q4('C4') }] },
+    { clef: 'bass', showTablature: true, measures: [{ beats: q4('C3') }, { ...m2b, beats: q4('C3') }, { beats: q4('C3') }] },
+  ] });
+  test('1.11 clef changes: clefChangeWidth is the widest changing clef at 0.75; tab-only tracks and system starts do not count', () => {
+    const sc = normalizeScore(two({ clef: 'alto' }, { clef: 'treble15ma' }));
+    eq(Y.clefChangeWidth(1, sc, th), Math.max(glyphBox('gClef15ma').width, glyphBox('cClef').width) * 0.75 * S);
+    eq([Y.clefChangeWidth(0, sc, th), Y.clefChangeWidth(2, sc, th)], [0, 0]);
+    const tabOnly = normalizeScore({ tracks: [{ showStandardNotation: false, showTablature: true, measures: [{ beats: q4('C3') }, { clef: 'alto', beats: q4('C3') }] }] });
+    eq(Y.clefChangeWidth(1, tabOnly, th), 0);
+    eq(Y.trackCourtesy(tabOnly.tracks[0], 1), null);
+    const op = Y.openingLayout(1, sc, th, Y.headerLayout(1, sc, th, false));
+    eq('clefX' in op, false, 'no clef change glyph at a system start');
+  });
+  test('1.11 clef changes: opening = barline, 0.75 sp, clef (0.75 size), 1 sp, key, time; after a repeat sign the clef follows it', () => {
+    const sc = normalizeScore(two({ clef: 'alto', keySignature: 2, timeSignature: { beats: 3, beatType: 4 } }, {}));
+    const cw = glyphBox('cClef').width * 0.75 * S;
+    const op = Y.openingLayout(1, sc, th, null);
+    eq(op.clefX, 0.75 * S);
+    const ch = Y.signatureChange(1, sc, th);
+    eq([op.sig.keyX, op.width], [0.75 * S + cw + S, 0.75 * S + cw + S + ch.width]);
+    const rep = normalizeScore(two({ clef: 'alto', barline: 'repeatStart' }, {}));
+    const r = Y.openingLayout(1, rep, th, null);
+    eq([r.repeatX, r.clefX, r.width], [0, Y.REPEAT_START_WIDTH_SP * S + 0.75 * S, Y.REPEAT_START_WIDTH_SP * S + 0.75 * S + cw]);
+  });
+  test('1.11 clef changes: courtesyWidth / courtesyLayout put the clef first, then key/time 1 sp later', () => {
+    const sc = normalizeScore(two({ clef: 'tenor', keySignature: -3 }, {}));
+    const cw = glyphBox('cClef').width * 0.75 * S;
+    const ch = Y.signatureChange(1, sc, th);
+    eq(Y.courtesyWidth(1, sc, th), cw + S + ch.width + 1.25 * S);
+    const L = Y.courtesyLayout(1, sc, th, 100);
+    eq([L.clefX, L.keyX, L.endX - 100], [100 + 0.75 * S, 100 + 0.75 * S + cw + S, Y.courtesyWidth(1, sc, th)]);
+    const only = normalizeScore(two({ clef: 'tenor' }, {}));
+    eq(Y.courtesyWidth(1, only, th), cw + 1.25 * S);
+    eq(Y.courtesyLayout(1, only, th, 0).endX, cw + 1.25 * S);
+    eq(Y.trackCourtesy(only.tracks[0], 1), { key: null, time: null, clef: 'tenor' });
+    eq(Y.trackCourtesy(only.tracks[1], 1), null);
+    eq(Y.trackCourtesy(sc.tracks[0], 1), { key: { to: -3, from: 0 }, time: null, clef: 'tenor' });
+  });
+  test('1.11 clef changes: layout model has clefChange only where a staff changes clef', () => {
+    const wide = computeLayout(normalizeScore(two({ clef: 'alto' }, {})), th, 1400);
+    const ms = wide.systems[0].tracks.map((t) => t.measures.map((m) => m.clefChange || null));
+    eq(ms[0][1].clef, 'alto');
+    eq([ms[0][0], ms[0][2], ms[1][0], ms[1][1], ms[1][2]], [null, null, null, null, null]);
+    eq(Object.keys(wide.systems[0].tracks[0].measures[0]).includes('clefChange'), false);
+    eq(ms[0][1].x, wide.systems[0].tracks[0].measures[1].x + 0.75 * S);
+  });
+  test('1.11 clef changes: drawn at 0.75 size in <g class="clef clef-change">, order repeat dots < clef < key < time; header clef has no class', () => {
+    const svg = render(two({ clef: 'alto', keySignature: 2, timeSignature: { beats: 3, beatType: 4 }, barline: 'repeatStart' }, { clef: 'treble' }), 1400);
+    const nodes = all(svg);
+    const ch = nodes.filter((n) => cls(n) === 'clef clef-change');
+    eq(ch.length, 2);
+    const t0 = ch[0].children[0];
+    eq([t0.textContent, +t0.getAttribute('font-size')], [Glyph.cClef, 0.75 * 4 * S]);
+    eq(ch[1].children[0].textContent, Glyph.gClef);
+    eq(+t0.getAttribute('x'), +ch[1].children[0].getAttribute('x'), 'clefs of every staff share x');
+    const inStaff = all(nodes.filter((n) => /\bstaff-notation\b/.test(cls(n)))[0]);
+    const ks = inStaff.filter((n) => cls(n) === 'key-signature')[0], ts = inStaff.filter((n) => cls(n) === 'time-signature');
+    const dots = inStaff.filter((n) => n.tag === 'circle');
+    const x = (n) => +n.getAttribute('x');
+    eq(Math.max(...dots.map((d) => +d.getAttribute('cx'))) < x(t0) && x(t0) < x(ks.children[0]) && x(ks.children[0]) < x(ts[ts.length - 1].children[0]), true);
+    eq(ks.children.map((k) => Math.round((4 * S - +k.getAttribute('y')) / (S / 2))), [7, 4], 'alto key positions');
+    eq(inStaff.filter((n) => n.tag === 'text' && n.textContent === Glyph.gClef).length, 1, 'header clef');
+    eq(nodes.some((n) => cls(n).split(/\s+/).includes('courtesy-clef')), false);
+  });
+  test('1.11 clef changes: a change opening a system draws the clef in force full size in its header and a courtesy clef (before the courtesy key) at the previous system end', () => {
+    const score = { tracks: [{ measures: [
+      { beats: q4('C5') }, { beats: q4('C5') }, { beats: q4('C5') }, { beats: q4('C5') },
+      { clef: 'bass', keySignature: 1, beats: q4('C3') }, { beats: q4('C3') }, { beats: q4('C3') }, { beats: q4('C3') }] }] };
+    const lay = computeLayout(normalizeScore(score), th, 450);
+    const si = lay.systems.findIndex((s) => s.measureIndices.includes(4));
+    if (lay.systems[si].measureIndices[0] !== 4) throw new Error(`m5 does not open a system: ${lay.systems.map((s) => s.measureIndices)}`);
+    const prev = lay.systems[si - 1];
+    eq(prev.tracks[0].courtesy, { key: { to: 1, from: 0 }, time: null, clef: 'bass' });
+    eq(prev.courtesy.clefX, prev.lastBarlineX + 0.75 * S);
+    const nodes = all(render(score, 450));
+    const sysG = (k) => nodes.find((n) => cls(n) === `system system-${k}`);
+    const prevNodes = all(sysG(si - 1));
+    const cc = prevNodes.filter((n) => cls(n) === 'clef courtesy-clef');
+    eq(cc.length, 1);
+    eq([cc[0].children[0].textContent, +cc[0].children[0].getAttribute('font-size')], [Glyph.fClef, 3 * S]);
+    const cks = prevNodes.filter((n) => cls(n) === 'courtesy')[0];
+    eq(cks.children.map(cls), ['clef courtesy-clef', 'key-signature']);
+    eq(+cc[0].children[0].getAttribute('x') < +cks.children[1].children[0].getAttribute('x'), true);
+    const hdr = all(sysG(si)).filter((n) => n.tag === 'text' && n.textContent === Glyph.fClef);
+    eq([hdr.length, +hdr[0].getAttribute('font-size')], [1, 4 * S], 'system header: the clef in force, full size');
+    eq(all(sysG(si)).some((n) => cls(n) === 'clef clef-change'), false);
+  });
+  test('1.11 clef changes: TAB staves are identical with and without clef changes', () => {
+    const base = { tracks: [{ showTablature: true, measures: [
+      { beats: [{ type: 'note', duration: 'half', notes: [{ string: 3, fret: 2 }] }, { type: 'note', duration: 'half', notes: [{ string: 1, fret: 0 }] }] },
+      { beats: [{ type: 'note', duration: 'whole', notes: [{ string: 5, fret: 3 }] }] }] }] };
+    const withC = JSON.parse(JSON.stringify(base)); withC.tracks[0].measures[1].clef = 'alto';
+    const tab = (sc) => all(render(sc, 1400)).filter((n) => /\bstaff-tab\b/.test(cls(n))).map((g) => all(g).filter((n) => n.tag === 'text').map((n) => n.textContent));
+    eq(tab(withC), tab(base));
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

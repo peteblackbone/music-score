@@ -27,9 +27,10 @@ export function drawStaffLines(x, endX, baselineY, theme) {
  * automatic 8vb (track.octaveClef, guitar music written an octave above
  * sounding pitch) — gClef8vb / fClef8vb / cClef8vb, same anchor as the
  * plain clef; an explicit octave clef name wins (clef.js clefGlyphFor).
+ * `scale` < 1 draws a clef change / courtesy clef (same anchor line).
  */
-export function drawClef(x, baselineY, clef, octave, theme) {
-  const fontSize = smuflFontSizePx(theme);
+export function drawClef(x, baselineY, clef, octave, theme, scale = 1) {
+  const fontSize = scale !== 1 ? smuflFontSizePx(theme) * scale : smuflFontSizePx(theme);
   const glyph = clefGlyphFor(clef, octave);
   // Bravura's clef glyphs are designed so the glyph baseline sits on the
   // staff line the clef "wraps": G4 (2nd line, position 2) for treble,
