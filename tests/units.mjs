@@ -5628,6 +5628,83 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.10.0: ottava brackets (draw/ottava.js) ----------
+{
+  const { resolveTheme } = await imp('src/theme.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const nt = (ps, x = {}, duration = 'quarter') => ({ type: 'note', duration, notes: ps.map((p) => (typeof p === 'string' ? { pitch: p } : p)), ...x });
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const draw = (measures, width = 900, track = {}) => {
+    const score = { tracks: [{ ...track, measures }] };
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    const nodes = all(box.children[0]);
+    const brackets = nodes.filter((n) => cls(n).split(/\s+/).includes('ottava')).map((g) => {
+      const [glyph, dash, hook] = g.children;
+      const n = (nd, a) => +nd.getAttribute(a);
+      return {
+        cls: cls(g), glyph: glyph.textContent, gx: n(glyph, 'x'), gy: n(glyph, 'y'),
+        dash: { x1: n(dash, 'x1'), x2: n(dash, 'x2'), y: n(dash, 'y1'), da: dash.getAttribute('stroke-dasharray') },
+        hook: hook ? { x: n(hook, 'x1'), y1: n(hook, 'y1'), y2: n(hook, 'y2') } : null,
+      };
+    });
+    return { nodes, brackets, lay: computeLayout(normalizeScore(score), th, width) };
+  };
+
+  test('1.10 ottava: 8va above the staff: glyph at the first head\'s left edge, dashed line, hook down 1 sp before the next beat', () => {
+    const { brackets, lay } = draw([{ beats: [nt(['C6'], { ottava: '8va' }), nt(['D6'], { ottava: '8va' }), nt(['C5']), nt(['C5'])] }]);
+    const els = lay.systems[0].tracks[0].measures[0].elements;
+    eq(brackets.length, 1);
+    const b = brackets[0];
+    eq([b.cls, b.glyph, b.dash.da], ['ottava ottava-8va', Glyph.ottavaAlta, '6 5']);
+    eq([Math.abs(b.gx - (els[0].x - 0.59 * S)) < 0.02, Math.abs(b.dash.x1 - (b.gx + glyphBox('ottavaAlta').width * S + 0.3 * S)) < 0.02], [true, true]);
+    eq([Math.abs(b.hook.x - Math.max(els[1].x + 0.89 * S, els[2].x - 0.5 * S)) < 0.02, Math.abs(b.hook.y2 - b.hook.y1 - S) < 0.01, b.hook.x === b.dash.x2], [true, true, true]);
+    eq(b.gy - glyphBox('ottavaAlta').bottom * S <= -S + 0.01, true, 'glyph bottom at least 1 sp above the top line');
+  });
+  test('1.10 ottava: 15mb below the staff and below the dynamics line, hook up; 8vb uses the "vb" glyph', () => {
+    const { brackets, nodes } = draw([{ beats: [nt(['C3'], { ottava: '15mb', dynamic: 'p' }), nt(['C3'], { ottava: '15mb' }), nt(['C3'], { ottava: '8vb' }), nt(['C4'])] }]);
+    eq(brackets.map((b) => [b.cls, b.glyph]), [['ottava ottava-15mb', Glyph.quindicesimaBassaMb], ['ottava ottava-8vb', Glyph.ottavaBassaVb]]);
+    const dyn = nodes.find((n) => cls(n) === 'dynamic');
+    const dynBottom = +dyn.getAttribute('y') - glyphBox('dynamicPiano').bottom * ((th.dynamicFontSize + 1.4 * S) / 4);
+    const top15 = brackets[0].gy - glyphBox('quindicesimaBassaMb').top * S;
+    eq([top15 >= dynBottom + 0.5 * S - 0.02, brackets.every((b) => b.hook.y2 < b.hook.y1)], [true, true]);
+  });
+  test('1.10 ottava: a tied note past the run extends the bracket; the next beat ends it', () => {
+    const { brackets, lay } = draw([{ beats: [nt(['C6'], { ottava: '8va' }), nt([{ pitch: 'C6', tieStart: true }], { ottava: '8va' }), nt([{ pitch: 'C6', tieEnd: true }]), nt(['C5'])] }]);
+    const els = lay.systems[0].tracks[0].measures[0].elements;
+    eq(Math.abs(brackets[0].hook.x - Math.max(els[2].x + 0.89 * S, els[3].x - 0.5 * S)) < 0.02, true);
+  });
+  test('1.10 ottava: across a system break the first segment ends at breakEndX without a hook; the next starts with "(8)" at breakStartX', () => {
+    const bars = Array(8).fill(0).map(() => ({ beats: Array(4).fill(0).map(() => nt(['C6'], { ottava: '8va' })) }));
+    bars.push({ beats: [nt(['C5'], {}, 'whole')] });
+    const { brackets, lay } = draw(bars, 600);
+    if (lay.systems.length < 2) throw new Error('no break');
+    eq(brackets.map((b) => b.cls.includes('ottava-cont')), [false, ...Array(brackets.length - 1).fill(true)]);
+    eq(brackets.slice(0, -1).every((b, i) => !b.hook && Math.abs(b.dash.x2 - (lay.systems[i].lastBarlineX - 0.5 * S)) < 0.02), true);
+    eq(brackets.slice(1).every((b, i) => b.glyph === Glyph.octaveParensLeft + Glyph.ottava + Glyph.octaveParensRight
+      && Math.abs(b.gx - (lay.systems[i + 1].contentStartX + 0.5 * S)) < 0.02), true);
+    eq(!!brackets[brackets.length - 1].hook, true);
+  });
+  test('1.10 ottava: chord symbols and fermatas sit above an 8va bracket; not drawn on TAB-only tracks; TAB frets unchanged', () => {
+    const { brackets, nodes } = draw([{ beats: [nt(['C6'], { ottava: '8va', chord: 'C', fermata: true }), nt(['C6'], { ottava: '8va' }), nt(['C5']), nt(['C5'])] }]);
+    const top = Math.min(brackets[0].gy - glyphBox('ottavaAlta').top * S, brackets[0].dash.y);
+    const chord = nodes.find((n) => cls(n) === 'chord-symbol');
+    eq(+chord.getAttribute('y') + 0.25 * th.dynamicFontSize < top, true, 'chord above');
+    const ferm = nodes.find((n) => n.textContent === Glyph.fermataAbove);
+    eq(+ferm.getAttribute('y') - glyphBox('fermataAbove').bottom * S <= top - 0.5 * S + 0.01, true, 'fermata above');
+    const t = (x = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 17 }], ...x });
+    const tabOnly = draw([{ beats: [t({ ottava: '8va' }), t({ ottava: '8va' }), t(), t()] }], 900, { showStandardNotation: false, showTablature: true });
+    eq(tabOnly.brackets.length, 0);
+    const frets = (o) => draw([{ beats: [t(o), t(o), t(), t()] }], 900, { showTablature: true }).nodes
+      .filter((n) => n.tag === 'text' && /^\d+$/.test(n.textContent || '')).map((n) => [n.textContent, n.getAttribute('x')]);
+    eq(frets({ ottava: '8va' }), frets({}));
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

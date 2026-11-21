@@ -23,6 +23,7 @@ import { drawTempo, drawSystemDecor, tempoTextWidth } from './draw/decor.js';
 import { renderNavigation } from './draw/navigation.js';
 import { renderBeatText } from './draw/beatText.js';
 import { renderFadeWah } from './draw/expressionMarks.js';
+import { renderOttavaAlta, renderOttavaBassa } from './draw/ottava.js';
 import {
   renderTiesAndSlurs, renderGraceSlurs, renderTabArticulations, renderTechniqueLabelRuns, renderChordSymbolsAndDynamics,
   renderFermatas, renderPlayingDirections,
@@ -92,8 +93,12 @@ export class MusicScoreRenderer {
     renderPlayingDirections(score, trackRuns, theme, layout.systems);
     // Fade / wah marks above the staff (outside the pass barrel; chord symbols and fermatas clear them).
     renderFadeWah(score, trackRuns, theme, layout.systems);
+    // 8va / 15ma brackets above the notation staff, outside the fade / wah marks.
+    renderOttavaAlta(score, trackRuns, theme, layout.systems);
     // Chord symbols / dynamics once everything they must clear is drawn.
     renderChordSymbolsAndDynamics(score, trackRuns, theme, layout.systems);
+    // 8vb / 15mb brackets below the dynamics line.
+    renderOttavaBassa(score, trackRuns, theme, layout.systems);
     // Fermatas last so they can clear slurs, tuplets and chord symbols.
     renderFermatas(score, trackRuns, theme, layout.systems);
     // Beat text above / below the music, clear of all of the above (outside the pass barrel).
