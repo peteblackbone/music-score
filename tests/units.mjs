@@ -7252,6 +7252,21 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- browser DOM parity: no array methods on .children (HTMLCollection in browsers, array in the shim) ----------
+test('browser parity: src never calls array methods directly on .children', () => {
+  const bad = [];
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).forEach((d) => {
+    const p = path.join(dir, d.name);
+    if (d.isDirectory()) return walk(p);
+    if (!d.name.endsWith('.js')) return;
+    fs.readFileSync(p, 'utf8').split('\n').forEach((line, i) => {
+      if (/\.children\.(find|filter|map|some|every|forEach|reduce|includes|indexOf|flatMap|at)\(/.test(line)) bad.push(`${path.relative(root0, p)}:${i + 1}`);
+    });
+  });
+  walk(path.join(root0, 'src'));
+  eq(bad, []);
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

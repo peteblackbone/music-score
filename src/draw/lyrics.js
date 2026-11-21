@@ -46,7 +46,8 @@ const EXTENDER_STROKE_SP = 0.1;  // extender line width (1 px at the default 10 
  * has no syllable under their span.
  */
 export function lyricsBottom(g, theme) {
-  const lg = g.children.find((c) => c.getAttribute && c.getAttribute('class') === 'lyrics');
+  // Array.from: a browser's `children` is an HTMLCollection (no .find); the test DOM shim uses an array.
+  const lg = Array.from(g.children || []).find((c) => c.getAttribute && c.getAttribute('class') === 'lyrics');
   return lg ? inkBounds(lg, theme).bottom : -Infinity;
 }
 
