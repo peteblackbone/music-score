@@ -9,7 +9,8 @@
  * outside the pass barrel (draw/passes.js): each text's baseline clears the
  * ink already under its estimated width by BEAT_TEXT_CLEARANCE_SP (music,
  * pick strokes / TAB labels / bends, chord diagrams / symbols, fermatas)
- * and sits at least BEAT_TEXT_MIN_ABOVE_SP above the top line. Texts are
+ * and sits at least BEAT_TEXT_MIN_ABOVE_SP above the top line; a text below
+ * also clears the whole lyrics band (draw/lyrics.js lyricsBottom). Texts are
  * appended one by one, left to right, so a later text also clears the
  * earlier ones; voltas and navigation marks then clear the texts. There is
  * no horizontal avoidance.
@@ -19,6 +20,7 @@ import { inkBounds, TEXT_ASCENT_EM, TEXT_DESCENT_EM } from '../layout/ink.js';
 import { estimateTextWidth } from '../textMetrics.js';
 import { canonicalBeatText } from '../scoreText.js';
 import { tabTopY } from './passes/common.js';
+import { lyricsBottom } from './lyrics.js';
 
 const BEAT_TEXT_SIZE_SP = 1.2;
 const BEAT_TEXT_CLEARANCE_SP = 0.5;   // text -> ink above / below which it sits
@@ -44,7 +46,8 @@ export function renderBeatText(trackRuns, theme) {
         const span = { xMin: le.x - pad, xMax: le.x + estimateTextWidth(t.text, size) + pad, overlap: true };
         let y;
         if (t.below) {
-          const bottom = inkBounds(belowG, theme, span).bottom;
+          // a text below also clears the lyrics band (draw/lyrics.js), not only the lyrics under its span
+          const bottom = Math.max(inkBounds(belowG, theme, span).bottom, lyricsBottom(belowG, theme));
           y = (Number.isFinite(bottom) ? bottom : bottomLine) + BEAT_TEXT_CLEARANCE_SP * s + TEXT_ASCENT_EM * size;
         } else {
           const top = inkBounds(aboveG, theme, span).top;

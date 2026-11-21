@@ -6581,7 +6581,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const dir = path.join(root0, 'tests', 'snapshots');
     let n = 0;
     for (const c of cases) {
-      if (c.id.startsWith('char-multirest-')) continue; // the multirest fixture collapses on purpose
+      if (c.id.startsWith('char-multirest-') || c.id.startsWith('char-lyrics-break-')) continue; // the multirest and lyrics-break fixtures collapse on purpose
       const file = path.join(dir, `${c.id}.svg`);
       if (!fs.existsSync(file)) continue;
       const box = makeContainer();
@@ -6671,7 +6671,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const off = (beats) => (beats || []).map((b) => ({ ...b, slash: false }));
     let n = 0;
     for (const c of cases) {
-      if (c.id.startsWith('char-slashes-')) continue; // the slashes fixture has note beats without notes (they need slash: true)
+      if (c.id.startsWith('char-slashes-') || c.id === 'char-lyrics-w900') continue; // the slashes fixture has note beats without notes (they need slash: true); char-lyrics has a slash beat on purpose
       const file = path.join(dir, `${c.id}.svg`);
       if (!fs.existsSync(file)) continue;
       const sc = JSON.parse(JSON.stringify(c.score));

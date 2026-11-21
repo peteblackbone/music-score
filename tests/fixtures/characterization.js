@@ -1891,3 +1891,76 @@ characterizationCases.push(...['tab-only', 'harmonics', 'tab-marks', 'directions
     },
   });
 }
+{
+  // 1.12.0 lyrics on notation + TAB (track 1) and on notation only (track 2, same music): two verses; m1 hyphens,
+  // p + cresc hairpin, "day_" / "py_" extenders through a tied note to the last note before a rest (m2, whose rest
+  // and grace lyrics are ignored); m3 a long syllable widening its beat, a grace with a lyric (ignored), a rhythm
+  // slash with a syllable, an { text, extend } object form, beat text below; m4 two voices (voice-2 lyrics ignored)
+  // under an 8vb bracket with mf.
+  const L = (string, fret, lyric, extra = {}, d = 'quarter', note = {}) => ({ type: 'note', duration: d, notes: [{ string, fret, ...note }], ...(lyric ? { lyric } : {}), ...extra });
+  const measures = [
+    { beats: [L(3, 0, ['Hap-', 'Ma-'], { dynamic: 'p', hairpin: 'cresc' }), L(3, 2, ['py', 'ny'], { hairpin: 'cresc' }), L(2, 0, ['birth-', 'hap-'], { hairpin: 'cresc' }),
+      L(2, 1, ['day_', 'py_'], { dynamic: 'f' }, 'quarter', { tieStart: true })] },
+    { beats: [L(2, 1, null, {}, 'half', { tieEnd: true }), { type: 'grace', duration: '16th', notes: [{ string: 2, fret: 2 }], lyric: 'grace' }, L(2, 3, null),
+      { type: 'rest', duration: 'quarter', lyric: 'rest' }] },
+    { beats: [L(1, 0, ['Supercalifragilistic', 'turn-']), { type: 'grace', duration: '16th', notes: [{ string: 1, fret: 1 }], lyric: ['g', 'g'] }, L(1, 2, ['to', 'ing']),
+      { type: 'note', duration: 'quarter', slash: true, notes: [{ string: 1, fret: 2 }], lyric: ['you', 'round'] }, L(1, 3, [{ text: 'all', extend: true }, null], { text: { text: 'rit.', below: true } })] },
+    vm([L(1, 0, ['two', 'and'], { ottava: '8vb', dynamic: 'mf' }), L(1, 2, ['voi-', 'a-'], { ottava: '8vb' }), L(1, 3, ['ces', 'gain'], { ottava: '8vb' }, 'half')],
+      [L(4, 2, 'lower', {}, 'half'), L(4, 0, ['v2', 'v2'], {}, 'half')]),
+  ];
+  characterizationCases.push({
+    name: 'lyrics', width: 900,
+    score: {
+      tracks: [
+        { name: 'Gtr', showStandardNotation: true, showTablature: true, measures },
+        { name: 'Vox', showStandardNotation: true, showTablature: false, measures },
+      ],
+    },
+  });
+}
+{
+  // 1.12.0 lyrics across system breaks (600), multiMeasureRests on: a hyphen whose next syllable starts the next
+  // system ("sys- / tem"); an "Ah_" melisma from m3 over the whole third system, ending on m9's last note (the next
+  // syllable is m10's); two whole rests with a lyric still collapse into one multi-measure rest, which a hyphen jumps ("end- / ing").
+  const L = (fret, lyric, d = 'quarter') => ({ type: 'note', duration: d, notes: [{ string: 2, fret }], ...(lyric ? { lyric } : {}) });
+  const bar = (lyrics) => ({ beats: [0, 1, 2, 3].map((i) => L([1, 3, 5, 3][i], lyrics[i])) });
+  characterizationCases.push({
+    name: 'lyrics-break', width: 600,
+    score: {
+      multiMeasureRests: true,
+      tracks: [{
+        name: 'Gtr', showStandardNotation: true, showTablature: true,
+        measures: [
+          bar(['Hel-', 'lo', 'and', 'wel-']),
+          bar(['come', 'to', 'the', 'sys-']),
+          bar(['tem', 'Ah_', null, null]),
+          bar([]), bar([]), bar([]), bar([]), bar([]), bar([]),
+          { beats: [L(1, 'end-'), L(3), L(5), { type: 'rest', duration: 'quarter' }] },
+          { beats: [{ type: 'rest', duration: 'whole', lyric: 'la' }] },
+          { beats: [{ type: 'rest', duration: 'whole', lyric: ['la', 'la'] }] },
+          { beats: [L(1, 'ing'), L(3), L(5, 'fin', 'half')] },
+        ],
+      }],
+    },
+  });
+}
+{
+  // 1.12.0 lyrics on a tab-only staff with TAB rhythm: three verses under the rhythm band, hyphens and an extender,
+  // beat text below under the lyrics, a two-voice measure (voice 2's band row above the lyrics).
+  const L = (string, fret, lyric, extra = {}, d = 'quarter') => ({ type: 'note', duration: d, notes: [{ string, fret }], ...(lyric ? { lyric } : {}), ...extra });
+  characterizationCases.push({
+    name: 'lyrics-tab-only', width: 900,
+    score: {
+      tracks: [{
+        name: 'TAB', showStandardNotation: false, showTablature: true, tabRhythm: true,
+        measures: [
+          { beats: [L(3, 0, ['Once', 'Twice', 'Thrice']), L(3, 2, ['up-', 'a-', 'o-']), L(2, 0, ['on', 'gain', 'ver'], { text: { text: 'softly', below: true } }),
+            L(2, 1, ['a_', 'and_', 'the_'])] },
+          { beats: [L(2, 1, null, {}, '8th'), L(2, 3, null, {}, '8th'), L(2, 1, null, {}, 'quarter'), L(1, 0, ['time', 'more', 'hill']), L(1, 0, null, { text: { text: 'end', below: true } })] },
+          vm([L(1, 3, ['we', 'they', 'you']), L(1, 2, ['sang', 'sing', 'sung'], {}, 'quarter'), L(1, 0, ['too', 'two', 'to'], {}, 'half')],
+            [L(4, 2, 'x', {}, '8th'), L(4, 0, null, {}, '8th'), L(5, 2, null, {}, 'quarter'), L(5, 0, null, {}, 'half')]),
+        ],
+      }],
+    },
+  });
+}

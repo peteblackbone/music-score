@@ -507,7 +507,7 @@ function collectNumbers(root) {
   }
   return out;
 }
-const SCALED = { staffLineSpacing: 20, tabStaffLineSpacing: 30, tabFontSize: 24, dynamicFontSize: 30 };
+const SCALED = { staffLineSpacing: 20, tabStaffLineSpacing: 30, tabFontSize: 24, dynamicFontSize: 30, lyricFontSize: 26 }; // 1.12: lyricFontSize is px too
 const SCALED_STROKES = { ...SCALED, stemWidth: 2.6, beamWidth: 10, staffLineWidth: 2 };
 
 function scaleDrift(theme, label, keep = () => true) {
@@ -898,7 +898,8 @@ const overlaps = (a, b) => a.x1 < b.x2 && b.x1 < a.x2 && a.top < b.bottom && b.t
 // Leaf nodes of a staff group that belong to the music (not the decorations placed around it).
 const SKIP = new Set(['chord-symbol', 'dynamic', 'fermata', 'tempo', 'measure-number', 'staff-lines', 'barline', 'key-signature', 'time-signature', 'courtesy']);
 // 1.10: hairpins sit on the dynamics line and 8vb / 15mb brackets below it, so they are not the music's ink either.
-const SKIP_BELOW_LINE = /^(hairpin|ottava ottava-(8vb|15mb))( |$)/;
+// 1.12: nor is beat text below (placed after them; char-lyrics has one beside a dynamics line on a notation-only staff).
+const SKIP_BELOW_LINE = /^(hairpin|ottava ottava-(8vb|15mb)|beat-text beat-text-below)( |$)/;
 function musicLeaves(g, xMin) {
   const out = [];
   const visit = (n) => {
@@ -3195,7 +3196,7 @@ test('tab-rhythm', 'AC8: renderTabElement still returns undefined for rests and 
 test('tab-rhythm', 'AC10: tabRhythm forced true vs false on every TAB staff of every SCORE (600/900): TAB-group nodes outside tab-rhythm keep their local coordinates (all of them where the timeline x is unchanged, else every y)', () => {
   let strict = 0; let yOnly = 0; let staffTotal = 0; let moved = 0;
   for (const [name, score, options] of SCORES) for (const width of WIDTHS_TR) {
-    if (name === 'char-multirest') continue; // 1.11: a multi-measure rest is drawn on TAB only with TAB rhythm, on purpose
+    if (name === 'char-multirest' || name === 'char-lyrics-break') continue; // 1.11: a multi-measure rest is drawn on TAB only with TAB rhythm, on purpose
     const on = tabModel(forceTab(score, true), width, options); const off = tabModel(forceTab(score, false), width, options);
     const sameSys = JSON.stringify(on.layout.systems.map((s) => s.measureIndices)) === JSON.stringify(off.layout.systems.map((s) => s.measureIndices));
     ok(sameSys, `${name}@${width}: system breaks unchanged`);
@@ -3210,7 +3211,7 @@ test('tab-rhythm', 'AC10: tabRhythm forced true vs false on every TAB staff of e
       ok(translateY(s.g) >= translateY(o.g) - EPS, `${name}@${width}: a TAB staff never moves up when rhythm is added`);
       if (translateY(s.g) !== translateY(o.g)) moved++;
       // beat text below the TAB staff (1.6.0) clears the rhythm band, so it moves with it
-      const strip = (stv) => stv.g.children.filter((c) => !/^tab-rhythm( |$)/.test(cls(c)) && cls(c) !== 'beat-text beat-text-below'); // 1.8: voice 2's row is 'tab-rhythm voice-2'
+      const strip = (stv) => stv.g.children.filter((c) => !/^tab-rhythm( |$)/.test(cls(c)) && cls(c) !== 'beat-text beat-text-below' && cls(c) !== 'lyrics'); // 1.8: voice 2's row is 'tab-rhythm voice-2'; 1.12: lyrics hang below the band
       const a = strip(s); const b = strip(o);
       ok(a.length === b.length, `${name}@${width} sys${s.si}: child count`);
       if (sameX) { ok(a.map(serialize).join('') === b.map(serialize).join(''), `${name}@${width} sys${s.si}: TAB group differs outside the band`); strict++; }
@@ -6803,6 +6804,141 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
         ok(JSON.stringify(leaves(ga, isSlash)) === JSON.stringify(lbNoSlash), `${width}: staff ${i} differs beyond the slash`);
         ok(la.length === lbNoSlash.length + (all(ga).filter(({ n }) => isSlash(n)).length), 'only slashes removed');
       });
+    }
+  });
+
+  // ---- lyrics ----
+  const LY = fx('lyrics'); const LB = fx('lyrics-break'); const LT = fx('lyrics-tab-only');
+  const LSIZE = DEF.lyricFontSize;
+  const stripLyrics = (score) => JSON.parse(JSON.stringify(score), (k, v) => (k === 'lyric' ? undefined : v));
+  const lyricGroups = (tree) => systemsOf(tree).flatMap((sg, si) => staffGroups(sg).flatMap((g) => g.children.filter((c) => cls(c) === 'lyrics').map((lg) => ({ si, g, lg }))));
+  const sylls = (lg, c = 'lyric') => lg.children.filter((k) => cls(k) === c);
+  const verseOf = (n) => Number(n.getAttribute('data-verse'));
+  const afterLyrics = (k) => ['dynamic', 'hairpin', 'ottava-8vb', 'ottava-15mb', 'beat-text-below'].some((c) => has(k, c));
+  const lyricFixtures = [[LY, 900], [LY, 600], [LB, 600], [LB, 900], [LT, 900], [LT, 600]];
+
+  test('struct112', 'lyrics: <g class="lyrics"> with centred <text class="lyric" data-verse> on the beat x (textFontFamily, lyricFontSize 13, noteColor); verse 1 top 0.8 sp under the staff ink right of the header; verse step 1.3 x size', () => {
+    for (const [f, width] of lyricFixtures) {
+      const tree = renderTree(f.score, width); const lay = layoutOf(f.score, width);
+      const groups = lyricGroups(tree);
+      ok(groups.length > 0, `${f.name}@${width}: lyrics drawn`);
+      groups.forEach(({ si, g, lg }) => {
+        const sys = lay.systems[si];
+        const ti = Number(g.getAttribute('data-track'));
+        const xs = sys.tracks[ti].measures.flatMap((m) => m.elements.map((le) => le.x));
+        sylls(lg).forEach((t) => {
+          ok(t.getAttribute('text-anchor') === 'middle' && num(t, 'font-size') === LSIZE && t.getAttribute('font-family') === DEF.textFontFamily && t.getAttribute('fill') === DEF.noteColor, `${f.name}: lyric attrs`);
+          ok(xs.some((x) => Math.abs(x - num(t, 'x')) < EPS), `${f.name}@${width} sys${si}: lyric "${t._text}" x ${num(t, 'x')} not on a voice-1 beat x`);
+        });
+        const ink = inkBounds(without(g, (k) => k === lg || afterLyrics(k)), DEF, { xMin: sys.contentStartX }).bottom;
+        const base1 = ink + 0.8 * S12 + 0.8 * LSIZE;
+        [...sylls(lg), ...sylls(lg, 'lyric-hyphen')].forEach((t) => near(num(t, 'y'), base1 + (verseOf(t) - 1) * 1.3 * LSIZE, EPS, `${f.name}@${width} sys${si} verse ${verseOf(t)} "${t._text}" baseline`));
+        sylls(lg, 'lyric-extender').forEach((l) => near(num(l, 'y1'), base1 + (verseOf(l) - 1) * 1.3 * LSIZE, EPS, `${f.name}@${width} extender baseline`));
+      });
+    }
+  });
+  test('struct112', 'lyrics: rests, hidden rests, graces and voice 2 draw no syllable; data-verse is 1-based; text content only', () => {
+    const tree = renderTree(LY.score, 900);
+    const all1 = lyricGroups(tree).flatMap(({ lg }) => sylls(lg));
+    ok(all1.length === 42, `${all1.length} syllables (21 per track)`);
+    ok(!all1.some((t) => ['rest', 'grace', 'g', 'lower', 'v2'].includes(t._text)), 'ignored lyrics drawn');
+    ok(all1.every((t) => [1, 2].includes(verseOf(t)) && t.children.length === 0), 'verses 1-2, no child nodes');
+    ok(lyricGroups(renderTree(LT.score, 900)).flatMap(({ lg }) => sylls(lg)).some((t) => verseOf(t) === 3), 'tab-only verse 3');
+    ok(!lyricGroups(renderTree(LB.score, 600)).flatMap(({ lg }) => sylls(lg)).some((t) => t._text === 'la'), 'lyric on collapsed rests ignored');
+  });
+  test('struct112', 'lyrics: a hyphen sits midway between its syllable and the next one of the verse; before a break, midway to the last barline; nothing on the next system', () => {
+    const w = (t) => estimateTextWidth(t, LSIZE);
+    let breaks = 0; let seen = 0;
+    for (const [f, width] of lyricFixtures) {
+      const tree = renderTree(f.score, width); const lay = layoutOf(f.score, width);
+      lyricGroups(tree).forEach(({ si, lg }) => sylls(lg, 'lyric-hyphen').forEach((h) => {
+        seen++;
+        ok(h._text === '-', 'hyphen text');
+        const v = verseOf(h); const hx = num(h, 'x');
+        const same = sylls(lg).filter((t) => verseOf(t) === v);
+        const left = same.filter((t) => num(t, 'x') < hx).sort((a, b) => num(b, 'x') - num(a, 'x'))[0];
+        const right = same.filter((t) => num(t, 'x') > hx).sort((a, b) => num(a, 'x') - num(b, 'x'))[0];
+        const from = num(left, 'x') + w(left._text) / 2;
+        if (right) near(hx, (from + num(right, 'x') - w(right._text) / 2) / 2, EPS, `${f.name}@${width} hyphen after "${left._text}"`);
+        else { breaks++; near(hx, (from + lay.systems[si].lastBarlineX) / 2, EPS, `${f.name}@${width} hyphen at the break after "${left._text}"`); }
+      }));
+    }
+    ok(seen >= 20 && breaks >= 2, `hyphens ${seen}, at breaks ${breaks}`);
+    // lyrics-break@600: "sys-" ends system 1 and "tem" starts system 2 with no hyphen before it
+    const tree = renderTree(LB.score, 600);
+    const g1 = lyricGroups(tree).find(({ si }) => si === 1).lg;
+    ok(sylls(g1)[0]._text === 'tem' && !sylls(g1, 'lyric-hyphen').some((h) => num(h, 'x') < num(sylls(g1)[0], 'x')), 'no hyphen restated on the next system');
+  });
+  test('struct112', 'lyrics: extenders (1 px, butt) from 0.2 sp right of the syllable to the right edge of the last note head before the next syllable / rest; split at breaks (last barline, then content start)', () => {
+    const w = (t) => estimateTextWidth(t, LSIZE);
+    // char-lyrics@900: "day_" / "py_" run through the tied half to the quarter before the rest (m2 beat 3)
+    {
+      const tree = renderTree(LY.score, 900); const lay = layoutOf(LY.score, 900);
+      const m2 = lay.systems[0].tracks[0].measures[1];
+      const end = m2.elements.find((le) => le.el.type === 'note' && le.el.notes[0].fret === 3).x + 0.59 * S12;
+      const { lg } = lyricGroups(tree)[0];
+      const ext = sylls(lg, 'lyric-extender');
+      ok(ext.length === 2, `${ext.length} extenders on track 1 (the { text, extend } "all" before the next syllable has none)`);
+      ext.forEach((l) => {
+        const syl = sylls(lg).filter((t) => verseOf(t) === verseOf(l) && num(t, 'x') < num(l, 'x1')).sort((a, b) => num(b, 'x') - num(a, 'x'))[0];
+        ok(['day', 'py'].includes(syl._text), `extender after ${syl._text}`);
+        near(num(l, 'x1'), num(syl, 'x') + w(syl._text) / 2 + 0.2 * S12, EPS, 'extender start');
+        near(num(l, 'x2'), end, EPS, 'extender end');
+        ok(l.getAttribute('stroke-width') === '1' && l.getAttribute('stroke-linecap') === 'butt' && l.getAttribute('stroke') === DEF.noteColor, 'extender stroke');
+      });
+    }
+    // char-lyrics-break@600: "Ah_" (system 2) over system 3 to m9's last note (system 4)
+    {
+      const tree = renderTree(LB.score, 600); const lay = layoutOf(LB.score, 600);
+      const segs = lyricGroups(tree).flatMap(({ si, lg }) => sylls(lg, 'lyric-extender').map((l) => ({ si, l })));
+      ok(JSON.stringify(segs.map((x) => x.si)) === '[1,2,3]', `segments on systems ${segs.map((x) => x.si)}`);
+      const ah = sylls(lyricGroups(tree).find(({ si }) => si === 1).lg).find((t) => t._text === 'Ah');
+      near(num(segs[0].l, 'x1'), num(ah, 'x') + w('Ah') / 2 + 0.2 * S12, EPS, 'segment 1 start');
+      near(num(segs[0].l, 'x2'), lay.systems[1].lastBarlineX, EPS, 'segment 1 end');
+      near(num(segs[1].l, 'x1'), lay.systems[2].contentStartX, EPS, 'segment 2 start');
+      near(num(segs[1].l, 'x2'), lay.systems[2].lastBarlineX, EPS, 'segment 2 end');
+      near(num(segs[2].l, 'x1'), lay.systems[3].contentStartX, EPS, 'segment 3 start');
+      const m9 = lay.systems[3].tracks[0].measures.find((m) => m.measureIndex === 8);
+      near(num(segs[2].l, 'x2'), m9.elements[3].x + 0.59 * S12, EPS, 'segment 3 end');
+    }
+  });
+  test('struct112', 'lyrics: the dynamics line, hairpins, 8vb brackets and beat text below sit below the lyrics band; the TAB staff under lyrics moves down', () => {
+    let n = 0;
+    for (const [f, width] of lyricFixtures) {
+      const tree = renderTree(f.score, width);
+      lyricGroups(tree).forEach(({ g, lg }) => {
+        const bottom = inkBounds(lg, DEF).bottom;
+        all(g).filter(({ n: k }) => afterLyrics(k)).forEach(({ n: k }) => { n++; ok(nodeInk(k).top > bottom, `${f.name}@${width}: ${cls(k)} top ${nodeInk(k).top} not below the lyrics ${bottom}`); });
+      });
+    }
+    ok(n >= 12, `${n} marks below lyrics checked`);
+    const tabY = (tree) => translateY(staffGroups(systemsOf(tree)[0]).find((g) => cls(g).includes('staff-tab')));
+    ok(tabY(renderTree(LY.score, 900)) > tabY(renderTree(stripLyrics(LY.score), 900)) + 2 * 1.3 * LSIZE, 'TAB staff moved down');
+  });
+  test('struct112', 'lyrics: on systems without lyrics the dynamics, hairpins and 8vb keep their y; tab-only lyrics sit under the rhythm band', () => {
+    const only1 = clone(LY.score);
+    only1.tracks.forEach((t) => { t.measures = t.measures.map((m, i) => (i === 0 ? m : stripLyrics(m))); });
+    const ys = (tree, si) => all(systemsOf(tree)[si]).filter(({ n }) => ['dynamic', 'hairpin', 'ottava-8vb'].some((c) => has(n, c)))
+      .map(({ n }) => serialize(n));
+    const a = renderTree(only1, 600); const b = renderTree(stripLyrics(LY.score), 600);
+    ok(lyricGroups(a).every(({ si }) => si === 0) && systemsOf(a).length === 2, 'lyrics on system 1 only');
+    const ya = ys(a, 1); ok(ya.length >= 4 && JSON.stringify(ya) === JSON.stringify(ys(b, 1)), 'system 2 marks unchanged');
+    ok(JSON.stringify(ys(a, 0)) !== JSON.stringify(ys(b, 0)), 'system 1 marks moved');
+    for (const width of [600, 900]) {
+      const tree = renderTree(LT.score, width);
+      lyricGroups(tree).forEach(({ g, lg }) => {
+        const band = Math.max(...g.children.filter((k) => /^tab-rhythm( |$)/.test(cls(k))).map((k) => nodeInk(k).bottom));
+        ok(inkBounds(lg, DEF).top > band, `tab-only@${width}: lyrics under the band`);
+      });
+    }
+  });
+  test('struct112', 'lyrics / graces / tuplets: determinism and clean numbers at 400 / 600 / 900; input untouched', () => {
+    for (const f of [TN, GO, LY, LB, LT]) for (const width of [400, 600, 900]) {
+      const before = JSON.stringify(f.score);
+      const out = serialize(renderTree(f.score, width));
+      ok(!/NaN|Infinity|undefined/.test(out), `${f.name}@${width}: bad number`);
+      ok(out === serialize(renderTree(f.score, width)), `${f.name}@${width}: two renders differ`);
+      ok(JSON.stringify(f.score) === before, `${f.name}: input mutated`);
     }
   });
 }

@@ -6,7 +6,7 @@
  *   renderer.render();
  *
  * render() = resolve theme (constructor) → normalize → layout → draw every
- * staff at a local origin → score-wide passes → beat text → navigation (voltas,
+ * staff at a local origin → score-wide passes (lyrics before the dynamics line) → beat text → navigation (voltas,
  * segno / coda / jumps / x3, sections) → tempo → measure ink → place staves →
  * copyright footer → mount.
  */
@@ -26,6 +26,7 @@ import { renderFadeWah } from './draw/expressionMarks.js';
 import { ottavaSegments, renderOttavaAlta, renderOttavaBassa } from './draw/ottava.js';
 import { tempoChanges, renderFirstTempoChange, renderTempoChanges } from './draw/tempoMarks.js';
 import { renderTabOnlyArticulations, renderTabOnlyFermatas } from './draw/tabOnlyMarks.js';
+import { renderLyrics } from './draw/lyrics.js';
 import {
   renderTiesAndSlurs, renderGraceSlurs, renderTabArticulations, renderTechniqueLabelRuns, renderChordSymbolsAndDynamics,
   renderFermatas, renderPlayingDirections,
@@ -100,6 +101,8 @@ export class MusicScoreRenderer {
     // 8va / 15ma brackets above the notation staff, outside the fade / wah marks.
     const ottavas = ottavaSegments(score, trackRuns, layout.systems, theme);
     renderOttavaAlta(ottavas, theme);
+    // Lyrics under the staff (outside the pass barrel): the dynamics line, 8vb / 15mb and beat text below measure them.
+    renderLyrics(score, trackRuns, theme, layout.systems);
     // Chord symbols / dynamics once everything they must clear is drawn.
     renderChordSymbolsAndDynamics(score, trackRuns, theme, layout.systems);
     // 8vb / 15mb brackets below the dynamics line.
