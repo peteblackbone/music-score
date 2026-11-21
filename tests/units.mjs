@@ -6008,6 +6008,81 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.11.0: the clef module (src/clef.js) ----------
+{
+  const C = await imp('src/clef.js');
+  const { notePosition, keySignatureLayout } = await imp('src/pitch.js');
+  const cases = (await import('./cases.mjs')).cases;
+  test('1.11 clefOf: canonical names (trimmed, any case); everything else null', () => {
+    eq(C.CLEF_NAMES.map(C.clefOf), C.CLEF_NAMES);
+    eq(['  Alto', 'BASS ', 'Treble8VB', '\ttenor\n', 'bass15MA'].map(C.clefOf), ['alto', 'bass', 'treble8vb', 'tenor', 'bass15ma']);
+    eq(['nonsense', '', 'treble 8vb', 'soprano', 'percussion', 'g', null, undefined, 3, {}, ['alto'], true].map(C.clefOf), Array(12).fill(null));
+  });
+  test('1.11 trackClef: canonical track clef, else treble', () => {
+    eq([{ clef: 'Alto' }, { clef: 'nonsense' }, {}, { clef: 7 }, null, undefined].map(C.trackClef), ['alto', 'treble', 'treble', 'treble', 'treble', 'treble']);
+  });
+  test('1.11 clefAt / clefChangeAt: measure clefs apply until the next change; unknown ignored; equal = no change; measure 0 replaces the track clef', () => {
+    const t = { clef: 'bass', measures: [{}, { clef: 'Tenor' }, {}, { clef: 'tenor' }, { clef: 'bogus' }, { clef: 'bass8va' }, null, { clef: ' TREBLE ' }] };
+    eq([0, 1, 2, 3, 4, 5, 6, 7].map((mi) => C.clefAt(t, mi)), ['bass', 'tenor', 'tenor', 'tenor', 'tenor', 'bass8va', 'bass8va', 'treble']);
+    eq([0, 1, 2, 3, 4, 5, 6, 7].map((mi) => C.clefChangeAt(t, mi)), [null, 'tenor', null, null, null, 'bass8va', null, 'treble']);
+    eq([C.clefAt(t, 99), C.clefAt(t, -1)], ['treble', 'bass']);
+    const t0 = { clef: 'treble', measures: [{ clef: 'alto' }, { clef: 'alto' }] };
+    eq([C.clefAt(t0, 0), C.clefChangeAt(t0, 0), C.clefChangeAt(t0, 1)], ['alto', null, null]);
+    eq(C.clefChangeAt({ measures: [{}, { clef: 'treble8vb' }] }, 1), 'treble8vb', 'treble -> treble8vb is a change');
+    eq([C.clefAt({}, 0), C.clefAt({ clef: 'alto', measures: [] }, 3)], ['treble', 'alto']);
+  });
+  test('1.11 clefBase / clefAnchorPos: octave variants use their base', () => {
+    eq(C.CLEF_NAMES.map(C.clefBase), ['treble', 'bass', 'alto', 'tenor', 'treble', 'treble', 'treble', 'treble', 'bass', 'bass', 'bass', 'bass']);
+    eq(C.CLEF_NAMES.map(C.clefAnchorPos), [2, 6, 4, 6, 2, 2, 2, 2, 6, 6, 6, 6]);
+    eq([C.clefBase('nonsense'), C.clefAnchorPos(undefined)], ['treble', 2]);
+  });
+  test('1.11 clefNotePosition equals pitch.js notePosition for treble/bass (and their octave labels) over every note of every case', () => {
+    let n = 0;
+    for (const c of cases) for (const t of normalizeScore(c.score).tracks) for (const m of t.measures) {
+      for (const b of [...m.beats, ...(m.voice2Beats || [])]) for (const note of b.notes || []) {
+        if (note.pitch == null) continue;
+        for (const [clef, base] of [['treble', 'treble'], ['bass', 'bass'], ['treble8vb', 'treble'], ['bass15ma', 'bass'], [t.clef, t.clef]]) {
+          if (C.clefNotePosition(note, clef) !== notePosition(note, base)) throw new Error(`${c.id} ${note.pitch} ${clef}`);
+        }
+        n++;
+      }
+    }
+    if (n < 1000) throw new Error(`only ${n} notes`);
+  });
+  test('1.11 clefNotePosition: alto C4 on the middle line, tenor C4 on the 4th line, bottom lines F3 / D3; ottava shift on top', () => {
+    const p = (pitch, clef, ottavaShift) => C.clefNotePosition({ pitch, ...(ottavaShift ? { ottavaShift } : {}) }, clef);
+    eq([p('C4', 'alto'), p('F3', 'alto'), p('G4', 'alto'), p('C4', 'tenor'), p('D3', 'tenor'), p('A4', 'tenor')], [4, 0, 8, 6, 0, 11]);
+    eq([p('C4', 'alto', -7), p('C4', 'tenor', 7), p('C#4', 'alto'), p('Cb4', 'tenor')], [-3, 13, 4, 6]);
+  });
+  test('1.11 clefKeySignatureLayout: alto/tenor hand table; treble/bass identical to keySignatureLayout', () => {
+    const L = { sharp: 'FCGDAEB'.split(''), flat: 'BEADGCF'.split('') };
+    const P = { alto: { sharp: [7, 4, 8, 5, 2, 6, 3], flat: [3, 6, 2, 5, 1, 4, 0] }, tenor: { sharp: [2, 6, 3, 7, 4, 8, 5], flat: [5, 8, 4, 7, 3, 6, 2] } };
+    for (const clef of ['alto', 'tenor']) for (let k = -7; k <= 7; k++) {
+      const kind = k > 0 ? 'sharp' : 'flat';
+      const want = Array.from({ length: Math.abs(k) }, (_, i) => ({ letter: L[kind][i], alter: k > 0 ? 1 : -1, position: P[clef][kind][i] }));
+      eq(C.clefKeySignatureLayout(k, clef), want, `${clef} ${k}`);
+      eq(C.clefKeySignatureLayout(k, `${clef === 'alto' ? 'Alto ' : 'TENOR'}`), want);
+    }
+    for (let k = -7; k <= 7; k++) {
+      for (const [clef, base] of [['treble', 'treble'], ['bass', 'bass'], ['treble15mb', 'treble'], ['bass8va', 'bass'], [undefined, 'treble'], ['nonsense', 'treble']]) {
+        eq(C.clefKeySignatureLayout(k, clef), keySignatureLayout(k, base), `${clef} ${k}`);
+      }
+    }
+    eq(C.clefKeySignatureLayout(9, 'alto').length, 7);
+  });
+  test('1.11 clefGlyphFor: explicit octave clef wins over auto 8vb; auto turns treble/bass into 8vb and alto/tenor into cClef8vb', () => {
+    const want = {
+      treble: ['gClef', 'gClef8vb'], bass: ['fClef', 'fClef8vb'], alto: ['cClef', 'cClef8vb'], tenor: ['cClef', 'cClef8vb'],
+      treble8vb: ['gClef8vb', 'gClef8vb'], treble8va: ['gClef8va', 'gClef8va'], treble15mb: ['gClef15mb', 'gClef15mb'], treble15ma: ['gClef15ma', 'gClef15ma'],
+      bass8vb: ['fClef8vb', 'fClef8vb'], bass8va: ['fClef8va', 'fClef8va'], bass15mb: ['fClef15mb', 'fClef15mb'], bass15ma: ['fClef15ma', 'fClef15ma'],
+      nonsense: ['gClef', 'gClef8vb'],
+    };
+    for (const [clef, [plain, auto]] of Object.entries(want)) {
+      eq([C.clefGlyphFor(clef, false), C.clefGlyphFor(clef, true)], [Glyph[plain], Glyph[auto]], clef);
+    }
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
