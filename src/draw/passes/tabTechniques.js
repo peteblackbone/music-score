@@ -77,7 +77,8 @@ const colX = (le) => le.x - (le.dx || 0);
  * Bend, trill, tap "T", golpe and whammy-dip ink boxes are recorded on the run
  * (`run.tabInkBoxes`, each tagged with its note's x as `noteX`),
  * hammer-ons/pull-offs theirs on `run.hpBoxes`, for the label and
- * directions passes.
+ * directions passes. run.tabInkBoxes starts from run.tabOnlyBoxes (tab-only
+ * articulation boxes drawn before this pass by ../tabOnlyMarks.js).
  */
 export function renderTabArticulations(score, trackRuns, theme, systems) {
   const s = theme.staffLineSpacing;

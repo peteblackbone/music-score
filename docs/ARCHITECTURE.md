@@ -102,7 +102,7 @@ This keeps the module testable and reusable on its own (a plain demo page,
 unit tests, or even a completely different host app later) without ever
 being coupled to one backend's schema or API shape.
 
-## Drawing order of the score-wide marks (1.10.0)
+## Drawing order of the score-wide marks (1.10.0, with 1.11.0 calls)
 
 `MusicScoreRenderer.render()` draws every system first, then runs the
 score-wide marks. The seven numbered passes live in the `draw/passes.js`
@@ -111,7 +111,10 @@ not passes, so they stay out of `passes/`, which keeps each pass small.
 `tests/structure.mjs` checks the order and that the barrel exports stay as
 they are.
 
-1. Passes 1 to 5 (ties and slurs, grace slurs, TAB articulations, technique
+1. Passes 1 and 2 (ties and slurs, grace slurs). Then `renderTabOnlyArticulations`
+   (`draw/tabOnlyMarks.js`, 1.11.0): articulations above the TAB staff of
+   tab-only tracks. It is not a pass, and it seeds pass 3 through
+   `run.tabOnlyBoxes`. Then passes 3 to 5 (TAB articulations, technique
    labels, playing directions).
 2. `renderFadeWah` (`draw/expressionMarks.js`): fade and wah marks above the
    top staff. Their boxes go into `run.aboveBoxes`.
@@ -126,6 +129,8 @@ they are.
 6. Pass 7 (`renderFermatas`): fermatas clear the chord boxes and
    `run.aboveBoxes`. The boxes reach pass 7 through `collectBeats` in
    `passes/notationBeats.js`.
+   `renderTabOnlyFermatas` (`draw/tabOnlyMarks.js`, 1.11.0) follows pass 7 and
+   clears the ink of each column in the TAB group. It is not a pass.
 7. Beat text (`draw/beatText.js`), then the navigation marks per system
    (`draw/navigation.js`). Then the tempo: `tempoChanges` and the score's
    `tempoText` in `MusicScoreRenderer.js` (the `drawTempo` in `draw/decor.js`
@@ -144,3 +149,74 @@ The expression fields are read in two places, and both use `src/expression.js`
   the accidental state. The written pitch, the TAB frets and the chord
   diagrams never see the shift. Tracks without an ottava get the same track
   object back, so their output is unchanged.
+
+## Notation structure (1.11.0)
+
+1.11.0 adds clefs and clef changes, multi-measure rests, rhythm slashes and
+tab-only articulations and fermatas. Each feature is opt-in or reads a field
+that was ignored before. Each one adds to the layout model only when the
+feature is present, so scores without it keep the same layout output.
+
+Modules:
+
+- `src/clef.js` (no DOM): the accepted clef names (`clefOf`, trimmed and lower
+  case), the clef in force on each track at each measure (`clefAt`,
+  `clefChangeAt`, `notationClefChange`), the staff positions and key signatures
+  of the C clefs (`clefNotePosition`, `clefKeySignatureLayout`), and the clef
+  glyph and anchor line (`clefGlyphFor`, `clefAnchorPos`). It calls
+  `src/pitch.js` only with `'treble'` or `'bass'`, so `pitch.js` is unchanged.
+- `src/slash.js`: the rhythm slash (`isSlashBeat`, `withSlash`,
+  `slashHeadGlyph`, the slash head on the middle line and the TAB half-width).
+- `src/layout/multiRest.js`: finds the runs of rest measures
+  (`multiRestRuns`, null unless `score.multiMeasureRests === true`) and builds
+  the column of a run (`multiRestColumn`) and its bar (`multiRestBar`).
+- `src/draw/multiRest.js`: the bar and the count, on notation and on TAB.
+- `src/draw/tabOnlyMarks.js`: the tab-only articulations and fermatas (see
+  the render order above).
+
+### Clef in force
+
+Every read of `track.clef` for drawing or layout goes through
+`clefAt(track, mi)`. It is cached per track object in a `WeakMap`, and the
+table is built from the track's clef and each measure's `clef` in measure
+order. Normalization does not change the clef names, so the canonical form is
+computed when it is read. Callers: `layout/timeline.js` (note positions and
+the clef passed to `voiceEvents`), `layout/systems.js` (the clef width in the
+opening and the header), `draw/notation.js` (positions and grace notes),
+`draw/system.js` (the header clef and the key and clef changes), and
+`scoreText.js` (the tuning chart, which reads measure 0 and passes the clef's
+base to `referenceTuning`).
+
+The clef change of a measure (`clefChangeAt`) is drawn only on notation tracks
+(`notationClefChange`). The header clef has no class, so a clef at the start
+of a system adds no class to existing markup.
+
+### Multi-measure rest columns and `lastOf`
+
+`computeLayout` (`layout/index.js`) replaces the first column of each run with
+the column from `multiRestColumn`. That column has no onsets, a fixed gap, and
+two extra keys: `lastMi` (the run's last measure) and `multiRest` (the bar
+count). Its measure has no elements, so the passes need no special case for
+it. The normalized model is not changed.
+
+`lastOf(columns, mi)` (`layout/systems.js`) returns the last measure that the
+column at `mi` stands for: the run's last measure when `mi` is a run's first
+measure, otherwise `mi`. `breakSystems`, `justifySystem`, the
+courtesy widths and `closingBarline` step over a run through it, so a run is
+never split across a system break. Without `lastMi` every call returns its
+input, so scores without the feature take the same paths. Navigation
+(`layout/navigation.js`) maps each measure of a run onto the run's column, and
+a segno or a section stays at the run's first measure, while a jump or a
+repeat count stays at its last.
+
+### Run seed for pass 3
+
+`renderTabOnlyArticulations` runs after pass 2 and records each stack's box in
+`run.tabOnlyBoxes`. `passes/tabTechniques.js` (pass 3) starts
+`run.tabInkBoxes` from a copy of those boxes, because pass 3 resets the ink
+boxes it measured itself. This is why tap letters, technique labels and pick
+strokes stay out of the articulation stack, while bends are drawn over it.
+The two calls are named `renderTabOnlyArticulations` and
+`renderTabOnlyFermatas` so that they do not match the pass-name pattern that
+`tests/structure.mjs` checks. Both are called from `MusicScoreRenderer.js`,
+outside `passes/`.

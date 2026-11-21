@@ -1,6 +1,6 @@
 # music-score
 
-Version 1.10.0 · MIT licence
+Version 1.11.0 · MIT licence
 
 A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL).
 
@@ -158,13 +158,14 @@ A score is nested: score, then tracks, then measures, then beats, then notes. Fi
 | `copyright` | string | Centred lines at the foot of the score, under the last system, one per line break. Up to 8 lines are drawn, and the score grows to fit them. |
 | `showTuningChart` | `true` | Optional, off by default. `true` lists the strings tuned differently from the usual tuning in the header. See [Capo and tuning chart](#capo-and-tuning-chart). |
 | `chordShapes` | object | Optional. Chord-diagram shapes by chord name, e.g. `{ "C": { "frets": ["x", 3, 2, 0, 1, 0] } }`. A beat whose `chord` matches a name gets a diagram. See [Chord diagrams](#chord-diagrams). |
+| `multiMeasureRests` | `true` | Optional, off by default. `true` collapses each run of two or more rest measures (rests in every track) into one multi-measure rest with a bar count. See [Multi-measure rests](#multi-measure-rests). |
 
 ### Track
 
 | Field | Type | Notes |
 |---|---|---|
 | `measures` | array | Required. |
-| `clef` | `'treble'` or `'bass'` | Default `'treble'`. With `writtenOctaveUp` or a note given by string and fret, the clef is drawn as an 8vb clef (see [Pitch and octaves](#pitch-and-octaves)). |
+| `clef` | `'treble'`, `'bass'`, `'alto'`, `'tenor'`, `'treble8vb'`, `'treble8va'`, `'treble15mb'`, `'treble15ma'`, `'bass8vb'`, `'bass8va'`, `'bass15mb'` or `'bass15ma'` | Default `'treble'`. Trimmed and any case, so `' Alto '` works. An unknown name is drawn as treble. An octave name changes only the clef sign: notes stay where the base clef puts them. With `writtenOctaveUp` or a note given by string and fret, a plain treble, bass, alto or tenor clef is drawn as its 8vb form (see [Pitch and octaves](#pitch-and-octaves) and [Clefs and clef changes](#clefs-and-clef-changes)). |
 | `showStandardNotation` | boolean | Default `true`. |
 | `showTablature` | boolean | Default `false`. When true, the tab staff sits below the notation staff. |
 | `tabRhythm` | `'auto'`, `true` or `false` | Default `'auto'`. Draws stems, beams, flags, dots, tuplets and rests on the tab staff. `'auto'` draws them only when the track has no notation staff (`showStandardNotation: false`). `true` also draws them when notation is shown. `false` never draws them, and neither does any track without a TAB staff (`showTablature: false`). Any other value counts as `'auto'`. See [Rhythm on TAB staves](#rhythm-on-tab-staves). |
@@ -176,6 +177,7 @@ A score is nested: score, then tracks, then measures, then beats, then notes. Fi
 | `writtenOctaveUp` | boolean | Default `false`. Set to `true` when the `pitch` values you give are sounding pitches and the part is written an octave higher (typical for bass and guitar). |
 | `capo` | integer, 1 to 30 | Optional. Adds "Capo fret N" to this track's line in the header. Display only: the music is not transposed. A numeric string such as `'2'` counts. See [Capo and tuning chart](#capo-and-tuning-chart). |
 | `tiedFrets` | `'parens'` | Optional. On the TAB staff, puts parentheses around the fret number of a note that is tied to the one before, such as `(5)`. Any case, spaces ignored. Other values do nothing. Off by default. See [Tied fret numbers](#tied-fret-numbers). |
+| `tabArticulations` | `true` | Optional, off by default. On a tab-only track (`showStandardNotation: false`, `showTablature: true`), draws articulations and fermatas above the TAB staff. Other values, such as `'true'`, draw nothing. A track that also shows notation keeps its marks on the notation staff. See [Articulations and fermatas on tab-only tracks](#articulations-and-fermatas-on-tab-only-tracks). |
 
 The examples also set `instrument`. The renderer does not draw it.
 
@@ -189,6 +191,7 @@ Measure columns line up across tracks. The number of measures is the longest tra
 | `voices` | array of `{ beats }` | Optional. Two rhythms on one staff: the first entry is voice 1 (stems up), the second is voice 2 (stems down). When it is set, `beats` is ignored. See [Voices](#voices). |
 | `timeSignature` | `{ beats, beatType }` | Optional. Applies from this measure until it changes. |
 | `keySignature` | integer | Optional. Applies from this measure until it changes. |
+| `clef` | Same names as the track's [`clef`](#track) | Optional. Changes this track's notation clef from this measure until its next change. An unknown name is ignored. On the first measure it replaces the track's clef. See [Clefs and clef changes](#clefs-and-clef-changes). |
 | `barline` | string | `'single'` (default), `'double'`, `'final'`, `'repeatStart'`, or `'repeatEnd'`. The last measure of the score defaults to `'final'`. |
 | `ending` | integer, array or object | Optional. Volta bracket (1st/2nd ending): `1`, `[1, 2]`, or `{ numbers, text, open }`. At most 32 numbers are kept (the lowest). See [Repeats and navigation](#repeats-and-navigation). |
 | `segno` | `true` | Optional. Draws a segno sign at the start of the measure. |
@@ -239,6 +242,7 @@ Beats are the rhythmic events in a measure, in order. Each beat is one note, one
 | `dots` | integer, 0 to 4 | Augmentation dots. Default 0. Values above 4 are capped at 4, fractions are rounded down, and numeric strings count as their number (`'1'` is one dot). Anything else that isn't a number counts as 0. |
 | `tuplet` | number or `{ count, of }` | `3` means a triplet (3 notes in the time of 2). `of` defaults to 2. Consecutive beats with the same ratio form one bracket once they add up to a complete tuplet. |
 | `hidden` | boolean | Rests only (`{ type: 'rest', hidden: true }`). The rest takes its time but draws nothing and takes no room. Works in any measure. See [Voices](#voices). |
+| `slash` | `true` | Rhythm slash on a voice 1 note beat: one slash head on the middle line of the notation staff, and a slash on the TAB staff, instead of the notes. The beat's `notes` are not drawn and may be left out. Other values, and rests, grace notes and voice 2 beats, are drawn as usual. See [Rhythm slashes](#rhythm-slashes). |
 | `notes` | array of notes | Required for `note` and `grace`. Several entries make a chord. Rests have no notes. |
 | `dynamic` | string | `'p'`, `'pp'`, `'ppp'`, `'mp'`, `'mf'`, `'f'`, `'ff'`, `'fff'`, `'sfz'`, `'rfz'`, `'n'`. Other values print as plain text. Drawn below the notation staff. A dynamic on a voice 2 beat is drawn too, at voice 2's position; if voice 1 has a dynamic at the same time, voice 2's is not drawn. See [Voices](#voices). |
 | `chord` | string | Chord symbol drawn above the staff, e.g. `'C'` or `'F/A'`. With a chord diagram, the name is centred above the diagram. |
@@ -603,7 +607,7 @@ The left indent of each system is widened to fit its names, so the first system 
 
 ## Articulations and fermata
 
-Optional beat fields for articulation and fermata marks. Articulations and fermatas draw on the notation staff only. Vibrato and tremolo are also drawn on the TAB staff (see [Vibrato and tremolo](#vibrato-and-tremolo)).
+Optional beat fields for articulation and fermata marks. Articulations and fermatas draw on the notation staff. On a tab-only track with `tabArticulations: true` they are also drawn above the TAB staff (see [Articulations and fermatas on tab-only tracks](#articulations-and-fermatas-on-tab-only-tracks)). Vibrato and tremolo are also drawn on the TAB staff (see [Vibrato and tremolo](#vibrato-and-tremolo)).
 
 ### `articulations`
 
@@ -618,7 +622,7 @@ An array of strings on a `note` beat. Allowed values: `'staccato'`, `'staccatiss
 - Two marks in the same place compete. `staccatissimo` replaces `staccato`, and `marcato` (or `heavyAccent`) replaces `accent`. Only the stronger one is drawn. Tenuto is never replaced.
 - A taller mark (marcato, staccatissimo) that would touch the notehead, or the mark inside it, moves out one more staff space. So it can sit a little higher than a plain accent or staccato on the same note.
 - Duplicates are ignored. Unknown values (for example `'bogus'`) and non-array values are ignored without an error.
-- Ignored on rests, grace notes, and tab staves.
+- Ignored on rests and grace notes. Not drawn on TAB staves, except on a tab-only track with `tabArticulations: true`.
 
 ### `fermata`
 
@@ -627,7 +631,7 @@ An array of strings on a `note` beat. Allowed values: `'staccato'`, `'staccatiss
 - `true` and `'normal'` draw the usual fermata. `'short'` and `'long'` draw the short and long forms. These values are trimmed and case-insensitive, so `' Long '` works.
 - Other values draw nothing: the string `'true'`, the number `1`, and `false`.
 - The fermata sits above everything else on that beat: the staff, stem, noteheads, articulation marks, slurs, tuplet brackets, vibrato or tremolo marks, and any chord symbol or chord diagram. In a two-voice measure, a voice 2 fermata is drawn below the staff instead, under the other voice 2 marks of its beat (see [Voices](#voices)).
-- Ignored on grace notes and tab staves.
+- Ignored on grace notes. Not drawn on TAB staves, except on a tab-only track with `tabArticulations: true`, where a note or rest beat's fermata is drawn above the TAB staff.
 
 ### Example
 
@@ -747,6 +751,77 @@ Beat fields for the marks along and above the staff: hairpins, fades, wah marks,
 
 SVG classes: `hairpin` with `hairpin-cresc` or `hairpin-dim` (one path per segment), plus `hairpin-cont` on a segment after a system break; `fade` with `fade-in`, `fade-out` or `fade-swell`; `wah` with `wah-open` or `wah-closed`; `ottava` with `ottava-8va`, `ottava-8vb`, `ottava-15ma` or `ottava-15mb` (one group per bracket segment), plus `ottava-cont` on a continuation after a system break; and `tempo-change` (one group per tempo change) with `tempo-change-text`, `tempo-change-note`, `tempo-change-dot` and `tempo-change-bpm` inside it.
 
+## Clefs and clef changes
+
+`track.clef` sets the clef of a track's notation staff, and `measure.clef` changes it from that measure on. Both take the same names.
+
+- **Names.** `treble`, `bass`, `alto`, `tenor`, and the octave forms `treble8vb`, `treble8va`, `treble15mb`, `treble15ma`, `bass8vb`, `bass8va`, `bass15mb` and `bass15ma`. Names are trimmed and not case-sensitive. An unknown name on a track is drawn as treble, and on a measure it is ignored.
+- **Alto and tenor.** The alto clef puts middle C on the middle line, with the bottom line at F3. The tenor clef puts middle C on the fourth line, with the bottom line at D3. Key signatures are placed for the clef, so the sharps and flats sit where that clef needs them.
+- **Octave clefs.** The 8, 8 below, 15 and 15 below forms add the figure to the clef sign. They change the sign only. Notes are placed as the base clef places them, and the sounding pitch still follows `writtenOctaveUp`.
+- **Automatic 8vb clef.** A plain treble, bass, alto or tenor clef becomes its 8vb form when `writtenOctaveUp: true`, or when a note is given by string and fret. A named octave clef always wins over this.
+- **Clef changes.** A `measure.clef` applies from that measure until the next change on the same track. Naming the clef already in force does nothing. On the first measure it replaces the track's `clef`.
+- **Where a change is drawn.** At the start of its measure, after the barline or repeat sign, at about three-quarters size. The key and time signatures of that measure follow it, in that order. When two tracks change clef in the same measure, the opening space is as wide as the wider change.
+- **At a line break.** A system's first clef shows the clef in force, at full size, with no change sign. When the next system opens with a change, the previous system ends with a smaller courtesy clef, before any courtesy key and time signature.
+- **Notation only.** A change is drawn on notation staves. A tab-only track shows no clef, and TAB frets and pitches are not affected.
+- **Tuning chart.** A six-string track's tuning chart compares with the bass tuning when the track's first clef is a bass clef, including the octave forms. See [Capo and tuning chart](#capo-and-tuning-chart).
+
+```json
+{ "clef": "alto", "measures": [{ "keySignature": 2, "beats": [] }, { "clef": "tenor", "beats": [] }] }
+```
+
+SVG classes: `clef` with `clef-change` for a clef change inside a system, and `clef` with `courtesy-clef` for the smaller clef at the end of a system. A clef at the start of a system has no class.
+
+## Multi-measure rests
+
+Set `multiMeasureRests: true` on the score to collapse rest measures into one multi-measure rest. Off by default, so existing scores draw each rest measure as before. The score data is not changed; only the drawing is.
+
+- **Rest measure.** In every track, the measure is empty (`beats: []`) or has one visible rest that lasts at least a whole bar, and nothing else. A grace note, a second voice, an ending, or any mark on the rest (a fermata, text, dynamic, chord symbol, tempo, hairpin, fade, wah or ottava) keeps the measure out.
+- **Runs.** Two or more consecutive rest measures become one column, drawn as a thick horizontal bar between two short end strokes, with the number of bars above the staff in time-signature digits. A single rest measure is drawn as before.
+- **What starts a run.** A key, time or clef change on a track with notation, a repeat start, a segno, a coda or a section stays at the start of the run, so such a measure begins a new run.
+- **What ends a run.** A measure with a double, final or repeat barline ends the run, and so does a measure with a jump text or a repeat count. Those marks and barlines stay at the end of the run.
+- **Endings.** A measure under a volta ending never joins a run.
+- **Systems.** A run stays on one system, so the bar and its count are never split across a line break.
+- **Notation and TAB.** The bar is drawn on the notation staff. The TAB staff shows it only when rhythm is shown on TAB (see [Rhythm on TAB staves](#rhythm-on-tab-staves)): tab-only tracks do by default, and a track with notation needs `tabRhythm: true`. Otherwise the TAB staff is blank for the run.
+- **Width.** The run takes a fixed width, about 8 staff spaces, and is wider only when the count needs more room. It does not grow with the number of bars.
+
+```json
+{ "multiMeasureRests": true, "tracks": [{ "showStandardNotation": true, "showTablature": true, "tabRhythm": true, "measures": [] }] }
+```
+
+SVG classes: `multi-rest` (the bar, one group per run) and `multi-rest-count` (the count).
+
+## Rhythm slashes
+
+A rhythm slash shows the rhythm of a beat without its pitches, as in guitar books that give only the strum pattern. Set `slash: true` on a voice 1 note beat.
+
+- **Notation.** One slash head on the middle line: a white slash for whole and half notes, and a filled slash for shorter values. Stems point up, unless the measure has two voices. Flags, beams, dots and tuplets work as usual. A slash has no accidentals, ledger lines, chords, arpeggio, ties or ottava.
+- **TAB.** A slash over a small backing, centred on the TAB staff in place of frets. The rhythm band shows the stem, beams and flags when rhythm is shown on TAB. On TAB, a slash beat gets no tremolo or vibrato.
+- **Beat marks still draw.** Beat-level marks, such as a chord symbol, a dynamic, an articulation, a fermata or text, are drawn on a slash beat. Note-level marks, such as a bend, a harmonic or a tap, are not, because the notes are gone.
+- **Notes.** The `notes` of a slash beat are not drawn. They may be left out or left empty.
+- **Only voice 1 note beats.** `slash` on a rest, a grace note or a voice 2 beat is ignored. Only the boolean `true` counts.
+- **Note beats still need notes.** A note beat without `slash: true` still needs at least one note, as before.
+
+```json
+{ "type": "note", "duration": "8th", "slash": true }
+```
+
+SVG classes: `slash` (the slash head on the notation staff) and `tab-slash` (the slash and its backing on the TAB staff).
+
+## Articulations and fermatas on tab-only tracks
+
+On a tab-only track (`showStandardNotation: false`, `showTablature: true`), set `tabArticulations: true` to draw articulations and fermatas above the TAB staff. Off by default. A track that also shows notation keeps its marks on the notation staff, and its TAB staff gets none.
+
+- **Articulations.** The beat's `articulations` (the same values as on notation) are stacked above the TAB staff, nearest first, in the same order as on notation. They sit above the frets, and above TAB vibrato and tremolo. They sit below P.M., harmonic and let-ring labels, and below pick strokes. Rests and grace notes get none.
+- **Fermatas.** A `fermata` on a note or rest beat is drawn above the beat's TAB marks, with the same values as on notation. Grace notes get none. Beat text and navigation marks sit above it.
+- **Two voices.** In a column with voice 1 and voice 2, voice 1's mark wins for each kind. A mark that only voice 2 has at that column is drawn in voice 1's place.
+- **Bends.** Bends do not move to avoid articulations. See [Known limitations](#known-limitations).
+
+```json
+{ "type": "note", "duration": "quarter", "articulations": ["staccato", "accent"], "fermata": true, "notes": [{ "string": 3, "fret": 5 }] }
+```
+
+SVG classes: `tab-articulations` (one group per beat column) and `tab-fermata` (the group around a fermata drawn above the TAB, with the usual `fermata` and `fermata-short` or `fermata-long` classes inside).
+
 ## Known limitations
 
 - **Dots on chords with seconds.** Augmentation dots on a chord whose notes sit a second apart may not be placed cleanly.
@@ -758,7 +833,7 @@ SVG classes: `hairpin` with `hairpin-cresc` or `hairpin-dim` (one path per segme
 - **Chord diagrams: taller systems.** With diagrams, a staff reaches about 10 to 11 staff spaces above its top line, against about 4 for a plain chord symbol, so systems get taller and fewer fit on a page.
 - **Time signatures across tracks.** Tracks cannot have different time signatures within the same measure column.
 - **Estimated sizes.** Glyph and text widths are estimated, not measured from the font. Spacing may look slightly different with another font or at unusual sizes.
-- **Rhythm on TAB staves.** Ties are not shown in the rhythm band, and rhythm slashes are not drawn. Tied-fret parentheses are drawn only with `tiedFrets: 'parens'` (see [Tied fret numbers](#tied-fret-numbers)). Tremolo picking stays above the fret number and is not drawn on the stem. On staves with four strings or fewer, 32nd and 64th rests can reach a little past the outer string lines; the gap to the staff above grows to fit them.
+- **Rhythm on TAB staves.** Ties are not shown in the rhythm band. Tied-fret parentheses are drawn only with `tiedFrets: 'parens'` (see [Tied fret numbers](#tied-fret-numbers)). Tremolo picking stays above the fret number and is not drawn on the stem. On staves with four strings or fewer, 32nd and 64th rests can reach a little past the outer string lines; the gap to the staff above grows to fit them.
 - **Measure count.** Shorter tracks are padded with empty measures (whole-measure rests in notation, blank tab, no rest on a TAB rhythm staff). Their `measures` array is not extended in the input.
 - **Errors.** An unknown duration or an invalid pitch throws an error, and nothing is drawn for that score.
 - **Dynamics.** Only the names listed under `dynamic` are drawn as symbols. Other names print as plain text.
@@ -810,7 +885,17 @@ SVG classes: `hairpin` with `hairpin-cresc` or `hairpin-dim` (one path per segme
 - **Voices: TAB.** A voice 2 fret on the same string as a voice 1 fret at the same time is left off the TAB staff.
 - **Voices: dots.** Where the voices do not clash, a dot can sit close to the other voice's noteheads.
 - **Tremolo room.** A stemless (whole) note keeps the room for three strokes even with `'8th'` or `'16th'`, so a mark above it can sit a little higher than it needs to.
-- **Articulations and fermatas on tab.** They are not drawn on tab-only tracks.
+- **Articulations and fermatas on tab.** A track that shows notation draws them on the notation staff only. A tab-only track draws them above the TAB staff only with `tabArticulations: true` (see [Articulations and fermatas on tab-only tracks](#articulations-and-fermatas-on-tab-only-tracks)).
+- **Articulations and fermatas on tab: bends.** Bends do not move to avoid them, so a bend's amount label can sit beside an articulation on the same beat, such as a tenuto next to a "Full" label.
+- **Articulations and fermatas on tab: chord symbols.** Chord symbols on a tab-only track are still drawn only above a chord diagram, with or without `tabArticulations`.
+- **Clefs: mid-measure changes.** A clef change takes effect only at the start of a measure.
+- **Clefs: other clefs.** Soprano, mezzo-soprano, baritone, percussion and other clefs are not supported. An unknown name is drawn as treble.
+- **Clefs: octave clefs.** An octave clef such as `treble8vb` changes the sign only. The notes are placed as the base clef places them.
+- **Clefs: TAB.** Clef changes are drawn on notation staves only. A tab-only track shows no clef, and TAB frets are not affected by any clef.
+- **Multi-measure rests: every track.** A run needs a rest measure in every track. Multi-measure rests are set for the whole score, not for one track.
+- **Rhythm slashes: measure repeats.** Slash measures and repeat-measure signs (a bar of slashes standing for the previous measure) are not drawn. Use slash beats instead.
+- **Rhythm slashes: voice 2.** A slash in voice 2 is ignored, and that beat draws its notes.
+- **Rhythm slashes: octave clef.** The notes of a slash beat are not drawn, but a `string` and `fret` on one still make the track's clef an 8vb clef.
 - **Score text: no wrapping.** Each text is drawn on one line; only `instructions` and `copyright` start a new line at each line break (other fields turn a line break into a space). A long line runs past the margin, so shorten it or split instructions and copyright yourself. Instructions and copyright beyond 8 lines are not drawn, and nothing warns you.
 - **Score text: no sideways placement.** Beat text takes no horizontal room and never moves sideways; overlapping beat texts stack upward instead. Section markers move right only to keep a gap from the previous marker on the same system. Widths are estimated, so spacing is approximate.
 - **Capo is display only.** The capo line does not transpose the music, change the pitches, or move the fret numbers. Transposition is not supported.
@@ -842,6 +927,25 @@ It prints `ALL PASSED` and exits with code 0 on success.
 - To run one group on its own: `node tests/units.mjs`, `node tests/engraving.mjs`, or `node tests/articulations.mjs`.
 
 ## Changelog
+
+### 1.11.0 — 2026-11-22
+
+Notation structure. Scores that use none of the inputs listed below are unchanged. Two existing inputs now draw differently, so check any score that uses them. Those changes are listed first.
+
+Changes to existing inputs:
+
+- Clef names that were not recognised were drawn as a treble clef. Now `'alto'`, `'tenor'`, the octave clef names (`'treble8vb'`, `'bass15ma'` and so on), and names with other capitals or spaces (`'Bass'`, `' treble8vb '`) draw their own clef. Names that are still not recognised draw as treble, as before. See [Clefs and clef changes](#clefs-and-clef-changes).
+- The tuning chart (`showTuningChart`) picks its reference tuning from the clef. A six-string track whose clef is a bass name other than plain `'bass'`, such as `'Bass'` or `'bass8vb'`, is now compared with the bass tuning, as `'bass'` already was. Before, these names were read as treble.
+- `beat.slash: true` was ignored before 1.11.0. Now a visible voice 1 note beat with `slash: true` draws as a rhythm slash, and its `notes` are not drawn. A slash beat with `string` and `fret` notes still makes the track's clef an 8vb clef. See [Rhythm slashes](#rhythm-slashes).
+
+New:
+
+- `track.clef` accepts `'alto'`, `'tenor'`, `'treble8vb'`, `'treble8va'`, `'treble15mb'`, `'treble15ma'`, `'bass8vb'`, `'bass8va'`, `'bass15mb'` and `'bass15ma'`. See [Clefs and clef changes](#clefs-and-clef-changes).
+- `measure.clef`: a clef change on a track's notation staff, from that measure until the next change. The key and time signatures of that measure follow it, and a system that opens with a change gets a smaller courtesy clef at the end of the previous system.
+- `score.multiMeasureRests: true`: each run of two or more rest measures becomes one multi-measure rest with a bar count. Off by default. See [Multi-measure rests](#multi-measure-rests).
+- `beat.slash: true` on a voice 1 note beat: a rhythm slash on notation and TAB. See [Rhythm slashes](#rhythm-slashes).
+- `track.tabArticulations: true` on a tab-only track: articulations and fermatas above the TAB staff. See [Articulations and fermatas on tab-only tracks](#articulations-and-fermatas-on-tab-only-tracks).
+- New SVG classes: `clef`, `clef-change`, `courtesy-clef`, `multi-rest`, `multi-rest-count`, `slash`, `tab-slash`, `tab-articulations` and `tab-fermata`.
 
 ### 1.10.0 — 2026-11-21
 
@@ -1041,6 +1145,8 @@ Initial public release.
   - `scoreText.js`: canonical forms of the score text fields (header lines, sections, repeat counts, beat text, capo) and the capo and tuning chart rows.
   - `noteEffects.js`: the canonical values of the `vibrato`, `tremolo` and `fermata` fields (for example `'wide'`, `'16th'` or `'short'`), used when drawing.
   - `expression.js`: the canonical values of the `hairpin`, `fade`, `wah`, `ottava` and `tempo` fields, and the ottava display shift that normalize adds to the notes inside a bracket.
+  - `clef.js`: the clef names, the clef in force on each track at each measure, the clef's staff positions and key signatures, and its glyphs.
+  - `slash.js`: rhythm slashes (the `slash` flag, the slash notehead on the staff and the slash on TAB).
   - `twoVoice.js`: the one shared rule for two voices (a voice 2 counts only when it has a beat that is not a hidden rest), which voice a layout element belongs to, and which beat supplies each TAB mark of a column.
   - `layout/`: positioning, no drawing.
     - `index.js`: `computeLayout`. Ties the layout steps together and sets element positions.
@@ -1054,6 +1160,7 @@ Initial public release.
     - `ink.js`: measures the drawn extent of each staff. An opt-in overlap mode counts every mark whose width reaches into an x range.
     - `navigation.js`: groups endings into volta brackets, splits them at line breaks and places the segno, coda, jump and repeat-count marks and the section markers horizontally.
     - `tabRhythm.js`: geometry of the rhythm on TAB staves (stem positions and lengths, flags, dots, horizontal room).
+    - `multiRest.js`: multi-measure rests: finds the runs of rest measures and lays each run out as one column.
   - `draw/`: SVG drawing.
     - `system.js`: draws one system and its measures.
     - `staff.js`: staff lines, clefs, key and time signatures, barlines.
@@ -1070,6 +1177,8 @@ Initial public release.
     - `strum.js`: strum arrows, and their placement above the TAB staff.
     - `handMarks.js`: the shapes of ornaments, the golpe, right-hand letters and left-hand fingering digits. The passes and `system.js` place them.
     - `tabRhythm.js`: rhythm on TAB staves (stems, beams, flags, dots, tuplets and rests), drawn per measure, with a second row for voice 2 in two-voice measures.
+    - `multiRest.js`: the bar and count of a multi-measure rest, on notation and TAB.
+    - `tabOnlyMarks.js`: articulations and fermatas above the TAB staff of tab-only tracks. Articulations are drawn between passes 2 and 3, and fermatas after pass 7.
     - `chordDiagram.js`: one chord diagram (the fretboard box with its dots, barres, fingers and name).
     - `passes.js`: the score-wide passes, drawn after all systems; re-exports them from `passes/` and documents their order.
       - `passes/common.js`: helpers shared by the passes.
