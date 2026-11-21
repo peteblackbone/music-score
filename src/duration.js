@@ -45,18 +45,24 @@ export function durationR(el) {
   return tupletChain(el).reduce((v, t) => mul(v, R(t.of, t.count)), value);
 }
 
-const isInt = (v) => Number.isInteger(v);
-/** One strict `tuplets` entry: an integer n >= 2 ({ count: n, of: 2 }) or a plain { count >= 2, of >= 1 (default 2) } of integers; else null. */
+// Bounds of a strict `tuplets` entry: keeps every ratio product an exact, small rational.
+const TUPLET_COUNT_MIN = 2;
+const TUPLET_MAX = 64;
+const inRange = (v, min) => Number.isInteger(v) && v >= min && v <= TUPLET_MAX;
+/**
+ * One strict `tuplets` entry: an integer n in 2–64 ({ count: n, of: 2 }) or
+ * a plain { count: 2–64, of: 1–64 (default 2) } of integers; else null.
+ */
 function strictTuplet(raw) {
-  if (isInt(raw)) return raw >= 2 ? { count: raw, of: 2 } : null;
+  if (typeof raw === 'number') return inRange(raw, TUPLET_COUNT_MIN) ? { count: raw, of: 2 } : null;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const of = raw.of === undefined ? 2 : raw.of;
-  return isInt(raw.count) && raw.count >= 2 && isInt(of) && of >= 1 ? { count: raw.count, of } : null;
+  return inRange(raw.count, TUPLET_COUNT_MIN) && inRange(of, 1) ? { count: raw.count, of } : null;
 }
 
 /**
  * A beat's `tuplets` field (nested tuplets, outer first): an array of 1–2
- * strict entries (see strictTuplet) → `[{ count, of }]`; anything else —
+ * strict entries (see strictTuplet: integers, count 2–64, of 1–64) → `[{ count, of }]`; anything else —
  * not an array, empty, longer than 2, or any invalid entry — → null (the
  * whole field is ignored and `tuplet` applies).
  */

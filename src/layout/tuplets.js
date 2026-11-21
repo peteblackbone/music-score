@@ -30,7 +30,8 @@ export function hasNestedTuplets(beats) {
  * `end(i)` its time and `cellOf(i)` its rhythmic cell (cell length `cell`).
  * A group closes at its first complete point unless that point falls inside
  * the first beat's cell and a later complete point ends exactly on the cell
- * end; a run that never completes falls back to one group per cell.
+ * end; a run that never completes falls back to one group per cell. Every
+ * step takes at least one beat, so the loop always ends.
  */
 function splitRun(run, count, { unit, end, cellOf, cell }) {
   const groups = [];
@@ -52,7 +53,9 @@ function splitRun(run, count, { unit, end, cellOf, cell }) {
       }
     }
     if (close < 0) close = first;
-    const indices = close >= 0 ? rest.slice(0, close + 1) : rest.filter((i) => cellOf(i) === cellOf(rest[0]));
+    let indices = close >= 0 ? rest.slice(0, close + 1) : rest.filter((i) => cellOf(i) === cellOf(rest[0]));
+    // always advance: a cell that compares to nothing (e.g. NaN time) still yields its first beat
+    if (!indices.length) indices = [rest[0]];
     groups.push(indices);
     rest = rest.slice(rest.indexOf(indices[indices.length - 1]) + 1);
   }

@@ -6979,6 +6979,27 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const v = [eq4({ tuplets: [{ count: 2, of: 3 }] }), e8({ tuplets: [{ count: 2, of: 3 }, 3] }), e8({ tuplets: [{ count: 2, of: 3 }, 3] }), e8({ tuplets: [{ count: 2, of: 3 }, 3] }), { ...eq4(), dots: 1 }];
     eq(tupletGroups(v, T68), [G([0, 1, 2, 3], 2, 0), G([1, 2, 3], 3, 1)]);
   });
+  test('1.12 validTuplets bounds: count 2-64, of 1-64 (integers); 65, 0 and 1e300 reject the whole field', () => {
+    eq(validTuplets([64, { count: 64, of: 64 }]), [{ count: 64, of: 2 }, { count: 64, of: 64 }]);
+    for (const bad of [[65], [1e300], [{ count: 65 }], [{ count: 3, of: 65 }], [{ count: 1e300, of: 1 }], [3, { count: 3, of: 1e300 }], [Infinity], [NaN]]) {
+      eq(validTuplets(bad), null, JSON.stringify(bad));
+    }
+    eq(tupletChain(e8({ tuplets: [{ count: 1e300, of: 1 }, { count: 1e300, of: 1 }], tuplet: 3 })), [{ count: 3, of: 2 }]);
+  });
+  test('1.12 nested tupletGroups always finish: huge tuplets entries next to a nested beat, and legacy huge tuplet values (NaN time) in a nested voice', () => {
+    const huge = { count: 1e300, of: 1 };
+    const a = [e8({ tuplets: [huge, huge] }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] })];
+    eq(tupletGroups(a, T44), [G([1, 2, 3], 3, 0), G([1, 2, 3], 3, 1)]);
+    const b = [e8({ tuplet: 1e300 }), e8({ tuplet: 1e300 }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] })];
+    const out = tupletGroups(b, T44);
+    eq(out.flatMap((x) => x.indices).every((i) => i >= 0 && i < b.length), true);
+    eq(out.filter((x) => x.depth !== 1).flatMap((x) => x.indices), [0, 1, 2, 3, 4]); // every beat in exactly one outer / plain group
+    for (const beats of [a, b]) {
+      const box = makeContainer();
+      new MusicScoreRenderer(box, { tracks: [{ showTablature: true, tabRhythm: true, measures: [{ beats }] }] }, { width: 900 }).render();
+      eq(box.children.length, 1);
+    }
+  });
 }
 
 // ---------- 1.12.0: on-beat grace notes (draw/notation.js renderGraceNote) ----------

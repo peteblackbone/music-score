@@ -88,7 +88,8 @@ export function renderLyrics(score, trackRuns, theme, systems) {
       const right = le.x + w / 2;
       opsOf(run).syllables.push([v, le.x, syl.text]);
       if (syl.hyphen) {
-        const next = items.slice(i + 1).find((n) => n.syl?.[v]);
+        let next = null;
+        for (let j = i + 1; j < items.length && !next; j++) if (items[j].syl?.[v]) next = items[j];
         if (!next) return;
         const end = next.run.sysIdx === run.sysIdx ? next.le.x - width(next.syl[v].text) / 2 : systems[run.sysIdx].lastBarlineX;
         opsOf(run).hyphens.push([v, (right + end) / 2]);
