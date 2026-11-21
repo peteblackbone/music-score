@@ -930,18 +930,18 @@ It prints `ALL PASSED` and exits with code 0 on success.
 
 ### 1.11.0 — 2026-11-22
 
-Notation structure. Scores that use none of the inputs listed below are unchanged. Two existing inputs now draw differently, so check any score that uses them. Those changes are listed first.
+Notation structure. Scores that use none of the inputs listed below are unchanged. Four existing inputs now draw differently, so check any score that uses them. Those changes are listed first.
 
 Changes to existing inputs:
 
 - Clef names that were not recognised were drawn as a treble clef. Now `'alto'`, `'tenor'`, the octave clef names (`'treble8vb'`, `'bass15ma'` and so on), and names with other capitals or spaces (`'Bass'`, `' treble8vb '`) draw their own clef. Names that are still not recognised draw as treble, as before. See [Clefs and clef changes](#clefs-and-clef-changes).
 - The tuning chart (`showTuningChart`) picks its reference tuning from the clef. A six-string track whose clef is a bass name other than plain `'bass'`, such as `'Bass'` or `'bass8vb'`, is now compared with the bass tuning, as `'bass'` already was. Before, these names were read as treble.
 - `beat.slash: true` was ignored before 1.11.0. Now a visible voice 1 note beat with `slash: true` draws as a rhythm slash, and its `notes` are not drawn. A slash beat with `string` and `fret` notes still makes the track's clef an 8vb clef. See [Rhythm slashes](#rhythm-slashes).
+- `measure.clef` was ignored before 1.11.0. Now it changes the clef on a track's notation staff from that measure until the next change. The key and time signatures of that measure follow it, and a system that opens with a change gets a smaller courtesy clef at the end of the previous system.
 
 New:
 
 - `track.clef` accepts `'alto'`, `'tenor'`, `'treble8vb'`, `'treble8va'`, `'treble15mb'`, `'treble15ma'`, `'bass8vb'`, `'bass8va'`, `'bass15mb'` and `'bass15ma'`. See [Clefs and clef changes](#clefs-and-clef-changes).
-- `measure.clef`: a clef change on a track's notation staff, from that measure until the next change. The key and time signatures of that measure follow it, and a system that opens with a change gets a smaller courtesy clef at the end of the previous system.
 - `score.multiMeasureRests: true`: each run of two or more rest measures becomes one multi-measure rest with a bar count. Off by default. See [Multi-measure rests](#multi-measure-rests).
 - `beat.slash: true` on a voice 1 note beat: a rhythm slash on notation and TAB. See [Rhythm slashes](#rhythm-slashes).
 - `track.tabArticulations: true` on a tab-only track: articulations and fermatas above the TAB staff. See [Articulations and fermatas on tab-only tracks](#articulations-and-fermatas-on-tab-only-tracks).

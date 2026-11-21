@@ -365,7 +365,7 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 <div class="demo" data-demo="voicesTab" data-width="680"></div>
 
 <h2 id="structure">Clefs, rests and slashes</h2>
-<p>1.11.0 additions: alto, tenor and octave clefs, clef changes in the middle of a score, multi-measure rests, rhythm slashes, and articulations and fermatas above a tab-only staff. Scores that use none of these fields draw as before, except that a clef name such as <code>'alto'</code> now draws its own clef, and <code>slash: true</code>, which was ignored, now draws a slash.</p>
+<p>1.11.0 additions: alto, tenor and octave clefs, clef changes in the middle of a score, multi-measure rests, rhythm slashes, and articulations and fermatas above a tab-only staff. Scores that use none of these fields draw as before, except that a clef name such as <code>'alto'</code> now draws its own clef (and the tuning chart reads bass-family names such as <code>'bass8vb'</code> as bass), a measure <code>clef</code> now changes the clef, and <code>slash: true</code>, which was ignored, now draws a slash.</p>
 <table>
   <tr><th>Field</th><th>Drawn as</th></tr>
   <tr><td><code>clef</code> (track, measure)</td><td><code>'treble'</code>, <code>'bass'</code>, <code>'alto'</code>, <code>'tenor'</code> or an octave form such as <code>'treble8vb'</code> or <code>'bass15ma'</code>. A measure's <code>clef</code> changes the clef from that measure on</td></tr>
@@ -375,7 +375,7 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 </table>
 <p>Alto and tenor clefs put middle C on the middle and fourth lines. An octave clef changes only the sign, so the notes stay where the base clef puts them. A clef change is drawn after the barline at smaller size, followed by the key and time signatures.</p>
 <div class="demo" data-demo="clefs" data-width="680"></div>
-<p>A run of rest measures collapses into one bar. A segno or a key change stops a run, and so does a double or final barline. Turn the feature on with <code>multiMeasureRests: true</code>.</p>
+<p>A run of rest measures collapses into one bar. A segno or a key change starts a new run, and a double or final barline ends one. Turn the feature on with <code>multiMeasureRests: true</code>.</p>
 <div class="demo" data-demo="multiRest" data-width="680"></div>
 <p>A rhythm slash shows a beat's rhythm with one slash head, not its pitches. Beams, dots and tuplets work as usual, and chord symbols, fermatas and articulations on the beat still draw.</p>
 <div class="demo" data-demo="slashes" data-width="680"></div>
