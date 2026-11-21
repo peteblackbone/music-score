@@ -4869,6 +4869,180 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- pre-1.12 characterization: tuplet, grace and below-staff output (pins taken before the 1.12.0 change) ----------
+{
+  // the 1.12.0 char-tuplets-nested-*, char-graces-onbeat-* and char-lyrics-* fixtures use the new keys on purpose
+  const NEW_FIXTURE = /^char-(tuplets-nested|graces-onbeat|lyrics)-/;
+  const cases = (await import('./cases.mjs')).cases.filter((c) => !NEW_FIXTURE.test(c.id));
+  const { createHash } = await import('node:crypto');
+  const { normalizeTuplet, durationR } = await imp('src/duration.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { renderNotationElement } = await imp('src/draw/notation.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { group } = await imp('src/draw/svgUtil.js');
+  const sha = (v) => createHash('sha256').update(typeof v === 'string' ? v : JSON.stringify(v)).digest('hex');
+  const lists = (m) => (m.voices ? m.voices.map((v, i) => [i, v.beats || []]) : [[0, m.beats || []], [1, m.voice2Beats || []]]);
+  // [track, measure, [voice 1 groups, voice 2 groups]]; the two tracks are identical
+  const TUPLET_SPANS_TABLE = [
+    [0, 0, [[{ indices: [0,1,2], count: 3 }], []]],
+    [0, 1, [[{ indices: [0,1], count: 3 }, { indices: [2,3], count: 3 }, { indices: [4,5,6,7], count: 3 }], []]],
+    [0, 2, [[{ indices: [0,1,2,3,4,5], count: 6 }, { indices: [6,7,8,9,10], count: 5 }], []]],
+    [0, 3, [[{ indices: [0,1,2], count: 3 }], []]],
+    [0, 4, [[{ indices: [1,2,3], count: 3 }], []]],
+    [0, 5, [[{ indices: [0,1], count: 2 }], []]],
+    [0, 6, [[{ indices: [0,2,3], count: 3 }, { indices: [4,5,6], count: 3 }], []]],
+    [1, 0, [[{ indices: [0,1,2], count: 3 }], []]],
+    [1, 1, [[{ indices: [0,1], count: 3 }, { indices: [2,3], count: 3 }, { indices: [4,5,6,7], count: 3 }], []]],
+    [1, 2, [[{ indices: [0,1,2,3,4,5], count: 6 }, { indices: [6,7,8,9,10], count: 5 }], []]],
+    [1, 3, [[{ indices: [0,1,2], count: 3 }], []]],
+    [1, 4, [[{ indices: [1,2,3], count: 3 }], []]],
+    [1, 5, [[{ indices: [0,1], count: 2 }], []]],
+    [1, 6, [[{ indices: [0,2,3], count: 3 }, { indices: [4,5,6], count: 3 }], []]],
+  ];
+  const MEASURES_PIN = [797, 51], TUPLET_GROUPS_SHA = "678cda8d8dbaa31d413c6836d7a3188579f55ccaeac15a5bece86afb0ebed9f0", GRACE_COUNT = 49, GRACE_SHA = "e06d6eed172168dc46c23f43dd348b6a0925b8284b47ba7a1e3daf1c0627c878", BELOW_COUNTS = { dynamic: 29, tuplet: 49, 'tab-tuplet': 33, 'beat-text-below': 5, hairpin: 5, 'ottava-below': 1 }, BELOW_SHA = "7552705101616f3c8df81cec95070624da5f62f47b38304d3d66d0a82b42f1de";
+  const NEW_KEYS = ['lyric', 'onBeat', 'tuplets'];
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const renderCase = (c) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, clone(c.score), { width: c.width, ...(c.options || {}) }).render();
+    return box.children[0];
+  };
+
+  test('pre-1.12 scan: none of the 77 cases (raw or normalized, both voices, graces included) has a lyric, onBeat or tuplets key', () => {
+    eq(cases.length, 77);
+    let beatsSeen = 0;
+    for (const c of cases) {
+      for (const [label, sc] of [['raw', c.score], ['normalized', normalizeScore(clone(c.score))]]) {
+        (sc.tracks || []).forEach((t) => (t.measures || []).forEach((m) => {
+          for (const [, beats] of lists(m)) for (const b of beats) {
+            beatsSeen++;
+            for (const k of NEW_KEYS) if (k in b) throw new Error(`${c.id} ${label}: beat has ${k}`);
+            (b.graces || []).forEach((gr) => { for (const k of NEW_KEYS) if (k in gr) throw new Error(`${c.id} ${label}: grace has ${k}`); });
+          }
+        }));
+      }
+    }
+    if (!beatsSeen) throw new Error('no beats scanned');
+  });
+
+  test('pre-1.12 pin: none of the 77 snapshot SVGs has a lyrics, lyric, lyric-hyphen, lyric-extender, grace-on-beat, tuplet-outer or tab-tuplet-outer class token', () => {
+    const dir = path.join(root0, 'tests', 'snapshots');
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.svg') && !NEW_FIXTURE.test(f));
+    eq(files.length, 77);
+    const BAN = new Set(['lyrics', 'lyric', 'lyric-hyphen', 'lyric-extender', 'grace-on-beat', 'tuplet-outer', 'tab-tuplet-outer']);
+    let seen = 0;
+    for (const f of files) {
+      const svg = fs.readFileSync(path.join(dir, f), 'utf8');
+      for (const m of svg.matchAll(/class="([^"]*)"/g)) for (const tok of m[1].split(/\s+/)) {
+        seen++;
+        if (BAN.has(tok)) throw new Error(`${f}: class token ${tok}`);
+      }
+    }
+    if (!seen) throw new Error('no class attributes scanned');
+  });
+
+  // tupletGroups(beats, timeSignature) over every measure of every normalized case, voice 1 then voice 2
+  const allGroups = () => {
+    const out = []; let measures = 0, nonEmpty = 0;
+    for (const c of cases) {
+      const sc = normalizeScore(clone(c.score));
+      sc.tracks.forEach((t, ti) => {
+        let ts = { beats: 4, beatType: 4 };
+        (t.measures || []).forEach((m, mi) => {
+          if (m.timeSignature) ts = m.timeSignature;
+          const g = lists(m).map(([, beats]) => tupletGroups(beats, ts));
+          measures++; if (g.some((x) => x.length)) nonEmpty++;
+          out.push([c.id, ti, mi, g]);
+        });
+      });
+    }
+    return { out, measures, nonEmpty };
+  };
+  test('pre-1.12 pin: tupletGroups of every measure (voice 1, voice 2) of every normalized case (sha256)', () => {
+    const { out, measures, nonEmpty } = allGroups();
+    eq([measures, nonEmpty], MEASURES_PIN);
+    eq(sha(out), TUPLET_GROUPS_SHA);
+  });
+  test('pre-1.12 pin: tupletGroups literal table for the char-tuplet-spans measures', () => {
+    const rows = allGroups().out.filter((r) => r[0] === 'char-tuplet-spans-w900').map((r) => [r[1], r[2], r[3]]);
+    eq(rows, TUPLET_SPANS_TABLE);
+  });
+
+  test('pre-1.12 pin: normalizeTuplet loose parsing table', () => {
+    eq(normalizeTuplet(null), null);
+    eq(normalizeTuplet(undefined), null);
+    eq(normalizeTuplet(3), { count: 3, of: 2 });
+    eq(normalizeTuplet('3'), { count: 3, of: 2 });
+    eq(normalizeTuplet({}), { count: 3, of: 2 });
+    eq(normalizeTuplet({ count: 5 }), { count: 5, of: 2 });
+    eq(normalizeTuplet({ of: 3 }), { count: 3, of: 3 });
+    eq(normalizeTuplet({ count: 6, of: 4 }), { count: 6, of: 4 });
+    eq(normalizeTuplet(0), { count: 0, of: 2 });
+  });
+  test('pre-1.12 pin: durationR of an 8th under each loose tuplet value; tuplet: 0 throws', () => {
+    const d = (t) => durationR({ duration: '8th', tuplet: t });
+    eq(d(undefined), { n: 1, d: 8 });
+    eq(d(3), { n: 1, d: 12 });
+    eq(d('3'), { n: 1, d: 12 });
+    eq(d({}), { n: 1, d: 12 });
+    eq(d({ count: 5 }), { n: 1, d: 20 });
+    eq(d({ of: 3 }), { n: 1, d: 8 });
+    eq(d({ count: 6, of: 4 }), { n: 1, d: 12 });
+    let msg = null;
+    try { d(0); } catch (e) { msg = e.message; }
+    eq(msg, 'rational: zero denominator');
+  });
+
+  // grace notes: renderNotationElement output (serialized SVG + returned info) of every grace layout element of every case
+  test('pre-1.12 pin: renderNotationElement output of every grace layout element across the 77 layouts (sha256)', () => {
+    const out = []; let graces = 0;
+    for (const c of cases) {
+      const theme = resolveTheme(c.options?.theme);
+      const sc = normalizeScore(clone(c.score));
+      const layout = computeLayout(sc, theme, c.width);
+      layout.systems.forEach((system, si) => sc.tracks.forEach((track, ti) => {
+        if (!track.showStandardNotation) return;
+        system.tracks[ti].measures.forEach((measure) => {
+          for (const key of ['elements', 'elements2']) (measure[key] || []).forEach((le) => {
+            if (le.el.type !== 'grace') return;
+            const g = group({});
+            const info = renderNotationElement(g, { ...le, baselineY: 100 }, measure, track, theme, {});
+            graces++;
+            out.push([c.id, si, ti, measure.measureIndex, key, le.index, serialize(g), info]);
+          });
+        });
+      }));
+    }
+    eq(graces, GRACE_COUNT);
+    eq(sha(out), GRACE_SHA);
+  });
+
+  // below-staff geometry read from the 77 rendered trees
+  test('pre-1.12 pin: below-staff geometry (dynamic y, hairpin d, beat-text-below y, 8vb/15mb children, tuplet and tab-tuplet path d) across the 77 renders (sha256)', () => {
+    const out = []; const counts = {};
+    const bump = (k) => { counts[k] = (counts[k] || 0) + 1; };
+    for (const c of cases) {
+      const rows = [];
+      for (const { nd } of walk(renderCase(c))) {
+        const cl = (nd.getAttribute && nd.getAttribute('class')) || '';
+        const toks = cl.split(/\s+/);
+        if (toks.includes('dynamic')) { rows.push(['dynamic', nd.getAttribute('y')]); bump('dynamic'); }
+        else if (toks.includes('hairpin')) { rows.push(['hairpin', nd.getAttribute('d')]); bump('hairpin'); }
+        else if (toks.includes('beat-text-below')) { rows.push(['beat-text-below', nd.getAttribute('y')]); bump('beat-text-below'); }
+        else if (toks.includes('ottava-8vb') || toks.includes('ottava-15mb')) {
+          rows.push([cl, nd.children.map((ch) => [ch.tag, ch.attrs, ch.textContent])]); bump('ottava-below');
+        } else if (toks.includes('tuplet') || toks.includes('tab-tuplet')) {
+          const k = toks.includes('tuplet') ? 'tuplet' : 'tab-tuplet';
+          rows.push([k, nd.children.filter((ch) => ch.getAttribute('d')).map((ch) => ch.getAttribute('d'))]); bump(k);
+        }
+      }
+      out.push([c.id, rows]);
+    }
+    eq(counts, BELOW_COUNTS);
+    eq(sha(out), BELOW_SHA);
+  });
+}
+
 // ---------- 1.9.0: compound bends (directions.js bendOf, draw/bend.js) ----------
 {
   const { bendOf } = await imp('src/directions.js');
