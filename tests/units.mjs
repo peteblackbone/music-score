@@ -2511,9 +2511,9 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(sl.length, 2);
     eq([Math.abs(sl[0].x2 - ms[0].elements2[1].x) < 0.01, Math.abs(sl[1].x2 - ms[0].elements[2].x) < 0.01], [true, true]);
   });
-  test('two-voice passes: dynamics and chord symbols on a voice-2 beat are not drawn (voice-1 only)', () => {
+  test('two-voice passes: a voice-2 dynamic is drawn (1.10), a voice-2 chord symbol is not (voice-1 only)', () => {
     const s2 = serialize(full([vm(quarters('C5'), [nb(['E4'], 'whole', { dynamic: 'f', chord: 'C' })])]));
-    eq([s2.includes('class="dynamic"'), s2.includes('chord-symbol')], [false, false]);
+    eq([s2.includes('class="dynamic"'), s2.includes('chord-symbol')], [true, false]);
     const s1 = serialize(full([vm([nb(['C5'], 'quarter', { dynamic: 'f', chord: 'C' }), ...quarters('C5').slice(1)], [nb(['E4'], 'whole')])]));
     eq([s1.includes('class="dynamic"'), s1.includes('chord-symbol')], [true, true]);
   });
@@ -2549,10 +2549,12 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq([a === b, JSON.stringify(score) === before], [true, true]);
   });
   test('voice-1-only beat marks on a voice-2 beat draw nothing: output is byte-identical to the same beat without them (1.8 split)', () => {
-    const marks = { strum: 'up', arpeggio: true, letRing: true, palmMute: true, rake: 'down', whammy: true, dynamic: 'ff', chord: 'Am' };
+    // 1.10: voice-2 dynamics are drawn on notation staves (still nothing on a tab-only track)
+    const marks = { strum: 'up', arpeggio: true, letRing: true, palmMute: true, rake: 'down', whammy: true, chord: 'Am' };
     const mk = (extra, track) => serialize(full([vm([nb([{ string: 3, fret: 2 }, { string: 4, fret: 2 }]), nb([{ string: 3, fret: 3 }]), nb([{ string: 3, fret: 4 }], 'half')],
       [nb([{ string: 5, fret: 2 }, { string: 6, fret: 2 }], 'quarter', extra), rs(), nb([{ string: 5, fret: 3 }], 'half', extra)])], track));
     [{ showTablature: true }, { showStandardNotation: false, showTablature: true }, {}].forEach((track, i) => eq(mk(marks, track) === mk({}, track), true, `track ${i}`));
+    eq(mk({ ...marks, dynamic: 'ff' }, { showStandardNotation: false, showTablature: true }) === mk({}, { showStandardNotation: false, showTablature: true }), true, 'tab-only dynamic');
     // 1.8 (R1): pick stroke, vibrato, fermata, tap / slap / pop and trill on voice 2 now draw on every kind of track
     for (const extra of [{ pickStroke: 'down' }, { vibrato: true }, { tap: true }, { trill: true }]) {
       const n = extra;
@@ -5466,6 +5468,103 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
         && (+nd.getAttribute('y1') < -0.1 || +nd.getAttribute('y1') > 4 * S + 0.1)).length;
     };
     if (!(ledgers([{ beats: marked }]) < ledgers([{ beats: base }]))) throw new Error('ledger lines not reduced');
+  });
+}
+
+// ---------- 1.10.0: hairpins and voice-2 dynamics on the dynamics line (draw/dynamicsLine.js, pass 6) ----------
+{
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { glyphStringBox } = await imp('src/glyphMetrics.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const U = (th.dynamicFontSize + 1.4 * S) / 4;
+  const nt = (ps, x = {}, duration = 'quarter') => ({ type: 'note', duration, notes: ps.map((p) => ({ pitch: p })), ...x });
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const hasCls = (nd, k) => (nd.getAttribute?.('class') || '').split(/\s+/).includes(k);
+  const draw = (measures, width = 900, track = {}) => {
+    const score = { tracks: [{ ...track, measures }] };
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    const svg = box.children[0];
+    const lay = computeLayout(normalizeScore(score), th, width);
+    const nodes = all(svg);
+    const pins = nodes.filter((n) => hasCls(n, 'hairpin')).map((n) => ({
+      cls: n.getAttribute('class'), d: n.getAttribute('d'), p: n.getAttribute('d').match(/-?\d+(\.\d+)?/g).map(Number),
+    }));
+    const dyns = nodes.filter((n) => hasCls(n, 'dynamic')).map((n) => ({ x: +n.getAttribute('x'), y: +n.getAttribute('y'), t: n.textContent }));
+    return { svg, lay, pins, dyns, els: lay.systems.flatMap((s) => s.tracks[0].measures.flatMap((m) => m.elements)), ser: serialize(svg) };
+  };
+  const near = (a, b, tol = 0.02) => Math.abs(a - b) <= tol;
+  const edges = (mark, x) => { const b = glyphStringBox(dynamicGlyph(mark)); const x1 = x + b.left * U - (b.width * U) / 2; return [x1, x1 + b.width * U]; };
+
+  test('1.10 hairpin: a cresc run from a dynamic to the next onset\'s dynamic, centre 0.38 u above the dynamics baseline, opening 1 sp', () => {
+    const { pins, dyns, els } = draw([{ beats: [nt(['C5'], { hairpin: 'cresc', dynamic: 'p' }), nt(['C5'], { hairpin: '<' }), nt(['C5'], { hairpin: 'Crescendo' }), nt(['C5'], { dynamic: 'f' })] }]);
+    eq([pins.length, pins[0].cls], [1, 'hairpin hairpin-cresc']);
+    const [x2a, ya, x1, c, x2b, yb] = pins[0].p;
+    const y = dyns[0].y;
+    eq([near(x1, edges('p', els[0].x)[1] + 0.4 * S), near(x2a, edges('f', els[3].x)[0] - 0.4 * S), x2a === x2b], [true, true, true]);
+    eq([near(c, y - 0.38 * U), near(yb - ya, 1 * S), near(c - ya, 0.5 * S), dyns.every((d) => d.y === y)], [true, true, true, true]);
+  });
+  test('1.10 hairpin: without dynamics it starts at the head\'s left edge and ends 0.8 sp before the next onset; a dim closes on the right', () => {
+    const { pins, els } = draw([{ beats: [nt(['C5']), nt(['C5'], { hairpin: 'dim' }), nt(['C5'], { hairpin: 'dim' }), nt(['C5'])] }]);
+    eq(pins.length, 1);
+    const [x1, ya, x2, c, x1b, yb] = pins[0].p;
+    eq([near(x1, els[1].x - 0.59 * S), near(x2, els[3].x - 0.8 * S), x1 === x1b, near(yb - ya, S), near(c, (ya + yb) / 2)], [true, true, true, true, true]);
+  });
+  test('1.10 hairpin: a dynamic inside a run splits it; another kind starts a new one; graces do not break it; a beat without one ends it', () => {
+    const g = { type: 'grace', duration: '16th', notes: [{ pitch: 'D5' }] };
+    const { pins } = draw([{ beats: [nt(['C5'], { hairpin: 'dim' }), nt(['C5'], { hairpin: 'dim', dynamic: 'mf' }), g, nt(['C5'], { hairpin: 'dim' }), nt(['C5'], { hairpin: 'cresc' })] },
+      { beats: [nt(['C5'], { hairpin: 'cresc' }), nt(['C5']), nt(['C5'], { hairpin: 'cresc' }), nt(['C5'], { hairpin: 'bogus' })] }]);
+    eq(pins.map((p) => p.cls.replace('hairpin ', '')), ['hairpin-dim', 'hairpin-dim', 'hairpin-cresc', 'hairpin-cresc']);
+  });
+  test('1.10 hairpin: at least 2 sp long (extended right); the last beat of the score ends at breakEndX', () => {
+    const { pins, lay } = draw([{ beats: [nt(['C5'], { hairpin: 'cresc' }, '16th'), ...Array(15).fill(0).map(() => nt(['C5'], {}, '16th'))] },
+      { beats: [nt(['C5'], {}, 'half'), nt(['C5'], { hairpin: 'dim' }, 'half')] }]);
+    eq(pins.length, 2);
+    eq(near(pins[0].p[0] - pins[0].p[2], 2 * S), true, 'min length');
+    eq(near(pins[1].p[2], lay.systems[0].lastBarlineX - 0.5 * S), true, 'breakEndX');
+  });
+  test('1.10 hairpin: split at system breaks; continuations start at breakStartX with the break-side end opened 0.3 sp', () => {
+    const bars = (kind) => Array(8).fill(0).map(() => ({ beats: Array(4).fill(0).map(() => nt(['C5'], { hairpin: kind })) }));
+    for (const kind of ['cresc', 'dim']) {
+      const { pins, lay } = draw(bars(kind), 600);
+      const n = lay.systems.length;
+      if (n < 2) throw new Error('no break');
+      eq(pins.length, n);
+      eq(pins.map((p) => p.cls.includes('hairpin-cont')), [false, ...Array(n - 1).fill(true)]);
+      const open = (p) => (p.p.length === 6 ? (kind === 'cresc' ? [0, p.p[5] - p.p[1]] : [p.p[5] - p.p[1], 0]) : [p.p[5] - p.p[1], p.p[7] - p.p[3]]);
+      const opens = pins.map((p) => open(p).map((v) => +(v / S).toFixed(2)));
+      const want = kind === 'cresc' ? [[0, 1], ...Array(n - 1).fill([0.3, 1])] : [...Array(n - 1).fill([1, 0.3]), [1, 0]];
+      eq(opens, want, kind);
+      eq(pins.slice(1).every((p, i) => near(p.p[0], lay.systems[i + 1].contentStartX + 0.5 * S)), true, 'breakStartX');
+      eq(pins.slice(0, -1).every((p, i) => near(Math.max(p.p[0], p.p[2]), lay.systems[i].lastBarlineX - 0.5 * S)), true, 'breakEndX');
+    }
+  });
+  test('1.10 dynamics baseline: a hairpin lowers it only when its top edge is higher than the glyphs\' top; hairpins alone still get a line', () => {
+    const low = (x = {}) => nt(['G3'], x);
+    const a = draw([{ beats: [low({ dynamic: 'p' }), low(), low(), low()] }]);
+    const b = draw([{ beats: [low({ dynamic: 'p' }), low(), low({ hairpin: 'cresc' }), low()] }]);
+    const d = b.dyns[0].y - a.dyns[0].y;
+    eq(near(d, (0.38 * U + 0.5 * S) - 1.0 * U, 0.02), true, `p lowered by ${d}`);
+    const f = draw([{ beats: [low({ dynamic: 'f' }), low(), low(), low()] }]);
+    const g = draw([{ beats: [low({ dynamic: 'f' }), low(), low({ hairpin: 'cresc' }), low()] }]);
+    eq(f.dyns[0].y, g.dyns[0].y, 'f glyph top is higher than the hairpin');
+    const h = draw([{ beats: [low(), low(), low({ hairpin: 'cresc' }), low()] }]);
+    eq([h.pins.length, h.dyns.length, near(h.pins[0].p[3] + 0.38 * U, b.dyns[0].y)], [1, 0, true]);
+  });
+  test('1.10 voice-2 dynamics: centred on the voice-2 element on the shared line; voice 1 wins a shared onset; v2 graces not drawn', () => {
+    const vm = (b1, b2) => ({ voices: [{ beats: b1 }, { beats: b2 }] });
+    const { dyns, lay } = draw([vm([nt(['C5'], { dynamic: 'f' }), nt(['C5']), nt(['C5'], {}, 'half')],
+      [nt(['E4'], { dynamic: 'p' }), nt(['E4'], { dynamic: 'mp' }), { type: 'grace', duration: '16th', notes: [{ pitch: 'F4' }], dynamic: 'ff' }, nt(['E4'], {}, 'half')])]);
+    const m = lay.systems[0].tracks[0].measures[0];
+    eq(dyns.map((d) => [d.t, d.x]), [[dynamicGlyph('f'), +m.elements[0].x.toFixed(2)], [dynamicGlyph('mp'), +m.elements2[1].x.toFixed(2)]]);
+    eq(dyns[0].y, dyns[1].y);
+  });
+  test('1.10 hairpins: not drawn on a tab-only track', () => {
+    const t = (x = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 5 }], ...x });
+    const r = draw([{ beats: [t({ hairpin: 'cresc' }), t({ hairpin: 'cresc' }), t(), t()] }], 900, { showStandardNotation: false, showTablature: true });
+    eq(r.pins.length, 0);
   });
 }
 
