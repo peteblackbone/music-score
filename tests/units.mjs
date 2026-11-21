@@ -7150,6 +7150,108 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.12.0: lyrics drawing edge cases and nested tuplet timing (inline scores) ----------
+{
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { estimateTextWidth } = await imp('src/textMetrics.js');
+  const { HEAD_HALF_SP } = await imp('src/draw/passes/common.js');
+  const { durationR } = await imp('src/duration.js');
+  const theme = resolveTheme({});
+  const S = theme.staffLineSpacing;
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const cl = (n) => n.getAttribute('class') || '';
+  const q = (lyric) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }], ...(lyric === undefined ? {} : { lyric }) });
+  const rest = (extra = {}) => ({ type: 'rest', duration: 'quarter', ...extra });
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    const nodes = walk(box);
+    const verse = (n) => n.getAttribute('data-verse');
+    return {
+      syl: nodes.filter((n) => cl(n) === 'lyric'), hy: nodes.filter((n) => cl(n) === 'lyric-hyphen'),
+      ext: nodes.filter((n) => cl(n) === 'lyric-extender'), groups: nodes.filter((n) => cl(n) === 'lyrics'), verse,
+    };
+  };
+  const xs = (score, mi = 0) => computeLayout(normalizeScore(JSON.parse(JSON.stringify(score))), theme, 900).systems[0].tracks[0].measures[mi].elements.map((le) => le.x);
+  const one = (...measures) => ({ tracks: [{ measures: measures.map((beats) => ({ beats })) }] });
+  const num = (n, a) => Number(n.getAttribute(a));
+  const headRight = (score, mi, i) => xs(score, mi)[i] + HEAD_HALF_SP * S;
+  const near1 = (a, b, m) => { if (!(Math.abs(a - b) < 1e-6)) throw new Error(`${m}: ${a} vs ${b}`); };
+  const w = (t) => estimateTextWidth(t, theme.lyricFontSize);
+
+  test('1.12 lyrics draw: an extender ends at the last note head before a rest, a hidden rest, the next syllable or the score end', () => {
+    const cases = [
+      ['rest', one([q('a_'), q(), rest(), q()]), 1],
+      ['hidden rest', one([q('a_'), q(), rest({ hidden: true }), q()]), 1],
+      ['next syllable', one([q('a_'), q(), q('b'), q()]), 1],
+      ['score end', one([q(), q(), q('a_'), q()]), 3],
+    ];
+    for (const [name, sc, last] of cases) {
+      const r = render(sc);
+      eq(r.ext.length, 1, name);
+      const a = r.syl.find((t) => t.textContent === 'a');
+      near1(num(r.ext[0], 'x1'), num(a, 'x') + w('a') / 2 + 0.2 * S, `${name} start`);
+      near1(num(r.ext[0], 'x2'), headRight(sc, 0, last), `${name} end`);
+    }
+  });
+  test('1.12 lyrics draw: an extender stops at a multi-measure rest, an empty measure and a whole-rest measure', () => {
+    const whole = [{ type: 'rest', duration: 'whole' }];
+    const mk = (extra, second) => ({ ...extra, tracks: [{ measures: [{ beats: [q('a_'), q(), q(), q()] }, { beats: second }, { beats: [q(), q(), q(), q()] }] }] });
+    for (const [name, sc] of [['multi-rest', mk({ multiMeasureRests: true }, whole)], ['whole rest', mk({}, whole)], ['empty measure', mk({}, [])]]) {
+      const r = render(sc);
+      eq(r.ext.length, 1, name);
+      near1(num(r.ext[0], 'x2'), headRight(sc, 0, 3), name);
+    }
+  });
+  test('1.12 lyrics draw: a syllable wider than its head has no extender (length <= 0 dropped)', () => {
+    eq(render(one([q('Hallelujah_'), rest(), q(), q()])).ext.length, 0);
+  });
+  test('1.12 lyrics draw: hyphen wins over extend; no hyphen without a next syllable; a hyphen reaches over a rest', () => {
+    const both = render(one([q([{ text: 'a', hyphen: true, extend: true }]), q(), q('b'), q()]));
+    eq([both.hy.length, both.ext.length], [1, 0]);
+    eq(render(one([q('a-'), q(), q(), q()])).hy.length, 0);
+    const over = render(one([q('a-'), rest(), q('b'), q()]));
+    eq(over.hy.length, 1);
+    const a = over.syl.find((t) => t.textContent === 'a'); const b = over.syl.find((t) => t.textContent === 'b');
+    near1(num(over.hy[0], 'x'), (num(a, 'x') + w('a') / 2 + num(b, 'x') - w('b') / 2) / 2, 'hyphen midway');
+  });
+  test('1.12 lyrics draw: verses are independent (a verse-2 syllable does not stop a verse-1 extender)', () => {
+    const sc = one([q(['a_']), q([null, 'b']), q(), q()]);
+    const r = render(sc);
+    eq(r.ext.length, 1);
+    eq(r.verse(r.ext[0]), '1');
+    near1(num(r.ext[0], 'x2'), headRight(sc, 0, 3), 'to the last head');
+  });
+  test('1.12 lyrics draw: more than 8 verses draw only verses 1-8; verse baselines are shared and 1.3 x size apart', () => {
+    const ten = Array.from({ length: 10 }, (_, i) => `v${i + 1}`);
+    const r = render(one([q(ten), q()]));
+    eq(r.syl.map((t) => r.verse(t)), ['1', '2', '3', '4', '5', '6', '7', '8']);
+    const ys = render(one([q(['a']), q([null, 'b']), q([null, null, 'c']), q()])).syl.map((t) => num(t, 'y'));
+    near1(ys[1] - ys[0], 1.3 * theme.lyricFontSize, 'verse 2 step');
+    near1(ys[2] - ys[1], 1.3 * theme.lyricFontSize, 'verse 3 step');
+  });
+  test('1.12 lyrics draw: no lyrics group when no beat has a usable syllable', () => {
+    const r = render(one([q(''), q({}), q(['', null, '-']), rest({ lyric: 'la' })], [{ type: 'grace', duration: '16th', notes: [{ pitch: 'D4' }], lyric: 'g' }, q(5)]));
+    eq([r.groups.length, r.syl.length], [0, 0]);
+  });
+  test('1.12 nested tuplets: the nested measures of the fixtures sum to exactly one whole (exact rationals)', () => {
+    const e8 = (extra) => ({ type: 'note', duration: '8th', notes: [{ pitch: 'E4' }], ...extra });
+    const qq = (extra) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }], ...extra });
+    const half = { type: 'note', duration: 'half', notes: [{ pitch: 'E4' }] };
+    const O = { count: 5, of: 4 };
+    const bars = [
+      [qq({ tuplet: 3 }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), qq({ tuplet: 3 }), half],
+      [e8({ tuplets: [O] }), e8({ tuplets: [O] }), e8({ tuplets: [O, 3] }), e8({ tuplets: [O, 3] }), e8({ tuplets: [O, 3] }), e8({ tuplets: [O] }), half],
+    ];
+    bars.forEach((beats, i) => {
+      let n = 0; let d = 1;
+      beats.forEach((b) => { const r = durationR(b); n = n * r.d + r.n * d; d *= r.d; });
+      eq(n === d, true, `bar ${i + 1}: ${n}/${d}`);
+    });
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
