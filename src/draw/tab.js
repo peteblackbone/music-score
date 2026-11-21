@@ -14,6 +14,7 @@ import { strokeOffsets } from './noteMarks.js';
 import { glyphBox } from '../glyphMetrics.js';
 import { Glyph } from '../glyphs.js';
 import { smuflFontSizePx } from '../theme.js';
+import { isSlashBeat, slashHeadGlyph, TAB_SLASH_PAD_SP } from '../slash.js';
 
 /** Draw the tab staff lines for `stringCount` strings, baseline = bottom (highest-numbered) string. */
 export function drawTabStaffLines(x, endX, baselineY, stringCount, theme) {
@@ -67,6 +68,7 @@ export function renderTabElement(g, layoutEl, stringCount, theme, labelOpts) {
   const el = layoutEl.el;
   const x = layoutEl.x;
   if (el.type === 'rest') return undefined; // no fret label for a rest; draw/tabRhythm.js draws the rest when track.tabRhythm is on
+  if (isSlashBeat(el)) return renderTabSlash(g, layoutEl, stringCount, theme);
   const notes = el.notes || [];
   let fretTopY = Infinity;
   let marksTopY = Infinity;
@@ -117,6 +119,27 @@ export function renderTabElement(g, layoutEl, stringCount, theme, labelOpts) {
     }
   }
   return { fretTopY, marksTopY };
+}
+
+/**
+ * A rhythm slash on TAB (slash.js): the slash head centred on the TAB
+ * staff over a backing as wide as its box plus TAB_SLASH_PAD_SP, in
+ * `<g class="tab-slash">`; no frets, tremolo or vibrato. Returns
+ * renderTabElement's `{ fretTopY, marksTopY }` (the backing's top).
+ */
+function renderTabSlash(g, layoutEl, stringCount, theme) {
+  const s = theme.staffLineSpacing;
+  const glyph = slashHeadGlyph(layoutEl.el.duration);
+  const box = glyphBox(glyph);
+  const x = layoutEl.x;
+  const y = layoutEl.tabBaselineY - ((stringCount - 1) * theme.tabStaffLineSpacing) / 2;
+  const half = (box.width / 2 + TAB_SLASH_PAD_SP) * s;
+  const top = y - (box.top + TAB_SLASH_PAD_SP) * s;
+  const gEl = group({ class: 'tab-slash' });
+  gEl.appendChild(rect(x - half, top, 2 * half, (box.top - box.bottom + 2 * TAB_SLASH_PAD_SP) * s, { fill: theme.background || '#ffffff' }));
+  gEl.appendChild(glyphText(x, y, glyph, theme.fontFamily, smuflFontSizePx(theme), { fill: theme.tabFretColor, 'text-anchor': 'middle' }));
+  g.appendChild(gEl);
+  return { fretTopY: top, marksTopY: Infinity };
 }
 
 /**

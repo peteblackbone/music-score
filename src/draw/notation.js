@@ -9,6 +9,7 @@ import {
 import { layoutHeadGlyph } from '../harmonics.js';
 import { staffPositionToY } from '../pitch.js';
 import { clefAt, clefNotePosition } from '../clef.js';
+import { isSlashBeat, SLASH_HEAD, SLASH_POSITION } from '../slash.js';
 import { smuflFontSizePx } from '../theme.js';
 import { beamCount } from '../duration.js';
 import {
@@ -92,8 +93,10 @@ export function renderNotationElement(g, layoutEl, measure, track, theme, opts =
 
   if (el.type === 'grace') return renderGraceNote(g, layoutEl, clef, theme);
 
-  const notes = el.notes || [];
-  const positions = notes.map((n) => clefNotePosition(n, clef));
+  // A rhythm slash: one slash head (the chord layout's glyph) on the middle line, in <g class="slash">.
+  const slash = isSlashBeat(el);
+  const notes = slash ? [SLASH_HEAD] : el.notes || [];
+  const positions = slash ? [SLASH_POSITION] : notes.map((n) => clefNotePosition(n, clef));
   const minPos = Math.min(...positions);
   const maxPos = Math.max(...positions);
   const chord = layoutEl.chord;
@@ -116,9 +119,10 @@ export function renderNotationElement(g, layoutEl, measure, track, theme, opts =
     // A voice-2 head shared with voice 1's (layout/voices.js) is drawn once, by voice 1.
     const shared = !!chord.heads[i].shared;
     if (!shared) {
-      g.appendChild(glyphText(hx, y, glyph, theme.fontFamily, fontSize, {
+      const head = glyphText(hx, y, glyph, theme.fontFamily, fontSize, {
         fill: theme.noteColor, 'text-anchor': 'middle',
-      }));
+      });
+      g.appendChild(slash ? group({ class: 'slash' }, [head]) : head);
     }
     // Ghost note: a note played very quietly/buried (as opposed to a
     // dead/muted note, which is silenced/percussive) — shown as the
@@ -158,6 +162,7 @@ export function renderNotationElement(g, layoutEl, measure, track, theme, opts =
     isRest: false, x, noteheads, stemUp, minPos, maxPos, duration: el.duration, headGlyph: chord.stemGlyph,
     stemBaseGlyphUp: chord.heads[positions.indexOf(minPos)].glyph,
     stemBaseGlyphDown: chord.heads[positions.indexOf(maxPos)].glyph,
+    ...(slash ? { slash: true } : {}),
   };
   if (el.duration === 'whole') return info;
 
@@ -332,7 +337,7 @@ export function renderBeams(g, measureLayout, rendered, theme, baselineY, forced
     // One shared stem direction for the whole group, based on its overall pitch range.
     const overallMin = Math.min(...infos.map((i) => i.minPos));
     const overallMax = Math.max(...infos.map((i) => i.maxPos));
-    const stemUp = forcedStemUp ?? stemUpFor([overallMin, overallMax]);
+    const stemUp = forcedStemUp ?? (infos.some((i) => i.slash) ? true : stemUpFor([overallMin, overallMax]));
     const dirSign = stemUp ? -1 : 1; // direction from notehead toward the stem tip
     const extendSign = stemUp ? 1 : -1; // secondary beams thicken toward the notehead
 

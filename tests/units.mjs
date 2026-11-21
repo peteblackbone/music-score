@@ -6416,6 +6416,101 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.11.0: rhythm slashes (slash.js, normalize.js, layout/timeline.js, draw/notation.js, draw/tab.js) ----------
+{
+  const SL = await imp('src/slash.js');
+  const { isMainNoteBeat } = await imp('src/directions.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { glyphBox } = await imp('src/glyphMetrics.js');
+  const cases = (await import('./cases.mjs')).cases;
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const sl = (d, x = {}) => ({ type: 'note', duration: d, slash: true, ...x });
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const render = (sc, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(sc)), { width }).render();
+    return all(box.children[0]);
+  };
+
+  test('1.11 slash: withSlash / isSlashBeat / slashHeadGlyph', () => {
+    const n = { type: 'note', duration: 'quarter', notes: [{ pitch: 'C4' }] };
+    eq(SL.withSlash({ ...n, slash: true }, true), { ...n, slash: true, notes: [] });
+    eq([SL.withSlash({ ...n, slash: true }, false), SL.withSlash({ ...n, slash: 'yes' }, true), SL.withSlash({ ...n, slash: false }, true)].map((b) => [b.slash, b.notes.length]), [[false, 1], [false, 1], [false, 1]]);
+    eq([SL.withSlash({ type: 'rest', duration: 'quarter', slash: true }, true).slash, SL.withSlash({ type: 'grace', duration: '8th', slash: true, notes: [] }, true).slash], [false, false]);
+    eq([SL.isSlashBeat({ type: 'note', slash: true }), SL.isSlashBeat({ type: 'rest', slash: true }), SL.isSlashBeat({ type: 'note', slash: 'true' }), SL.isSlashBeat(null)], [true, false, false, false]);
+    eq(['whole', 'half', 'quarter', '8th', '16th'].map(SL.slashHeadGlyph), [Glyph.noteheadSlashWhiteWhole, Glyph.noteheadSlashWhiteHalf, Glyph.noteheadSlashHorizontalEnds, Glyph.noteheadSlashHorizontalEnds, Glyph.noteheadSlashHorizontalEnds]);
+  });
+  test('1.11 slash: isMainNoteBeat counts slash beats (beat-level marks draw)', () => {
+    eq([isMainNoteBeat({ type: 'note', slash: true, notes: [] }), isMainNoteBeat({ type: 'note', notes: [] }), isMainNoteBeat({ type: 'note', slash: false, notes: [] })], [true, false, false]);
+  });
+  test('1.11 slash: normalize drops voice-1 slash notes only when the key is present; ignored on voice 2, graces and rests', () => {
+    const t = normalizeScore({ tracks: [{ measures: [
+      { beats: [sl('quarter', { notes: [{ pitch: 'C4' }] }), { type: 'grace', duration: '8th', slash: true, notes: [{ pitch: 'D4' }] }, sl('quarter'), { type: 'rest', duration: 'half', slash: true }] },
+      { voices: [{ beats: [sl('whole')] }, { beats: [{ type: 'note', duration: 'whole', slash: true, notes: [{ pitch: 'C4' }] }] }] },
+      { beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'C4' }] }] },
+    ] }] }).tracks[0];
+    eq(t.measures[0].beats.map((b) => [b.type, b.slash, b.notes.length]), [['note', true, 0], ['grace', false, 1], ['note', true, 0], ['rest', false, 0]]);
+    eq([t.measures[1].beats[0].slash, t.measures[1].voice2Beats[0].slash, t.measures[1].voice2Beats[0].notes.length], [true, false, 1]);
+    eq('slash' in t.measures[2].beats[0], false);
+  });
+  test('1.11 slash: notation head on the middle line in <g class="slash">, stems up (beamed too), no accidental or ledger; whole has no stem', () => {
+    const nodes = render({ tracks: [{ measures: [{ keySignature: -3, beats: [sl('quarter', { notes: [{ pitch: 'C6', accidental: 'sharp' }] }), sl('8th'), sl('8th'), sl('half')] }, { beats: [sl('whole')] }] }] });
+    const st = all(nodes.find((n) => cls(n) === 'staff staff-notation'));
+    const heads = st.filter((n) => cls(n) === 'slash').map((g) => g.children[0]);
+    eq(heads.map((h) => h.textContent), [Glyph.noteheadSlashHorizontalEnds, Glyph.noteheadSlashHorizontalEnds, Glyph.noteheadSlashHorizontalEnds, Glyph.noteheadSlashWhiteHalf, Glyph.noteheadSlashWhiteWhole]);
+    eq(heads.map((h) => +h.getAttribute('y')), Array(5).fill(2 * S));
+    eq(st.some((n) => n.tag === 'text' && [Glyph.accidentalSharp, Glyph.accidentalNatural].includes(n.textContent)), false);
+    // stems: x at the slash's up anchor, from its top corner upwards
+    const stems = st.filter((n) => n.tag === 'line' && n.getAttribute('stroke-width') === String(th.stemWidth));
+    eq(stems.length, 4);
+    const q = heads[0];
+    const a = glyphBox('noteheadSlashHorizontalEnds');
+    const s0 = stems.find((l) => Math.abs(+l.getAttribute('x1') - (+q.getAttribute('x') + (2.124 - a.width / 2) * S)) < 0.01);
+    eq(!!s0 && Math.max(+s0.getAttribute('y1'), +s0.getAttribute('y2')), 2 * S - 1.0 * S);
+    eq(Math.min(...stems.map((l) => Math.min(+l.getAttribute('y1'), +l.getAttribute('y2')))) < 0, true, 'stems go up');
+  });
+  test('1.11 slash: layout lays a slash out as one head at position 4, stem up; two voices keep voice 1 up', () => {
+    const lay = computeLayout(normalizeScore({ tracks: [{ measures: [{ voices: [{ beats: [sl('half'), sl('half')] }, { beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'G4' }] }] }] }] }] }), th, 900);
+    const els = lay.systems[0].tracks[0].measures[0].elements;
+    eq(els.map((e) => [e.chord.heads.map((h) => h.pos), e.chord.stemUp, e.chord.heads[0].glyph]), [[[4], true, Glyph.noteheadSlashWhiteHalf], [[4], true, Glyph.noteheadSlashWhiteHalf]]);
+  });
+  test('1.11 slash: TAB draws a slash head over a backing (class tab-slash) instead of frets; beat-level marks still draw', () => {
+    const nodes = render({ tracks: [{ showTablature: true, measures: [{ beats: [sl('quarter', { notes: [{ string: 1, fret: 5 }], pickStroke: 'down', tremolo: true }), sl('quarter'), sl('half')] }] }] });
+    const tab = all(nodes.find((n) => cls(n) === 'staff staff-tab'));
+    const ts = tab.filter((n) => cls(n) === 'tab-slash');
+    eq(ts.length, 3);
+    eq(ts.map((g) => [g.children[0].tag, g.children[1].tag]), Array(3).fill(['rect', 'text']));
+    const midY = (5 * th.tabStaffLineSpacing) / 2;
+    eq(ts.map((g) => +g.children[1].getAttribute('y')), Array(3).fill(midY));
+    eq(tab.some((n) => n.tag === 'text' && n.textContent === '5'), false, 'no fret');
+    eq(tab.some((n) => /tab-tremolo/.test(cls(n))), false, 'no TAB tremolo on a slash');
+    eq(nodes.some((n) => n.tag === 'text' && n.textContent === Glyph.stringsDownBow), true, 'pick stroke');
+  });
+  test('1.11 slash: off is byte-identical — every case with slash: false on every beat renders its snapshot', () => {
+    const dir = path.join(root0, 'tests', 'snapshots');
+    const off = (beats) => (beats || []).map((b) => ({ ...b, slash: false }));
+    let n = 0;
+    for (const c of cases) {
+      const file = path.join(dir, `${c.id}.svg`);
+      if (!fs.existsSync(file)) continue;
+      const sc = JSON.parse(JSON.stringify(c.score));
+      (sc.tracks || []).forEach((t) => (t.measures || []).forEach((m) => {
+        if (!m) return;
+        if (Array.isArray(m.beats)) m.beats = off(m.beats);
+        if (Array.isArray(m.voices)) m.voices = m.voices.map((v) => (v && Array.isArray(v.beats) ? { ...v, beats: off(v.beats) } : v));
+      }));
+      const box = makeContainer();
+      new MusicScoreRenderer(box, sc, { width: c.width, ...(c.options || {}) }).render();
+      if (serialize(box.children[0]) !== fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n')) throw new Error(c.id);
+      n++;
+    }
+    if (n < 73) throw new Error(`only ${n}`);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
