@@ -7032,6 +7032,103 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+/// ---------- 1.12.0: lyrics parsing and room (lyrics.js, layout/timeline.js, layout/multiRest.js) ----------
+{
+  const { canonicalLyrics, lyricsOf, lyricExtents, MAX_VERSES, LYRIC_PAD_SP, HYPHEN_ROOM_SP } = await imp('src/lyrics.js');
+  const { estimateTextWidth } = await imp('src/textMetrics.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { isRestMeasure } = await imp('src/layout/multiRest.js');
+  const theme = resolveTheme({});
+  const S = (text, hyphen = false, extend = false) => ({ text, hyphen, extend });
+  const qn = (lyric) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }], ...(lyric === undefined ? {} : { lyric }) });
+
+  test('1.12 canonicalLyrics: string shorthand (trim, collapse, one trailing marker: - hyphen, _ extend)', () => {
+    eq(canonicalLyrics('love'), [S('love')]);
+    eq(canonicalLyrics('  hap-  '), [S('hap', true)]);
+    eq(canonicalLyrics('day_'), [S('day', false, true)]);
+    eq(canonicalLyrics('two  words '), [S('two words')]);
+    eq(canonicalLyrics('a -'), [S('a', true)]);
+    eq(canonicalLyrics('x--'), [S('x-', true)]);
+    eq(canonicalLyrics('x_-'), [S('x_', true)]);
+    eq(canonicalLyrics('x-_'), [S('x-', false, true)]);
+    eq(canonicalLyrics('-day'), [S('-day')]);
+  });
+  test('1.12 canonicalLyrics: object form (text canonical, hyphen === true, extend === true, hyphen wins)', () => {
+    eq(canonicalLyrics({ text: ' Oh ', extend: true }), null, 'a bare object is not an array of verses');
+    eq(canonicalLyrics([{ text: ' Oh ', extend: true }]), [S('Oh', false, true)]);
+    eq(canonicalLyrics([{ text: 'Hal', hyphen: true, extend: true }]), [S('Hal', true)]);
+    eq(canonicalLyrics([{ text: 'go-', hyphen: 'yes', extend: 1 }]), [S('go-')]);
+    eq(canonicalLyrics([{ text: '' }, { text: 3 }, { hyphen: true }, ['x']]), null);
+  });
+  test('1.12 canonicalLyrics: verses (index = verse, null holes kept), at most 8, nothing left -> null', () => {
+    eq(canonicalLyrics(['one', null, 'three-']), [S('one'), null, S('three', true)]);
+    eq(canonicalLyrics([null, 'two']), [null, S('two')]);
+    const ten = Array.from({ length: 10 }, (_, i) => `v${i + 1}`);
+    eq(MAX_VERSES, 8);
+    eq(canonicalLyrics(ten).length, 8);
+    eq(canonicalLyrics([...Array(8).fill(null), 'ninth']), null);
+    for (const raw of [undefined, null, '', '   ', '-', '_', ' - ', 3, true, {}, [], [''], ['-', '_'], [5, null]]) eq(canonicalLyrics(raw), null, JSON.stringify(raw));
+  });
+  test('1.12 canonicalLyrics is idempotent', () => {
+    const inputs = ['hap-', 'day_', ['a', null, 'b-'], [{ text: 'x', extend: true }], ' p  q ', 'x--'];
+    inputs.forEach((raw) => { const once = canonicalLyrics(raw); eq(canonicalLyrics(once), once, JSON.stringify(raw)); });
+  });
+  test('1.12 lyricsOf: note beats only (slash beats count); rests, hidden rests and graces -> null', () => {
+    eq(lyricsOf(qn('la')), [S('la')]);
+    eq(lyricsOf({ type: 'note', duration: 'quarter', slash: true, lyric: 'la' }), [S('la')]);
+    eq(lyricsOf({ type: 'rest', duration: 'quarter', lyric: 'la' }), null);
+    eq(lyricsOf({ type: 'rest', duration: 'quarter', hidden: true, lyric: 'la' }), null);
+    eq(lyricsOf({ type: 'grace', duration: '16th', notes: [{ pitch: 'E4' }], lyric: 'la' }), null);
+    eq(lyricsOf(qn()), null);
+  });
+  test('1.12 lyricExtents: half the widest syllable + 0.25 sp; a hyphenated verse adds the hyphen width + 0.6 sp on the right', () => {
+    const s = theme.staffLineSpacing; const size = theme.lyricFontSize;
+    eq(size, 13);
+    const w = (t) => estimateTextWidth(t, size);
+    eq(lyricExtents(qn('Hallelujah'), theme), { left: w('Hallelujah') / 2 + LYRIC_PAD_SP * s, right: w('Hallelujah') / 2 + LYRIC_PAD_SP * s });
+    const h = w('to') / 2 + LYRIC_PAD_SP * s;
+    eq(lyricExtents(qn('to-'), theme), { left: h, right: h + w('-') + HYPHEN_ROOM_SP * s });
+    const long = w('morning') / 2 + LYRIC_PAD_SP * s;
+    eq(lyricExtents(qn(['to-', 'morning']), theme), { left: long, right: Math.max(long, h + w('-') + HYPHEN_ROOM_SP * s) });
+    eq(lyricExtents(qn(), theme), null);
+    eq(lyricExtents(qn(''), theme), null);
+    eq(lyricExtents({ type: 'rest', duration: 'quarter', lyric: 'Hallelujah' }, theme), null);
+  });
+  const layoutX = (score) => computeLayout(normalizeScore(JSON.parse(JSON.stringify(score))), theme, 900);
+  const xs = (lay) => lay.systems.flatMap((sy) => sy.tracks.flatMap((t) => t.measures.flatMap((m) => [...m.elements, ...(m.elements2 || [])].map((le) => le.x))));
+  const strip = (v) => JSON.parse(JSON.stringify(v, (k, x) => (k === 'lyric' ? undefined : x)));
+  const LONG = 'Supercalifragilistic';
+  test('1.12 layout: a long syllable widens its beat; empty / rest / grace / voice-2 lyrics and lyric-free scores lay out exactly as before', () => {
+    const base = { tracks: [{ showTablature: true, measures: [{ beats: [qn(), qn(), qn(), qn()] }] }] };
+    const withLyric = (lyric) => { const sc = JSON.parse(JSON.stringify(base)); sc.tracks[0].measures[0].beats[1].lyric = lyric; return sc; };
+    const a = layoutX(base);
+    const b = layoutX(withLyric(LONG));
+    if (!(xs(b)[2] - xs(b)[1] > xs(a)[2] - xs(a)[1] + 20)) throw new Error(`not widened ${xs(a)} / ${xs(b)}`);
+    eq(JSON.stringify(strip(layoutX(withLyric('')))), JSON.stringify(a)); // el keeps its own lyric key; nothing else differs
+    eq(JSON.stringify(strip(layoutX(withLyric(['', null])))), JSON.stringify(a));
+    const rest = { tracks: [{ measures: [{ beats: [qn(), { type: 'rest', duration: 'quarter', lyric: LONG }, { type: 'grace', duration: '16th', notes: [{ pitch: 'D4' }], lyric: LONG }, qn(), qn()] }] }] };
+    eq(xs(layoutX(rest)), xs(layoutX(strip(rest))));
+    const two = { tracks: [{ measures: [{ voices: [{ beats: [qn(), qn(), qn(), qn()] }, { beats: [qn(LONG), qn(), qn(), qn()] }] }] }] };
+    eq(xs(layoutX(two)), xs(layoutX(strip(two))));
+    const two1 = strip(two); two1.tracks[0].measures[0].voices[0].beats[0].lyric = LONG;
+    if (!(xs(layoutX(two1))[1] > xs(layoutX(strip(two)))[1] + 20)) throw new Error('voice-1 lyric in a two-voice measure not widened');
+  });
+  test('1.12 layout: a lyric keeps grace notes anchored to the note (same distance from the beat x)', () => {
+    const gr = { type: 'grace', duration: '16th', notes: [{ pitch: 'D4' }] };
+    const sc = (lyric) => ({ tracks: [{ measures: [{ beats: [qn(), gr, qn(lyric), qn(), qn()] }] }] });
+    const d = (lay) => { const els = lay.systems[0].tracks[0].measures[0].elements; return els[2].x - els[1].x; };
+    eq(d(layoutX(sc(LONG))), d(layoutX(sc(undefined))));
+  });
+  test('1.12 multi-measure rests: a whole rest carrying a lyric still collapses', () => {
+    const wr = (extra = {}) => ({ beats: [{ type: 'rest', duration: 'whole', ...extra }] });
+    const sc = normalizeScore({ multiMeasureRests: true, tracks: [{ measures: [wr({ lyric: 'la' }), wr({ lyric: ['a', 'b'] }), wr()] }] });
+    eq([0, 1, 2].map((mi) => isRestMeasure(sc, mi)), [true, true, true]);
+    const fer = normalizeScore({ multiMeasureRests: true, tracks: [{ measures: [wr({ lyric: 'la', fermata: true })] }] });
+    eq(isRestMeasure(fer, 0), false);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

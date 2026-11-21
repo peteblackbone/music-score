@@ -44,6 +44,7 @@ import { tabRhythmExtents } from './tabRhythm.js';
 import { beatArpeggio } from '../directions.js';
 import { isTwoVoiceMeasure } from '../twoVoice.js';
 import { isSlashBeat, SLASH_HEAD, SLASH_POSITION, slashHeadGlyph, tabSlashHalf } from '../slash.js';
+import { lyricExtents } from '../lyrics.js';
 
 const COLLISION_PAD_SP = 0.3;
 const TAIL_IDEAL_REDUCTION_SP = 0.5;
@@ -134,13 +135,13 @@ function trackEvents(track, mi, theme) {
   const measure = track.measures[mi];
   if (!isTwoVoiceMeasure(measure)) {
     const accs = track.showStandardNotation ? resolveMeasureAccidentals(track, mi) : null;
-    return voiceEvents(track, measure, measure.beats, accs, null, theme, { tabBand: true, arpeggio: true, fingers: true, clef: clefAt(track, mi) });
+    return voiceEvents(track, measure, measure.beats, accs, null, theme, { tabBand: true, arpeggio: true, fingers: true, lyrics: true, clef: clefAt(track, mi) });
   }
   // Two voices: voice 2 (`events2`) has its own TAB rhythm-band row, no arpeggio and no fingering;
   // rests not merged with the other voice's sit in their voice's band row (`merged`: full-size, in the staff).
   const [a1, a2] = track.showStandardNotation ? resolveVoiceAccidentals(track, mi) : [null, null];
   const merged = mergedRestPairs(measure.beats, measure.voice2Beats, measure.timeSignature);
-  const r1 = voiceEvents(track, measure, measure.beats, a1, true, theme, { tabBand: true, arpeggio: true, fingers: true, merged: merged.v1, clef: clefAt(track, mi) });
+  const r1 = voiceEvents(track, measure, measure.beats, a1, true, theme, { tabBand: true, arpeggio: true, fingers: true, lyrics: true, merged: merged.v1, clef: clefAt(track, mi) });
   const r2 = voiceEvents(track, measure, measure.voice2Beats, a2, false, theme, { tabBand: true, arpeggio: false, fingers: false, merged: merged.v2, clef: clefAt(track, mi) });
   combineVoices(r1.events, r2.events, measure, theme, merged);
   return {
@@ -155,9 +156,10 @@ function trackEvents(track, mi, theme) {
  * automatic); `tabBand` / `arpeggio` / `fingers` whether TAB rhythm-band
  * extents, arpeggio room and left-hand fingering room count; `merged` (two
  * voices only) the beat indices of merged rests, every other rest being a
- * band-row rest; `clef` the clef in force (clef.js clefAt).
+ * band-row rest; `clef` the clef in force (clef.js clefAt); `lyrics` whether
+ * note beats' syllables (lyrics.js lyricExtents) widen left / right (not ownLeft).
  */
-function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, arpeggio, fingers, merged = null, clef }) {
+function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, arpeggio, fingers, lyrics = false, merged = null, clef }) {
   const beams = groupBeams(beats, measure.timeSignature);
   const positionsOf = (el) => (isSlashBeat(el) ? [SLASH_POSITION] : (el.notes || []).map((n) => (n.pitch == null ? 4 : clefNotePosition(n, clef))));
   // Rhythm slashes stem up (unless the voice forces a direction), alone or in a beam group.
@@ -249,6 +251,11 @@ function voiceEvents(track, measure, beats, accs, forcedUp, theme, { tabBand, ar
       leftFirst: leftFirst + graceLead, ownLeftFirst: leftFirst, chordFirst, accidentalsFirst,
       wholeMeasureRest: wholeMeasureRest && el.type === 'rest',
     };
+    // Lyrics are centred on the beat x: they widen its extents but not ownLeft (graces anchor on that).
+    const lx = lyrics ? lyricExtents(el, theme) : null;
+    if (lx) {
+      ev.left = Math.max(ev.left, lx.left); ev.leftFirst = Math.max(ev.leftFirst, lx.left); ev.right = Math.max(ev.right, lx.right);
+    }
     pending = [];
     t = add(t, durationR(el));
     return ev;
