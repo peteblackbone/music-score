@@ -85,6 +85,7 @@
   <a href="#tab-rhythm">Rhythm on tab</a>
   <a href="#voices">Two voices</a>
   <a href="#structure">Clefs, rests &amp; slashes</a>
+  <a href="#lyrics">Lyrics, grace &amp; tuplets</a>
   <a href="#theme">Theming</a>
   <a href="#limits">Not included</a>
 </nav>
@@ -100,6 +101,7 @@
   <div class="tile"><b>Marks</b><span>Articulations, fermatas, dynamics, chord symbols, vibrato, tremolo.</span></div>
   <div class="tile"><b>Expression and tempo</b><span>Hairpins, fades, wah, 8va, 8vb, 15ma and 15mb brackets, and tempo changes with a metronome mark.</span></div>
   <div class="tile"><b>Notation structure</b><span>Alto, tenor and octave clefs with clef changes mid-score, multi-measure rests, rhythm slashes, and articulations and fermatas on tab-only staves.</span></div>
+  <div class="tile"><b>Lyrics and nested tuplets</b><span>Up to 8 verses of lyrics with hyphens and extenders, grace notes drawn on the beat, and tuplets inside tuplets.</span></div>
   <div class="tile"><b>Themeable</b><span>Colours, fonts and spacing; everything scales with one key.</span></div>
   <div class="tile"><b>Accessible SVG</b><span><code>role="img"</code> with a <code>&lt;title&gt;</code> and <code>&lt;desc&gt;</code>.</span></div>
   <div class="tile"><b>Zero dependencies</b><span>Plain ES modules; Bravura font shipped locally.</span></div>
@@ -382,6 +384,22 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
 <p>On a tab-only track, <code>tabArticulations: true</code> draws the articulations above the TAB staff, and a fermata sits above the beat's other TAB marks. A track that also shows notation keeps its marks on the notation staff.</p>
 <div class="demo" data-demo="tabMarks" data-width="680"></div>
 
+<h2 id="lyrics">Lyrics, grace notes and nested tuplets</h2>
+<p>1.12.0 additions: lyrics under the staff, grace notes drawn without a slash on the beat, and tuplets inside tuplets. Scores that use none of these fields draw as before. The three beat fields were ignored before 1.12.0, so a score that already sets <code>lyric</code>, <code>onBeat</code> or <code>tuplets</code> will now draw them.</p>
+<table>
+  <tr><th>Field</th><th>Drawn as</th></tr>
+  <tr><td><code>lyric</code> (beat)</td><td>Syllables under a voice 1 note: a string, or an array with one entry per verse (up to 8). A trailing <code>-</code> draws a hyphen and a trailing <code>_</code> an extender line</td></tr>
+  <tr><td><code>onBeat</code> (grace beat)</td><td><code>true</code>: the grace note drawn without its slash. It still takes no time</td></tr>
+  <tr><td><code>tuplets</code> (beat)</td><td>Outer-to-inner ratios, one or two entries, such as <code>[3, 3]</code>: a triplet inside a triplet. An invalid array is ignored and <code>tuplet</code> applies</td></tr>
+  <tr><td><code>lyricFontSize</code> (theme)</td><td>Size of the lyric text in px (default 13)</td></tr>
+</table>
+<p>Lyrics take room only where they are: a syllable widens its beat. On a system with lyrics, the dynamics line, the octave brackets and the text below the staff move down.</p>
+<div class="demo" data-demo="lyrics" data-width="680"></div>
+<p>The grace note with no slash is <code>onBeat</code>. It is placed and slurred like the grace note with a slash, and takes no time, as before.</p>
+<div class="demo" data-demo="graceOnBeat" data-width="680"></div>
+<p>Nine eighth notes with <code>tuplets: [3, 3]</code> fill a half note. The outer bracket sits above the inner ones, and the TAB rhythm shows the same nesting.</p>
+<div class="demo" data-demo="nestedTuplets" data-width="680"></div>
+
 <h2 id="theme">Theming</h2>
 <p>Pass <code>options.theme</code> to override any key of <code>defaultTheme</code>: colours (<code>noteColor</code>, <code>staffLineColor</code>, <code>tabFretColor</code>, <code>background</code>), fonts, line widths and spacing. Spacing keys ending in <code>Sp</code> are in staff spaces, so <code>staffLineSpacing</code> scales the whole score. Rhythm on tab uses <code>tabStemGapSp</code>, <code>tabStemLengthSp</code>, <code>tabHalfStemLengthSp</code>, <code>tabFlagScale</code> and <code>tabFretColor</code>.</p>
 <div class="demo" data-demo="theme" data-width="640" data-theme='{"staffLineSpacing":13,"noteColor":"#1f3a8a","staffLineColor":"#64748b","tabFretColor":"#1f3a8a","background":"#fbfaf6"}'></div>
@@ -391,6 +409,7 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
   <li>Playback, an editor, and import/export of other formats (design notes for these are in <a href="ARCHITECTURE.md">ARCHITECTURE.md</a>).</li>
   <li>Different time signatures across tracks in the same measure.</li>
   <li>Soprano, baritone and percussion clefs, clef changes in the middle of a measure, slash measures and repeat-measure signs.</li>
+  <li>Lyric import, splitting words into syllables, elision, grace notes that take time from the next note, lyrics on voice 2, and tuplets nested deeper than two levels.</li>
   <li>Glyph and text widths are estimated, not measured from the font.</li>
 </ul>
 <p class="note">See "Known limitations" in the README for the full list.</p>
@@ -917,6 +936,66 @@ renderer.setScore(other);   // swap the score, then call render() again</code></
           { beats: [
             t('half', 1, 5, {}, { articulations: ['accent'], fermata: 'long', vibrato: true }),
             r('half', { fermata: true }),
+          ] },
+        ],
+      }],
+    },
+    lyrics: {
+      tracks: [{
+        name: 'Voc.', showStandardNotation: true, showTablature: false,
+        measures: [
+          { beats: [
+            n('quarter', 'E4', { lyric: ['Hap-', 'Hel-'] }),
+            n('quarter', 'G4', { lyric: ['py', 'lo'] }),
+            n('quarter', 'A4', { lyric: ['birth-', 'to'] }),
+            n('quarter', 'G4', { lyric: ['day', 'you'] }),
+          ] },
+          { beats: [
+            n('half', 'D5', { lyric: 'sing_' }),
+            n('half', 'B4'),
+          ] },
+          { beats: [
+            n('quarter', 'C5', { lyric: 'of' }),
+            n('quarter', 'E5', { lyric: 'joy' }),
+            n('half', 'D5', { lyric: 'peace' }),
+          ] },
+        ],
+      }],
+    },
+    graceOnBeat: {
+      tracks: [{
+        name: 'Gtr.', showStandardNotation: true, showTablature: false,
+        measures: [
+          { beats: [
+            { type: 'grace', notes: [{ pitch: 'F#4' }] },
+            n('quarter', 'G4'),
+            { type: 'grace', onBeat: true, notes: [{ pitch: 'F#4' }] },
+            n('quarter', 'A4'),
+            n('half', 'B4'),
+          ] },
+          { beats: [
+            { type: 'grace', onBeat: true, notes: [{ pitch: 'E4' }] },
+            { type: 'grace', notes: [{ pitch: 'D4' }] },
+            n('quarter', 'C5'),
+            n('quarter', 'G4'),
+            n('half', 'E4'),
+          ] },
+        ],
+      }],
+    },
+    nestedTuplets: {
+      tracks: [{
+        name: 'Gtr.', showStandardNotation: true, showTablature: true, tabRhythm: true,
+        measures: [
+          { beats: [
+            ...[5, 7, 8, 5, 7, 8, 5, 7, 8].map((fret) => t('8th', 3, fret, {}, { tuplets: [3, 3] })),
+            t('half', 2, 5),
+          ] },
+          { beats: [
+            t('quarter', 2, 5, {}, { tuplet: 3 }),
+            t('quarter', 2, 7, {}, { tuplet: 3 }),
+            t('quarter', 2, 8, {}, { tuplet: 3 }),
+            t('half', 1, 5),
           ] },
         ],
       }],
