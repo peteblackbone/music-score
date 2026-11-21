@@ -1619,6 +1619,61 @@ export const characterizationCases = [
       }],
     },
   },
+  {
+    // 1.10.0 expression on notation + TAB (tempoText + a tempo change at the first onset): m1 a cresc from p to f;
+    // m2 a dim split by a mid-run mf; m3 fade in / out / swell, a wah on a fade beat, a fermata over a fade and a wah;
+    // m4 8va with a fermata, its last beat tied into a beat past the run (inherits the bracket); m5 15mb; m6 a tempo
+    // change with text and a dot; m7 two voices: voice 1's mp wins the first onset, voice 2's ff is drawn.
+    name: 'expression', width: 900,
+    score: {
+      tempoText: 'Moderato',
+      tracks: [{
+        name: 'Gt.', showTablature: true,
+        measures: [
+          { beats: [tabq(1, 0, { tempo: 96, dynamic: 'p', hairpin: 'cresc' }), tabq(1, 2, { hairpin: 'cresc' }), tabq(1, 3, { hairpin: '<' }), tabq(1, 5, { dynamic: 'f' })] },
+          { beats: [tabq(2, 5, { hairpin: 'dim' }), tabq(2, 3, { hairpin: 'dim', dynamic: 'mf' }), tabq(2, 1, { hairpin: 'decresc' }), tabq(2, 0)] },
+          { beats: [tabq(3, 2, { fade: 'in' }), tabq(3, 4, { fade: 'out', wah: 'open' }), tabq(3, 5, { fade: 'swell' }), tabq(3, 7, { fade: 'in', wah: '+', fermata: true })] },
+          { beats: [tabq(1, 15, { ottava: '8va' }), tabq(1, 17, { ottava: '8va', fermata: true }), tabd('quarter', 1, 17, { tieStart: true }, { ottava: '8va' }),
+            tabd('quarter', 1, 17, { tieEnd: true })] },
+          { beats: [tabq(6, 0, { ottava: '15mb' }), tabq(6, 3, { ottava: '15mb' }), tabq(5, 0), tabq(5, 2)] },
+          { beats: [tabq(3, 2), tabq(3, 4), tabq(3, 5, { tempo: { bpm: 72, dots: 1, text: 'Slower' } }), tabq(3, 7)] },
+          vm([tabq(1, 0, { dynamic: 'mp' }), tabq(1, 1), tabd('half', 1, 3)], [tabd('half', 4, 2, {}, { dynamic: 'pp' }), tabd('half', 4, 4, {}, { dynamic: 'ff' })]),
+        ],
+      }],
+    },
+  },
+  {
+    // 1.10.0 across a system break at 600: a cresc and an 8va running over the break (continuation "(8)", 0.3 sp
+    // opening), then a tempo change on a later system.
+    name: 'expression-break', width: 600,
+    score: {
+      tracks: [{
+        name: 'Gt.', showTablature: true,
+        measures: [
+          { beats: [tabq(1, 0), tabq(1, 2), tabq(1, 3, { hairpin: 'cresc', dynamic: 'pp' }), tabq(1, 5, { hairpin: 'cresc' })] },
+          ...[0, 1].map(() => ({ beats: [tabq(1, 12, { hairpin: 'cresc', ottava: '8va' }), tabq(1, 14, { hairpin: 'cresc', ottava: '8va' }),
+            tabq(1, 15, { hairpin: 'cresc', ottava: '8va' }), tabq(1, 17, { hairpin: 'cresc', ottava: '8va' })] })),
+          { beats: [tabq(1, 15, { ottava: '8va' }), tabq(1, 14, { ottava: '8va' }), tabq(1, 12), tabq(1, 10)] },
+          { beats: [tabq(2, 5), tabq(2, 3), tabq(2, 1), tabq(2, 0)] },
+          { beats: [tabq(3, 2, { tempo: { bpm: 140, unit: 'half' } }), tabq(3, 4), tabd('half', 3, 5)] },
+        ],
+      }],
+    },
+  },
+  {
+    // 1.10.0 on a tab-only track: fade, wah and a tempo change above the TAB staff; a hairpin and an 8va are present
+    // but not drawn (notation-only marks).
+    name: 'expression-tab-only', width: 900,
+    score: {
+      tracks: [{
+        name: 'TAB', showStandardNotation: false, showTablature: true,
+        measures: [
+          { beats: [tabq(3, 2, { fade: 'in', tempo: 110 }), tabq(3, 4, { wah: 'open' }), tabq(3, 5, { fade: 'swell', wah: 'closed' }), tabq(3, 7, { hairpin: 'cresc' })] },
+          { beats: [tabq(1, 15, { ottava: '8va', hairpin: 'dim' }), tabq(1, 17, { ottava: '8va', hairpin: 'dim' }), tabd('half', 1, 12, {}, { tempo: { bpm: 90, unit: '8th', text: 'Swing' } })] },
+        ],
+      }],
+    },
+  },
 ];
 
 // Copy of a score with tabRhythm: false on every track (source untouched). Today the field is ignored, so

@@ -34,6 +34,8 @@ const { leadRiff } = await imp('examples/lead-riff.js');
 const { leadSoloF } = await imp('examples/lead-solo-f.js');
 const { articulationsScore } = await imp('examples/articulations-demo.js');
 const { characterizationCases } = await imp('tests/fixtures/characterization.js');
+const { glyphBox: glyphBoxOf } = await imp('src/glyphMetrics.js');
+const { Glyph: GLYPH_NAMES } = await imp('src/glyphs.js');
 
 const EPS = 0.011;          // positions are rounded to 2 decimals
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -893,10 +895,12 @@ function nodeBox(n, theme = DEF) {
 const overlaps = (a, b) => a.x1 < b.x2 && b.x1 < a.x2 && a.top < b.bottom && b.top < a.bottom;
 // Leaf nodes of a staff group that belong to the music (not the decorations placed around it).
 const SKIP = new Set(['chord-symbol', 'dynamic', 'fermata', 'tempo', 'measure-number', 'staff-lines', 'barline', 'key-signature', 'time-signature', 'courtesy']);
+// 1.10: hairpins sit on the dynamics line and 8vb / 15mb brackets below it, so they are not the music's ink either.
+const SKIP_BELOW_LINE = /^(hairpin|ottava ottava-(8vb|15mb))( |$)/;
 function musicLeaves(g, xMin) {
   const out = [];
   const visit = (n) => {
-    if (SKIP.has(cls(n))) return;
+    if (SKIP.has(cls(n)) || SKIP_BELOW_LINE.test(cls(n))) return;
     if (n.tag === 'g') { n.children.forEach(visit); return; }
     const b = nodeBox(n);
     if (b && Number.isFinite(b.top) && b.x2 >= xMin) out.push({ n, b });
@@ -5848,9 +5852,9 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
   });
 
   test('hands17', 'G2: every pre-1.7 case with every new field set to garbage renders byte-identical to its snapshot', () => {
-    // 1.8: the voices-marks / voices-tab-rhythm(-break) / voices-tied-frets fixtures are not pre-1.7 either; 1.9: nor bends-slides-*
-    const pre = cases.filter((c) => !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides)-/.test(c.id));
-    const snaps = fs.readdirSync(path.join(root0, 'tests/snapshots')).filter((f) => f.endsWith('.svg') && !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides)-/.test(f));
+    // 1.8: the voices-marks / voices-tab-rhythm(-break) / voices-tied-frets fixtures are not pre-1.7 either; 1.9: nor bends-slides-*; 1.10: nor expression-*
+    const pre = cases.filter((c) => !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression)-/.test(c.id));
+    const snaps = fs.readdirSync(path.join(root0, 'tests/snapshots')).filter((f) => f.endsWith('.svg') && !/^char-(ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression)-/.test(f));
     ok(pre.length === 60 && snaps.length === 60, `${pre.length} pre-1.7 cases vs ${snaps.length} pre-1.7 snapshots`);
     const NOTE = [{ ornament: 'trill', finger: 9, rightFinger: 'q', leftHandTap: false }, { ornament: 5, finger: 'x', rightFinger: 1, leftHandTap: 0 },
       { ornament: {}, finger: -1, rightFinger: 'pi', leftHandTap: '' }, { ornament: '', finger: 1.5, rightFinger: null, leftHandTap: null }];
@@ -6284,6 +6288,170 @@ test('voices', 'every two-voice fixture renders at 600/900/1400 without throwing
 
   test('bends19', 'determinism and clean numbers at 400 / 600 / 900; input untouched', () => {
     for (const f of BS) for (const width of [400, 600, 900]) {
+      const before = JSON.stringify(f.score);
+      const out = serialize(renderTree(f.score, width));
+      ok(!/NaN|Infinity|undefined/.test(out), `${f.name}@${width}: bad number`);
+      ok(out === serialize(renderTree(f.score, width)), `${f.name}@${width}: two renders differ`);
+      ok(JSON.stringify(f.score) === before, `${f.name}: input mutated`);
+    }
+  });
+}
+
+// ======================= expression lines, ottava, tempo changes, voice-2 dynamics (1.10.0) =======================
+// Fixtures expression (w900), expression-break (w600) and expression-tab-only (w900); counts follow from the fixture
+// comments (characterization.js), geometry from ui.md (hairpins, fade / wah, ottava display shift, tempo change).
+{
+  const fx = (name) => characterizationCases.find((c) => c.name === name);
+  const EX = ['expression', 'expression-break', 'expression-tab-only'].map(fx);
+  const S10 = DEF.staffLineSpacing;
+  const U10 = (DEF.dynamicFontSize + 1.4 * S10) / 4;
+  const has = (n, k) => cls(n).split(/\s+/).includes(k);
+  const nodesWith = (root, k) => all(root).filter(({ n }) => has(n, k)).map(({ n }) => n);
+  const ptsOf = (d) => (d.match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+  const notationG = (tree, si) => staffGroups(systemsOf(tree)[si]).find((g) => cls(g).includes('notation'));
+  const nameOf = (c) => Object.keys(GLYPH_NAMES).find((k) => GLYPH_NAMES[k] === c._text);
+  const glyphTop = (t, name = nameOf(t)) => num(t, 'y') - (glyphBoxOf(name).top * num(t, 'font-size')) / 4;
+  const glyphBottom = (t, name = nameOf(t)) => num(t, 'y') - (glyphBoxOf(name).bottom * num(t, 'font-size')) / 4;
+  const strip = (score) => JSON.parse(JSON.stringify(score), (k, v) => (k === 'ottava' ? undefined : v));
+  const heads = (g) => g.children.filter((c) => c.tag === 'text' && cpOf(c) === 0xE0A4).map((c) => ({ x: num(c, 'x'), y: num(c, 'y') }));
+
+  test('expr10', 'fixture counts: hairpins, fades, wahs, ottava brackets, tempo changes and dynamics', () => {
+    const want = {
+      expression: { cresc: 1, dim: 2, hcont: 0, fade: 4, wah: 2, ottava: 2, ocont: 0, tempo: 2, dynamic: 5 },
+      'expression-break': { cresc: 2, dim: 0, hcont: 1, fade: 0, wah: 0, ottava: 2, ocont: 1, tempo: 1, dynamic: 1 },
+      'expression-tab-only': { cresc: 0, dim: 0, hcont: 0, fade: 2, wah: 2, ottava: 0, ocont: 0, tempo: 2, dynamic: 0 },
+    };
+    for (const f of EX) {
+      const t = renderTree(f.score, f.width);
+      const got = {
+        cresc: nodesWith(t, 'hairpin-cresc').length, dim: nodesWith(t, 'hairpin-dim').length, hcont: nodesWith(t, 'hairpin-cont').length,
+        fade: nodesWith(t, 'fade').length, wah: nodesWith(t, 'wah').length,
+        ottava: nodesWith(t, 'ottava').length, ocont: nodesWith(t, 'ottava-cont').length,
+        tempo: nodesWith(t, 'tempo-change').length, dynamic: nodesWith(t, 'dynamic').length,
+      };
+      ok(JSON.stringify(got) === JSON.stringify(want[f.name]), `${f.name}: ${JSON.stringify(got)}`);
+    }
+  });
+
+  test('expr10', 'hairpins: centre 0.38 u above the dynamics baseline of their staff; openings 1 sp, 0.3 sp at a break', () => {
+    for (const f of EX.slice(0, 2)) {
+      const t = renderTree(f.score, f.width);
+      systemsOf(t).forEach((sg, si) => {
+        const g = notationG(t, si);
+        const dyn = g.children.filter((c) => cls(c) === 'dynamic');
+        g.children.filter((c) => has(c, 'hairpin')).forEach((p) => {
+          const v = ptsOf(p.getAttribute('d'));
+          const centre = v.length === 6 ? v[3] : (v[1] + v[5]) / 2;
+          if (dyn.length) near(centre, num(dyn[0], 'y') - 0.38 * U10, 0.02, `${f.name} sys${si}: hairpin centre`);
+          const opens = v.length === 6 ? [v[5] - v[1]] : [v[5] - v[1], v[7] - v[3]];
+          ok(opens.every((o) => [0.3 * S10, S10].some((w) => Math.abs(o - w) < 0.02)), `${f.name} sys${si}: openings ${opens}`);
+          // a continuation opens 0.3 sp at the break side; a closed end only where the hairpin really starts / ends
+          if (has(p, 'hairpin-cont')) ok(v.length === 8 && Math.abs(opens[0] - 0.3 * S10) < 0.02, `${f.name}: continuation opening`);
+        });
+      });
+    }
+  });
+
+  test('expr10', 'fade / wah: ink bottom >= 1 sp above the top line, a wah above the fade on its beat; fermatas clear fades, wahs and the 8va', () => {
+    const t = renderTree(fx('expression').score, 900);
+    const g = notationG(t, 0);
+    const fades = g.children.filter((c) => has(c, 'fade'));
+    const wahs = g.children.filter((c) => has(c, 'wah'));
+    [...fades, ...wahs].forEach((c) => ok(glyphBottom(c) <= -S10 + EPS, `${cls(c)} bottom`));
+    wahs.forEach((w) => {
+      const f = fades.find((c) => num(c, 'x') === num(w, 'x'));
+      ok(f && glyphBottom(w) <= glyphTop(f) - 0.4 * S10 + EPS, 'wah 0.4 sp above its fade');
+    });
+    const fermatas = g.children.filter((c) => cls(c) === 'fermata').map((c) => c.children[0]);
+    ok(fermatas.length === 2, 'two fermatas');
+    const tops = [...fades, ...wahs].map((c) => ({ x1: num(c, 'x') - 0.8 * S10, x2: num(c, 'x') + 0.8 * S10, top: glyphTop(c) }));
+    const ott = nodesWith(g, 'ottava-8va')[0];
+    tops.push({ x1: num(ott.children[0], 'x'), x2: num(ott.children[1], 'x1'), top: glyphTop(ott.children[0], 'ottavaAlta') });
+    tops.push({ x1: num(ott.children[1], 'x1'), x2: num(ott.children[1], 'x2'), top: num(ott.children[1], 'y1') - 0.08 * S10 });
+    let checked = 0;
+    fermatas.forEach((fm) => {
+      const x = num(fm, 'x'); const bottom = num(fm, 'y');
+      tops.filter((b) => b.x1 < x + 1.2 * S10 && b.x2 > x - 1.2 * S10).forEach((b) => { checked++; ok(bottom <= b.top - 0.5 * S10 + EPS, `fermata at ${x} clears ${b.top}`); });
+    });
+    ok(checked >= 3, `only ${checked} overlaps checked`);
+  });
+
+  test('expr10', 'ottava display: heads in the 8va run 3.5 sp lower (15mb 7 sp higher), fewer ledger lines, TAB frets unchanged', () => {
+    const f = fx('expression');
+    const a = renderTree(f.score, 900); const b = renderTree(strip(f.score), 900);
+    const ha = [0, 1].flatMap((si) => heads(notationG(a, si))); const hb = [0, 1].flatMap((si) => heads(notationG(b, si)));
+    ok(ha.length === hb.length, 'same head count');
+    const dy = ha.map((h, i) => +(h.y - hb[i].y).toFixed(2));
+    // m1-m3: 12 heads unchanged; m4: four 8va heads (the tied one inherits); m5: two 15mb heads, then the rest unchanged
+    ok(JSON.stringify(dy.slice(0, 18)) === JSON.stringify([...Array(12).fill(0), ...Array(4).fill(3.5 * S10), -7 * S10, -7 * S10]), `dy ${dy.slice(0, 18)}`);
+    ok(dy.slice(18).every((d) => d === 0), 'outside the runs unchanged');
+    const ledgers = (tree) => [0, 1].flatMap((si) => notationG(tree, si).children)
+      .filter((c) => c.tag === 'line' && num(c, 'y1') === num(c, 'y2') && (num(c, 'y1') < -EPS || num(c, 'y1') > 4 * S10 + EPS)).length;
+    ok(ledgers(a) < ledgers(b), `ledgers ${ledgers(a)} vs ${ledgers(b)}`);
+    const frets = (tree) => all(tree).filter(({ n }) => n.tag === 'text' && num(n, 'font-size') === DEF.tabFontSize).map(({ n }) => n._text);
+    ok(frets(a).length > 20 && JSON.stringify(frets(a)) === JSON.stringify(frets(b)), 'TAB frets identical');
+  });
+
+  test('expr10', 'ottava brackets: alta hooks point down, bassa up; the 15mb glyph >= 1 sp below the bottom line; "(8)" after the break', () => {
+    const t = renderTree(fx('expression').score, 900);
+    nodesWith(t, 'ottava').forEach((g) => {
+      const hook = g.children[2];
+      const alta = has(g, 'ottava-8va') || has(g, 'ottava-15ma');
+      ok(hook && (alta ? num(hook, 'y2') > num(hook, 'y1') : num(hook, 'y2') < num(hook, 'y1')), `${cls(g)} hook direction`);
+      near(Math.abs(num(hook, 'y2') - num(hook, 'y1')), S10, EPS, 'hook 1 sp');
+      ok(g.children[1].getAttribute('stroke-dasharray') === '6 5', 'dashed line');
+    });
+    const b = nodesWith(t, 'ottava-15mb')[0];
+    ok(glyphTop(b.children[0], 'quindicesimaBassaMb') >= 5 * S10 - EPS, '15mb below the staff');
+    const br = renderTree(fx('expression-break').score, 600);
+    const [first, cont] = nodesWith(br, 'ottava');
+    ok(first.children.length === 2 && cont.children.length === 3, 'hook only where the run ends');
+    ok(cont.children[0]._text === '', '"(8)" continuation');
+    near(num(cont.children[0], 'x'), layoutOf(fx('expression-break').score, 600).systems[1].contentStartX + 0.5 * S10, EPS, 'continuation at breakStartX');
+  });
+
+  test('expr10', 'tempo: metronome code points, the first-onset mark on the tempoText baseline, later marks with dots and text', () => {
+    const t = renderTree(fx('expression').score, 900);
+    const marks = nodesWith(t, 'tempo-change');
+    const part = (g, k) => g.children.filter((c) => cls(c) === k);
+    ok(cpOf(part(marks[0], 'tempo-change-note')[0]) === 0xECA5 && part(marks[0], 'tempo-change-bpm')[0]._text === '= 96', 'quarter = 96');
+    const tempo = nodesWith(t, 'tempo')[0];
+    ok(num(tempo, 'y') === num(part(marks[0], 'tempo-change-bpm')[0], 'y'), 'shared baseline with the tempoText');
+    ok(part(marks[1], 'tempo-change-text')[0]._text === 'Slower' && cpOf(part(marks[1], 'tempo-change-dot')[0]) === 0xECB7, 'text and dot');
+    const br = renderTree(fx('expression-break').score, 600);
+    const m = nodesWith(br, 'tempo-change');
+    ok(m.length === 1 && cpOf(part(m[0], 'tempo-change-note')[0]) === 0xECA3, 'half note on a later system');
+    const last = systemsOf(br).length - 1;
+    ok(last > 0 && staffGroups(systemsOf(br)[last])[0].children.includes(m[0]), 'in the later system\'s top staff');
+  });
+
+  test('expr10', 'voice-2 dynamics: centred on the voice-2 note on the voice-1 line; voice 1 wins the shared onset', () => {
+    const f = fx('expression');
+    const t = renderTree(f.score, 900);
+    const lay = layoutOf(f.score, 900);
+    const si = lay.systems.findIndex((sy) => sy.tracks[0].measures.some((mm) => mm.measureIndex === 6));
+    const m7 = lay.systems[si].tracks[0].measures.find((mm) => mm.measureIndex === 6);
+    const dyn = notationG(t, si).children.filter((c) => cls(c) === 'dynamic');
+    ok(dyn.length === 2, `${dyn.length} dynamics`);
+    near(num(dyn[0], 'x'), m7.elements[0].x, EPS, 'mp at voice 1');
+    near(num(dyn[1], 'x'), m7.elements2[1].x, EPS, 'ff at voice 2');
+    ok(num(dyn[0], 'y') === num(dyn[1], 'y'), 'one line');
+  });
+
+  test('expr10', 'tab-only: fades and wahs >= 1 sp above the TAB top line; no hairpins or ottava brackets', () => {
+    const t = renderTree(fx('expression-tab-only').score, 900);
+    const g = staffGroups(systemsOf(t)[0])[0];
+    const lines = all(g).filter(({ n }) => n.tag === 'line' && num(n, 'y1') === num(n, 'y2') && num(n, 'x2') - num(n, 'x1') > 200).map(({ n }) => num(n, 'y1'));
+    ok(lines.length >= 6, 'TAB lines');
+    const top = Math.min(...lines);
+    const marks = [...nodesWith(g, 'fade'), ...nodesWith(g, 'wah')];
+    ok(marks.length === 4, 'four marks');
+    marks.forEach((c) => ok(glyphBottom(c) <= top - S10 + EPS, `${cls(c)} above TAB`));
+    ok(!nodesWith(t, 'hairpin').length && !nodesWith(t, 'ottava').length, 'no hairpin / ottava');
+  });
+
+  test('expr10', 'determinism and clean numbers at 400 / 600 / 900; input untouched', () => {
+    for (const f of EX) for (const width of [400, 600, 900]) {
       const before = JSON.stringify(f.score);
       const out = serialize(renderTree(f.score, width));
       ok(!/NaN|Infinity|undefined/.test(out), `${f.name}@${width}: bad number`);
