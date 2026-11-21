@@ -21,6 +21,7 @@ import { glyphBox } from '../glyphMetrics.js';
 import { Glyph, metNoteGlyph } from '../glyphs.js';
 import { smuflFontSizePx } from '../theme.js';
 import { tempoOf, formatBpm } from '../expression.js';
+import { HEAD_HALF_SP } from './passes/common.js';
 
 const MIN_BASELINE_SP = 2.5;
 const CLEARANCE_SP = 0.75;
@@ -28,7 +29,6 @@ const NOTE_SCALE = 0.6;          // metronome note size relative to the SMuFL si
 const TEXT_GAP_SP = 0.5;         // tempo text -> metronome note; tempoText -> a first-onset mark
 const DOT_GAP_SP = 0.15;         // note -> dot, dot -> dot
 const BPM_GAP_SP = 0.3;          // note / dots -> "= N"
-const HEAD_HALF_SP = 0.59;
 
 /**
  * Tempo changes of every system (`drawn`: drawSystem results with their
@@ -107,31 +107,32 @@ function drawMark(g, tempo, lay, y, theme) {
  * A tempo change at the score's first onset, when there is a tempoText:
  * drawn into `topG` starting TEXT_GAP_SP right of the tempoText (whose
  * right edge is `tempoTextRight`), on one baseline shared with it — the
- * higher of the tempoText's own (`tempoY`) and the mark's. Returns that
- * baseline (the mark is then left out by renderTempoChanges), or undefined
- * when there is no such change (the tempoText keeps its own baseline).
+ * higher of the tempoText's own (`tempoY`) and the mark's. Returns
+ * `{ y, drawn }`: that baseline and the entry of `changes` it drew (pass it
+ * to renderTempoChanges as `skip`), or `{ y: undefined, drawn: null }` when
+ * there is no such change (the tempoText keeps its own baseline).
  */
 export function renderFirstTempoChange(topG, changes, tempoTextRight, tempoY, theme) {
   const first = (changes[0] || []).find((m) => m.first);
-  if (!first) return undefined;
+  if (!first) return { y: undefined, drawn: null };
   const lay = markLayout(first.tempo, tempoTextRight + TEXT_GAP_SP * theme.staffLineSpacing, theme);
   const y = Math.min(tempoY, markBaseline(topG, lay.textX, lay.width, theme));
   drawMark(topG, first.tempo, lay, y, theme);
-  first.done = true;
-  return y;
+  return { y, drawn: first };
 }
 
 /**
- * Every tempo change not drawn yet, left to right per system, into each
- * system's top staff group: from its beat's head left edge, or the time
- * signature's x for one at the score's first onset.
+ * Every tempo change of `changes` (tempoChanges) except `skip` (the entry
+ * renderFirstTempoChange drew, or null), left to right per system, into
+ * each system's top staff group: from its beat's head left edge, or the
+ * time signature's x for one at the score's first onset.
  */
-export function renderTempoChanges(drawn, systems, changes, theme) {
+export function renderTempoChanges(drawn, systems, changes, theme, skip = null) {
   const s = theme.staffLineSpacing;
   drawn.forEach((d, sysIdx) => {
     if (!d.staves.length) return;
     const topG = d.staves[0].g;
-    changes[sysIdx].filter((m) => !m.done).forEach((m) => {
+    changes[sysIdx].filter((m) => m !== skip).forEach((m) => {
       const left = m.first ? systems[sysIdx].header.timeX : m.x - HEAD_HALF_SP * s;
       const lay = markLayout(m.tempo, left, theme);
       drawMark(topG, m.tempo, lay, markBaseline(topG, left, lay.width, theme), theme);

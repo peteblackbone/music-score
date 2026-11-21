@@ -20,7 +20,7 @@
  */
 import { renderDynamic, dynamicFontSizePx } from './notation.js';
 import { path, svgD } from './svgUtil.js';
-import { breakEndX, breakStartX } from './passes/common.js';
+import { breakEndX, breakStartX, HEAD_HALF_SP } from './passes/common.js';
 import { glyphStringBox } from '../glyphMetrics.js';
 import { dynamicGlyph } from '../glyphs.js';
 import { hairpinOf } from '../expression.js';
@@ -34,7 +34,6 @@ const HAIRPIN_CENTRE_U = 0.38;      // hairpin centre line above the dynamics ba
 const HAIRPIN_OPENING_SP = 1;
 const BREAK_OPENING_SP = 0.3;       // narrow end of a hairpin at a system break
 const HAIRPIN_STROKE_SP = 0.16;
-const HEAD_HALF_SP = 0.59;          // a notehead's half width (hairpin start without a dynamic)
 const DYNAMIC_GAP_SP = 0.4;         // a dynamic's edge <-> a hairpin end
 const NEXT_ONSET_GAP_SP = 0.8;      // hairpin end -> the next onset (no dynamic there)
 const MIN_LENGTH_SP = 2;
@@ -109,13 +108,16 @@ export function hairpinsByRun(score, trackRuns, systems, theme) {
         const limit = breakEndX(systems, sysIdx, theme);
         let b = sysIdx === sysLast ? endX : limit;
         if (b - a < MIN_LENGTH_SP * s) b = Math.min(a + MIN_LENGTH_SP * s, limit);
-        const single = sysFirst === sysLast;
+        const cresc = pin.kind === 'cresc';
+        const isFirst = sysIdx === sysFirst;
         const isLast = sysIdx === sysLast;
-        const narrow = single || (pin.kind === 'cresc' ? sysIdx === sysFirst : isLast) ? 0 : BREAK_OPENING_SP;
+        // The narrow end is closed where the hairpin really starts (cresc) / ends (dim); at a break it opens.
+        const closedAtBreak = (isFirst && isLast) || (cresc ? isFirst : isLast);
+        const narrow = closedAtBreak ? 0 : BREAK_OPENING_SP;
         const seg = {
-          sysIdx, x1: a, x2: b, kind: pin.kind, cont: sysIdx !== sysFirst,
-          open1: pin.kind === 'cresc' ? narrow : HAIRPIN_OPENING_SP,
-          open2: pin.kind === 'cresc' ? HAIRPIN_OPENING_SP : narrow,
+          sysIdx, x1: a, x2: b, kind: pin.kind, cont: !isFirst,
+          open1: cresc ? narrow : HAIRPIN_OPENING_SP,
+          open2: cresc ? HAIRPIN_OPENING_SP : narrow,
         };
         if (!out.has(run)) out.set(run, []);
         out.get(run).push(seg);

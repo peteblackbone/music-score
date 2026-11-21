@@ -12,7 +12,7 @@
 import { renderCurve, renderNoteSlide, curveOuterPoints } from '../notation.js';
 import { parsePitch, midiNumber } from '../../pitch.js';
 import { slideMarks } from '../../directions.js';
-import { flattenRuns, breakEndX, breakStartX } from './common.js';
+import { flattenRuns, breakEndX, breakStartX, HEAD_HALF_SP } from './common.js';
 import { collectBeats, findSlurs } from './notationBeats.js';
 import { trackHasTwoVoices, voiceOf } from '../../twoVoice.js';
 
@@ -90,7 +90,7 @@ function renderVoiceCurves(track, trackRuns, theme, systems, voice) {
     info.noteheads.forEach((h, i) => {
       const n = notes[i] || {};
       flat.push({
-        sysIdx: run.sysIdx, g: run.notationG, x: h.x, halfWidth: h.halfWidth ?? 0.59 * s, y: h.y,
+        sysIdx: run.sysIdx, g: run.notationG, x: h.x, halfWidth: h.halfWidth ?? HEAD_HALF_SP * s, y: h.y,
         midi: n.pitch != null ? midiNumber(parsePitch(n.pitch)) : null,
         tieStart: !!n.tieStart, tieEnd: !!n.tieEnd, above: sides.get(h), start: voice !== 2 || voiceOf(layoutEl) === 2,
       });

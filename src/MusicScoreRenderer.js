@@ -23,7 +23,7 @@ import { drawTempo, drawSystemDecor, tempoTextWidth, tempoBaseline } from './dra
 import { renderNavigation } from './draw/navigation.js';
 import { renderBeatText } from './draw/beatText.js';
 import { renderFadeWah } from './draw/expressionMarks.js';
-import { renderOttavaAlta, renderOttavaBassa } from './draw/ottava.js';
+import { ottavaSegments, renderOttavaAlta, renderOttavaBassa } from './draw/ottava.js';
 import { tempoChanges, renderFirstTempoChange, renderTempoChanges } from './draw/tempoMarks.js';
 import {
   renderTiesAndSlurs, renderGraceSlurs, renderTabArticulations, renderTechniqueLabelRuns, renderChordSymbolsAndDynamics,
@@ -95,11 +95,12 @@ export class MusicScoreRenderer {
     // Fade / wah marks above the staff (outside the pass barrel; chord symbols and fermatas clear them).
     renderFadeWah(score, trackRuns, theme, layout.systems);
     // 8va / 15ma brackets above the notation staff, outside the fade / wah marks.
-    renderOttavaAlta(score, trackRuns, theme, layout.systems);
+    const ottavas = ottavaSegments(score, trackRuns, layout.systems, theme);
+    renderOttavaAlta(ottavas, theme);
     // Chord symbols / dynamics once everything they must clear is drawn.
     renderChordSymbolsAndDynamics(score, trackRuns, theme, layout.systems);
     // 8vb / 15mb brackets below the dynamics line.
-    renderOttavaBassa(score, trackRuns, theme, layout.systems);
+    renderOttavaBassa(ottavas, theme);
     // Fermatas last so they can clear slurs, tuplets and chord symbols.
     renderFermatas(score, trackRuns, theme, layout.systems);
     // Beat text above / below the music, clear of all of the above (outside the pass barrel).
@@ -111,6 +112,7 @@ export class MusicScoreRenderer {
     // --- Tempo mark above system 1, at the time signature's x, clear of the first measure and of navigation under it ---
     // (a tempo change at the first onset follows it on one shared baseline)
     const changes = tempoChanges(drawn);
+    let firstChange = null;
     if (score.tempoText && drawn.length && drawn[0].staves.length) {
       const sys0 = layout.systems[0];
       const topG = drawn[0].staves[0].g;
@@ -120,11 +122,12 @@ export class MusicScoreRenderer {
       const navTop = navGroups[0]
         ? inkBounds(navGroups[0], theme, { xMin: timeX, xMax: timeX + tempoTextWidth(score.tempoText, theme), overlap: true }).top
         : Infinity;
-      const y = renderFirstTempoChange(topG, changes, timeX + tempoTextWidth(score.tempoText, theme), tempoBaseline(Math.min(firstTop, navTop), theme), theme);
-      drawTempo(topG, timeX, score.tempoText, Math.min(firstTop, navTop), theme, y);
+      const first = renderFirstTempoChange(topG, changes, timeX + tempoTextWidth(score.tempoText, theme), tempoBaseline(Math.min(firstTop, navTop), theme), theme);
+      firstChange = first.drawn;
+      drawTempo(topG, timeX, score.tempoText, Math.min(firstTop, navTop), theme, first.y);
     }
     // --- Tempo changes (metronome marks), outermost above each system's top staff ---
-    renderTempoChanges(drawn, layout.systems, changes, theme);
+    renderTempoChanges(drawn, layout.systems, changes, theme, firstChange);
 
     // --- Content-aware vertical placement ---
     const placement = placeStaves(

@@ -14,19 +14,20 @@
  * HOOK_NEXT_GAP_SP before the next beat (or the barline), whichever is
  * further right. The line is at least MIN_LINE_SP long.
  *
- * renderOttavaAlta runs after the fade / wah marks and before pass 6 (its
- * boxes go into `run.aboveBoxes` for the fermatas, and chord symbols rise
- * above it); renderOttavaBassa runs after pass 6, below the dynamics line.
+ * The segments (ottavaSegments, from the layout only) are computed once per
+ * render and handed to both: renderOttavaAlta runs after the fade / wah
+ * marks and before pass 6 (its boxes go into `run.aboveBoxes` for the
+ * fermatas, and chord symbols rise above it); renderOttavaBassa runs after
+ * pass 6, below the dynamics line.
  */
 import { group, glyphText, line } from './svgUtil.js';
-import { breakEndX, breakStartX } from './passes/common.js';
+import { breakEndX, breakStartX, HEAD_HALF_SP } from './passes/common.js';
 import { inkBounds } from '../layout/ink.js';
 import { glyphStringBox } from '../glyphMetrics.js';
 import { ottavaGlyph } from '../glyphs.js';
 import { smuflFontSizePx } from '../theme.js';
 import { ottavaKinds } from '../expression.js';
 
-const HEAD_HALF_SP = 0.59;      // a notehead's half width
 const LINE_GAP_SP = 0.3;        // glyph right -> dashed line
 const HOOK_HEAD_GAP_SP = 0.3;   // last head's right edge -> hook
 const HOOK_NEXT_GAP_SP = 0.5;   // hook -> the next beat / barline
@@ -126,14 +127,14 @@ function drawSegment(seg, alta, theme) {
   ];
 }
 
-/** 8va / 15ma brackets above the notation staves (see the header); their boxes go into `run.aboveBoxes`. */
-export function renderOttavaAlta(score, trackRuns, theme, systems) {
-  ottavaSegments(score, trackRuns, systems, theme).filter((seg) => ALTA.has(seg.kind)).forEach((seg) => {
+/** 8va / 15ma brackets of `segments` (ottavaSegments) above the notation staves; their boxes go into `run.aboveBoxes`. */
+export function renderOttavaAlta(segments, theme) {
+  segments.filter((seg) => ALTA.has(seg.kind)).forEach((seg) => {
     (seg.run.aboveBoxes ||= []).push(...drawSegment(seg, true, theme));
   });
 }
 
-/** 8vb / 15mb brackets below the notation staves, under the dynamics line (see the header). */
-export function renderOttavaBassa(score, trackRuns, theme, systems) {
-  ottavaSegments(score, trackRuns, systems, theme).filter((seg) => !ALTA.has(seg.kind)).forEach((seg) => drawSegment(seg, false, theme));
+/** 8vb / 15mb brackets of `segments` (ottavaSegments) below the notation staves, under the dynamics line. */
+export function renderOttavaBassa(segments, theme) {
+  segments.filter((seg) => !ALTA.has(seg.kind)).forEach((seg) => drawSegment(seg, false, theme));
 }
