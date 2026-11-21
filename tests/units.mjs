@@ -5770,6 +5770,96 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
 }
 
+// ---------- 1.10.0: expression edge cases (verification audit) ----------
+{
+  const { resolveTheme } = await imp('src/theme.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const th = resolveTheme();
+  const S = th.staffLineSpacing;
+  const nt = (ps, x = {}, duration = 'quarter') => ({ type: 'note', duration, notes: ps.map((p) => ({ pitch: p })), ...x });
+  const all = (nd, out = []) => { out.push(nd); (nd.children || []).forEach((c) => all(c, out)); return out; };
+  const cls = (nd) => nd.getAttribute?.('class') || '';
+  const has = (nd, k) => cls(nd).split(/\s+/).includes(k);
+  const draw = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    const svg = box.children[0];
+    return { svg, nodes: all(svg), ser: serialize(svg), lay: computeLayout(normalizeScore(score), th, width) };
+  };
+  const NEW = ['hairpin', 'fade', 'wah', 'ottava', 'tempo-change'];
+  const count = (nodes) => NEW.map((k) => nodes.filter((n) => has(n, k)).length);
+  const near = (a, b, tol = 0.02) => Math.abs(a - b) <= tol;
+
+  test('1.10 invalid hairpin / fade / wah / ottava / tempo values are ignored silently: output identical to the plain score', () => {
+    const bad = [{ hairpin: 'bogus' }, { fade: 'x' }, { wah: 'half' }, { ottava: '22ma' }, { tempo: 0 }, { tempo: 'fast' }, { tempo: {} }, { tempo: { bpm: 1001 } },
+      { hairpin: 5, fade: null, wah: {}, ottava: 8, tempo: [] }, { hairpin: '', fade: '', wah: '', ottava: '' }];
+    const mk = (extra) => ({ tracks: [{ measures: [{ beats: [0, 1, 2, 3].map((i) => nt(['C5'], extra[i % extra.length])) }, { beats: [nt(['C5'], {}, 'whole')] }] }] });
+    const plain = draw(mk([{}]));
+    for (const b of bad) {
+      const r = draw(mk([b]));
+      eq(r.ser, plain.ser, JSON.stringify(b));
+      eq(count(r.nodes), [0, 0, 0, 0, 0]);
+    }
+  });
+  test('1.10 voice-2 beats ignore hairpin / fade / wah / ottava / tempo (voice-1 marks only)', () => {
+    const v2 = (x) => ({ voices: [{ beats: [nt(['C5'], {}, 'whole')] }, { beats: [nt(['E4'], x, 'whole')] }] });
+    const plain = draw({ tracks: [{ measures: [v2({})] }] });
+    const r = draw({ tracks: [{ measures: [v2({ hairpin: 'cresc', fade: 'in', wah: 'open', ottava: '8va', tempo: 90 })] }] });
+    eq(count(r.nodes), [0, 0, 0, 0, 0]);
+    eq(r.ser, plain.ser);
+  });
+  test('1.10 hairpin / ottava run ending exactly on a system\'s last beat: no continuation on the next system', () => {
+    const plainBars = Array(8).fill(0).map(() => ({ beats: Array(4).fill(0).map(() => nt(['C6'])) }));
+    const n0 = draw({ tracks: [{ measures: plainBars }] }, 600).lay.systems[0].tracks[0].measures.length;
+    if (n0 >= 8) throw new Error('no break');
+    const bars = (extra) => plainBars.map((m, i) => ({ beats: m.beats.map((b) => (i < n0 ? { ...b, ...extra } : b)) }));
+    const o = draw({ tracks: [{ measures: bars({ ottava: '8va' }) }] }, 600);
+    const oc = o.nodes.filter((n) => has(n, 'ottava'));
+    eq(oc.length, 1);
+    eq(has(oc[0], 'ottava-cont'), false);
+    eq(oc[0].children.length, 3, 'glyph + dash + hook');
+    const h = draw({ tracks: [{ measures: bars({ hairpin: 'cresc' }) }] }, 600);
+    const hp = h.nodes.filter((n) => has(n, 'hairpin'));
+    eq(hp.length, 1);
+    eq(has(hp[0], 'hairpin-cont'), false);
+  });
+  test('1.10 ottava: a single-beat run is drawn with a dashed line of at least 1 sp; at the last beat of the score the hook stays inside the SVG', () => {
+    const one = draw({ tracks: [{ measures: [{ beats: [nt(['C6'], { ottava: '8va' }, '16th'), ...Array(15).fill(0).map(() => nt(['C6'], {}, '16th'))] }] }] });
+    const [g1, d1] = one.nodes.find((n) => has(n, 'ottava')).children;
+    eq(+d1.getAttribute('x2') - +d1.getAttribute('x1') >= 1 * S - 0.01, true, 'min line length');
+    eq(g1.textContent, Glyph.ottavaAlta);
+    const last = draw({ tracks: [{ measures: [{ beats: [nt(['C5']), nt(['C5']), nt(['C5']), nt(['C6'], { ottava: '8va' })] }] }] });
+    const m = last.lay.systems[0].tracks[0].measures[0];
+    const br = last.nodes.find((n) => has(n, 'ottava'));
+    const hook = br.children[2];
+    const le = m.elements[3];
+    // the 3.6 sp glyph is wider than the last beat's room, so the 1 sp minimum line pushes the hook past the barline-gap point (by design)
+    const hx = +hook.getAttribute('x1');
+    eq([hx >= Math.max(le.x + 0.89 * S, m.endX - 0.5 * S) - 0.02, hx <= +last.svg.getAttribute('width'), +hook.getAttribute('y2') > +hook.getAttribute('y1')], [true, true, true]);
+  });
+  test('1.10 tempo: several tracks draw one mark above the system\'s top staff; a mark from the second track alone is drawn once at the same height', () => {
+    const ms = (t) => [{ beats: [nt(['C5']), nt(['C5']), nt(['C5'], t), nt(['C5'])] }, { beats: [nt(['C5'], {}, 'whole')] }];
+    const one = draw({ tracks: [{ measures: ms({ tempo: 100 }) }] });
+    const two = draw({ tracks: [{ measures: ms({}) }, { measures: ms({ tempo: 100 }) }] });
+    const mk = (r) => r.nodes.filter((n) => has(n, 'tempo-change'));
+    eq(mk(two).length, 1);
+    const yOf = (r) => +mk(r)[0].children.find((c) => has(c, 'tempo-change-bpm')).getAttribute('y');
+    eq(yOf(two), yOf(one), 'same baseline as with a single track');
+    const both = draw({ tracks: [{ measures: ms({ tempo: 100 }) }, { measures: ms({ tempo: 70 }) }] });
+    eq(mk(both).length, 1);
+    eq(mk(both)[0].children.find((c) => has(c, 'tempo-change-bpm')).textContent, '= 100');
+  });
+  test('1.10 tempoText is unchanged by a mid-score tempo mark (x and text); without any tempo mark nothing is added', () => {
+    const ms = (t) => [{ beats: [nt(['C5']), nt(['C5']), nt(['C5'], t), nt(['C5'])] }];
+    const base = draw({ tempoText: 'Allegro', tracks: [{ measures: ms({}) }] });
+    const mid = draw({ tempoText: 'Allegro', tracks: [{ measures: ms({ tempo: 90 }) }] });
+    const tt = (r) => r.nodes.filter((n) => cls(n) === 'tempo');
+    eq(tt(mid).length, 1);
+    eq([tt(mid)[0].textContent, tt(mid)[0].getAttribute('x')], [tt(base)[0].textContent, tt(base)[0].getAttribute('x')]);
+    eq(count(base.nodes), [0, 0, 0, 0, 0]);
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
