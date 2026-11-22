@@ -84,7 +84,7 @@ test('io: round trip exportScore(parseInput(x)) deep-equals {schemaVersion:1, ..
 const { EDITOR_LIMITS } = await imp('src/editor/model/limits.js');
 test('io limits: each structure limit accepts exactly the limit and rejects one more with "Score too large" (before sanitize)', () => {
   const L = EDITOR_LIMITS;
-  eq(L, { jsonChars: 5 * 1024 * 1024, tracks: 32, measuresPerTrack: 2000, voicesPerMeasure: 4, beatsPerVoice: 256, notesPerBeat: 16, tuningStrings: 12 });
+  eq(L, { jsonChars: 5 * 1024 * 1024, tracks: 32, measuresPerTrack: 2000, voicesPerMeasure: 4, beatsPerVoice: 256, notesPerBeat: 16, tuningStrings: 12, textChars: 200, longTextChars: 2000, timeSignatureBeats: 32, beatTypes: [1, 2, 4, 8, 16, 32] });
   const T = (extra = {}, measures = [{ beats: [] }]) => ({ showTablature: true, ...extra, measures });
   const notes = (n) => Array.from({ length: n }, (_, i) => ({ pitch: 'C4', fret: i % 20 }));
   const cases = [

@@ -118,5 +118,10 @@ for (const c of cases) {
   const { summary } = await import('./editor-effects-edge.mjs');
   fail += await summary();
 }
+// 2.2.0 editor settings: validators, presets, score / tempo / tuning / track / measure operations (tests/editor-settings.mjs)
+{
+  const { summary } = await import('./editor-settings.mjs');
+  fail += summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);

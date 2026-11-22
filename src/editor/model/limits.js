@@ -13,6 +13,11 @@ export const EDITOR_LIMITS = Object.freeze({
   beatsPerVoice: 256, // per measure: `beats` and each `voices[i].beats`
   notesPerBeat: 16,
   tuningStrings: 12,
+  // 2.2 settings API caps (checked by the settings calls only; loadScore does not enforce them)
+  textChars: 200, // single-line score, track, section and ending text (UTF-16 code units)
+  longTextChars: 2000, // instructions and copyright
+  timeSignatureBeats: 32,
+  beatTypes: Object.freeze([1, 2, 4, 8, 16, 32]),
 });
 
 const L = EDITOR_LIMITS;
