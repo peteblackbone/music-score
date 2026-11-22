@@ -188,9 +188,9 @@ Start the demo server as in [Running the demo](#running-the-demo), then open htt
 - A status bar that shows the track, measure, beat, string, fret, duration and fill of the cursor.
 - **Autosave.** After each edit, undo or redo, the score is saved in this browser (localStorage key `music-score-editor:autosave`), 500 ms after the last change. Loading an example or a file is not saved until you edit. The next visit restores the saved score. If the saved data can't be read, the lead-riff example loads with a notice. If a restore never finishes drawing, the next visit in the same tab skips it.
 - **First visit.** With nothing saved, the lead-riff example loads.
-- **Unsaved changes.** New, Example and Open JSON ask first when the score has changed since the last load, New or Download. The autosave doesn't count as a save.
+- **Unsaved changes.** New, Example and Open JSON ask first when the score has changed since the last load, New or Download, and always after a restored session (it was never downloaded). The autosave doesn't count as a save.
 
-The demo's Keyboard shortcuts panel lists the same keys as the table below.
+The demo's Keyboard shortcuts panel lists the main keys from the table below (not the numpad variants).
 
 ### Quick start
 
@@ -1305,14 +1305,14 @@ This runs every test:
 - Articulation and fermata assertions (`tests/articulations.mjs`).
 - Structural guards for the score-wide passes (`tests/structure.mjs`).
 - A determinism check: the same score renders the same SVG twice.
-- Editor checks (2.0.0): `tests/editor-model.mjs` covers the editing commands, keys, undo and the JSON format, and `tests/editor-dom.mjs` covers the `ScoreEditor` API, the hit map and the overlay.
+- Editor checks (2.0.0): `tests/editor-model.mjs` covers the editing commands, keys, undo and the JSON format, and `tests/editor-dom.mjs` covers the `ScoreEditor` API, the hit map and the overlay. `tests/editor-edge.mjs` and `tests/editor-edge-dom.mjs` cover edge cases against the 2.0.0 acceptance criteria.
 
 A speed check for the editor, `node tests/bench-editor.mjs`, runs outside the test run. It times renders and keystrokes on synthetic scores of 32, 100 and 200 measures.
 
 It prints `ALL PASSED` and exits with code 0 on success.
 
 - Use `node tests/run.js --update` only when a rendering change is intentional. It rewrites the existing snapshots.
-- To run one group on its own: `node tests/units.mjs`, `node tests/engraving.mjs`, or `node tests/articulations.mjs`.
+- To run one group on its own: `node tests/units.mjs`, `node tests/engraving.mjs`, or `node tests/articulations.mjs`. The editor groups run only through `node tests/run.js`.
 
 ## Changelog
 

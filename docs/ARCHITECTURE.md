@@ -494,6 +494,9 @@ apply them.
 
 - Edits re-render once per animation frame. Several edits in one frame give one
   render. Without `requestAnimationFrame` (Node), the render is synchronous.
+- Hidden or background tabs pause animation frames, so a pending render also
+  runs after a 250 ms timeout (`RENDER_FALLBACK_MS`); `change` and the host's
+  autosave still happen.
 - A cursor move redraws only the overlay group, and emits `cursor` at once.
 - `change` is queued and fires after the render that it caused. The
   `afterRender` hook drains the queue. A click flushes a pending render first,

@@ -141,7 +141,9 @@ export function startEditorDemo(doc) {
   if (win.matchMedia?.('(pointer: coarse)').matches) $('hint').textContent = 'Editing needs a hardware keyboard';
 
   // ---- dirty flag and autosave ----
-  let dirty = false;
+  // A restored session was never downloaded: replacing it must ask first, because the next
+  // autosave overwrites the only copy.
+  let dirty = saved.status === 'ok';
   let saveTimer = null;
   let storageWarned = false;
   function storageFailed() {

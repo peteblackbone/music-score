@@ -567,7 +567,7 @@ test('C10: a score with no visible track: keys are consumed, nothing changes, th
 });
 
 // ---------- C9 / G4 / I2: durations, fill bands and announcements ----------
-test('C9: the palette (setDuration), dots and triplet apply to the NEXT beat typed on the append slot and are taken back from the beat the cursor moves onto; undo re-syncs them', () => {
+test('C9: the palette (setDuration) and dots apply to the NEXT beat typed on the append slot (triplet is refused there) and are taken back from the beat the cursor moves onto; undo re-syncs them', () => {
   const { ed } = mk({ tracks: [tab([{ beats: [nt('half', 1, 0, { dots: 1 })] }])] });
   eq(ed.getCursorInfo().duration, 'half');
   press(ed, 'ArrowRight');
