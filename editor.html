@@ -51,6 +51,30 @@
   dialog fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 0 0 12px; }
   dialog input[type="number"] { width: 4em; }
   dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
+  dialog.settings { max-height: calc(100dvh - 16px); max-width: calc(100vw - 16px); padding: 0; overflow: hidden; }
+  dialog.settings form { display: flex; flex-direction: column; max-height: calc(100dvh - 18px); }
+  dialog.settings h2 { padding: 16px 20px 0; }
+  dialog.settings .dialog-body { overflow-y: auto; padding: 0 20px; }
+  dialog.settings .actions { position: sticky; bottom: 0; background: #fff; padding: 10px 20px 14px; border-top: 1px solid var(--line); }
+  dialog.settings h3 { font-size: 14px; margin: 14px 0 8px; }
+  dialog.settings .row > label:first-child { min-width: 9em; }
+  dialog.settings input[type="text"], dialog.settings textarea { width: 22em; max-width: 100%; box-sizing: border-box; font: inherit; }
+  dialog.settings input[type="number"] { width: 5em; }
+  dialog .help, dialog .field-error, dialog .note { flex-basis: 100%; margin: 0; font-size: 13px; }
+  dialog .help, dialog .note { color: var(--muted); }
+  dialog .field-error, dialog .form-error { color: var(--error); }
+  dialog .form-error { margin: 8px 20px 0; min-height: 1em; }
+  dialog .form-error:empty { display: none; }
+  dialog fieldset:disabled { color: #9b9ba0; }
+  dialog .stack { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+  .tracks-layout { display: flex; flex-direction: column; gap: 12px; }
+  .tracks-layout > * { min-width: 0; }
+  #tr-list { width: 16em; max-width: 100%; }
+  #tr-list option { overflow: hidden; text-overflow: ellipsis; }
+  #tr-strings .row > label:first-child { min-width: 9em; }
+  #tr-strings input { width: 5em; }
+  @media (min-width: 720px) { .tracks-layout { flex-direction: row; align-items: flex-start; } .tracks-layout > :first-child { flex: 0 0 auto; } }
+  @media (max-width: 479px) { dialog.settings { width: calc(100vw - 16px); min-width: 0; } dialog.settings .row { flex-direction: column; align-items: stretch; } }
   .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 </style>
 </head>
@@ -76,6 +100,12 @@
         <div class="group" role="group" aria-label="History">
           <button type="button" id="undo-btn">Undo</button>
           <button type="button" id="redo-btn">Redo</button>
+        </div>
+        <span class="sep" aria-hidden="true"></span>
+        <div class="group" role="group" aria-label="Settings">
+          <button type="button" id="score-btn" aria-haspopup="dialog" title="Header and options">Score…</button>
+          <button type="button" id="tracks-btn" aria-haspopup="dialog" title="Tracks, tuning and capo">Tracks…</button>
+          <button type="button" id="measure-btn" aria-haspopup="dialog" title="Settings for the cursor's measure">Measure…</button>
         </div>
       </div>
       <div class="toolbar">
@@ -122,6 +152,9 @@
     <p class="status" id="status">
       <span><span class="k">Track:</span> <span id="st-track">–</span></span>
       <span><span class="k">Measure:</span> <span id="st-measure">–</span></span>
+      <span><span class="k">Time:</span> <span id="st-time">–</span></span>
+      <span><span class="k">Key:</span> <span id="st-key">–</span></span>
+      <span><span class="k">Tempo:</span> <span id="st-tempo">–</span></span>
       <span><span class="k">Beat:</span> <span id="st-beat">–</span></span>
       <span><span class="k">String:</span> <span id="st-string">–</span></span>
       <span><span class="k">Fret:</span> <span id="st-fret">–</span></span>
@@ -181,6 +214,9 @@
           <dt>A</dt><dd>Accent → marcato → off</dd>
           <dt>Shift+A</dt><dd>Staccato → staccatissimo → off</dd>
         </dl></section>
+        <section><h3>Settings</h3>
+          <p>No keys. Use Score…, Tracks… and Measure… in the toolbar.</p>
+        </section>
         <section><h3>History</h3><dl>
           <dt>Ctrl+Z</dt><dd>Undo</dd>
           <dt>Ctrl+Y / Ctrl+Shift+Z</dt><dd>Redo</dd>
@@ -196,18 +232,22 @@
       <div class="row"><label for="new-name">Title</label> <input type="text" id="new-name" value="Untitled" autocomplete="off" /></div>
       <div class="row">
         <label for="new-beats">Time signature</label>
-        <input type="number" id="new-beats" min="1" max="16" value="4" />
+        <input type="number" id="new-beats" min="1" max="32" value="4" />
         <span aria-hidden="true">/</span>
         <select id="new-beat-type" aria-label="Beat type">
-          <option>2</option><option selected>4</option><option>8</option><option>16</option>
+          <option>1</option><option>2</option><option selected>4</option><option>8</option><option>16</option><option>32</option>
         </select>
       </div>
       <div class="row">
         <label for="new-preset">Instrument</label>
         <select id="new-preset">
           <option value="guitar6">6-string guitar</option>
-          <option value="bass4">4-string bass</option>
           <option value="guitar7">7-string guitar</option>
+          <option value="guitar8">8-string guitar</option>
+          <option value="bass4">4-string bass</option>
+          <option value="bass5">5-string bass</option>
+          <option value="bass6">6-string bass</option>
+          <option value="ukulele">Ukulele</option>
         </select>
       </div>
       <fieldset>
@@ -218,6 +258,289 @@
       <div class="actions">
         <button type="submit" id="new-create" value="create">Create</button>
         <button type="button" id="new-cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="score-dialog" class="settings" aria-labelledby="score-title">
+    <form method="dialog" id="score-form" novalidate>
+      <h2 id="score-title">Score settings</h2>
+      <div class="dialog-body">
+        <fieldset>
+          <legend>Header</legend>
+          <div class="row"><label for="sc-title">Title</label> <input type="text" id="sc-title" data-field="title" maxlength="200" autocomplete="off" /><p class="field-error" id="sc-title-err" hidden></p></div>
+          <div class="row"><label for="sc-subtitle">Subtitle</label> <input type="text" id="sc-subtitle" data-field="subtitle" maxlength="200" autocomplete="off" /><p class="field-error" id="sc-subtitle-err" hidden></p></div>
+          <div class="row"><label for="sc-artist">Artist</label> <input type="text" id="sc-artist" data-field="artist" maxlength="200" autocomplete="off" /><p class="field-error" id="sc-artist-err" hidden></p></div>
+          <div class="row"><label for="sc-album">Album</label> <input type="text" id="sc-album" data-field="album" maxlength="200" autocomplete="off" /><p class="field-error" id="sc-album-err" hidden></p></div>
+          <div class="row"><label for="sc-composer">Composer</label> <input type="text" id="sc-composer" data-field="composer" maxlength="200" autocomplete="off" /><p class="field-error" id="sc-composer-err" hidden></p></div>
+          <div class="row"><label for="sc-words">Words by</label> <input type="text" id="sc-words" data-field="words" maxlength="200" autocomplete="off" /><p class="field-error" id="sc-words-err" hidden></p></div>
+          <div class="row"><label for="sc-music">Music by</label> <input type="text" id="sc-music" data-field="music" maxlength="200" autocomplete="off" aria-describedby="sc-music-help" /><p class="field-error" id="sc-music-err" hidden></p><p class="help" id="sc-music-help">Same as Words by: shown once as Words &amp; Music by.</p></div>
+          <div class="row"><label for="sc-tempoText">Tempo text</label> <input type="text" id="sc-tempoText" data-field="tempoText" maxlength="200" autocomplete="off" aria-describedby="sc-tempoText-help" /><p class="field-error" id="sc-tempoText-err" hidden></p><p class="help" id="sc-tempoText-help">Shown above the first system, such as Moderato. Set a tempo mark in Measure…</p></div>
+          <div class="row"><label for="sc-tuningLabel">Tuning label</label> <input type="text" id="sc-tuningLabel" data-field="tuningLabel" maxlength="200" autocomplete="off" aria-describedby="sc-tuningLabel-help" /><p class="field-error" id="sc-tuningLabel-err" hidden></p><p class="help" id="sc-tuningLabel-help">Such as Drop D tuning.</p></div>
+        </fieldset>
+        <fieldset>
+          <legend>Notes</legend>
+          <div class="row"><label for="sc-instructions">Instructions</label> <textarea id="sc-instructions" data-field="instructions" maxlength="2000" rows="3" aria-describedby="sc-instructions-help"></textarea><p class="field-error" id="sc-instructions-err" hidden></p><p class="help" id="sc-instructions-help">Up to 8 lines are shown.</p></div>
+          <div class="row"><label for="sc-copyright">Copyright</label> <textarea id="sc-copyright" data-field="copyright" maxlength="2000" rows="2" aria-describedby="sc-copyright-help"></textarea><p class="field-error" id="sc-copyright-err" hidden></p><p class="help" id="sc-copyright-help">Up to 8 lines are shown.</p></div>
+        </fieldset>
+        <fieldset>
+          <legend>Options</legend>
+          <div class="row"><label class="inline"><input type="checkbox" id="sc-showTuningChart" data-field="showTuningChart" aria-describedby="sc-showTuningChart-help" /> Show tuning chart</label><p class="help" id="sc-showTuningChart-help">Lists strings tuned differently from standard in the header.</p></div>
+          <div class="row"><label class="inline"><input type="checkbox" id="sc-multiMeasureRests" data-field="multiMeasureRests" aria-describedby="sc-multiMeasureRests-help" /> Multi-measure rests</label><p class="help" id="sc-multiMeasureRests-help">Shown when rendered, not in the editor.</p></div>
+        </fieldset>
+      </div>
+      <p class="form-error" id="score-error" role="alert"></p>
+      <div class="actions">
+        <button type="submit" id="score-apply">Apply</button>
+        <button type="button" id="score-cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="tracks-dialog" class="settings" aria-labelledby="tracks-title">
+    <form method="dialog" id="tracks-form" novalidate>
+      <h2 id="tracks-title">Tracks</h2>
+      <div class="dialog-body">
+        <div class="tracks-layout">
+          <fieldset>
+            <legend>Tracks in the score</legend>
+            <div class="stack">
+              <label for="tr-list">Tracks</label>
+              <select id="tr-list" size="4"></select>
+            </div>
+            <div class="row">
+              <button type="button" id="tr-up">Move up</button>
+              <button type="button" id="tr-down">Move down</button>
+              <button type="button" id="tr-remove" aria-describedby="tr-remove-help">Remove…</button>
+              <p class="help" id="tr-remove-help" hidden>A score needs at least one track.</p>
+            </div>
+            <fieldset>
+              <legend>Add a track</legend>
+              <div class="row">
+                <label for="tr-add-preset">Instrument</label>
+                <select id="tr-add-preset"></select>
+                <button type="button" id="tr-add" aria-describedby="tr-add-help">Add track</button>
+                <p class="help" id="tr-add-help" hidden>A score can have at most 32 tracks.</p>
+              </div>
+            </fieldset>
+            <p class="note" id="tr-status" role="status"></p>
+          </fieldset>
+          <div id="tr-panel" role="region" aria-labelledby="tr-panel-title">
+            <h3 id="tr-panel-title">Track 1</h3>
+            <fieldset>
+              <legend>Track</legend>
+              <div class="row"><label for="tr-name">Name</label> <input type="text" id="tr-name" maxlength="200" autocomplete="off" /><p class="field-error" id="tr-name-err" hidden></p></div>
+              <div class="row"><label for="tr-label">Short name</label> <input type="text" id="tr-label" maxlength="200" autocomplete="off" aria-describedby="tr-label-help" /><p class="field-error" id="tr-label-err" hidden></p><p class="help" id="tr-label-help">Shown before each system after the first, such as Gtr.</p></div>
+              <div class="row"><label for="tr-clef">Clef</label>
+                <select id="tr-clef" aria-describedby="tr-clef-help">
+            <option value="treble">Treble</option>
+            <option value="treble8vb">Treble 8vb</option>
+            <option value="treble8va">Treble 8va</option>
+            <option value="treble15mb">Treble 15mb</option>
+            <option value="treble15ma">Treble 15ma</option>
+            <option value="bass">Bass</option>
+            <option value="bass8vb">Bass 8vb</option>
+            <option value="bass8va">Bass 8va</option>
+            <option value="bass15mb">Bass 15mb</option>
+            <option value="bass15ma">Bass 15ma</option>
+            <option value="alto">Alto</option>
+            <option value="tenor">Tenor</option>
+                </select>
+                <p class="help" id="tr-clef-help">The opening clef. Set clef changes in Measure…</p>
+              </div>
+            </fieldset>
+            <fieldset aria-describedby="tr-tab-err tr-staves-help">
+              <legend>Staves</legend>
+              <div class="row">
+                <label class="inline"><input type="checkbox" id="tr-notation" /> Notation</label>
+                <label class="inline"><input type="checkbox" id="tr-tab" /> TAB</label>
+                <p class="field-error" id="tr-tab-err" hidden></p>
+                <p class="help" id="tr-staves-help" hidden>Hidden: this track isn't shown.</p>
+              </div>
+            </fieldset>
+            <fieldset id="tr-tab-options">
+              <legend>TAB options</legend>
+              <fieldset>
+                <legend>Rhythm on TAB</legend>
+                <div class="stack">
+                  <label class="inline"><input type="radio" name="tr-rhythm" value="auto" id="tr-rhythm-auto" /> Automatic (only when notation is hidden)</label>
+                  <label class="inline"><input type="radio" name="tr-rhythm" value="true" id="tr-rhythm-true" /> Always</label>
+                  <label class="inline"><input type="radio" name="tr-rhythm" value="false" id="tr-rhythm-false" /> Never</label>
+                </div>
+              </fieldset>
+              <div class="row"><label class="inline"><input type="checkbox" id="tr-artic" aria-describedby="tr-artic-help" /> Show articulations above TAB</label><p class="help" id="tr-artic-help">Only on tracks with TAB only.</p></div>
+              <div class="row"><label class="inline"><input type="checkbox" id="tr-tied" /> Tied frets in parentheses, such as (5)</label></div>
+            </fieldset>
+            <fieldset id="tr-tuning-set" aria-describedby="tr-tuning-help">
+              <legend>Tuning</legend>
+              <div id="tr-tuning-on">
+                <div class="row"><label for="tr-preset">Preset</label> <select id="tr-preset"></select></div>
+                <div id="tr-strings"></div>
+                <div class="row">
+                  <button type="button" id="tr-add-string">Add low string</button>
+                  <button type="button" id="tr-remove-string">Remove low string</button>
+                </div>
+                <p class="note" id="tr-string-note" aria-live="polite"></p>
+              </div>
+              <div id="tr-tuning-off" class="row" hidden>
+                <span>No tuning.</span>
+                <button type="button" id="tr-add-tuning">Add tuning</button>
+              </div>
+              <p class="help" id="tr-tuning-help">Frets stay the same, so pitches change. Strings are added and removed at the low end.</p>
+            </fieldset>
+            <div class="row"><label for="tr-capo">Capo</label> <input type="number" id="tr-capo" min="0" max="30" step="1" aria-describedby="tr-capo-help" /><p class="field-error" id="tr-capo-err" hidden></p><p class="help" id="tr-capo-help">0 means no capo. Shown in the header only. Frets aren't changed.</p></div>
+          </div>
+        </div>
+      </div>
+      <p class="form-error" id="tracks-error" role="alert"></p>
+      <div class="actions">
+        <button type="submit" id="tracks-apply">Apply</button>
+        <button type="button" id="tracks-cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="measure-dialog" class="settings" aria-labelledby="measure-title">
+    <form method="dialog" id="measure-form" novalidate>
+      <h2 id="measure-title">Measure 1</h2>
+      <div class="dialog-body">
+        <h3>All tracks</h3>
+        <fieldset aria-describedby="ms-time-help">
+          <legend>Time signature</legend>
+          <div class="stack" id="ms-time-modes">
+            <label class="inline"><input type="radio" name="ms-time" value="same" id="ms-time-same" /> <span id="ms-time-same-label">No change</span></label>
+            <label class="inline"><input type="radio" name="ms-time" value="change" id="ms-time-change" /> Change from this measure to</label>
+          </div>
+          <div class="row">
+            <label for="ms-beats">Beats</label>
+            <input type="number" id="ms-beats" min="1" max="32" step="1" />
+            <span aria-hidden="true">/</span>
+            <select id="ms-beat-type" aria-label="Beat type">
+              <option>1</option><option>2</option><option>4</option><option>8</option><option>16</option><option>32</option>
+            </select>
+            <p class="field-error" id="ms-beats-err" hidden></p>
+          </div>
+          <p class="help" id="ms-time-start" hidden>Applies from the start.</p>
+          <p class="help" id="ms-time-help">Applies to every track. Notes aren't moved, so measures may become overfull or underfull.</p>
+        </fieldset>
+        <fieldset>
+          <legend>Key signature</legend>
+          <div class="stack" id="ms-key-modes">
+            <label class="inline"><input type="radio" name="ms-key-mode" value="same" id="ms-key-same" /> <span id="ms-key-same-label">No change</span></label>
+            <label class="inline"><input type="radio" name="ms-key-mode" value="change" id="ms-key-change" /> Change from this measure to</label>
+          </div>
+          <div class="row">
+            <label for="ms-key">Key</label>
+            <select id="ms-key">
+            <option value="0">No sharps or flats (C major / A minor)</option>
+            <optgroup label="Sharps">
+              <option value="1">1 sharp (G major / E minor)</option>
+              <option value="2">2 sharps (D major / B minor)</option>
+              <option value="3">3 sharps (A major / F sharp minor)</option>
+              <option value="4">4 sharps (E major / C sharp minor)</option>
+              <option value="5">5 sharps (B major / G sharp minor)</option>
+              <option value="6">6 sharps (F sharp major / D sharp minor)</option>
+              <option value="7">7 sharps (C sharp major / A sharp minor)</option>
+            </optgroup>
+            <optgroup label="Flats">
+              <option value="-1">1 flat (F major / D minor)</option>
+              <option value="-2">2 flats (B flat major / G minor)</option>
+              <option value="-3">3 flats (E flat major / C minor)</option>
+              <option value="-4">4 flats (A flat major / F minor)</option>
+              <option value="-5">5 flats (D flat major / B flat minor)</option>
+              <option value="-6">6 flats (G flat major / E flat minor)</option>
+              <option value="-7">7 flats (C flat major / A flat minor)</option>
+            </optgroup>
+            </select>
+          </div>
+          <p class="help" id="ms-key-start" hidden>Applies from the start.</p>
+        </fieldset>
+        <fieldset>
+          <legend>Barline and repeat</legend>
+          <div class="row"><label for="ms-barline">Barline</label>
+            <select id="ms-barline" aria-describedby="ms-barline-help">
+              <option value="">Default</option>
+              <option value="single">Single</option>
+              <option value="double">Double</option>
+              <option value="final">Final</option>
+              <option value="repeatStart">Repeat start</option>
+              <option value="repeatEnd">Repeat end</option>
+            </select>
+            <p class="help" id="ms-barline-help">A measure can't have both a repeat start and a repeat end.</p>
+          </div>
+          <div class="row"><label for="ms-repeat">Repeat count</label> <input type="number" id="ms-repeat" min="2" max="99" step="1" aria-describedby="ms-repeat-help" /><p class="field-error" id="ms-repeat-err" hidden></p><p class="help" id="ms-repeat-help">Leave empty for a plain repeat.</p></div>
+        </fieldset>
+        <fieldset>
+          <legend>Ending</legend>
+          <div class="row"><label for="ms-ending">Numbers</label> <input type="text" id="ms-ending" autocomplete="off" aria-describedby="ms-ending-help" /><p class="field-error" id="ms-ending-err" hidden></p><p class="help" id="ms-ending-help">Leave empty for no ending. Separate numbers with commas, such as 1, 2.</p></div>
+          <div class="row"><label for="ms-ending-text">Text</label> <input type="text" id="ms-ending-text" maxlength="200" autocomplete="off" aria-describedby="ms-ending-text-help" /><p class="field-error" id="ms-ending-text-err" hidden></p><p class="help" id="ms-ending-text-help">Optional, replaces the numbers in the bracket.</p></div>
+          <div class="row"><label class="inline"><input type="checkbox" id="ms-ending-open" /> Open end (no closing hook)</label></div>
+        </fieldset>
+        <fieldset>
+          <legend>Navigation</legend>
+          <div class="row">
+            <label class="inline"><input type="checkbox" id="ms-segno" /> Segno</label>
+            <label class="inline"><input type="checkbox" id="ms-coda" /> Coda</label>
+          </div>
+          <div class="row"><label for="ms-jump">Jump</label>
+            <select id="ms-jump">
+              <option value="">None</option>
+              <option>D.C.</option><option>D.C. al Fine</option><option>D.C. al Coda</option><option>D.S.</option>
+              <option>D.S. al Fine</option><option>D.S. al Coda</option><option>To Coda</option><option>Fine</option>
+            </select>
+          </div>
+          <div class="row"><label for="ms-section-letter">Section letter</label> <input type="text" id="ms-section-letter" maxlength="3" autocomplete="off" aria-describedby="ms-section-help" /><p class="field-error" id="ms-section-letter-err" hidden></p></div>
+          <div class="row"><label for="ms-section-text">Section text</label> <input type="text" id="ms-section-text" maxlength="200" autocomplete="off" aria-describedby="ms-section-help" /><p class="field-error" id="ms-section-text-err" hidden></p><p class="help" id="ms-section-help">Such as A and Verse. Either can be left empty.</p></div>
+        </fieldset>
+        <h3 id="ms-track-heading">This track only</h3>
+        <fieldset id="ms-clef-set">
+          <legend>Clef</legend>
+          <div class="stack" id="ms-clef-modes">
+            <label class="inline"><input type="radio" name="ms-clef-mode" value="same" id="ms-clef-same" /> <span id="ms-clef-same-label">No change</span></label>
+            <label class="inline"><input type="radio" name="ms-clef-mode" value="change" id="ms-clef-change" /> Change from this measure to</label>
+          </div>
+          <div class="row"><label for="ms-clef">Clef</label>
+            <select id="ms-clef">
+            <option value="treble">Treble</option>
+            <option value="treble8vb">Treble 8vb</option>
+            <option value="treble8va">Treble 8va</option>
+            <option value="treble15mb">Treble 15mb</option>
+            <option value="treble15ma">Treble 15ma</option>
+            <option value="bass">Bass</option>
+            <option value="bass8vb">Bass 8vb</option>
+            <option value="bass8va">Bass 8va</option>
+            <option value="bass15mb">Bass 15mb</option>
+            <option value="bass15ma">Bass 15ma</option>
+            <option value="alto">Alto</option>
+            <option value="tenor">Tenor</option>
+            </select>
+          </div>
+          <p class="help" id="ms-clef-start" hidden>Set the opening clef in Tracks…</p>
+          <p class="help" id="ms-clef-tab" hidden>Not shown: this track has TAB only.</p>
+        </fieldset>
+        <fieldset id="ms-tempo-set">
+          <legend id="ms-tempo-legend">Tempo at beat 1</legend>
+          <div class="stack">
+            <label class="inline"><input type="radio" name="ms-tempo-mode" value="none" id="ms-tempo-none" /> <span id="ms-tempo-none-label">No tempo mark here</span></label>
+            <label class="inline"><input type="radio" name="ms-tempo-mode" value="mark" id="ms-tempo-mark" /> Tempo mark</label>
+          </div>
+          <div class="row"><label for="ms-bpm">BPM</label> <input type="number" id="ms-bpm" min="0.01" max="1000" step="0.01" /><p class="field-error" id="ms-bpm-err" hidden></p></div>
+          <div class="row"><label for="ms-unit">Note</label>
+            <select id="ms-unit">
+              <option value="whole">Whole</option><option value="half">Half</option><option value="quarter" selected>Quarter</option>
+              <option value="8th">Eighth</option><option value="16th">16th</option><option value="32nd">32nd</option>
+            </select>
+            <label for="ms-dots">Dots</label>
+            <select id="ms-dots"><option value="0">None</option><option value="1">1</option><option value="2">2</option></select>
+          </div>
+          <div class="row"><label for="ms-tempo-text">Text</label> <input type="text" id="ms-tempo-text" maxlength="200" autocomplete="off" aria-describedby="ms-tempo-text-help" /><p class="field-error" id="ms-tempo-text-err" hidden></p><p class="help" id="ms-tempo-text-help">Optional, such as Allegro.</p></div>
+          <p class="help" id="ms-tempo-off" hidden>Move the cursor onto a beat to set a tempo mark.</p>
+        </fieldset>
+      </div>
+      <p class="form-error" id="measure-error" role="alert"></p>
+      <div class="actions">
+        <button type="submit" id="measure-apply">Apply</button>
+        <button type="button" id="measure-cancel">Cancel</button>
       </div>
     </form>
   </dialog>

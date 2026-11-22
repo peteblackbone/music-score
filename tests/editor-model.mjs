@@ -926,7 +926,7 @@ test('demo: newScore presets (guitar, bass clef, 7-string), time signature on th
   const n = normalizeScore({ tracks: [{ ...b.tracks[0], showStandardNotation: true, measures: [{ beats: [nt('quarter', 4, 0)] }] }] }).tracks[0];
   eq([n.clef, n.octaveClef], ['bass', true], 'bass clef with the 8vb (octave) clef from fret-derived pitches');
   eq(demo.newScore({ preset: 'guitar7' }).tracks[0].tuning.length, 7);
-  eq(demo.newScore({ beats: 40, beatType: 5, preset: 'nope' }).tracks[0].timeSignature, { beats: 16, beatType: 4 });
+  eq(demo.newScore({ beats: 40, beatType: 5, preset: 'nope' }).tracks[0].timeSignature, { beats: 32, beatType: 4 });
   eq(demo.newScore({ beats: 0 }).tracks[0].timeSignature.beats, 1);
   [g, b].forEach((x) => ok(sanitizeScore(x) === x));
 });
