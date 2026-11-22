@@ -69,7 +69,7 @@ export function digit(score, cursor, state, ctx, n) {
 
 /** Delete the note on the cursor string (E5); the last note leaves a rest of the same duration. Partners are untied. */
 export function deleteNote(score, cursor) {
-  if (!tabOnly(score, cursor)) return refuse('refusedNoTab');
+  if (!tabOnly(score, cursor)) return refuse('needsTab');
   const { track: ti, measure: mi, beat: bi, string: s } = cursor;
   const beat = beatsAt(score, ti, mi)[bi];
   if (!beat || isRest(beat) || noteIndexOn(beat, s) < 0) return refuse('noNote');
@@ -91,7 +91,7 @@ export function deleteNote(score, cursor) {
  * the previous main beat (maybe in the previous measure), copying its fret.
  */
 export function toggleTie(score, cursor) {
-  if (!tabOnly(score, cursor)) return refuse('refusedNoTab');
+  if (!tabOnly(score, cursor)) return refuse('needsTab');
   const { track: ti, measure: mi, beat: bi, string: s } = cursor;
   const beat = beatsAt(score, ti, mi)[bi];
   const note = beat && !isRest(beat) ? noteOn(beat, s) : null;

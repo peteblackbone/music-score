@@ -663,6 +663,131 @@ test('B10: 6 start scores x 2000 random commands keep sanitizeScore(model) === m
   }
 });
 
+// ---------- announce (ui.md §7) ----------
+const AN = await imp('src/editor/announce.js');
+const infoOf = (s, c, st = ST) => C.cursorInfo(s, c, st);
+test('announce: duration words with dots and triplet', () => {
+  eq([AN.durationWords('8th'), AN.durationWords('quarter', 1), AN.durationWords('half', 2), AN.durationWords('16th', 0, true)],
+    ['eighth', 'dotted quarter', 'double-dotted half', '16th, triplet']);
+});
+test('announce: moves speak track and measure only when they change, string alone for Up/Down, fill when entering a non-full measure', () => {
+  const s = sc(tab([{ beats: [tn('quarter', 1, 5, { tieEnd: true }), rest('8th'), nt('half', 2, 7, { tuplet: 3 })] }, { beats: [] }]), { name: 'Piano', measures: [{ beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'C4' }, { pitch: 'E4' }] }] }] });
+  const a = infoOf(s, cur(0, 0, 0, 1));
+  eq(AN.describeCursor(a, null), 'Track 1 Gtr, measure 1, beat 1, string 1, fret 5, quarter, tied, underfull');
+  const b = infoOf(s, cur(0, 0, 1, 1));
+  eq(AN.describeCursor(b, a), 'Beat 2, rest, eighth');
+  const c = infoOf(s, cur(0, 0, 2, 3));
+  eq(AN.describeCursor(c, b), 'Beat 3, string 3, empty, half, triplet');
+  eq(AN.describeCursor(infoOf(s, cur(0, 0, 2, 2)), c), 'String 2, fret 7');
+  eq(AN.describeCursor(infoOf(s, cur(0, 0, 3, 2)), c), 'End of measure, quarter');
+  eq(AN.describeCursor(infoOf(s, cur(0, 1, 0, 2)), c), 'Measure 2, empty measure');
+  eq(AN.describeCursor(infoOf(s, cur(1, 0, 0, 1)), c), 'Track 2 Piano, measure 1, beat 1, chord of 2, whole');
+  eq(AN.describeCursor(a, a, true), AN.describeCursor(a, null), 'full on focus');
+});
+test('announce: edit messages, fill suffix after an edit, beat deleted followed by the position, undo labels', () => {
+  eq(AN.describe({ id: 'fret', fret: 12 }), 'Fret 12');
+  eq(AN.describe({ id: 'chordNote', fret: 7, count: 3 }), 'Fret 7 added, chord of 3');
+  eq(AN.describe({ id: 'duration', duration: '8th', dots: 0 }), 'Eighth');
+  eq(AN.describe({ id: 'nextDuration', duration: '8th', dots: 0 }), 'Next: eighth');
+  eq([0, 1, 2].map((dots) => AN.describe({ id: 'dots', duration: 'quarter', dots })), ['Quarter, no dot', 'Dotted quarter', 'Double-dotted quarter']);
+  eq(AN.describe({ id: 'restInserted', duration: 'quarter', dots: 0 }), 'Rest inserted, quarter');
+  eq([AN.describe({ id: 'measureInserted', n: 4 }), AN.describe({ id: 'measureDeleted', n: 3 }), AN.describe({ id: 'measureAdded', n: 5 })], ['Measure 4 inserted', 'Measure 3 deleted', 'Measure 5 added']);
+  eq([AN.describe({ id: 'undo', label: 'fret 5' }), AN.describe({ id: 'nothingToRedo' }), AN.describe({ id: 'refusedNoTab' }), AN.describe({ id: 'readOnly' }), AN.describe({ id: 'nothingToTie' })],
+    ['Undo: fret 5', 'Nothing to redo', 'Fret entry needs a TAB staff', 'Read-only', 'Nothing to tie to']);
+  eq(AN.describe({ id: 'bogus' }), '');
+  const s0 = sc(tab([{ beats: [nt('half'), nt('quarter')] }]));
+  const s1 = sc(tab([{ beats: [nt('half'), nt('quarter'), nt('quarter')] }]));
+  eq(AN.describeEdit({ id: 'fret', fret: 3 }, infoOf(s1, cur(0, 0, 2)), infoOf(s0, cur(0, 0, 2))), 'Fret 3, measure full');
+  eq(AN.describeEdit({ id: 'fret', fret: 3 }, infoOf(s1, cur(0, 0, 2)), infoOf(s1, cur(0, 0, 2))), 'Fret 3');
+  eq(AN.describeEdit({ id: 'beatDeleted' }, infoOf(s0, cur(0, 0, 1)), infoOf(s0, cur(0, 0, 1))), 'Beat deleted. Beat 2, string 1, fret 0, quarter');
+  eq([AN.undoLabel('digit', { fret: 5 }), AN.undoLabel('toggleRest', { id: 'changedToRest' }), AN.undoLabel('toggleRest', { id: 'changedToNote' }), AN.undoLabel('insertMeasureBefore'), AN.undoLabel('longer'), AN.undoLabel('insertBeat')],
+    ['fret 5', 'rest', 'note', 'insert measure', 'duration', 'insert rest']);
+});
+
+// ---------- style and geometry (ui.md §3–§5) ----------
+const { EDITOR_STYLE, resolveStyle } = await imp('src/editor/style.js');
+const G = await imp('src/editor/geometry.js');
+const { resolveTheme } = await imp('src/theme.js');
+const theme = resolveTheme();
+test('style: ui.md defaults; colour options override only with non-empty strings', () => {
+  eq([EDITOR_STYLE.cursorColor, EDITOR_STYLE.overfullColor, EDITOR_STYLE.underfullColor], ['#3b5bdb', '#d92d20', '#62636a']);
+  eq([EDITOR_STYLE.focused.colFill, EDITOR_STYLE.unfocused.colStroke, EDITOR_STYLE.focused.stringFill, EDITOR_STYLE.unfocused.stringFill, EDITOR_STYLE.unfocused.slotStroke], [0.1, 0.35, 0.22, 0.08, 0.35]);
+  const st = resolveStyle({ cursorColor: 'red', overfullColor: '', underfullColor: 5 });
+  eq([st.cursorColor, st.overfullColor, st.underfullColor], ['red', '#d92d20', '#62636a']);
+  ok(Object.isFrozen(EDITOR_STYLE) && Object.isFrozen(st));
+});
+// A synthetic hit map: one system, track 0 notation (y 100) + TAB (y 170, 6 strings), track 1 TAB only (y 300, 4 strings).
+const MAP = {
+  width: 800, height: 400,
+  staves: [
+    { sysIdx: 0, ti: 0, kind: 'notation', y: 100, lineBottom: 40, x1: 50, x2: 750 },
+    { sysIdx: 0, ti: 0, kind: 'tab', y: 170, lineBottom: 75, x1: 50, x2: 750, stringSpacing: 15, stringCount: 6 },
+    { sysIdx: 0, ti: 1, kind: 'tab', y: 300, lineBottom: 45, x1: 50, x2: 750, stringSpacing: 15, stringCount: 4 },
+  ],
+  measures: [
+    { sysIdx: 0, ti: 0, measureIndex: 0, x: 100, contentX: 110, endX: 300 },
+    { sysIdx: 0, ti: 0, measureIndex: 1, x: 300, contentX: 300, endX: 500 },
+    { sysIdx: 0, ti: 1, measureIndex: 0, x: 100, contentX: 110, endX: 300 },
+    { sysIdx: 0, ti: 1, measureIndex: 1, x: 300, contentX: 300, endX: 500 },
+  ],
+  elements: [
+    { sysIdx: 0, ti: 0, measureIndex: 0, voice: 1, beatIndex: 0, x: 120, width: 60, isGrace: false, isRest: false },
+    { sysIdx: 0, ti: 0, measureIndex: 0, voice: 1, beatIndex: 1, x: 175, width: 8, isGrace: true, isRest: false },
+    { sysIdx: 0, ti: 0, measureIndex: 0, voice: 1, beatIndex: 2, x: 200, width: 60, isGrace: false, isRest: false },
+    { sysIdx: 0, ti: 0, measureIndex: 0, voice: 2, beatIndex: 0, x: 120, width: 60, isGrace: false, isRest: false },
+    { sysIdx: 0, ti: 1, measureIndex: 0, voice: 1, beatIndex: 0, x: 120, width: 180, isGrace: false, isRest: false },
+  ],
+};
+const IDX = G.indexHitMap(MAP);
+const ci = (extra) => ({ track: 0, measure: 0, beat: 0, string: 2, appendSlot: false, empty: false, frets: [], fret: null, ...extra });
+test('geometry: indexHitMap keys measures, voice-1 elements and staves', () => {
+  eq(IDX.measures.get('0:1').x, 300);
+  eq(IDX.elements.get('0:0').map((e) => e.beatIndex), [0, 1, 2]);
+  eq(IDX.staves.get('0:0').map((s) => s.kind), ['notation', 'tab']);
+  const runs = G.indexHitMap({ ...MAP, measures: [{ sysIdx: 0, ti: 0, measureIndex: 0, x: 0, contentX: 0, endX: 9, lastMeasureIndex: 3 }] });
+  ok(runs.measures.get('0:3') === runs.measures.get('0:0'));
+  eq(G.indexHitMap(null).measures.size, 0);
+});
+test('geometry: cursor column on notation and TAB centred on the element, width max(ink + 0.8sp, 1.8sp), y spans, string box (G1)', () => {
+  const sh = G.cursorShapes(IDX, ci({ beat: 2, string: 3, fret: 12, frets: [12, 3] }), EDITOR_STYLE, theme, true);
+  eq(sh.map((x) => x.attrs.class), ['editor-col editor-col-notation', 'editor-col editor-col-tab', 'editor-string']);
+  const ink = 2 * 0.5 * 12 + 3; // '12' at 12px + 0.3 sp knock-out
+  const w = Math.max(ink + 8, 18);
+  eq([sh[0].attrs.x, sh[0].attrs.width, sh[0].attrs.y, sh[0].attrs.height], [200 - w / 2, w, 100 - 15, 40 + 30]);
+  eq([sh[1].attrs.x, sh[1].attrs.y, sh[1].attrs.height], [200 - w / 2, 170 - 7.5, 75 + 15]);
+  eq([sh[2].attrs.y, sh[2].attrs.height, sh[2].attrs.width], [170 + 2 * 15 - 7.5, 15, Math.min(Math.max(ink + 4, 16), w)]);
+  eq([sh[1].attrs['fill-opacity'], sh[1].attrs['stroke-opacity'], sh[2].attrs['fill-opacity'], sh[1].attrs.fill, sh[1].attrs.rx, sh[1].attrs['stroke-width']], [0.1, 1, 0.22, '#3b5bdb', 2, 1.5]);
+  const dim = G.cursorShapes(IDX, ci({ beat: 2 }), EDITOR_STYLE, theme, false);
+  eq([dim[1].attrs['stroke-opacity'], dim[1].attrs['fill-opacity'], dim[2].attrs['stroke-opacity'], dim[2].attrs['fill-opacity'], dim[2].attrs.width], [0.35, 0.04, 0.5, 0.08, 16]);
+});
+test('geometry: column clamped inside the measure; TAB-only track has column + string box; unknown beat draws nothing', () => {
+  const sh = G.cursorShapes(IDX, ci({ beat: 0, frets: [] }), EDITOR_STYLE, theme, true);
+  eq([sh[0].attrs.x, sh[0].attrs.width], [111, 18]);
+  const near = G.indexHitMap({ ...MAP, elements: [{ ...MAP.elements[0], x: 104 }] });
+  const cl = G.cursorShapes(near, ci({ beat: 0 }), EDITOR_STYLE, theme, true);
+  eq([cl[0].attrs.x, cl[0].attrs.width], [102, 104 + 9 - 102], 'clamped to measure.x + 0.2 sp');
+  const t1 = G.cursorShapes(IDX, ci({ track: 1, string: 4 }), EDITOR_STYLE, theme, true);
+  eq(t1.map((x) => x.attrs.class), ['editor-col editor-col-tab', 'editor-string']);
+  eq(t1[1].attrs.y, 300 + 3 * 15 - 7.5);
+  eq(G.cursorShapes(IDX, ci({ beat: 7 }), EDITOR_STYLE, theme, true), []);
+  eq(G.cursorShapes(IDX, ci({ measure: 9 }), EDITOR_STYLE, theme, true), []);
+});
+test('geometry: append slot dashed between the last element and endX; empty measure slot from contentX (ui.md §3)', () => {
+  const sh = G.cursorShapes(IDX, ci({ beat: 3, appendSlot: true }), EDITOR_STYLE, theme, true);
+  eq(sh.map((x) => x.attrs.class), ['editor-slot', 'editor-slot', 'editor-string']);
+  eq([sh[1].attrs.x, sh[1].attrs.width, sh[1].attrs.fill, sh[1].attrs['stroke-dasharray']], [250 - 8, 16, 'none', '4 2.5']);
+  eq([sh[2].attrs.fill, sh[2].attrs['stroke-dasharray']], ['none', '4 2.5']);
+  const e = G.cursorShapes(IDX, ci({ measure: 1, beat: 0, appendSlot: true, empty: true }), EDITOR_STYLE, theme, false);
+  eq([e[0].attrs.x, e[0].attrs.width, e[0].attrs['stroke-opacity']], [300, 16, 0.35]);
+});
+test('geometry: fill bands over the track staves; overfull tint + bar, underfull dashed line, empty and full none (G4)', () => {
+  const sh = G.fillShapes(IDX, [['over', 'empty'], ['under', 'full']], EDITOR_STYLE, theme);
+  eq(sh.map((x) => x.attrs.class), ['editor-band-over', 'editor-band-over', 'editor-band-under']);
+  eq([sh[0].attrs.x, sh[0].attrs.width, sh[0].attrs.y, sh[0].attrs.height, sh[0].attrs['fill-opacity']], [100, 200, 90, 170 + 75 + 10 - 90, 0.1]);
+  eq([sh[1].attrs.y, sh[1].attrs.height, sh[1].attrs.opacity, sh[1].attrs.fill], [100 - 12.5, 2.5, 0.85, '#d92d20']);
+  eq([sh[2].tag, sh[2].attrs.y1, sh[2].attrs.x1, sh[2].attrs.x2, sh[2].attrs['stroke-opacity'], sh[2].attrs['stroke-width'], sh[2].attrs.stroke], ['line', 300 - 12.5 + 1.25, 100, 300, 0.7, 1, '#62636a']);
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
