@@ -533,24 +533,24 @@ test('fill on a beats selection fills every measure the selection touches, not j
 // =====================================================================================================
 const reflowKey = key('F', SHIFT);
 test('reflow with graces at the boundary: the grace before the first beat past the barline moves with it', () => {
-  const t = mk({ tracks: [tab([{ beats: [...f(4), grace(), nt('quarter', 1, 7)] }, { beats: [nt('whole', 2, 2)] }])] });
+  const t = mk({ tracks: [tab([{ beats: [...f(4), grace(), nt('quarter', 1, 7)] }, { beats: [nt('half', 2, 2)] }])] });
   t.press(reflowKey);
-  eq(ms(t.ed).map((m) => m.beats.map((b) => b.type[0])), [['n', 'n', 'n', 'n'], ['g', 'n', 'n']]);
+  eq(ms(t.ed).map((m) => m.beats.map((b) => b.type[0])), [['n', 'n', 'n', 'n'], ['g', 'n', 'n']], '2.3.1: measure 2 is not left overfull, so no cascade');
   ok(/Moved 1 beat to measure 2/.test(t.say()), t.say());
 });
 test('reflow with a crossing beat and overflow after it: the beats at or past the barline move, the crossing beat stays, the announcement names it; cursor on a moved beat follows, cursor before it stays', () => {
-  const beats = [nt('quarter'), nt('quarter'), nt('quarter'), nt('half'), nt('quarter', 1, 7)];
-  const a = mk({ tracks: [tab([{ beats }, { beats: [nt('whole', 2, 2)] }])] });
+  const beats = [nt('quarter'), nt('quarter'), nt('quarter'), nt('half', 1, 0, { tuplet: 3 }), nt('quarter', 1, 7)]; // 2.3.1: a triplet, which is never split
+  const a = mk({ tracks: [tab([{ beats }, { beats: [nt('half', 2, 2)] }])] });
   a.ed.setCursor({ measure: 0, beat: 4 });
   a.press(reflowKey);
   eq(ms(a.ed).map((m) => m.beats.length), [4, 2]);
   eq(a.ed.getCursor(), { track: 0, measure: 1, beat: 0, string: a.ed.getCursor().string }, 'follows its beat');
   ok(/beat 4 crosses the barline and stays/.test(a.say()), a.say());
-  const b = mk({ tracks: [tab([{ beats }, { beats: [nt('whole', 2, 2)] }])] });
+  const b = mk({ tracks: [tab([{ beats }, { beats: [nt('half', 2, 2)] }])] });
   b.ed.setCursor({ measure: 0, beat: 1 });
   b.press(reflowKey);
   eq([b.ed.getCursor().measure, b.ed.getCursor().beat], [0, 1], 'cursor before the moved part stays');
-  const c = mk({ tracks: [tab([{ beats: [nt('quarter'), nt('quarter'), nt('quarter'), nt('half')] }])] });
+  const c = mk({ tracks: [tab([{ beats: [nt('quarter'), nt('quarter'), nt('quarter'), nt('half', 1, 0, { tuplet: 3 })] }])] });
   c.press(reflowKey);
   ok(/crosses the barline/.test(c.say()) && ms(c.ed).length === 1, 'only a crossing beat: nothing moves, no measure added');
   eq(c.ed.canUndo(), false);
@@ -559,11 +559,11 @@ test('reflow with a crossing beat and overflow after it: the beats at or past th
   ok(/Nothing to reflow|nothing/i.test(d.say()), 'a full measure: nothing to move');
   eq(d.ed.canUndo(), false);
 });
-test('reflow does not cascade: the next measure may become overfull and stays so; a 3/4 measure uses its own capacity; ties across the new barline are kept when they pair and repaired otherwise', () => {
+test('2.3.1: reflow cascades while the next measure is overfull; a 3/4 measure uses its own capacity; ties across the new barline are kept when they pair and repaired otherwise', () => {
   const t = mk({ tracks: [tab([{ beats: [...f(3), tn('quarter', 1, 7, { tieEnd: true })], timeSignature: { beats: 3, beatType: 4 } }, { beats: f(3) }])] });
   t.press(reflowKey);
-  eq(ms(t.ed).map((m) => m.beats.length), [3, 4], 'one measure per press');
-  eq(t.ed.getMeasureFill(0, 1), 'over');
+  eq(ms(t.ed).map((m) => m.beats.length), [3, 3, 1], 'measure 2 became overfull, so the cascade moved its last beat on');
+  eq(t.ed.getMeasureFill(0, 1), 'full');
   eq(ms(t.ed)[1].beats[0].notes[0].tieEnd, undefined, 'a tieEnd with no tieStart before it is repaired');
   const u = mk({ tracks: [tab([{ beats: [...f(3), tn('quarter', 1, 0, { tieStart: true }), tn('quarter', 1, 0, { tieEnd: true })], timeSignature: { beats: 3, beatType: 4 } }])] });
   u.ed.setCursor({ measure: 0, beat: 0 });
@@ -604,7 +604,7 @@ test('reflow ignores a selection (design D18): it acts on the cursor measure (th
   sel(t.ed, P(2, 0), P(1, 3));
   eq(t.ed.getCursor().measure, 1, 'the focus is the cursor');
   t.press(reflowKey);
-  eq(ms(t.ed).map((m) => m.beats.length), [5, 4, 5], 'only the cursor measure reflowed');
+  eq(ms(t.ed).map((m) => m.beats.length), [5, 4, 4, 1], 'from the cursor measure on (2.3.1 cascade); measure 1, the other end of the selection, is untouched');
   eq(t.ed.getSelection(), null);
 });
 

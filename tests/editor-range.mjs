@@ -336,6 +336,78 @@ test('criterion 28 (model): selectScoreStart goes to the first position of measu
   eq([CMD.COMMANDS.selectScoreStart.kind, CMD.COMMANDS.selectScoreEnd.kind], ['select', 'select']);
 });
 
+// ---------- D. reflow: split and cascade ----------
+const RS = await imp('src/editor/model/reflowSplit.js');
+const { R, ZERO } = await imp('src/rational.js');
+test('criterion 23: in 4/4 a dotted half on beat 4 is split into a tied quarter ending measure 1 and a half with tieEnd on every chord note opening measure 2; a rest splits without ties; the cursor on it stays on the first piece', () => {
+  const chord = { type: 'note', duration: 'half', dots: 1, notes: [{ string: 1, fret: 3 }, { string: 2, fret: 5 }] };
+  const s = model({ tracks: [tab([{ beats: [nt('half'), nt('quarter'), chord] }, { beats: [nt('quarter')] }])] });
+  const r = run('reflow', s, cur(0, 0, 2), null);
+  eq(v1(r.score, 0, 0)[2], { type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 3, tieStart: true }, { string: 2, fret: 5, tieStart: true }] });
+  eq(v1(r.score, 0, 1), [{ type: 'note', duration: 'half', notes: [{ string: 1, fret: 3, tieEnd: true }, { string: 2, fret: 5, tieEnd: true }] }, nt('quarter')]);
+  eq([said(r), r.cursor], ['Moved 1 beat to measure 2, beat 3 split at the barline', cur(0, 0, 2)]);
+  const rs = model({ tracks: [tab([{ beats: [nt('half'), nt('quarter'), rest('half', { dots: 1, hidden: true })] }])] });
+  const rr = run('reflow', rs, cur(0, 0, 0), null);
+  eq([v1(rr.score, 0, 0)[2], v1(rr.score, 0, 1)], [rest('quarter', { hidden: true }), [rest('half', { hidden: true })]]);
+  eq(said(rr), 'Measure 2 added, moved 1 beat to it, beat 3 split at the barline');
+  const long = model({ tracks: [tab([{ beats: [nt('8th'), nt('whole', 1, 2)] }])] });
+  const rl = run('reflow', long, cur(0, 0, 0), null);
+  eq([v1(rl.score, 0, 0).map((b) => b.duration), v1(rl.score, 0, 1).map((b) => b.duration)], [['8th', '8th', 'quarter', 'half'], ['8th']], 'each side a greedy run aligned to its onset');
+  ok(same(r.score) && same(rr.score) && same(rl.score));
+});
+test('criterion 24: a crossing triplet (or tuplets) beat stays and is announced; plainRun refuses what plain durations cannot write', () => {
+  const s = model({ tracks: [tab([{ beats: [nt('half'), nt('quarter'), nt('half', 1, 0, { tuplet: 3 })] }, { beats: [] }])] });
+  const r = run('reflow', s, cur(0, 0, 0), null);
+  eq([r.changed, said(r)], [false, 'Beat 3 crosses the barline and stays']);
+  eq(RS.plainRun(R(1, 3), R(1, 1)), null, 'a triplet onset');
+  eq(RS.plainRun(ZERO, R(3, 4)), ['half', 'quarter']);
+  eq(RS.plainRun(R(3, 4), R(1, 1)), ['quarter']);
+});
+test('criteria 25 / 26: a beat inserted into measure 1 of 4 full measures: one Shift+F reflows 4 measures, adds 1 column, one result, the cursor follows its beat; the cascade stops at the first measure that is not over', () => {
+  const s = model({ tracks: [tab([q4(), q4(), q4(), q4()]), tab([{ beats: [nt('whole')] }], { name: 'B' })] });
+  const ins = run('insertBeat', s, cur(0, 0, 0), null);
+  const r = run('reflow', ins.score, cur(0, 0, 4), null);
+  eq(r.score.tracks[0].measures.map((m) => m.beats.length), [4, 4, 4, 4, 1]);
+  eq([0, 1, 2, 3].map((mi) => r.score.tracks[0].measures[mi].beats.map((b) => b.notes?.[0].fret ?? 'r').join('')), ['r123', '4123', '4123', '4123'], 'measures 1-4 full');
+  eq([r.score.tracks[1].measures.length, said(r)], [5, 'Reflowed 4 measures, 1 measure added']);
+  eq(r.cursor, cur(0, 1, 0), 'beat 4 of measure 1 moved to the start of measure 2');
+  const stop = model({ tracks: [tab([{ beats: [...q4().beats, nt('quarter', 1, 9)] }, { beats: [nt('half')] }, { beats: [...q4().beats, nt('quarter')] }])] });
+  const r2 = run('reflow', stop, cur(0, 0, 0), null);
+  eq([r2.score.tracks[0].measures.map((m) => m.beats.length), said(r2)], [[4, 2, 5], 'Moved 1 beat to measure 2'], 'measure 2 is not over: measure 3 stays overfull');
+  const mixed = model({ tracks: [tab([{ beats: [nt('whole'), nt('half')] }, { beats: [nt('quarter'), nt('half', 1, 0, { tuplet: 3 }), nt('quarter')] }])] });
+  eq(said(run('reflow', mixed, cur(0, 0, 0), null)), 'Reflowed 2 measures, 1 measure added, measure 2 beat 3 crosses the barline and stays');
+});
+test('D-D3: the cascade is all or nothing against the 2000-measure and 256-beat limits, and ignores the selection', () => {
+  const n = L.measuresPerTrack;
+  const s = model({ tracks: [tab(Array.from({ length: n }, (_, i) => (i === 0 ? { beats: [nt('whole'), nt('whole')] } : { beats: [nt('whole')] })))] });
+  const r = run('reflow', s, cur(0, 0, 0), null);
+  eq([r.changed, said(r)], [false, 'The score would be too large'], 'the last measure would need a column 2001');
+  const big = model({ timeSignature: { beats: 32, beatType: 4 }, tracks: [tab([{ beats: [nt('whole'), ...Array.from({ length: 8 }, () => nt('whole')), nt('quarter')] }, { beats: [...Array.from({ length: 255 }, () => nt('64th')), nt('whole', 1, 0)] }])] });
+  eq(run('reflow', big, cur(0, 0, 0), null).changed, false, 'the next measure would pass 256 beats');
+  const sel = SEL.selectionRange(s, 0, P(1, 0), P(2, 0));
+  eq(run('reflow', model({ tracks: [tab([{ beats: [nt('whole'), nt('half')] }, q4()])] }), cur(0, 0, 0), sel).score.tracks[0].measures.length, 3);
+});
+test('criterion 27 / D-D2: the pieces carry the fields by table (first / last / every), dots are dropped, unknown fields go first; trailing graces after a split beat stay; sanitize identity', () => {
+  const x = { keep: 1 };
+  const beat = {
+    type: 'note', duration: 'whole', dots: 1, x, tempo: 90, text: 'Am', lyrics: 'la', dynamic: 'mf', articulations: ['accent'], palmMute: true, letRing: true, vibrato: true,
+    notes: [{ string: 1, fret: 5, x, mute: true, ghost: true, harmonic: 'natural', harmonicFret: 12, pitch: 'A4', tieEnd: true, tieStart: true, slideIn: 'below', bend: 'full', hammerPull: true, slide: true, slideOut: 'down' }],
+  };
+  const pieces = RS.splitBeat(beat, ['half', 'quarter', 'whole']);
+  eq(pieces[0], { type: 'note', duration: 'half', x, tempo: 90, text: 'Am', lyrics: 'la', dynamic: 'mf', articulations: ['accent'], palmMute: true, letRing: true, vibrato: true,
+    notes: [{ string: 1, fret: 5, x, mute: true, ghost: true, harmonic: 'natural', harmonicFret: 12, pitch: 'A4', tieEnd: true, slideIn: 'below', bend: 'full', tieStart: true }] });
+  eq(pieces[1], { type: 'note', duration: 'quarter', palmMute: true, letRing: true, vibrato: true, notes: [{ string: 1, fret: 5, mute: true, ghost: true, harmonic: 'natural', harmonicFret: 12, pitch: 'A4', tieStart: true, tieEnd: true }] });
+  eq(pieces[2], { type: 'note', duration: 'whole', palmMute: true, letRing: true, vibrato: true, notes: [{ string: 1, fret: 5, mute: true, ghost: true, harmonic: 'natural', harmonicFret: 12, pitch: 'A4', tieStart: true, hammerPull: true, slide: true, slideOut: 'down', tieEnd: true }] });
+  eq(RS.splitBeat({ type: 'rest', duration: 'half', hidden: true, slash: true, tempo: 60 }, ['quarter', 'quarter']), [{ type: 'rest', duration: 'quarter', hidden: true, slash: true, tempo: 60 }, { type: 'rest', duration: 'quarter', hidden: true, slash: true }]);
+  eq([RS.BEAT_EVERY, RS.NOTE_LAST].map((t) => t.length), [6, 4]);
+  const s = model({ tracks: [tab([{ beats: [nt('half'), nt('quarter'), { ...beat, duration: 'half' }, grace()] }, { beats: [tn('quarter', 1, 5, { tieEnd: true })] }])] });
+  const r = run('reflow', s, cur(0, 0, 0), null);
+  eq(v1(r.score, 0, 0).map((b) => b.type + b.duration), ['notehalf', 'notequarter', 'notequarter', 'grace16th'], 'the trailing grace stays');
+  eq(v1(r.score, 0, 1).map((b) => b.type + b.duration), ['notehalf', 'notequarter'], 'the dotted half: a quarter before the barline, a half after');
+  ok(same(r.score), 'sanitize identity');
+  eq(v1(r.score, 0, 1)[0].notes[0].tieStart, true, 'the original tieStart (to the next measure\'s tieEnd) is on the last piece');
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

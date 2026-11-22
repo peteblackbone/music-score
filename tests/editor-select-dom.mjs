@@ -331,11 +331,11 @@ test('criterion 37: F is refused on an unfinished triplet gap and on a pickup me
   eq(p.ed.getMeasureFill(0, 1), 'full', 'measure 2 still fills');
 });
 test('criterion 38: Shift+F moves the overflow, adds a measure on the last one, leaves a crossing beat with an announcement; one undo step; read-only refuses', () => {
-  const { ed, press, spoken } = mk({ tracks: [{ name: 'G', showTablature: true, measures: [{ beats: [nt('half'), nt('half', 1, 0, { dots: 1 }), nt('quarter'), nt('8th')] }] }] });
+  const { ed, press, spoken } = mk({ tracks: [{ name: 'G', showTablature: true, measures: [{ beats: [nt('half'), nt('quarter'), nt('half', 1, 0, { tuplet: 3 }), nt('quarter'), nt('8th')] }] }] });
   const before = ed._model;
   eq(press(key('F', SHIFT)), [true]);
-  eq(ed.getScore().tracks[0].measures.map((m) => m.beats.length), [2, 2]);
-  eq(spoken(), 'Measure 2 added, moved 2 beats to it, beat 2 crosses the barline and stays', 'still overfull: no fill suffix');
+  eq(ed.getScore().tracks[0].measures.map((m) => m.beats.length), [3, 2]);
+  eq(spoken(), 'Measure 2 added, moved 2 beats to it, beat 3 crosses the barline and stays', '2.3.1: a crossing triplet stays; still overfull: no fill suffix');
   ed.undo();
   ok(ed._model === before, 'one undo step, the added measure included');
   eq(spoken(), 'Undo: reflow');

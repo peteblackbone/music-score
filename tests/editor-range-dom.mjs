@@ -229,6 +229,22 @@ test('criterion 28: Ctrl+Shift+End extends the selection to the last position of
   t.ed.destroy();
 });
 
+// ---------- criterion 25: the reflow cascade ----------
+test('criterion 25 (controller): Insert in measure 1 of 4 full measures, then one Shift+F: measures 1-4 full, 1 column added, one undo step, "Reflowed 4 measures, 1 measure added"', () => {
+  const q = () => ({ beats: [1, 2, 3, 4].map((f) => nt('quarter', 1, f)) });
+  const t = mk({ tracks: [tab([q(), q(), q(), q()])] });
+  t.press('Insert');
+  const before = t.ed._model;
+  t.spoken();
+  eq(t.press(key('F', SHIFT)), [true]);
+  eq([0, 1, 2, 3].map((mi) => t.ed.getMeasureFill(0, mi)), ['full', 'full', 'full', 'full']);
+  eq([ms(t.ed).length, t.spoken()], [5, 'Reflowed 4 measures, 1 measure added, measure full'], 'with the usual fill suffix: the cursor measure is now full');
+  t.ed.undo();
+  ok(t.ed._model === before, 'one undo step');
+  eq(t.spoken(), 'Undo: reflow');
+  t.ed.destroy();
+});
+
 // ---------- report ----------
 export async function summary() {
   let fail = 0;

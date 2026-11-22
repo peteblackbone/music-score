@@ -67,14 +67,15 @@ test('pin (a), inverted in 2.3.1: a measures clip with no selection overwrites a
 });
 
 // (b) Shift+F reflows one measure. Inverted in 2.3.1: the crossing beat is split and the cascade carries on.
-test('pin (b): Shift+F moves the overflow of one measure only (the next one stays overfull); a crossing dotted half stays in its measure', () => {
+test('pin (b), inverted in 2.3.1: Shift+F cascades through every overfull measure that follows, adding columns; a crossing dotted half is split into tied plain pieces', () => {
   const s = model({ tracks: [tab([{ beats: [nt('whole'), nt('whole')] }, { beats: [nt('whole'), nt('half')] }])] });
   const r = run('reflow', s, cur(0, 0, 0), null);
-  eq(r.score.tracks[0].measures.map((m) => m.beats.length), [1, 3], 'one beat moved, measure 2 not reflowed');
-  eq(describe(r.announce), 'Moved 1 beat to measure 2');
+  eq(r.score.tracks[0].measures.map((m) => m.beats.length), [1, 1, 1, 1], 'every measure reflowed');
+  eq(describe(r.announce), 'Reflowed 3 measures, 2 measures added');
   const cross = model({ tracks: [tab([{ beats: [nt('half'), nt('half', 1, 0, { dots: 1 })] }, { beats: [] }])] });
   const c = run('reflow', cross, cur(0, 0, 0), null);
-  eq([c.changed, describe(c.announce)], [false, 'Beat 2 crosses the barline and stays']);
+  eq(c.score.tracks[0].measures.map((m) => m.beats), [[nt('half'), { type: 'note', duration: 'half', notes: [{ string: 1, fret: 0, tieStart: true }] }], [{ type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 0, tieEnd: true }] }]]);
+  eq(describe(c.announce), 'Moved 1 beat to measure 2, beat 2 split at the barline');
 });
 
 // (c) effect keys clear the selection. Inverted in 2.3.1: they act on every selected beat and keep the selection.

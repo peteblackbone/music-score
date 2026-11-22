@@ -320,10 +320,10 @@ test('reflow: beats at or past the barline (with their graces) move to the start
   const r2 = run('reflow', last, cur(0, 0, 0), null);
   eq([r2.score.tracks[0].measures.length, r2.score.tracks[1].measures.length, describe(r2.announce)], [2, 2, 'Measure 2 added, moved 1 beat to it']);
   eq(r2.cursor, cur(0, 0, 0));
-  const cross = model({ tracks: [tab([{ beats: [nt('half'), nt('half', 1, 0, { dots: 1 }), nt('quarter')] }])] });
-  eq(describe(run('reflow', cross, cur(0, 0, 0), null).announce), 'Measure 2 added, moved 1 beat to it, beat 2 crosses the barline and stays');
-  const only = model({ tracks: [tab([{ beats: [nt('half'), nt('half', 1, 0, { dots: 1 })] }, { beats: [] }])] });
-  eq(describe(run('reflow', only, cur(0, 0, 0), null).announce), 'Beat 2 crosses the barline and stays');
+  const cross = model({ tracks: [tab([{ beats: [nt('half'), nt('quarter'), nt('half', 1, 0, { tuplet: 3 }), nt('quarter')] }])] });
+  eq(describe(run('reflow', cross, cur(0, 0, 0), null).announce), 'Measure 2 added, moved 1 beat to it, beat 3 crosses the barline and stays', '2.3.1: a crossing triplet stays');
+  const only = model({ tracks: [tab([{ beats: [nt('half'), nt('quarter'), nt('half', 1, 0, { tuplet: 3 })] }, { beats: [] }])] });
+  eq(describe(run('reflow', only, cur(0, 0, 0), null).announce), 'Beat 3 crosses the barline and stays');
   eq(describe(run('reflow', one([nt('half')]), cur(0, 0, 0), null).announce), 'Nothing to reflow');
 });
 test('reflow: two-voice measures move voice 1 only; the 2000-measure and 256-beat limits refuse', () => {

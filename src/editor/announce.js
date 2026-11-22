@@ -111,7 +111,8 @@ export const MESSAGES = Object.freeze({
   fillPickup: () => 'Pickup measure, not filled',
   fillCannot: () => "Plain rests can't fill this measure",
   nothingToFill: () => 'Nothing to fill',
-  reflowed: (d) => `${d.added ? `Measure ${d.to} added, moved ${plural(d.count, 'beat')} to it` : `Moved ${plural(d.count, 'beat')} to measure ${d.to}`}${d.crossing ? `, beat ${d.crossing} crosses the barline and stays` : ''}`,
+  reflowed: (d) => `${d.added ? `Measure ${d.to} added, moved ${plural(d.count, 'beat')} to it` : `Moved ${plural(d.count, 'beat')} to measure ${d.to}`}${d.split ? `, beat ${d.split} split at the barline` : ''}${d.crossing ? `, beat ${d.crossing} crosses the barline and stays` : ''}`,
+  reflowedMany: (d) => `Reflowed ${plural(d.count, 'measure')}${d.added ? `, ${plural(d.added, 'measure')} added` : ''}${d.split ? `, ${plural(d.split, 'beat')} split` : ''}${d.crossing ? `, measure ${d.crossing.measure} beat ${d.crossing.beat} crosses the barline and stays` : ''}`,
   reflowCrossing: (d) => `Beat ${d.beat} crosses the barline and stays`,
   reflowNothing: () => 'Nothing to reflow',
   // 2.3 clipboard
