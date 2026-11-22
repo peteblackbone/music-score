@@ -5,10 +5,12 @@
  * references. A push clears redo and drops the oldest entry past the limit.
  */
 
-/** The history limit: an integer 0–10000, default 200. */
-export const clampLimit = (v) => (Number.isFinite(v) ? Math.min(10000, Math.max(0, Math.floor(v))) : 200);
+import { DEFAULTS, intOption } from '../options.js';
 
-export function createHistory(limit = 200) {
+/** The history limit: an integer 0–DEFAULTS.historyCap, default DEFAULTS.historyLimit. */
+export const clampLimit = (v) => intOption(v, DEFAULTS.historyLimit, 0, DEFAULTS.historyCap);
+
+export function createHistory(limit = DEFAULTS.historyLimit) {
   const max = clampLimit(limit);
   let undos = [];
   let redos = [];

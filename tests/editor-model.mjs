@@ -696,6 +696,16 @@ test('B10: 6 start scores x 2000 random commands keep sanitizeScore(model) === m
   }
 });
 
+// ---------- options ----------
+const OPT = await imp('src/editor/options.js');
+test('options: DEFAULTS and resolveOptions (integers floored and clamped, non-numbers fall back)', () => {
+  eq(OPT.DEFAULTS, { maxFret: 24, maxFretCap: 99, twoDigitDelayMs: 800, historyLimit: 200, historyCap: 10000 });
+  eq(OPT.resolveOptions(), { readOnly: false, maxFret: 24, twoDigitDelayMs: 800, historyLimit: 200 });
+  eq(OPT.resolveOptions({ readOnly: 1, maxFret: 120, twoDigitDelayMs: -5, historyLimit: 1e9 }), { readOnly: true, maxFret: 99, twoDigitDelayMs: 800, historyLimit: 10000 });
+  eq(OPT.resolveOptions({ maxFret: 12.9, twoDigitDelayMs: 0, historyLimit: '7' }), { readOnly: false, maxFret: 12, twoDigitDelayMs: 0, historyLimit: 200 });
+  eq([OPT.intOption(NaN, 3, 0, 9), OPT.intOption(-2, 3, 0, 9), OPT.nonNegative(Infinity, 1)], [3, 0, 1]);
+});
+
 // ---------- announce (ui.md §7) ----------
 const AN = await imp('src/editor/announce.js');
 const infoOf = (s, c, st = ST) => C.cursorInfo(s, c, st);

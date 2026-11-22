@@ -42,7 +42,7 @@ const CALL_ORDER = ['renderTiesAndSlurs', 'renderGraceSlurs', 'renderTabArticula
 
 const EDITOR = 'src/editor';
 // Pure editor modules: no DOM tokens (the controller lives in view.js, overlay.js and ScoreEditor.js).
-const isPureEditor = (n) => n.startsWith(`${EDITOR}/model/`) || ['keymap.js', 'announce.js', 'geometry.js', 'style.js'].some((b) => n === `${EDITOR}/${b}`);
+const isPureEditor = (n) => n.startsWith(`${EDITOR}/model/`) || ['keymap.js', 'announce.js', 'geometry.js', 'style.js', 'options.js'].some((b) => n === `${EDITOR}/${b}`);
 const DOM_TOKENS = /\b(document|window|requestAnimationFrame|addEventListener)\b/g;
 // Renderer modules any editor file may import, and the ones only named editor files may import.
 const EDITOR_SHARED = ['src/sanitize.js', 'src/duration.js', 'src/rational.js'];

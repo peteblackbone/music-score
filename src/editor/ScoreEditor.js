@@ -25,6 +25,7 @@ import { bufferLive } from './model/notes.js';
 import { DURATIONS } from './model/durations.js';
 import { keyToCommand } from './keymap.js';
 import { resolveStyle } from './style.js';
+import { resolveOptions } from './options.js';
 import { describe, describeCursor, describeEdit, undoLabel } from './announce.js';
 
 const START = { track: 0, measure: 0, beat: 0, string: 1 };
@@ -44,13 +45,14 @@ export class ScoreEditor {
     if (!container || typeof container.appendChild !== 'function') throw new TypeError('ScoreEditor needs a container element');
     const model = score == null ? defaultScore() : parseInput(score); // parse first: a bad score writes nothing
     const o = options || {};
-    this._maxFret = Number.isFinite(o.maxFret) ? Math.min(99, Math.max(0, Math.floor(o.maxFret))) : 24;
-    this._delay = Number.isFinite(o.twoDigitDelayMs) && o.twoDigitDelayMs >= 0 ? o.twoDigitDelayMs : 800;
-    this._readOnly = !!o.readOnly;
+    const opts = resolveOptions(o);
+    this._maxFret = opts.maxFret;
+    this._delay = opts.twoDigitDelayMs;
+    this._readOnly = opts.readOnly;
     this._model = model;
     this._cursor = clampCursor(model, START);
     this._state = syncDuration(model, this._cursor, freshState());
-    this._history = createHistory(o.historyLimit ?? 200);
+    this._history = createHistory(opts.historyLimit);
     this._digitEntry = null;
     this._listeners = new Map();
     this._queue = [];
