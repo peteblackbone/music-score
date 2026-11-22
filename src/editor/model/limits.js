@@ -13,6 +13,17 @@ export const EDITOR_LIMITS = Object.freeze({
   beatsPerVoice: 256, // per measure: `beats` and each `voices[i].beats`
   notesPerBeat: 16,
   tuningStrings: 12,
+  // 2.2 settings API caps (checked by the settings calls only; loadScore does not enforce them)
+  textChars: 200, // single-line score, track, section and ending text (UTF-16 code units)
+  longTextChars: 2000, // instructions and copyright
+  timeSignatureBeats: 32,
+  beatTypes: Object.freeze([1, 2, 4, 8, 16, 32]),
+  capo: 30, // capo fret 1–capo (the renderer's canonicalCapo range)
+  bpm: 1000, // tempo marks above 0 up to bpm (the renderer's tempoOf range)
+  endingNumber: 99, // ending numbers 1–endingNumber
+  endingNumbers: 32, // numbers in one ending (the renderer's MAX_ENDING_NUMBERS)
+  repeatCount: 99, // repeat counts 2–repeatCount (the renderer's canonicalRepeatCount range)
+  sectionLetter: 3, // code points in a section letter (the renderer's canonicalSection)
 });
 
 const L = EDITOR_LIMITS;

@@ -42,11 +42,16 @@ const CALL_ORDER = ['renderTiesAndSlurs', 'renderGraceSlurs', 'renderTabArticula
 
 const EDITOR = 'src/editor';
 // Pure editor modules: no DOM tokens (the controller lives in view.js, overlay.js and ScoreEditor.js).
-const isPureEditor = (n) => n.startsWith(`${EDITOR}/model/`) || ['keymap.js', 'announce.js', 'geometry.js', 'style.js', 'options.js', 'emitter.js'].some((b) => n === `${EDITOR}/${b}`);
+const isPureEditor = (n) => n.startsWith(`${EDITOR}/model/`) || ['settings.js', 'keymap.js', 'announce.js', 'geometry.js', 'style.js', 'options.js', 'emitter.js'].some((b) => n === `${EDITOR}/${b}`);
 const DOM_TOKENS = /\b(document|window|requestAnimationFrame|addEventListener)\b/g;
 // Renderer modules any editor file may import, and the ones only named editor files may import.
 // 2.1: the effect canonicalizers (pure, DOM-free) are shared rather than copied, so the editor classifies values as the renderer draws them.
-const EDITOR_SHARED = ['src/sanitize.js', 'src/duration.js', 'src/rational.js', 'src/directions.js', 'src/harmonics.js', 'src/noteEffects.js'];
+const EDITOR_SHARED = ['src/sanitize.js', 'src/duration.js', 'src/rational.js', 'src/directions.js', 'src/harmonics.js', 'src/noteEffects.js',
+  // 2.2: clef names, navigation / score text canonicalizers and tempoOf, shared so settings validate values as the renderer reads them.
+  'src/clef.js', 'src/navigation.js', 'src/scoreText.js', 'src/expression.js'];
+// Check names used both by the checks and by their mutation cases.
+const ALLOWLIST_CHECK = 'editor imports from outside src/editor/ follow the allowlist (model: sanitize, duration, rational, directions, harmonics, noteEffects, clef, navigation, scoreText, expression only)';
+const DOM_FREE_CHECK = 'editor model, keymap, announce, geometry and style are DOM-free';
 const EDITOR_ALLOWED = {
   'src/MusicScoreRenderer.js': [`${EDITOR}/view.js`, `${EDITOR}/ScoreEditor.js`],
   'src/hitMap.js': [`${EDITOR}/view.js`, `${EDITOR}/geometry.js`],
@@ -126,11 +131,11 @@ export const checks = {
     return probs;
   },
 
-  'editor model, keymap, announce, geometry and style are DOM-free': (f) => Object.entries(f)
+  [DOM_FREE_CHECK]: (f) => Object.entries(f)
     .filter(([n]) => isPureEditor(n))
     .flatMap(([n, t]) => [...new Set([...t.matchAll(DOM_TOKENS)].map((m) => m[1]))].map((tok) => `${n} uses ${tok}`)),
 
-  'editor imports from outside src/editor/ follow the allowlist (model: sanitize, duration, rational, directions, harmonics, noteEffects only)': (f) => {
+  [ALLOWLIST_CHECK]: (f) => {
     const probs = [];
     for (const [n, t] of Object.entries(f)) {
       if (!n.startsWith(`${EDITOR}/`)) continue;
@@ -140,6 +145,19 @@ export const checks = {
         if (n.startsWith(`${EDITOR}/model/`) || !(EDITOR_ALLOWED[target] || []).includes(n)) probs.push(`${n} imports ${s}`);
       }
     }
+    return probs;
+  },
+
+  'renderer modules shared with the editor, and everything they import, are DOM-free': (f) => {
+    const probs = [];
+    const seen = new Set();
+    const visit = (n) => {
+      if (seen.has(n) || !(n in f)) return;
+      seen.add(n);
+      for (const tok of new Set([...f[n].matchAll(DOM_TOKENS)].map((m) => m[1]))) probs.push(`${n} uses ${tok}`);
+      for (const s of relOnly(f[n])) visit(resolveSpec(n, s));
+    };
+    EDITOR_SHARED.forEach(visit);
     return probs;
   },
 
@@ -196,19 +214,25 @@ export function mutationProblems(files) {
   const cases = [
     ['renderer module importing src/editor/ is caught', 'nothing in src/ outside src/editor/ imports src/editor/',
       { 'src/theme.js': imp('./editor/style.js') + (files['src/theme.js'] || '') }],
-    ['DOM token in a model file is caught', 'editor model, keymap, announce, geometry and style are DOM-free',
+    ['DOM token in a model file is caught', DOM_FREE_CHECK,
       { [`${EDITOR}/model/zz.js`]: 'export const w = () => window.innerWidth;\n' }],
-    ['addEventListener in keymap.js is caught', 'editor model, keymap, announce, geometry and style are DOM-free',
+    ['addEventListener in keymap.js is caught', DOM_FREE_CHECK,
       { [`${EDITOR}/keymap.js`]: 'el.addEventListener("x", f);\n' }],
-    ['model importing layout is caught', 'editor imports from outside src/editor/ follow the allowlist (model: sanitize, duration, rational, directions, harmonics, noteEffects only)',
+    ['model importing layout is caught', ALLOWLIST_CHECK,
       { [`${EDITOR}/model/zz.js`]: imp('../../layout/index.js') }],
-    ['model importing hitMap is caught', 'editor imports from outside src/editor/ follow the allowlist (model: sanitize, duration, rational, directions, harmonics, noteEffects only)',
+    ['model importing hitMap is caught', ALLOWLIST_CHECK,
       { [`${EDITOR}/model/zz.js`]: imp('../../hitMap.js') }],
-    ['model importing draw/tab.js is caught', 'editor imports from outside src/editor/ follow the allowlist (model: sanitize, duration, rational, directions, harmonics, noteEffects only)',
+    ['model importing draw/tab.js is caught', ALLOWLIST_CHECK,
       { [`${EDITOR}/model/zz.js`]: imp('../../draw/tab.js') }],
-    ['overlay importing MusicScoreRenderer is caught', 'editor imports from outside src/editor/ follow the allowlist (model: sanitize, duration, rational, directions, harmonics, noteEffects only)',
+    ['model importing layout/navigation.js (not the shared src/navigation.js) is caught', ALLOWLIST_CHECK,
+      { [`${EDITOR}/model/settings/zz.js`]: imp('../../../layout/navigation.js') }],
+    ['a shared module importing a DOM module is caught', 'renderer modules shared with the editor, and everything they import, are DOM-free',
+      { 'src/pitch.js': imp('./font.js') + (files['src/pitch.js'] || '') }],
+    ['DOM token in settings.js is caught', DOM_FREE_CHECK,
+      { [`${EDITOR}/settings.js`]: 'export const d = () => document.title;\n' }],
+    ['overlay importing MusicScoreRenderer is caught', ALLOWLIST_CHECK,
       { [`${EDITOR}/overlay.js`]: imp('../MusicScoreRenderer.js') }],
-    ['geometry importing svgUtil is caught', 'editor imports from outside src/editor/ follow the allowlist (model: sanitize, duration, rational, directions, harmonics, noteEffects only)',
+    ['geometry importing svgUtil is caught', ALLOWLIST_CHECK,
       { [`${EDITOR}/geometry.js`]: imp('../draw/svgUtil.js') }],
     ['301-line editor file is caught', 'src/editor/ files are <= 300 lines',
       { [`${EDITOR}/zz.js`]: 'x\n'.repeat(301) }],

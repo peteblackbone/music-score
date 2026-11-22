@@ -2,7 +2,10 @@
  * editor-demo.js — page logic of editor.html (the ScoreEditor demo).
  * Not part of the package. The pure helpers are exported for the tests:
  * sanitizeFilename, newScore, readAutosave, checkUpload. The Effects
- * group is wired by editor-demo-effects.js.
+ * group is wired by editor-demo-effects.js, the Score… dialog and the
+ * Time / Key / Tempo status items by editor-demo-settings.js, the Measure…
+ * dialog by editor-demo-measure.js, the Tracks… dialog by
+ * editor-demo-tracks.js (form helpers: editor-demo-forms.js).
  *
  * Flows (ui.md §1, §6): first visit loads lead-riff with a notice; later
  * visits restore the browser autosave (debounced 500 ms after each edit,
@@ -18,6 +21,8 @@ import { leadSoloF } from './lead-solo-f.js';
 import { exampleScore } from './example-score.js';
 import { durationWords, FILL_WORDS } from '../src/editor/model/durations.js';
 import { wireEffects } from './editor-demo-effects.js';
+import { wireSettings } from './editor-demo-settings.js';
+import { wireTracksDialog } from './editor-demo-tracks.js';
 
 export const AUTOSAVE_KEY = 'music-score-editor:autosave';
 /** sessionStorage flag set while a restore renders; still set on the next load = that restore never finished. */
@@ -25,11 +30,6 @@ export const RESTORING_KEY = 'music-score-editor:restoring';
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const MIN_WIDTH = 560;
 const EXAMPLES = { 'lead-riff': leadRiff, 'lead-solo-f': leadSoloF, 'example-score': exampleScore };
-const PRESETS = {
-  guitar6: { name: 'Guitar', clef: 'treble', tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'] },
-  bass4: { name: 'Bass', clef: 'bass', tuning: ['E1', 'A1', 'D2', 'G2'] },
-  guitar7: { name: '7-string Guitar', clef: 'treble', tuning: ['B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'] },
-};
 
 /** Download file name from a title: only [A-Za-z0-9-_ ], trimmed, + '.json'; 'score.json' when nothing is left. */
 export function sanitizeFilename(title) {
@@ -37,11 +37,12 @@ export function sanitizeFilename(title) {
   return s ? `${s}.json` : 'score.json';
 }
 
-/** The score New… creates: one track of the preset, time signature on the track, one empty measure. */
+/** The score New… creates: one track of the instrument preset (ScoreEditor.INSTRUMENTS), time signature on the track (the API's range), one empty measure. */
 export function newScore({ title = 'Untitled', beats = 4, beatType = 4, preset = 'guitar6', tabOnly = false } = {}) {
-  const p = Object.hasOwn(PRESETS, preset) ? PRESETS[preset] : PRESETS.guitar6;
-  const b = Number.isInteger(Number(beats)) ? Math.min(16, Math.max(1, Number(beats))) : 4;
-  const bt = [2, 4, 8, 16].includes(Number(beatType)) ? Number(beatType) : 4;
+  const { INSTRUMENTS, LIMITS } = ScoreEditor;
+  const p = Object.hasOwn(INSTRUMENTS, preset) ? INSTRUMENTS[preset] : INSTRUMENTS.guitar6;
+  const b = Number.isInteger(Number(beats)) ? Math.min(LIMITS.timeSignatureBeats, Math.max(1, Number(beats))) : 4;
+  const bt = LIMITS.beatTypes.includes(Number(beatType)) ? Number(beatType) : 4;
   return {
     title: String(title ?? '').trim() || 'Untitled',
     tracks: [{
@@ -180,6 +181,9 @@ export function startEditorDemo(doc) {
   const readOnlyBox = $('readonly');
   // Effects group: a click runs the button's key, then the whole UI refreshes and a pointer click returns focus
   const refreshEffects = wireEffects(doc.querySelectorAll('[data-effect]'), editor, (e) => { refreshUi(); back(e); });
+  // Settings dialogs (they manage focus themselves) and the Time / Key / Tempo status items
+  const refreshSettings = wireSettings(doc, editor, { refresh: () => refreshUi() });
+  wireTracksDialog(doc, editor, { refresh: () => refreshUi() });
   function refreshUi() {
     const i = editor.getCursorInfo();
     const ro = editor.isReadOnly();
@@ -200,6 +204,7 @@ export function startEditorDemo(doc) {
     undoBtn.disabled = !editor.canUndo();
     redoBtn.disabled = !editor.canRedo();
     refreshEffects(i, ro);
+    refreshSettings(i, ro);
   }
   editor.on('cursor', refreshUi);
   editor.on('change', (e) => {

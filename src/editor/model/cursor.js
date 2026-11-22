@@ -14,7 +14,8 @@ import {
   tracksOf, trackAt, beatsAt, beatAt, isGrace, isRest, isVisible, hasTab, hasNotation, measureCount, stringCount, openPitch,
   clampDots, notesOf, cursorNote, voiceOf,
 } from './access.js';
-import { measureFill, onsetOf } from './fill.js';
+import { measureFill, onsetOf, timeSignatureAt, keySignatureAt } from './fill.js';
+import { tempoAt } from './settings/score.js';
 import { appendMeasure } from './measures.js';
 import { lastMainIn } from './ties.js';
 import { effectState } from './effects.js';
@@ -154,6 +155,7 @@ export function cursorInfo(score, cursor, state) {
   let beatTotal = 0;
   beats.forEach((x, i) => { if (!isGrace(x)) { beatTotal++; if (i <= cursor.beat) beatNumber++; } });
   const fx = effectState(score, cursor);
+  const ts = timeSignatureAt(score, cursor);
   return {
     track: cursor.track,
     measure: cursor.measure,
@@ -185,5 +187,9 @@ export function cursorInfo(score, cursor, state) {
     noteEffects: fx.note,
     beatEffects: fx.beat,
     effectSteps: fx.steps,
+    // 2.2: the time signature (a fresh object), key signature and tempo in force at the cursor
+    timeSignature: { beats: ts.beats, beatType: ts.beatType },
+    keySignature: keySignatureAt(score, cursor),
+    tempo: tempoAt(score, cursor),
   };
 }

@@ -118,5 +118,25 @@ for (const c of cases) {
   const { summary } = await import('./editor-effects-edge.mjs');
   fail += await summary();
 }
+// 2.2.0 editor settings: validators, presets, score / tempo / tuning / track / measure operations (tests/editor-settings.mjs)
+{
+  const { summary } = await import('./editor-settings.mjs');
+  fail += summary();
+}
+// 2.2.0 editor settings under the DOM shim: public surface, controller path, lastMessage, aria-label, joined announcements (tests/editor-settings-dom.mjs)
+{
+  const { summary } = await import('./editor-settings-dom.mjs');
+  fail += await summary();
+}
+// 2.2.0 editor settings, edge cases against the criteria: retune, hidden tracks, track operations and the cursor, column migration, addTrack render, equal-to-in-force, forms (tests/editor-settings-edge.mjs)
+{
+  const { summary } = await import('./editor-settings-edge.mjs');
+  fail += summary();
+}
+// 2.2.0 editor settings, edge cases at controller level: undo by reference, read-only, size limit, lastMessage, events, live region, demo helpers (tests/editor-settings-edge-dom.mjs)
+{
+  const { summary } = await import('./editor-settings-edge-dom.mjs');
+  fail += await summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);

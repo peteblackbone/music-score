@@ -84,7 +84,7 @@ test('io: round trip exportScore(parseInput(x)) deep-equals {schemaVersion:1, ..
 const { EDITOR_LIMITS } = await imp('src/editor/model/limits.js');
 test('io limits: each structure limit accepts exactly the limit and rejects one more with "Score too large" (before sanitize)', () => {
   const L = EDITOR_LIMITS;
-  eq(L, { jsonChars: 5 * 1024 * 1024, tracks: 32, measuresPerTrack: 2000, voicesPerMeasure: 4, beatsPerVoice: 256, notesPerBeat: 16, tuningStrings: 12 });
+  eq(L, { jsonChars: 5 * 1024 * 1024, tracks: 32, measuresPerTrack: 2000, voicesPerMeasure: 4, beatsPerVoice: 256, notesPerBeat: 16, tuningStrings: 12, textChars: 200, longTextChars: 2000, timeSignatureBeats: 32, beatTypes: [1, 2, 4, 8, 16, 32], capo: 30, bpm: 1000, endingNumber: 99, endingNumbers: 32, repeatCount: 99, sectionLetter: 3 });
   const T = (extra = {}, measures = [{ beats: [] }]) => ({ showTablature: true, ...extra, measures });
   const notes = (n) => Array.from({ length: n }, (_, i) => ({ pitch: 'C4', fret: i % 20 }));
   const cases = [
@@ -926,7 +926,7 @@ test('demo: newScore presets (guitar, bass clef, 7-string), time signature on th
   const n = normalizeScore({ tracks: [{ ...b.tracks[0], showStandardNotation: true, measures: [{ beats: [nt('quarter', 4, 0)] }] }] }).tracks[0];
   eq([n.clef, n.octaveClef], ['bass', true], 'bass clef with the 8vb (octave) clef from fret-derived pitches');
   eq(demo.newScore({ preset: 'guitar7' }).tracks[0].tuning.length, 7);
-  eq(demo.newScore({ beats: 40, beatType: 5, preset: 'nope' }).tracks[0].timeSignature, { beats: 16, beatType: 4 });
+  eq(demo.newScore({ beats: 40, beatType: 5, preset: 'nope' }).tracks[0].timeSignature, { beats: 32, beatType: 4 });
   eq(demo.newScore({ beats: 0 }).tracks[0].timeSignature.beats, 1);
   [g, b].forEach((x) => ok(sanitizeScore(x) === x));
 });

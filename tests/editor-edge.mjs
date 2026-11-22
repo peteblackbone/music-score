@@ -808,9 +808,9 @@ test('H5: sanitizeFilename edge cases (non-strings, whitespace, dots, path separ
     ['123.json', 'score.json', 'score.json', 'score.json', 'ab.json', 'My Song  Take 2.json', '-_-.json', 'score.json', 'score.json', 'score.json', 'aaaaa.json']);
   ok(/^[A-Za-z0-9\-_ ]+\.json$/.test(demo.sanitizeFilename('<script>alert(1)</script>')));
 });
-test('H2: newScore clamps beats 1-16 and beatType to 2/4/8/16, accepts numeric strings, ignores bad presets; every result loads into the editor model unchanged', () => {
-  eq([demo.newScore({ beats: '3' }).tracks[0].timeSignature, demo.newScore({ beats: 17 }).tracks[0].timeSignature.beats, demo.newScore({ beats: 2.5 }).tracks[0].timeSignature.beats, demo.newScore({ beatType: '8' }).tracks[0].timeSignature.beatType, demo.newScore({ beatType: 3 }).tracks[0].timeSignature.beatType],
-    [{ beats: 3, beatType: 4 }, 16, 4, 8, 4]);
+test('H2: newScore clamps beats 1-32 and beatType to 1/2/4/8/16/32, accepts numeric strings, ignores bad presets; every result loads into the editor model unchanged', () => {
+  eq([demo.newScore({ beats: '3' }).tracks[0].timeSignature, demo.newScore({ beats: 33 }).tracks[0].timeSignature.beats, demo.newScore({ beats: 2.5 }).tracks[0].timeSignature.beats, demo.newScore({ beatType: '8' }).tracks[0].timeSignature.beatType, demo.newScore({ beatType: 3 }).tracks[0].timeSignature.beatType],
+    [{ beats: 3, beatType: 4 }, 32, 4, 8, 4]);
   for (const preset of ['guitar6', 'bass4', 'guitar7', 'nope']) for (const tabOnlyFlag of [false, true]) {
     const sc1 = demo.newScore({ preset, tabOnly: tabOnlyFlag, beats: 7, beatType: 8, title: '  x  ' });
     ok(io.parseInput(sc1) && J(io.parseInput(sc1)) === J(sc1), `${preset} ${tabOnlyFlag}`);
