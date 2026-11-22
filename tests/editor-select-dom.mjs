@@ -574,6 +574,27 @@ test('F1: inside a shadow root the focus check reads the root node\'s activeElem
   delete rootEl.getRootNode;
   ed.destroy();
 });
+test('F2: a cut event writes clipboardData first; when it throws or is missing the score is unchanged, the event is left alone, the clip stays in the internal clipboard and that is said', () => {
+  const { ed, spoken } = mk(fixture());
+  ed.focus();
+  ed.setSelection({ anchor: { measure: 0, beat: 0 }, focus: { measure: 0, beat: 1 } });
+  spoken();
+  const before = ed._model;
+  const denied = fire('cut', {}, { throws: true });
+  eq([denied.e.defaultPrevented, ed._model === before, ed.canUndo()], [false, true, false]);
+  eq([spoken(), ed.lastMessage], ['Clipboard unavailable, nothing cut. 2 beats copied in the editor', 'Clipboard unavailable, nothing cut. 2 beats copied in the editor']);
+  eq(ed.getSelection().beatCount, 2, 'nothing changed, so the selection stays');
+  const bare = document.dispatch('cut', {});
+  eq([bare.defaultPrevented, ed._model === before], [false, true], 'no clipboardData at all');
+  ed.clearSelection();
+  ed.setCursor({ measure: 3, beat: 1 });
+  eq(ed.paste(), true, 'the internal clipboard has the clip');
+  eq(ed.getScore().tracks[0].measures[3].beats.length, 3);
+  ed.setSelection({ anchor: { measure: 0, beat: 0 }, focus: { measure: 0, beat: 0 } });
+  const okCut = fire('cut');
+  eq([okCut.e.defaultPrevented, okCut.clipboardData.data.has(CLIP_MIME), okCut.clipboardData.data.has('text/plain'), ed.getScore().tracks[0].measures[0].beats[0].type], [true, true, true, 'rest']);
+  ed.destroy();
+});
 test('destroy removes the document listeners (listenerCount restored); two editors: only the focused one acts on a native event', () => {
   const n0 = document.listenerCount();
   const a = mk(fixture());

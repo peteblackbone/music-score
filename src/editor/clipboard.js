@@ -26,6 +26,17 @@ import { describe } from './announce.js';
 /** The clipboard shared by every editor on the page: clip JSON text, or null. */
 let internal = null;
 
+/** Write clip `text` to clipboardData `data` as the custom type and text/plain; false when it is missing or refused. */
+function writeClip(data, text) {
+  try {
+    data.setData(CLIP_MIME, text);
+    data.setData('text/plain', text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const hidden = (value) => ({ value, enumerable: false, writable: true, configurable: true });
 
 /** Install copy, cut, paste and the clipboard event handler on `Editor` (ScoreEditor). */
@@ -49,11 +60,22 @@ export function installClipboard(Editor) {
 
   def('cut', function cut() {
     this._alive();
+    return this._cut(false);
+  });
+
+  /**
+   * Cut: copy, then clear the range (one undo step). From a cut event
+   * (`event`) the clip goes into `data` (clipboardData) first; when that is
+   * missing or refused the score is left alone. The internal clipboard
+   * still gets the clip, so Paste in the editor works, and that is said.
+   */
+  def('_cut', function cutTo(event, data) {
     this._cancelBuffer();
     if (this._readOnly) { this._sayKept(describe({ id: 'readOnly' })); return null; }
     const c = this._clip();
     if (!c) { this._say(describe({ id: 'nothingToCopy' })); return null; }
     internal = c.text;
+    if (event && !writeClip(data, c.text)) { this._sayKept(describe({ id: 'cutUnwritten', kind: c.kind, count: c.count })); return null; }
     const r = clearSlices(this._model, c.range);
     const announce = { id: 'cut', kind: c.kind, count: c.count };
     if (r.score === this._model) this._say(describe(announce)); // only rests: copied, nothing to clear
@@ -108,14 +130,8 @@ export function installClipboard(Editor) {
       this._pasteFrom(custom ?? (looksLikeClip(text) ? text : internal));
       return true;
     }
-    const text = kind === 'copy' ? this.copy() : this.cut();
-    if (text == null) return false;
-    try {
-      data.setData(CLIP_MIME, text);
-      data.setData('text/plain', text);
-      return true;
-    } catch {
-      return false;
-    }
+    if (kind === 'cut') return this._cut(true, data) != null;
+    const text = this.copy();
+    return text != null && writeClip(data, text);
   });
 }
