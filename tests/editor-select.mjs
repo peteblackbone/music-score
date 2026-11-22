@@ -214,6 +214,14 @@ test('clearRange (Delete with a selection): graces removed, notes become rests k
   ok(run('deleteNote', rests, cur(0, 0, 0), SEL.selectionRange(rests, 0, P(0, 0), P(0, 1))).changed === false, 'only rests: no change');
   eq(describe(run('deleteNote', rests, cur(0, 0, 0), SEL.selectionRange(rests, 0, P(0, 0), P(0, 0))).announce), '1 beat changed to rest');
 });
+test('eachSlice (exported for 2.3.1): maps each slice\'s beats on one track, repairs ties, keeps the score when no slice has beats', () => {
+  const s = rangeFixture();
+  const sel = SEL.selectionRange(s, 0, P(0, 3), P(1, 0));
+  const out = RE.eachSlice(s, 0, sel.slices, (part) => part.map((b) => ({ ...b, zz: 2 })));
+  eq([v1(out, 0, 0).map((b) => b.zz ?? 0), v1(out, 0, 1).map((b) => b.zz ?? 0)], [[0, 0, 2, 2, 2], [2, 0]]);
+  ok(out.tracks[1] === s.tracks[1] && sanitizeScore(out) === out);
+  ok(RE.eachSlice(s, 0, [{ measure: 0, from: 2, to: 2 }], () => []) === s);
+});
 test('removeRange (Ctrl+Delete with a selection): beats and graces spliced out across measures, ties repaired, drawn tempo marks counted, cursor on what follows', () => {
   const s = rangeFixture();
   const sel = SEL.selectionRange(s, 0, P(0, 3), P(2, 0));

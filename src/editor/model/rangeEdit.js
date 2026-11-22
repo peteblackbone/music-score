@@ -26,8 +26,8 @@ export function tempoIn(score, track, slices) {
   }).length;
 }
 
-/** `score` with each slice's beats [from, to) replaced by fn(beats) on track `track`, then its ties repaired. */
-function eachSlice(score, track, slices, fn) {
+/** `score` with each slice's beats [from, to) replaced by fn(beats) on track `track`, then its ties repaired (`score` itself when no slice has beats). Exported for range edits to come (2.3.1 effects and transpose). */
+export function eachSlice(score, track, slices, fn) {
   let out = score;
   for (const s of slices) {
     if (s.from >= s.to) continue;
