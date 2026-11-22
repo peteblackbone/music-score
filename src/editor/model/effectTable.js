@@ -5,7 +5,7 @@
  *
  * Row: `{ name, key, shift, level: 'note' | 'beat', fields, steps, dir,
  * start?, classify, exclusive, onRest, creates, write?, suffix?, say, off,
- * added?, label, info? }`.
+ * added?, label, info?, reverseOf? }`.
  * - `fields`: the keys the row owns; `steps`: the patches it cycles
  *   through (dir 1 forward, -1 backward; `start` = the step written from
  *   none, else the first, or the last when dir is -1).
@@ -19,6 +19,8 @@
  * - `suffix`: 'link' | 'tabArtic' | 'noNotation' (spoken when it applies).
  * - `say[step]` / `off` / `added`: spoken text; `label`: the undo label;
  *   `info(target)`: the words getCursorInfo().effects lists.
+ * - `reverseOf`: set on a row that steps another row's values backwards
+ *   (reverse()); it shares that row's classification and words.
  *
  * Values are classified with the renderer's own canonicalizers, so a
  * truthy unknown value counts the way the renderer draws it. Pure, no DOM.
@@ -49,7 +51,11 @@ export function bendStep(raw) {
   if (amount === 'full') return b.release ? 2 : 0;
   return amount === '1/2' && !b.release ? 1 : -1;
 }
-const bendInfo = (t) => (t.bend ? [bendStep(t.bend) < 0 ? 'bend' : `bend ${BEND_WORDS[bendStep(t.bend)]}`] : []);
+function bendInfo(t) {
+  if (!t.bend) return [];
+  const i = bendStep(t.bend);
+  return [i < 0 ? 'bend' : `bend ${BEND_WORDS[i]}`];
+}
 
 // ---- dynamics ----
 /** The dynamics D and Shift+D step through, softest first. */
@@ -75,8 +81,28 @@ const articWrite = (group) => (t, step, def) => {
 const articInfo = (t) => [...new Set(articList(t).filter((a) => typeof a === 'string').map((a) => (a === 'heavyAccent' ? 'marcato' : a)))];
 
 const row = (r) => Object.freeze({ shift: false, dir: 1, exclusive: [], onRest: false, creates: false, ...r });
+/**
+ * Row `r` stepped backwards (Shift+B, Shift+D): the same keys, values,
+ * classification and words with `dir: -1`, no `start` and no `info` (the
+ * forward row already lists the words), plus `overrides` (`name`, `shift`,
+ * `start` …). `reverseOf` names the forward row.
+ */
+function reverse(r, overrides) {
+  const { info, start, ...rest } = r;
+  return row({ ...rest, dir: -1, reverseOf: r.name, ...overrides });
+}
 const ACCENTS = ['accent', 'marcato', 'heavyAccent'];
 const STACCATOS = ['staccato', 'staccatissimo'];
+
+const BEND = row({
+  name: 'bend', key: 'b', level: 'note', fields: ['bend'], steps: values('bend', BENDS),
+  classify: (t) => bendStep(t.bend), say: BEND_SAY, off: 'Bend off', label: 'bend', info: bendInfo,
+});
+const LOUDER = row({
+  name: 'louder', key: 'd', level: 'beat', fields: ['dynamic'], steps: values('dynamic', DYNAMIC_SCALE), start: DYNAMIC_SCALE.indexOf('mf'),
+  classify: dynamicStep, onRest: true, suffix: 'noNotation',
+  say: DYNAMIC_SCALE.map((d) => `Dynamic ${d}`), off: 'Dynamic off', label: 'dynamic', info: dynamicInfo,
+});
 
 export const EFFECTS = Object.freeze([
   row({
@@ -104,14 +130,8 @@ export const EFFECTS = Object.freeze([
     say: ['Slide in from below', 'Slide in from above', 'Slide out down', 'Slide out up'], off: 'Slide in/out off', label: 'slide in/out',
     info: (t) => [...(slideInOf(t.slideIn) ? ['slide in'] : []), ...(slideOutOf(t.slideOut) ? ['slide out'] : [])],
   }),
-  row({
-    name: 'bend', key: 'b', level: 'note', fields: ['bend'], steps: values('bend', BENDS),
-    classify: (t) => bendStep(t.bend), say: BEND_SAY, off: 'Bend off', label: 'bend', info: bendInfo,
-  }),
-  row({
-    name: 'bendBack', key: 'b', shift: true, level: 'note', fields: ['bend'], steps: values('bend', BENDS), dir: -1,
-    classify: (t) => bendStep(t.bend), say: BEND_SAY, off: 'Bend off', label: 'bend',
-  }),
+  BEND,
+  reverse(BEND, { name: 'bendBack', shift: true }),
   row({
     name: 'vibrato', key: 'v', level: 'beat', fields: ['vibrato'], steps: values('vibrato', [true, 'wide']),
     classify: (t) => { const v = vibratoOf(t.vibrato); return v === 'wide' ? 1 : v ? 0 : -1; },
@@ -141,16 +161,8 @@ export const EFFECTS = Object.freeze([
     name: 'letRing', key: 'l', shift: true, level: 'beat', fields: ['letRing'], steps: values('letRing', [true]), classify: flag('letRing'),
     say: ['Let ring on'], off: 'Let ring off', label: 'let ring', info: word('letRing', 'let ring'),
   }),
-  row({
-    name: 'louder', key: 'd', level: 'beat', fields: ['dynamic'], steps: values('dynamic', DYNAMIC_SCALE), start: 4,
-    classify: dynamicStep, onRest: true, suffix: 'noNotation',
-    say: DYNAMIC_SCALE.map((d) => `Dynamic ${d}`), off: 'Dynamic off', label: 'dynamic', info: dynamicInfo,
-  }),
-  row({
-    name: 'softer', key: 'd', shift: true, level: 'beat', fields: ['dynamic'], steps: values('dynamic', DYNAMIC_SCALE), dir: -1, start: 3,
-    classify: dynamicStep, onRest: true, suffix: 'noNotation',
-    say: DYNAMIC_SCALE.map((d) => `Dynamic ${d}`), off: 'Dynamic off', label: 'dynamic',
-  }),
+  LOUDER,
+  reverse(LOUDER, { name: 'softer', shift: true, start: DYNAMIC_SCALE.indexOf('mp') }),
   row({
     name: 'accent', key: 'a', level: 'beat', fields: ['articulations'], steps: ['accent', 'marcato'],
     classify: articStep('accent', ['marcato', 'heavyAccent']), write: articWrite(ACCENTS), suffix: 'tabArtic',

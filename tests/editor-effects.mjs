@@ -68,6 +68,13 @@ test('table: 15 rows in the documented order, frozen, every row registered as an
   }
   eq(DYNAMIC_SCALE, ['ppp', 'pp', 'p', 'mp', 'mf', 'f', 'ff', 'fff']);
   eq(Object.keys(EFFECT_KEYS).length, 15);
+  // the backward rows share the forward row's values, classification and words
+  for (const [back, fwd] of [['bendBack', 'bend'], ['softer', 'louder']]) {
+    const b = EFFECT_BY_NAME[back], f = EFFECT_BY_NAME[fwd];
+    ok(b.reverseOf === fwd && b.dir === -1 && f.dir === 1 && b.steps === f.steps && b.say === f.say && b.classify === f.classify && !b.info && f.info, back);
+  }
+  eq([EFFECT_BY_NAME.louder.start, EFFECT_BY_NAME.softer.start, EFFECT_BY_NAME.bendBack.start], [DYNAMIC_SCALE.indexOf('mf'), DYNAMIC_SCALE.indexOf('mp'), undefined]);
+  eq(EFFECTS.filter((d) => d.reverseOf).map((d) => d.name), ['bendBack', 'softer']);
 });
 test('nextStep: from none the start (or first / last by direction); then by direction, off past the end', () => {
   const fwd = { steps: [1, 2, 3], dir: 1 };
