@@ -22,7 +22,7 @@ import { tracksOf, measureCount } from './model/access.js';
 import { COMMANDS, run } from './model/commands.js';
 import { createHistory } from './model/history.js';
 import { bufferLive } from './model/notes.js';
-import { DURATIONS } from './model/beats.js';
+import { DURATIONS } from './model/durations.js';
 import { keyToCommand } from './keymap.js';
 import { resolveStyle } from './style.js';
 import { describe, describeCursor, describeEdit, undoLabel } from './announce.js';

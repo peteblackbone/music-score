@@ -15,6 +15,7 @@ import { ScoreEditor } from '../index.js';
 import { leadRiff } from './lead-riff.js';
 import { leadSoloF } from './lead-solo-f.js';
 import { exampleScore } from './example-score.js';
+import { durationWords, FILL_WORDS } from '../src/editor/model/durations.js';
 
 export const AUTOSAVE_KEY = 'music-score-editor:autosave';
 /** sessionStorage flag set while a restore renders; still set on the next load = that restore never finished. */
@@ -27,9 +28,6 @@ const PRESETS = {
   bass4: { name: 'Bass', clef: 'bass', tuning: ['E1', 'A1', 'D2', 'G2'] },
   guitar7: { name: '7-string Guitar', clef: 'treble', tuning: ['B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'] },
 };
-const WORDS = { whole: 'whole', half: 'half', quarter: 'quarter', '8th': 'eighth', '16th': '16th', '32nd': '32nd', '64th': '64th' };
-const DOTS = ['', 'dotted ', 'double-dotted ', 'triple-dotted ', 'quadruple-dotted '];
-const FILL = { under: 'Under', full: 'Full', over: 'Over' };
 
 /** Download file name from a title: only [A-Za-z0-9-_ ], trimmed, + '.json'; 'score.json' when nothing is left. */
 export function sanitizeFilename(title) {
@@ -83,7 +81,6 @@ export function checkUpload(file) {
   return { ok: true };
 }
 
-const durationText = (info) => `${DOTS[info.dots] ?? ''}${WORDS[info.duration] ?? info.duration}${info.triplet ? ', triplet' : ''}`;
 const noteLetter = (pitch) => (pitch ? String(pitch).replace(/-?\d+$/, '') : '');
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
@@ -183,8 +180,8 @@ export function startEditorDemo(doc) {
     $('st-beat').textContent = i.empty ? 'empty' : i.appendSlot ? 'end' : `${i.beatNumber}/${i.beatTotal}`;
     $('st-string').textContent = i.hasTab ? `${i.string} (${noteLetter(i.tuningNote)})` : '–';
     $('st-fret').textContent = i.hasTab && i.fret != null ? String(i.fret) : '–';
-    $('st-duration').textContent = durationText(i);
-    $('st-fill').textContent = FILL[i.fill] || i.fill;
+    $('st-duration').textContent = durationWords(i.duration, i.dots, i.triplet);
+    $('st-fill').textContent = FILL_WORDS[i.fill]?.label ?? i.fill;
     $('st-readonly').hidden = !ro;
     durationButtons.forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.duration === i.duration)); b.disabled = ro; });
     dotsBtn.textContent = `Dots: ${i.dots}`;

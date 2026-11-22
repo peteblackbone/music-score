@@ -3,6 +3,7 @@
 import { register } from 'node:module';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
+import fs from 'node:fs';
 
 register('./hooks.mjs', import.meta.url);
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -698,6 +699,16 @@ test('B10: 6 start scores x 2000 random commands keep sanitizeScore(model) === m
 // ---------- announce (ui.md §7) ----------
 const AN = await imp('src/editor/announce.js');
 const infoOf = (s, c, st = ST) => C.cursorInfo(s, c, st);
+const DV = await imp('src/editor/model/durations.js');
+test('durations: one vocabulary (names, words, dots, fill) shared by announce.js and the demo', () => {
+  eq(DV.DURATIONS, ['whole', 'half', 'quarter', '8th', '16th', '32nd', '64th']);
+  eq(DV.DURATIONS.map((d) => DV.DURATION_WORDS[d]), ['whole', 'half', 'quarter', 'eighth', '16th', '32nd', '64th']);
+  ok(AN.durationWords === DV.durationWords, 'announce re-exports the shared function');
+  eq([DV.FILL_WORDS.under.word, DV.FILL_WORDS.over.label, DV.FILL_WORDS.full.label], ['underfull', 'Over', 'Full']);
+  ok(Object.isFrozen(DV.DURATIONS) && Object.isFrozen(DV.FILL_WORDS.under));
+  const src = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+  for (const p of ['src/editor/announce.js', 'examples/editor-demo.js']) ok(!/'eighth'|'double-dotted '/.test(src(p)), `${p} has its own copy of the words`);
+});
 test('announce: duration words with dots and triplet', () => {
   eq([AN.durationWords('8th'), AN.durationWords('quarter', 1), AN.durationWords('half', 2), AN.durationWords('16th', 0, true)],
     ['eighth', 'dotted quarter', 'double-dotted half', '16th, triplet']);

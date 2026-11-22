@@ -7,15 +7,11 @@
  * full.
  */
 
-const WORDS = { whole: 'whole', half: 'half', quarter: 'quarter', '8th': 'eighth', '16th': '16th', '32nd': '32nd', '64th': '64th' };
-const DOTS = ['', 'dotted ', 'double-dotted ', 'triple-dotted ', 'quadruple-dotted '];
-const FILL = { under: 'underfull', over: 'overfull', full: 'full' };
-const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+import { DURATION_WORDS, FILL_WORDS, durationWords } from './model/durations.js';
 
-/** e.g. 'dotted eighth, triplet'. */
-export function durationWords(duration, dots = 0, triplet = false) {
-  return `${DOTS[dots] ?? ''}${WORDS[duration] ?? String(duration)}${triplet ? ', triplet' : ''}`;
-}
+export { durationWords };
+const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+const fillWord = (f) => FILL_WORDS[f]?.word ?? f;
 
 export const MESSAGES = Object.freeze({
   fret: (d) => `Fret ${d.fret}`,
@@ -27,7 +23,7 @@ export const MESSAGES = Object.freeze({
   changedToNote: () => 'Changed to note',
   duration: (d) => cap(durationWords(d.duration, d.dots)),
   nextDuration: (d) => `Next: ${durationWords(d.duration, d.dots)}`,
-  dots: (d) => (d.dots ? cap(durationWords(d.duration, d.dots)) : `${cap(WORDS[d.duration] ?? d.duration)}, no dot`),
+  dots: (d) => (d.dots ? cap(durationWords(d.duration, d.dots)) : `${cap(DURATION_WORDS[d.duration] ?? d.duration)}, no dot`),
   tripletOn: () => 'Triplet on',
   tripletOff: () => 'Triplet off',
   tiedTo: (d) => `Tied to fret ${d.fret}`,
@@ -99,7 +95,7 @@ export function describeCursor(info, prev = null, full = false) {
   if (trackChanged) parts.push(`Track ${info.track + 1}${info.trackName ? ` ${info.trackName}` : ''}`);
   if (measureChanged) parts.push(`measure ${info.measure + 1}`);
   parts.push(positionText(info));
-  const fill = measureChanged && !info.empty && info.fill !== 'full' ? `, ${FILL[info.fill]}` : '';
+  const fill = measureChanged && !info.empty && info.fill !== 'full' ? `, ${fillWord(info.fill)}` : '';
   return cap(parts.join(', ') + fill);
 }
 
@@ -112,7 +108,7 @@ export function describeEdit(d, info, prev) {
   let text = describe(d);
   if (d?.id === 'beatDeleted') text += ` ${cap(positionText(info))}`;
   if (prev && !info.empty && (prev.track !== info.track || prev.measure !== info.measure || prev.fill !== info.fill)) {
-    text += `, measure ${FILL[info.fill]}`;
+    text += `, measure ${fillWord(info.fill)}`;
   }
   return text;
 }

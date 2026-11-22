@@ -9,9 +9,8 @@
  */
 import { validTuplets } from '../../duration.js';
 import { trackAt, hasTab, beatsAt, isGrace, isRest, clampDots, updateBeat, updateBeats, without } from './access.js';
+import { DURATIONS } from './durations.js';
 import { fixSeam, fixSeamsAround, prevMainBeat, nextMainBeat } from './ties.js';
-
-export const DURATIONS = Object.freeze(['whole', 'half', 'quarter', '8th', '16th', '32nd', '64th']);
 
 const cursorBeat = (score, c) => beatsAt(score, c.track, c.measure)[c.beat] ?? null;
 /** A new rest with the current duration and dots (no `dots` key at 0). */
