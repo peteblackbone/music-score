@@ -32,7 +32,7 @@ function preset(id) {
 /** The new track (without measures) for `spec`, every field checked. */
 function trackFromSpec(spec) {
   if (spec === undefined || typeof spec === 'string') spec = { preset: spec ?? 'guitar6' };
-  object(spec, 'Track spec');
+  spec = object(spec, 'Track spec');
   checkKeys(spec, SPEC_KEYS, 'track spec');
   const p = preset(spec.preset ?? 'guitar6');
   const has = (k) => Object.hasOwn(spec, k) && spec[k] !== undefined;

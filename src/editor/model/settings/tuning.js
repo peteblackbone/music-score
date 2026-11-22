@@ -26,8 +26,9 @@ import { isObj, voicesOf, without } from '../access.js';
 const PITCH = /^\s*([A-Ga-g])([#b]?)(\d)\s*$/;
 
 /** The canonical copy of tuning `value`; TypeError / RangeError when it is not one. */
-export function canonicalTuning(value) {
-  if (!Array.isArray(value)) throw new TypeError('Tuning must be an array of pitches');
+export function canonicalTuning(raw) {
+  if (!Array.isArray(raw)) throw new TypeError('Tuning must be an array of pitches');
+  const value = [...raw];
   if (value.length < 1 || value.length > EDITOR_LIMITS.tuningStrings) throw new RangeError(`A tuning has 1 to ${EDITOR_LIMITS.tuningStrings} strings`);
   return value.map((p) => {
     if (typeof p !== 'string') throw new TypeError('Each tuning pitch must be a string');

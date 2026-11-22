@@ -21,8 +21,8 @@ export const SCORE_FIELDS = Object.freeze({
 });
 
 /** The values `patch` writes (undefined = delete), every key checked first. */
-function scoreValues(patch) {
-  object(patch, 'Score settings');
+function scoreValues(raw) {
+  const patch = object(raw, 'Score settings');
   checkKeys(patch, Object.keys(SCORE_FIELDS), 'score');
   const out = {};
   for (const [k, v] of Object.entries(patch)) {

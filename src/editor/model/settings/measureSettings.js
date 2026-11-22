@@ -14,7 +14,7 @@ import { canonicalJump, jumpKind, mergeNavigation, JUMP_TEXTS } from '../../../n
 import { EDITOR_LIMITS } from '../limits.js';
 import { tracksOf, trackAt, measureAt, measureCount, hasTab, hasNotation } from '../access.js';
 import { timeSignatureAt, keySignatureAt } from '../fill.js';
-import { object, checkKeys, index, intIn, text, flag } from './validate.js';
+import { object, list, checkKeys, index, intIn, text, flag, LINE_BREAK } from './validate.js';
 import { columnValue, setColumn, setTrackField } from './column.js';
 import { checkClef } from './track.js';
 
@@ -22,22 +22,23 @@ export const PATCH_KEYS = Object.freeze(['timeSignature', 'keySignature', 'clef'
 export const BARLINES = Object.freeze(['single', 'double', 'final', 'repeatStart', 'repeatEnd']);
 const COMMON = { beats: 4, beatType: 4 };
 
-function checkTime(v) {
-  object(v, 'Time signature');
+function checkTime(raw) {
+  const v = object(raw, 'Time signature');
   checkKeys(v, ['beats', 'beatType'], 'time signature');
-  intIn(v.beats, 1, EDITOR_LIMITS.timeSignatureBeats, 'Beats');
-  if (typeof v.beatType !== 'number') throw new TypeError('Beat type must be a number');
-  if (!EDITOR_LIMITS.beatTypes.includes(v.beatType)) throw new RangeError(`Beat type must be one of ${EDITOR_LIMITS.beatTypes.join(', ')}`);
-  return { beats: v.beats, beatType: v.beatType };
+  const { beats, beatType } = v;
+  intIn(beats, 1, EDITOR_LIMITS.timeSignatureBeats, 'Beats');
+  if (typeof beatType !== 'number') throw new TypeError('Beat type must be a number');
+  if (!EDITOR_LIMITS.beatTypes.includes(beatType)) throw new RangeError(`Beat type must be one of ${EDITOR_LIMITS.beatTypes.join(', ')}`);
+  return { beats, beatType };
 }
 
 /** Ending numbers: one integer 1–99 or an array of 1–32 unique ones → sorted array. */
 function endingNumbers(v) {
-  const list = Array.isArray(v) ? v : [v];
-  if (Array.isArray(v) && (v.length < 1 || v.length > 32)) throw new RangeError('An ending has 1 to 32 numbers');
-  list.forEach((n) => intIn(n, 1, 99, 'Ending number'));
-  if (new Set(list).size !== list.length) throw new RangeError('Each ending number can be used once');
-  return [...list].sort((a, b) => a - b);
+  const nums = Array.isArray(v) ? list(v) : [v];
+  if (Array.isArray(v) && (nums.length < 1 || nums.length > 32)) throw new RangeError('An ending has 1 to 32 numbers');
+  nums.forEach((n) => intIn(n, 1, 99, 'Ending number'));
+  if (new Set(nums).size !== nums.length) throw new RangeError('Each ending number can be used once');
+  return nums.sort((a, b) => a - b);
 }
 
 /** Stored ending: a number, an array, or `{ numbers, text?, open? }` only with text or open. */
@@ -45,12 +46,13 @@ function checkEnding(v) {
   if (v === null) return undefined;
   const obj = typeof v === 'number' || Array.isArray(v) ? { numbers: v } : object(v, 'Ending');
   checkKeys(obj, ['numbers', 'text', 'open'], 'ending');
-  const nums = endingNumbers(obj.numbers);
-  const words = obj.text == null ? undefined : text(obj.text, { label: 'Ending text' });
-  if (obj.open != null && typeof obj.open !== 'boolean') throw new TypeError('Ending open must be true or false');
+  const { numbers: rawNumbers, text: rawText, open } = obj;
+  const nums = endingNumbers(rawNumbers);
+  const words = rawText == null ? undefined : text(rawText, { label: 'Ending text' });
+  if (open != null && typeof open !== 'boolean') throw new TypeError('Ending open must be true or false');
   const numbers = nums.length === 1 ? nums[0] : nums;
-  if (!words && obj.open == null) return numbers;
-  return { numbers, ...(words ? { text: words } : {}), ...(obj.open != null ? { open: obj.open } : {}) };
+  if (!words && open == null) return numbers;
+  return { numbers, ...(words ? { text: words } : {}), ...(open != null ? { open } : {}) };
 }
 
 /**
@@ -58,20 +60,20 @@ function checkEnding(v) {
  * letter (null or missing, as getMeasureSettings reports a text-only
  * section) is stored as its text.
  */
-function checkSection(v) {
-  if (v === null) return undefined;
-  if (typeof v === 'string') return text(v, { label: 'Section' });
-  object(v, 'Section');
+function checkSection(raw) {
+  if (raw === null) return undefined;
+  if (typeof raw === 'string') return text(raw, { label: 'Section' });
+  const v = object(raw, 'Section');
   checkKeys(v, ['letter', 'text'], 'section');
-  if (v.letter == null) {
-    const words = v.text == null ? undefined : text(v.text, { label: 'Section text' });
+  const { letter: rawLetter, text: rawText } = v;
+  const words = rawText == null ? undefined : text(rawText, { label: 'Section text' });
+  if (rawLetter == null) {
     if (!words) throw new RangeError('A section needs a letter or text');
     return words;
   }
-  if (typeof v.letter !== 'string') throw new TypeError('Section letter must be a string');
-  const letter = v.letter.trim();
-  if (/[\r\n]/.test(letter) || [...letter].length < 1 || [...letter].length > 3) throw new RangeError('Section letter must be 1 to 3 characters');
-  const words = v.text == null ? undefined : text(v.text, { label: 'Section text' });
+  if (typeof rawLetter !== 'string') throw new TypeError('Section letter must be a string');
+  const letter = rawLetter.trim();
+  if (LINE_BREAK.test(letter) || [...letter].length < 1 || [...letter].length > 3) throw new RangeError('Section letter must be 1 to 3 characters');
   return { letter, ...(words ? { text: words } : {}) };
 }
 
@@ -84,8 +86,8 @@ function checkJump(v) {
 }
 
 /** The checked values of `patch` at column `mi` (undefined = delete). */
-function checkPatch(score, mi, patch) {
-  object(patch, 'Measure settings');
+function checkPatch(score, mi, raw) {
+  const patch = object(raw, 'Measure settings');
   checkKeys(patch, PATCH_KEYS, 'measure');
   const has = (k) => Object.hasOwn(patch, k);
   const out = {};
@@ -130,8 +132,9 @@ function keyBefore(score, ti, mi) {
 /** updateMeasure(mi, patch, { track }?). */
 export function updateMeasure(score, cursor, mi, patch, opts) {
   index(mi, measureCount(score), 'Measure index');
-  if (opts !== undefined) { object(opts, 'Options'); checkKeys(opts, ['track'], 'option'); }
-  const ti = opts?.track === undefined ? cursor.track : index(opts.track, tracksOf(score).length, 'Track index');
+  const o = opts === undefined ? {} : object(opts, 'Options');
+  checkKeys(o, ['track'], 'option');
+  const ti = o.track === undefined ? cursor.track : index(o.track, tracksOf(score).length, 'Track index');
   const v = checkPatch(score, mi, patch);
   if (Object.hasOwn(v, 'clef') && !trackAt(score, ti)) throw new RangeError('There is no track for the clef');
   const has = (k) => Object.hasOwn(v, k);

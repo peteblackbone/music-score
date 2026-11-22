@@ -58,8 +58,8 @@ const CHECK = {
 };
 
 /** The values track patch `patch` writes (undefined = delete), every key checked first. */
-export function checkTrackPatch(patch) {
-  object(patch, 'Track settings');
+export function checkTrackPatch(raw) {
+  const patch = object(raw, 'Track settings');
   checkKeys(patch, TRACK_FIELDS, 'track');
   const out = {};
   for (const k of TRACK_FIELDS) if (Object.hasOwn(patch, k)) out[k] = CHECK[k](patch[k]);

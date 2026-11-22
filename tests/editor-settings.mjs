@@ -588,6 +588,44 @@ test('B3: getMeasureSettings section and ending go back into updateMeasure uncha
   eq(MS.updateMeasure(model(sc(tab([{ beats: [] }]))), c, 0, { section: { text: ' Coda ' } }).score.tracks[0].measures[0].section, 'Coda', 'stored as text');
 });
 
+test('S1: getter objects are read once: a getter that answers a checked value first and a bad one later never reaches the model', () => {
+  /** An object whose `key` getter returns `good` on the first read and `bad` on every later read; `rest` are plain fields. */
+  const flip = (key, good, bad, rest = {}) => {
+    let reads = 0;
+    const o = { ...rest };
+    Object.defineProperty(o, key, { enumerable: true, get: () => (reads++ ? bad : good) });
+    return o;
+  };
+  const s = model(sc(tab([{ beats: [nt('quarter')] }, { beats: [] }]), tab([{ beats: [] }, { beats: [] }])));
+  const c = cur(0, 0, 0);
+  const at1 = (r) => r.score.tracks[0].measures[1];
+  const cases = [
+    ['timeSignature.beats', () => MS.updateMeasure(s, c, 1, { timeSignature: flip('beats', 3, 999, { beatType: 4 }) }), (r) => at1(r).timeSignature, { beats: 3, beatType: 4 }],
+    ['timeSignature.beatType', () => MS.updateMeasure(s, c, 1, { timeSignature: flip('beatType', 8, 3, { beats: 3 }) }), (r) => at1(r).timeSignature, { beats: 3, beatType: 8 }],
+    ['patch.timeSignature', () => MS.updateMeasure(s, c, 1, flip('timeSignature', { beats: 5, beatType: 4 }, { beats: 99, beatType: 3 })), (r) => at1(r).timeSignature, { beats: 5, beatType: 4 }],
+    ['patch.keySignature', () => MS.updateMeasure(s, c, 1, flip('keySignature', 2, 99)), (r) => at1(r).keySignature, 2],
+    ['ending.numbers', () => MS.updateMeasure(s, c, 1, { ending: flip('numbers', [1, 2], [0, 0], { text: 'x' }) }), (r) => at1(r).ending, { numbers: [1, 2], text: 'x' }],
+    ['ending.text', () => MS.updateMeasure(s, c, 1, { ending: flip('text', 'ok', 'a\nb'.repeat(300), { numbers: 1 }) }), (r) => at1(r).ending, { numbers: 1, text: 'ok' }],
+    ['ending.open', () => MS.updateMeasure(s, c, 1, { ending: flip('open', true, 'yes', { numbers: 1 }) }), (r) => at1(r).ending, { numbers: 1, open: true }],
+    ['ending array item', () => { const a = [1, 2]; let n = 0; Object.defineProperty(a, 1, { enumerable: true, get: () => (n++ ? 0 : 2) }); return MS.updateMeasure(s, c, 1, { ending: a }); }, (r) => at1(r).ending, [1, 2]],
+    ['section.letter', () => MS.updateMeasure(s, c, 1, { section: flip('letter', 'A', 'TOO LONG') }), (r) => at1(r).section, { letter: 'A' }],
+    ['section.text', () => MS.updateMeasure(s, c, 1, { section: flip('text', 'Verse', 'x'.repeat(500), { letter: 'A' }) }), (r) => at1(r).section, { letter: 'A', text: 'Verse' }],
+    ['options.track', () => MS.updateMeasure(s, c, 1, { clef: 'bass' }, flip('track', 1, 9)), (r) => r.score.tracks[1].measures[1].clef, 'bass'],
+    ['score title', () => S.updateScore(s, c, flip('title', 'Ok', 'a\nb')), (r) => r.score.title, 'Ok'],
+    ['tempo text', () => S.setTempo(s, c, flip('text', 'Slow', 'x'.repeat(500), { bpm: 60 })), (r) => r.score.tracks[0].measures[0].beats[0].tempo, { bpm: 60, unit: 'quarter', text: 'Slow' }],
+    ['tempo bpm', () => S.setTempo(s, c, flip('bpm', 60, -1)), (r) => r.score.tracks[0].measures[0].beats[0].tempo, 60],
+    ['track capo', () => TR.updateTrack(s, c, 0, flip('capo', 2, 99)), (r) => r.score.tracks[0].capo, 2],
+    ['track tuning item', () => { const t = ['E2', 'A2', 'D3', 'G3', 'B3', 'E4']; let n = 0; Object.defineProperty(t, 0, { enumerable: true, get: () => (n++ ? 'Q9' : 'D2') }); return TR.updateTrack(s, c, 0, { tuning: t }); }, (r) => r.score.tracks[0].tuning[0], 'D2'],
+    ['addTrack spec name', () => TS.addTrack(s, c, flip('name', 'Uke', 'a\nb', { preset: 'ukulele' })), (r) => r.score.tracks[2].name, 'Uke'],
+    ['addTrack spec capo', () => TS.addTrack(s, c, flip('capo', 3, 99)), (r) => r.score.tracks[2].capo, 3],
+  ];
+  for (const [name, call, read, want] of cases) {
+    const r = call();
+    eq(read(r), want, name);
+    ok(sanitizeScore(r.score) === r.score, `${name}: sanitize-stable`);
+  }
+});
+
 // ---------- B10: commands and settings calls mixed ----------
 const { run } = await imp('src/editor/model/commands.js');
 const { createHistory } = await imp('src/editor/model/history.js');

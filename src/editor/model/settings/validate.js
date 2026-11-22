@@ -6,10 +6,14 @@
  *
  * Patch keys are checked against an allowlist of own keys, so
  * `__proto__`, `constructor`, `tracks` or `measures` never get through.
+ * Objects and arrays are copied once before they are checked (object(),
+ * list()), and nested values are read into locals, so a getter can't hand
+ * one value to the check and another to the model.
  */
 import { EDITOR_LIMITS } from '../limits.js';
 
-const LINE_BREAK = /[\r\n\u2028\u2029]/;
+/** Line breaks a single-line field rejects. */
+export const LINE_BREAK = /[\r\n\u2028\u2029]/;
 
 /** Whether `v` is a plain object (an object literal or JSON object, not an array, class instance or null). */
 export function plain(v) {
@@ -18,11 +22,14 @@ export function plain(v) {
   return proto === Object.prototype || proto === null;
 }
 
-/** `v` checked to be a plain object; TypeError "<what> must be an object" otherwise. */
+/** A shallow copy of `v` (each own enumerable value read once), checked to be a plain object; TypeError "<what> must be an object" otherwise. */
 export function object(v, what) {
   if (!plain(v)) throw new TypeError(`${what} must be an object`);
-  return v;
+  return { ...v };
 }
+
+/** A copy of array `v` (each item read once). */
+export const list = (v) => [...v];
 
 /** TypeError "Unknown <what> field: <k>" for the first own key of `obj` not in `allowed` (an array of names). */
 export function checkKeys(obj, allowed, what) {
