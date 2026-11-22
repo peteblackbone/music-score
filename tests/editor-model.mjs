@@ -79,6 +79,36 @@ test('io: round trip exportScore(parseInput(x)) deep-equals {schemaVersion:1, ..
     ok(sanitizeScore(m) === m, `${c.id}: fixed point`);
   }
 });
+const { EDITOR_LIMITS } = await imp('src/editor/model/limits.js');
+test('io limits: each structure limit accepts exactly the limit and rejects one more with "Score too large" (before sanitize)', () => {
+  const L = EDITOR_LIMITS;
+  eq(L, { jsonChars: 5 * 1024 * 1024, tracks: 32, measuresPerTrack: 2000, voicesPerMeasure: 4, beatsPerVoice: 256, notesPerBeat: 16, tuningStrings: 12 });
+  const T = (extra = {}, measures = [{ beats: [] }]) => ({ showTablature: true, ...extra, measures });
+  const notes = (n) => Array.from({ length: n }, (_, i) => ({ pitch: 'C4', fret: i % 20 }));
+  const cases = [
+    ['tracks', (n) => ({ tracks: Array.from({ length: n }, () => T()) }), L.tracks],
+    ['measures in a track', (n) => ({ tracks: [T({}, Array.from({ length: n }, () => ({ beats: [] })))] }), L.measuresPerTrack],
+    ['beats in a measure', (n) => ({ tracks: [T({}, [{ beats: Array.from({ length: n }, () => ({ type: 'rest', duration: '64th' })) }])] }), L.beatsPerVoice],
+    ['beats in a measure', (n) => ({ tracks: [T({}, [{ voices: [{ beats: [] }, { beats: Array.from({ length: n }, () => ({ type: 'rest', duration: '64th' })) }] }])] }), L.beatsPerVoice],
+    ['voices in a measure', (n) => ({ tracks: [T({}, [{ voices: Array.from({ length: n }, () => ({ beats: [] })) }])] }), L.voicesPerMeasure],
+    ['notes in a beat', (n) => ({ tracks: [T({}, [{ beats: [{ type: 'note', duration: 'whole', notes: notes(n) }] }])] }), L.notesPerBeat],
+    ['tuning strings', (n) => ({ tracks: [T({ tuning: Array.from({ length: n }, () => 'E2') })] }), L.tuningStrings],
+  ];
+  for (const [what, make, limit] of cases) {
+    io.parseInput(make(limit));
+    throws(() => io.parseInput(make(limit + 1)), `Score too large: ${limit + 1} ${what} (limit ${limit})`);
+    throws(() => io.parseInput(JSON.stringify(make(limit + 1))), 'Score too large');
+  }
+});
+test('io limits: JSON text over 5 MB characters is rejected before parsing (strings and objects)', () => {
+  const pad = (n) => `{"title":"${'x'.repeat(n - 12)}"}`;
+  eq(pad(100).length, 100);
+  io.parseInput(pad(EDITOR_LIMITS.jsonChars));
+  throws(() => io.parseInput(pad(EDITOR_LIMITS.jsonChars + 1)), 'Score too large');
+  throws(() => io.parseInput(`${pad(EDITOR_LIMITS.jsonChars)} `), 'characters of JSON');
+  throws(() => io.parseInput({ title: 'x'.repeat(EDITOR_LIMITS.jsonChars) }), 'Score too large');
+  throws(() => io.parseInput({ schemaVersion: 2, tracks: Array.from({ length: 40 }, () => ({})) }), 'Unsupported schemaVersion');
+});
 test('defaultScore: one guitar track, standard tuning, notation + TAB, 4/4, one empty measure; sanitize-stable', () => {
   const d = defaultScore();
   eq(d.tracks.length, 1);
@@ -817,6 +847,22 @@ test('demo: readAutosave reports ok / none / corrupt / unavailable', () => {
   eq(demo.readAutosave(store('null')), { status: 'corrupt' });
   eq(demo.readAutosave({ getItem: () => { throw new Error('blocked'); } }), { status: 'unavailable' });
   eq(demo.AUTOSAVE_KEY, 'music-score-editor:autosave');
+});
+test('demo: restoring guard — a flagged session skips the restore (reported corrupt) until cleared; storage errors are swallowed', () => {
+  const mem = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; };
+  const local = mem(); local.setItem(demo.AUTOSAVE_KEY, '{"tracks":[]}');
+  const session = mem();
+  eq(demo.readAutosave(local, session).status, 'ok');
+  demo.markRestoring(session);
+  eq([demo.isRestoring(session), session.getItem(demo.RESTORING_KEY)], [true, '1']);
+  eq(demo.readAutosave(local, session), { status: 'corrupt', unfinished: true });
+  eq(demo.readAutosave(mem(), session), { status: 'none' }, 'no autosave: nothing to skip');
+  demo.clearRestoring(session);
+  eq([demo.isRestoring(session), demo.readAutosave(local, session).status], [false, 'ok']);
+  const broken = { getItem: () => { throw new Error('x'); }, setItem: () => { throw new Error('x'); }, removeItem: () => { throw new Error('x'); } };
+  demo.markRestoring(broken); demo.clearRestoring(broken); demo.markRestoring(null);
+  eq([demo.isRestoring(broken), demo.isRestoring(null), demo.readAutosave(local, broken).status], [false, false, 'ok']);
+  eq(demo.RESTORING_KEY, 'music-score-editor:restoring');
 });
 test('demo: checkUpload rejects files over 5 MB before reading', () => {
   eq(demo.checkUpload({ name: 'a.json', size: 5 * 1024 * 1024 }), { ok: true });

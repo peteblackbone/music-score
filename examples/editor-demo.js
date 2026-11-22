@@ -4,7 +4,9 @@
  * sanitizeFilename, newScore, readAutosave, checkUpload.
  *
  * Flows (ui.md §1, §6): first visit loads lead-riff with a notice; later
- * visits restore the browser autosave (debounced 500 ms after each change);
+ * visits restore the browser autosave (debounced 500 ms after each edit,
+ * undo or redo; loading a score is not saved). A restore that never
+ * finished its first render (sessionStorage flag) is skipped next time;
  * New… / Load / Open JSON ask before replacing unsaved work ("unsaved" =
  * changed since the last load, New or Download); errors are shown as text
  * notices and never change the editor.
@@ -15,6 +17,8 @@ import { leadSoloF } from './lead-solo-f.js';
 import { exampleScore } from './example-score.js';
 
 export const AUTOSAVE_KEY = 'music-score-editor:autosave';
+/** sessionStorage flag set while a restore renders; still set on the next load = that restore never finished. */
+export const RESTORING_KEY = 'music-score-editor:restoring';
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const MIN_WIDTH = 560;
 const EXAMPLES = { 'lead-riff': leadRiff, 'lead-solo-f': leadSoloF, 'example-score': exampleScore };
@@ -47,16 +51,30 @@ export function newScore({ title = 'Untitled', beats = 4, beatType = 4, preset =
   };
 }
 
-/** The autosave in `storage`: { status: 'ok', score } | { status: 'none' } | { status: 'corrupt' } | { status: 'unavailable' }. */
-export function readAutosave(storage) {
+/**
+ * The autosave in `storage`: { status: 'ok', score } | { status: 'none' } |
+ * { status: 'corrupt' } | { status: 'unavailable' }. With `session`
+ * (sessionStorage) still flagged by an earlier restore that never finished
+ * its first render, the autosave is reported corrupt and not restored.
+ */
+export function readAutosave(storage, session = null) {
   let raw;
   try { raw = storage.getItem(AUTOSAVE_KEY); } catch { return { status: 'unavailable' }; }
   if (raw == null) return { status: 'none' };
+  if (isRestoring(session)) return { status: 'corrupt', unfinished: true };
   try {
     const score = JSON.parse(raw);
     return score && typeof score === 'object' && !Array.isArray(score) ? { status: 'ok', score } : { status: 'corrupt' };
   } catch { return { status: 'corrupt' }; }
 }
+
+const sessionOp = (fn) => { try { return fn(); } catch { return null; } };
+/** Whether `session` carries the restoring flag. */
+export const isRestoring = (session) => !!session && sessionOp(() => session.getItem(RESTORING_KEY)) != null;
+/** Set the restoring flag (before a restore renders). */
+export const markRestoring = (session) => { if (session) sessionOp(() => session.setItem(RESTORING_KEY, '1')); };
+/** Clear the restoring flag (the restore rendered, or the autosave was replaced). */
+export const clearRestoring = (session) => { if (session) sessionOp(() => session.removeItem(RESTORING_KEY)); };
 
 /** Size check before reading an upload: { ok: true } or { ok: false, error } (over 5 MB, or no file). */
 export function checkUpload(file) {
@@ -77,7 +95,9 @@ export function startEditorDemo(doc) {
   const notices = $('notices');
   const save = $('st-save');
   let storage = null;
+  let session = null;
   try { storage = win.localStorage; } catch { storage = null; }
+  try { session = win.sessionStorage; } catch { session = null; }
 
   // ---- notices: one per kind, replaced, dismissed by the user only ----
   const shown = {};
@@ -102,13 +122,19 @@ export function startEditorDemo(doc) {
     const cs = win.getComputedStyle(card);
     return Math.max(MIN_WIDTH, card.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
   };
-  const saved = storage ? readAutosave(storage) : { status: 'unavailable' };
+  const saved = storage ? readAutosave(storage, session) : { status: 'unavailable' };
   let editor = null;
   if (saved.status === 'ok') {
+    // the flag stays set if this render hangs or crashes the tab; the next load then skips the restore
+    markRestoring(session);
     try {
       editor = new ScoreEditor(card, saved.score, { width: width() });
       notify('info', 'Restored your last session from this browser.');
-    } catch { saved.status = 'corrupt'; }
+      win.requestAnimationFrame(() => clearRestoring(session));
+    } catch {
+      clearRestoring(session);
+      saved.status = 'corrupt';
+    }
   }
   if (!editor) {
     editor = new ScoreEditor(card, clone(leadRiff), { width: width() });
@@ -135,6 +161,7 @@ export function startEditorDemo(doc) {
       try {
         if (!storage) throw new Error('no storage');
         storage.setItem(AUTOSAVE_KEY, JSON.stringify(editor.getScore()));
+        clearRestoring(session); // a skipped, unfinished session has now been replaced
         save.textContent = 'Saved in this browser';
       } catch { storageFailed(); }
     }, 500);
@@ -169,8 +196,11 @@ export function startEditorDemo(doc) {
   }
   editor.on('cursor', refreshUi);
   editor.on('change', (e) => {
-    if (e.source !== 'load') dirty = true;
-    scheduleSave();
+    // only real edits (edit / undo / redo) are unsaved work and autosaved; a load is not
+    if (e.source !== 'load') {
+      dirty = true;
+      scheduleSave();
+    }
     refreshUi();
   });
   refreshUi();
