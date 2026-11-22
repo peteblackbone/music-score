@@ -104,7 +104,7 @@ export function installSelection(Editor) {
     this._selection = null;
     this._view.drawSelection();
     this._events.emit('selection', null);
-    if (say) { this._lastMessage = describe({ id: 'selectionCleared' }); this._view.announce(this._lastMessage, 'lead'); }
+    if (say) { this._lastMessage = describe({ id: 'selectionCleared' }); this._view.announce(this._lastMessage, { lead: true }); }
     return true;
   });
 

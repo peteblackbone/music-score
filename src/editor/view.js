@@ -196,16 +196,17 @@ export class EditorView {
 
   /**
    * Speak `text` in the live region after 150 ms of quiet. Within one
-   * window a later text replaces an earlier one, except a `keep` text (a
-   * settings result): it stays, and the texts after it are joined to it
-   * with ". " (the latest non-kept one only; a repeat is spoken once).
-   * `keep: 'lead'` (2.3 "Selection cleared") starts the window afresh with a kept text.
+   * window a later text replaces an earlier one, except a kept text
+   * (`{ keep: true }`, a settings result): it stays, and the texts after it
+   * are joined to it with ". " (the latest non-kept one only; a repeat is
+   * spoken once). `{ lead: true }` (2.3 "Selection cleared") starts the
+   * window afresh with a kept text.
    */
-  announce(text, keep = false) {
+  announce(text, { keep = false, lead = false } = {}) {
     if (this._destroyed) return;
     if (this._liveTimer != null) this.clock.clearTimeout(this._liveTimer);
-    if (this._liveTimer == null || keep === 'lead') this._parts = [];
-    keep = !!keep;
+    if (this._liveTimer == null || lead) this._parts = [];
+    keep = keep || lead;
     const last = this._parts[this._parts.length - 1];
     if (last && last.text === text) last.keep ||= keep; // the same text twice in a row is spoken once
     else if (last && !last.keep && !keep) last.text = text;

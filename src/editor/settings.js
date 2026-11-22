@@ -69,7 +69,7 @@ export function installSettings(Editor) {
   });
   method(Editor, '_sayKept', function sayKept(text) {
     this._lastMessage = text;
-    this._view.announce(text, true);
+    this._view.announce(text, { keep: true });
   });
   method(Editor, '_applyModel', function applyModel(name, label, r) {
     this._dropSelection(); // 2.3: an edit clears the selection (selection(null) first)
