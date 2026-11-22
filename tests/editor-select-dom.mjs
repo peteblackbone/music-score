@@ -580,6 +580,109 @@ test('B10 (controller, 300 steps): keys, selection, fill, reflow, ranged deletes
   ed.destroy();
 });
 
+// ---------- demo (criterion 43) ----------
+const DE = await imp('examples/editor-demo-edit.js');
+const DT = await imp('examples/editor-demo-tracks.js');
+const DM = await imp('examples/editor-demo-measure.js');
+const fsMod = await import('node:fs');
+const html = fsMod.readFileSync(path.join(root, 'editor.html'), 'utf8');
+test('demo helpers: Selection status text, clip text check, the Remove confirm with tempo marks, the pickup patch from the Measure dialog', () => {
+  eq(DE.selectionText(null), '–');
+  eq(DE.selectionText({ kind: 'beats', beatCount: 6, measures: [1, 2] }), '6 beats, measures 2–3');
+  eq(DE.selectionText({ kind: 'beats', beatCount: 4, measures: [1, 1] }), '4 beats, measure 2');
+  eq(DE.selectionText({ kind: 'beats', beatCount: 1, measures: [0, 0] }), '1 beat, measure 1');
+  eq(DE.selectionText({ kind: 'measures', beatCount: 9, measures: [1, 3] }), '3 measures (2–4)');
+  eq(DE.selectionText({ kind: 'measures', beatCount: 2, measures: [1, 1] }), '1 measure (2)');
+  eq([DE.isClipText(clipText('beats', [])), DE.isClipText('{"type":"x"}'), DE.isClipText('music-score-clip'), DE.isClipText(undefined)], [true, false, false, false]);
+  eq(DT.removeConfirm('Guitar', { notes: 24, tempoMarks: 1 }), 'Remove track "Guitar"? Its 24 notes and 1 tempo mark will be deleted.');
+  eq(DT.removeConfirm('Guitar', { notes: 0, tempoMarks: 2 }), 'Remove track "Guitar"? Its 2 tempo marks will be deleted.');
+  eq(DT.removeConfirm('Guitar', { notes: 1, tempoMarks: 0 }), 'Remove track "Guitar"? Its 1 note will be deleted.');
+  eq(DT.removeConfirm('Guitar', { notes: 0, tempoMarks: 0 }), 'Remove track "Guitar"?');
+  const { ed } = mk({ tracks: [
+    { name: 'Gtr', showTablature: true, measures: [{ beats: [nt('quarter', 1, 0, { tempo: 90 }), nt('quarter', 1, 0, { tempo: 100 })] }] },
+    { name: 'B', showTablature: true, measures: [{ beats: [nt('half')] }] },
+  ] });
+  eq(ed.getRemoveTrackImpact(0), { notes: 2, tempoMarks: 1 }, 'the onset-0 mark moves to track 2, the other one is dropped');
+  eq(ed.getRemoveTrackImpact(1), { notes: 1, tempoMarks: 0 });
+  throws(() => ed.getRemoveTrackImpact(2), RangeError);
+  ed.setCursor({ measure: 0, beat: 0 });
+  const info = ed.getCursorInfo();
+  const m = ed.getMeasureSettings(0, 0);
+  const v = DM.measureValues(m, info);
+  eq(v.pickup, false);
+  eq(DM.measurePatch(m, { ...v, pickup: true }, 0, info).patch, { pickup: true });
+  eq(ed.updateMeasure(0, { pickup: true }), true);
+  const on = ed.getCursorInfo();
+  const v2 = DM.measureValues(ed.getMeasureSettings(0, 0), on);
+  eq([v2.pickup, DM.measurePatch(ed.getMeasureSettings(0, 0), { ...v2, pickup: false }, 0, on).patch], [true, { pickup: null }]);
+  eq(DM.measurePatch(ed.getMeasureSettings(0, 0), v2, 0, on).patch, {}, 'unchanged');
+  ed.destroy();
+});
+test('demo markup: Edit group (Copy, Cut, Paste) between History and Settings, Measures group (Fill, Reflow) after Duration, Selection status after Beat, the pickup checkbox in the Time signature fieldset, Tempo under All tracks, shortcut sections in order', () => {
+  const at = (s) => html.indexOf(s);
+  ok(at('aria-label="History"') < at('aria-label="Edit"') && at('aria-label="Edit"') < at('aria-label="Settings"'));
+  for (const [id, title] of [['copy-btn', 'Ctrl+C'], ['cut-btn', 'Ctrl+X'], ['paste-btn', 'Paste before the cursor (Ctrl+V)'], ['fill-btn', 'Fill the measure with rests (F)'], ['reflow-btn', 'Move overflow to the next measure (Shift+F)']]) {
+    ok(new RegExp(`<button type="button" id="${id}" title="[^"]*${title.replace(/[()+]/g, '\\$&')}`).test(html), id);
+  }
+  ok(at('aria-label="Duration"') < at('aria-label="Measures"') && at('aria-label="Measures"') < at('id="readonly"'));
+  ok(at('id="st-beat"') < at('id="st-selection"') && at('id="st-selection"') < at('id="st-string"'));
+  const time = html.slice(at('<legend>Time signature</legend>'), html.indexOf('</fieldset>', at('<legend>Time signature</legend>')));
+  ok(time.includes('id="ms-pickup"') && time.includes('aria-describedby="ms-pickup-help"') && time.includes('Pickup measure'));
+  ok(at('<legend>Navigation</legend>') < at('id="ms-tempo-set"') && at('id="ms-tempo-set"') < at('id="ms-track-heading"'));
+  ok(html.includes('Applies to every track. A mark at this beat on another track is replaced.'));
+  const sections = [...html.matchAll(/<section><h3>([^<]+)<\/h3>/g)].map((x) => x[1]);
+  eq(sections, ['Move', 'Selection', 'Enter', 'Rhythm', 'Edit', 'Clipboard', 'Measures', 'Effects', 'Settings', 'History']);
+});
+test('demo wiring: buttons call the public API, Copy / Cut also try navigator.clipboard (refusal ignored), Paste reads the system clipboard only with the permission granted; disabled states; a focused button that turns disabled hands focus on', async () => {
+  const mkBtn = (id) => ({ id, disabled: false, handlers: [], addEventListener(t, f) { this.handlers.push(f); }, focus() { fake.activeElement = this; }, click(detail = 0) { return Promise.all(this.handlers.map((f) => f({ detail }))); } });
+  const els = Object.fromEntries(['copy-btn', 'cut-btn', 'paste-btn', 'fill-btn', 'reflow-btn'].map((id) => [id, mkBtn(id)]));
+  els['st-selection'] = { textContent: '' };
+  const writes = [];
+  let state = 'prompt';
+  const fake = {
+    activeElement: null,
+    getElementById: (id) => els[id],
+    defaultView: { navigator: {
+      clipboard: { writeText: (t) => { writes.push(t); return Promise.reject(new Error('denied')); }, readText: async () => clipText('beats', [nt('8th', 1, 9)]) },
+      permissions: { query: async () => ({ state }) },
+    } },
+  };
+  const { ed } = mk({ tracks: [{ showTablature: true, measures: [{ beats: [nt('half', 1, 1)] }] }] });
+  let refreshed = 0;
+  const refreshEdit = DE.wireEdit(fake, ed, { refresh: () => { refreshed++; refreshEdit(ed.getCursorInfo(), ed.isReadOnly()); } });
+  refreshEdit(ed.getCursorInfo(), false);
+  eq(['copy-btn', 'cut-btn', 'paste-btn'].map((id) => els[id].disabled), [false, false, false]);
+  await els['copy-btn'].click();
+  eq(writes.length, 1);
+  ed.setCursor({ beat: 1 });
+  await els['paste-btn'].click();
+  eq(ed.getScore().tracks[0].measures[0].beats.map((b) => b.notes[0].fret), [1, 1], 'prompt state: the internal clipboard');
+  state = 'granted';
+  await els['paste-btn'].click();
+  eq(ed.getScore().tracks[0].measures[0].beats.map((b) => b.notes[0].fret), [1, 9, 1], 'granted: the system clipboard (before the cursor beat; the full measure has no slot)');
+  ed.setCursor({ beat: 3 });
+  refreshEdit(ed.getCursorInfo(), false);
+  eq([els['copy-btn'].disabled, els['cut-btn'].disabled, els['st-selection'].textContent], [false, false, '–'], 'overfull: no slot, the cursor is on a beat');
+  ed.setCursor({ beat: 0 });
+  els['cut-btn'].focus();
+  ed.setReadOnly(true);
+  refreshEdit(ed.getCursorInfo(), true);
+  eq(['copy-btn', 'cut-btn', 'paste-btn', 'fill-btn', 'reflow-btn'].map((id) => els[id].disabled), [false, true, true, true, true]);
+  eq(fake.activeElement, els['copy-btn'], 'focus moved to an enabled sibling');
+  ed.setReadOnly(false);
+  ed.loadScore({ tracks: [{ showTablature: true, measures: [{ beats: [nt('whole'), nt('quarter')] }] }] });
+  await els['reflow-btn'].click();
+  eq(ed.getScore().tracks[0].measures.length, 2, 'Reflow goes through handleKey');
+  ed.loadScore({ tracks: [{ showTablature: true, measures: [{ beats: [] }] }] });
+  await els['fill-btn'].click();
+  eq(ed.getScore().tracks[0].measures[0].beats, [rest('whole')]);
+  ok(refreshed >= 5);
+  ed.setSelection({ anchor: { measure: 0, beat: 0 }, focus: { measure: 0, beat: 0 } });
+  refreshEdit(ed.getCursorInfo(), false);
+  eq(els['st-selection'].textContent, '1 measure (1)');
+  ed.destroy();
+});
+
 // ---------- report ----------
 export async function summary() {
   let fail = 0;

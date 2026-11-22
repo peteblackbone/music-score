@@ -11,7 +11,7 @@
  * graces, the same count the library reports).
  *
  * Pure helpers (exported for the tests): instrumentOptions, tuningRows,
- * matchPreset, presetGroups, notesOnRemovedStrings, trackNoteCount,
+ * matchPreset, presetGroups, notesOnRemovedStrings, trackNoteCount, removeConfirm,
  * lowerFourth, trackLabel, trackValues, trackPatch, trackErrors.
  */
 import { ScoreEditor } from '../index.js';
@@ -86,6 +86,12 @@ export function notesOnRemovedStrings(score, ti, newCount) {
 }
 /** Every note of track `ti` (voice 1, voice 2 and graces). */
 export const trackNoteCount = (score, ti) => countNotes(score.tracks[ti], (n) => !!n && typeof n === 'object');
+
+/** The Remove… confirm for track `name` and getRemoveTrackImpact `{ notes, tempoMarks }` (2.3: dropped tempo marks named; moved ones not). */
+export function removeConfirm(name, { notes = 0, tempoMarks = 0 } = {}) {
+  const parts = [notes ? `${notes} note${notes === 1 ? '' : 's'}` : '', tempoMarks ? `${tempoMarks} tempo mark${tempoMarks === 1 ? '' : 's'}` : ''].filter(Boolean);
+  return parts.length ? `Remove track "${name}"? Its ${parts.join(' and ')} will be deleted.` : `Remove track "${name}"?`;
+}
 
 /** List text of track `t` at index `i`: '1. Guitar', '2. Track 2 (hidden)'. */
 export function trackLabel(t, i) {
@@ -302,9 +308,7 @@ export function wireTracksDialog(doc, editor, { refresh = () => {} } = {}) {
   });
   $('tr-remove').addEventListener('click', () => {
     if (!leavePanel()) return;
-    const n = trackNoteCount(score(), sel);
-    const ask = n ? `Remove track "${nameOf(sel)}"? Its ${n} note${n === 1 ? '' : 's'} will be deleted.` : `Remove track "${nameOf(sel)}"?`;
-    if (!doc.defaultView.confirm(ask)) return;
+    if (!doc.defaultView.confirm(removeConfirm(nameOf(sel), editor.getRemoveTrackImpact(sel)))) return;
     if (callApi(editor, alert, () => editor.removeTrack(sel))) {
       sel = Math.min(sel, tracks().length - 1);
       refreshAll(editor.lastMessage);

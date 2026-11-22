@@ -2,8 +2,9 @@
  * editor-demo-measure.js — the Measure… dialog of editor.html: the cursor's
  * column (time and key signature, barline and repeat, ending, navigation),
  * the clef of the cursor's track and the tempo mark at the cursor beat.
- * Apply makes up to two calls: updateMeasure, then setTempo. Not part of
- * the package; uses the ScoreEditor public API only.
+ * Apply makes up to two calls: updateMeasure, then setTempo. The tempo is
+ * score-wide (2.3) and the pickup checkbox shows at measure 1 only. Not
+ * part of the package; uses the ScoreEditor public API only.
  *
  * Pure helpers (exported for the tests): keyCount, keyLabel, tempoLabel,
  * parseEnding, measureValues, measureErrors, measurePatch; BARLINES is the
@@ -76,6 +77,7 @@ export function measureValues(m, info) {
     unit: here ? t.unit : t?.unit ?? 'quarter',
     dots: String(here ? t.dots : t?.dots ?? 0),
     tempoText: here ? t.text ?? '' : '',
+    pickup: !!info?.pickup,
   };
 }
 
@@ -144,6 +146,7 @@ export function measurePatch(m, v, mi, info) {
   if (!!v.segno !== m.segno) patch.segno = v.segno ? true : null;
   if (!!v.coda !== m.coda) patch.coda = v.coda ? true : null;
   if (v.jump !== 'custom' && (v.jump || null) !== (m.jumpCustom ? '\0' : m.jump)) patch.jump = v.jump || null;
+  if (mi === 0 && v.pickup !== undefined && !!v.pickup !== !!m.pickup) patch.pickup = v.pickup ? true : null;
   const letter = String(v.sectionLetter ?? '').trim();
   const stext = String(v.sectionText ?? '').trim();
   const oldSec = m.section;
@@ -205,6 +208,8 @@ export function wireMeasureDialog(doc, editor, { refresh = () => {} } = {}) {
       ms('key-modes').hidden = mi === 0;
       ms('time-start').hidden = mi !== 0;
       ms('key-start').hidden = mi !== 0;
+      ms('pickup-row').hidden = mi !== 0;
+      ms('pickup').checked = v.pickup;
       const ih = m.timeSignature.inherited;
       ms('time-same-label').textContent = `No change (${ih.beats}/${ih.beatType} continues)`;
       ms('key-same-label').textContent = `No change (${m.keySignature.inherited ? keyCount(m.keySignature.inherited) : 'no sharps or flats'} continues)`;
@@ -261,6 +266,7 @@ export function wireMeasureDialog(doc, editor, { refresh = () => {} } = {}) {
         segno: ms('segno').checked, coda: ms('coda').checked, jump: ms('jump').value, sectionLetter: ms('section-letter').value, sectionText: ms('section-text').value,
         clefMode: checked('ms-clef-mode'), clef: ms('clef').value,
         tempoMode: checked('ms-tempo-mode'), bpm: ms('bpm').value, unit: ms('unit').value, dots: ms('dots').value, tempoText: ms('tempo-text').value,
+        pickup: ms('pickup').checked,
       };
       const errs = measureErrors(v, { tempoOn: !ms('tempo-set').disabled });
       const fieldOf = { beats: ms('beats'), repeatCount: ms('repeat'), ending: ms('ending'), bpm: ms('bpm') };

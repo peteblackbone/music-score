@@ -102,6 +102,12 @@
           <button type="button" id="redo-btn">Redo</button>
         </div>
         <span class="sep" aria-hidden="true"></span>
+        <div class="group" role="group" aria-label="Edit">
+          <button type="button" id="copy-btn" title="Copy the selection, or the beat (Ctrl+C)">Copy</button>
+          <button type="button" id="cut-btn" title="Cut the selection, or the beat (Ctrl+X)">Cut</button>
+          <button type="button" id="paste-btn" title="Paste before the cursor (Ctrl+V)">Paste</button>
+        </div>
+        <span class="sep" aria-hidden="true"></span>
         <div class="group" role="group" aria-label="Settings">
           <button type="button" id="score-btn" aria-haspopup="dialog" title="Header and options">Score…</button>
           <button type="button" id="tracks-btn" aria-haspopup="dialog" title="Tracks, tuning and capo">Tracks…</button>
@@ -120,6 +126,11 @@
           <button type="button" data-duration="64th" aria-label="64th" aria-pressed="false">64</button>
           <button type="button" id="dots-btn">Dots: 0</button>
           <button type="button" id="triplet-btn" aria-pressed="false">Triplet</button>
+        </div>
+        <span class="sep" aria-hidden="true"></span>
+        <div class="group" role="group" aria-label="Measures">
+          <button type="button" id="fill-btn" title="Fill the measure with rests (F)">Fill</button>
+          <button type="button" id="reflow-btn" title="Move overflow to the next measure (Shift+F)">Reflow</button>
         </div>
         <span class="sep" aria-hidden="true"></span>
         <label class="inline"><input type="checkbox" id="readonly" /> Read-only</label>
@@ -156,6 +167,7 @@
       <span><span class="k">Key:</span> <span id="st-key">–</span></span>
       <span><span class="k">Tempo:</span> <span id="st-tempo">–</span></span>
       <span><span class="k">Beat:</span> <span id="st-beat">–</span></span>
+      <span><span class="k">Selection:</span> <span id="st-selection">–</span></span>
       <span><span class="k">String:</span> <span id="st-string">–</span></span>
       <span><span class="k">Fret:</span> <span id="st-fret">–</span></span>
       <span><span class="k">Duration:</span> <span id="st-duration">–</span></span>
@@ -176,6 +188,12 @@
           <dt>Ctrl+Home / End</dt><dd>Start / end of the score</dd>
           <dt>PageUp / PageDown</dt><dd>Previous / next track</dd>
         </dl></section>
+        <section><h3>Selection</h3><dl>
+          <dt>Shift+← →</dt><dd>Extend by one beat</dd>
+          <dt>Ctrl+Shift+← →</dt><dd>Extend to the barline</dd>
+          <dt>Shift+Home / End</dt><dd>Extend to the measure start or end</dd>
+          <dt>Ctrl+A</dt><dd>Select the whole track</dd>
+        </dl></section>
         <section><h3>Enter</h3><dl>
           <dt>0–9</dt><dd>Fret on the cursor string (two quick digits: 10–24)</dd>
           <dt>R</dt><dd>Rest / note</dd>
@@ -188,15 +206,22 @@
           <dt>/</dt><dd>Triplet on / off</dd>
         </dl></section>
         <section><h3>Edit</h3><dl>
-          <dt>Delete / Backspace</dt><dd>Delete the note on the string</dd>
-          <dt>Ctrl+Delete / Ctrl+Backspace</dt><dd>Delete the beat</dd>
+          <dt>Delete / Backspace</dt><dd>Delete the note on the string, or turn a selection into rests</dd>
+          <dt>Ctrl+Delete / Ctrl+Backspace</dt><dd>Delete the beat, or the selected beats</dd>
           <dt>Insert or I</dt><dd>Insert a rest before the beat</dd>
-          <dt>Esc</dt><dd>Cancel a two-digit fret</dd>
+          <dt>Esc</dt><dd>Clear the selection or a two-digit fret</dd>
         </dl></section>
+        <section><h3>Clipboard</h3><dl>
+          <dt>Ctrl+C</dt><dd>Copy</dd>
+          <dt>Ctrl+X</dt><dd>Cut (the beats become rests)</dd>
+          <dt>Ctrl+V</dt><dd>Paste before the cursor, replacing a selection</dd>
+        </dl><p>Click the score first.</p></section>
         <section><h3>Measures</h3><dl>
           <dt>M / Shift+M</dt><dd>Insert a measure after / before</dd>
-          <dt>Shift+Delete / Shift+Backspace</dt><dd>Delete the measure</dd>
-        </dl></section>
+          <dt>Shift+Delete / Shift+Backspace</dt><dd>Delete the measure, or the selected measures</dd>
+          <dt>F</dt><dd>Fill with rests</dd>
+          <dt>Shift+F</dt><dd>Move overflow to the next measure</dd>
+        </dl><p>Pickup: use Measure… at measure 1.</p></section>
         <section><h3>Effects</h3><dl>
           <dt>H</dt><dd>Hammer-on/pull-off on / off</dd>
           <dt>S</dt><dd>Slide → legato slide → off</dd>
@@ -422,6 +447,7 @@
           </div>
           <p class="help" id="ms-time-start" hidden>Applies from the start.</p>
           <p class="help" id="ms-time-help">Applies to every track. Notes aren't moved, so measures may become overfull or underfull.</p>
+          <div class="row" id="ms-pickup-row" hidden><label class="inline"><input type="checkbox" id="ms-pickup" aria-describedby="ms-pickup-help" /> Pickup measure</label><p class="help" id="ms-pickup-help">Shorter than the time signature, such as the lead-in beats. It isn't marked underfull, and Fill skips it. Measure numbers still count it as 1.</p></div>
         </fieldset>
         <fieldset>
           <legend>Key signature</legend>
@@ -492,6 +518,25 @@
           <div class="row"><label for="ms-section-letter">Section letter</label> <input type="text" id="ms-section-letter" maxlength="3" autocomplete="off" aria-describedby="ms-section-help" /><p class="field-error" id="ms-section-letter-err" hidden></p></div>
           <div class="row"><label for="ms-section-text">Section text</label> <input type="text" id="ms-section-text" maxlength="200" autocomplete="off" aria-describedby="ms-section-help" /><p class="field-error" id="ms-section-text-err" hidden></p><p class="help" id="ms-section-help">Such as A and Verse. Either can be left empty.</p></div>
         </fieldset>
+        <fieldset id="ms-tempo-set" aria-describedby="ms-tempo-help">
+          <legend id="ms-tempo-legend">Tempo at beat 1</legend>
+          <div class="stack">
+            <label class="inline"><input type="radio" name="ms-tempo-mode" value="none" id="ms-tempo-none" /> <span id="ms-tempo-none-label">No tempo mark here</span></label>
+            <label class="inline"><input type="radio" name="ms-tempo-mode" value="mark" id="ms-tempo-mark" /> Tempo mark</label>
+          </div>
+          <div class="row"><label for="ms-bpm">BPM</label> <input type="number" id="ms-bpm" min="0.01" max="1000" step="0.01" /><p class="field-error" id="ms-bpm-err" hidden></p></div>
+          <div class="row"><label for="ms-unit">Note</label>
+            <select id="ms-unit">
+              <option value="whole">Whole</option><option value="half">Half</option><option value="quarter" selected>Quarter</option>
+              <option value="8th">Eighth</option><option value="16th">16th</option><option value="32nd">32nd</option>
+            </select>
+            <label for="ms-dots">Dots</label>
+            <select id="ms-dots"><option value="0">None</option><option value="1">1</option><option value="2">2</option></select>
+          </div>
+          <div class="row"><label for="ms-tempo-text">Text</label> <input type="text" id="ms-tempo-text" maxlength="200" autocomplete="off" aria-describedby="ms-tempo-text-help" /><p class="field-error" id="ms-tempo-text-err" hidden></p><p class="help" id="ms-tempo-text-help">Optional, such as Allegro.</p></div>
+          <p class="help" id="ms-tempo-off" hidden>Move the cursor onto a beat to set a tempo mark.</p>
+          <p class="help" id="ms-tempo-help">Applies to every track. A mark at this beat on another track is replaced.</p>
+        </fieldset>
         <h3 id="ms-track-heading">This track only</h3>
         <fieldset id="ms-clef-set">
           <legend>Clef</legend>
@@ -517,24 +562,6 @@
           </div>
           <p class="help" id="ms-clef-start" hidden>Set the opening clef in Tracks…</p>
           <p class="help" id="ms-clef-tab" hidden>Not shown: this track has TAB only.</p>
-        </fieldset>
-        <fieldset id="ms-tempo-set">
-          <legend id="ms-tempo-legend">Tempo at beat 1</legend>
-          <div class="stack">
-            <label class="inline"><input type="radio" name="ms-tempo-mode" value="none" id="ms-tempo-none" /> <span id="ms-tempo-none-label">No tempo mark here</span></label>
-            <label class="inline"><input type="radio" name="ms-tempo-mode" value="mark" id="ms-tempo-mark" /> Tempo mark</label>
-          </div>
-          <div class="row"><label for="ms-bpm">BPM</label> <input type="number" id="ms-bpm" min="0.01" max="1000" step="0.01" /><p class="field-error" id="ms-bpm-err" hidden></p></div>
-          <div class="row"><label for="ms-unit">Note</label>
-            <select id="ms-unit">
-              <option value="whole">Whole</option><option value="half">Half</option><option value="quarter" selected>Quarter</option>
-              <option value="8th">Eighth</option><option value="16th">16th</option><option value="32nd">32nd</option>
-            </select>
-            <label for="ms-dots">Dots</label>
-            <select id="ms-dots"><option value="0">None</option><option value="1">1</option><option value="2">2</option></select>
-          </div>
-          <div class="row"><label for="ms-tempo-text">Text</label> <input type="text" id="ms-tempo-text" maxlength="200" autocomplete="off" aria-describedby="ms-tempo-text-help" /><p class="field-error" id="ms-tempo-text-err" hidden></p><p class="help" id="ms-tempo-text-help">Optional, such as Allegro.</p></div>
-          <p class="help" id="ms-tempo-off" hidden>Move the cursor onto a beat to set a tempo mark.</p>
         </fieldset>
       </div>
       <p class="form-error" id="measure-error" role="alert"></p>
