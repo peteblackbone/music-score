@@ -15,7 +15,7 @@ import {
   clampDots, notesOf, cursorNote, voiceOf,
 } from './access.js';
 import { measureFill, onsetOf, timeSignatureAt, keySignatureAt } from './fill.js';
-import { tempoAt } from './settings/score.js';
+import { tempoAt } from './settings/tempo.js';
 import { appendMeasure } from './measures.js';
 import { lastMainIn } from './ties.js';
 import { effectState } from './effects.js';

@@ -73,7 +73,7 @@ export const MESSAGES = Object.freeze({
   tooLarge: () => 'The score would be too large',
   trackUpdated: (d) => `${trackText(d)} updated${d.removed ? `, ${d.removed} note${d.removed === 1 ? '' : 's'} removed` : ''}`,
   trackAdded: (d) => `${trackText(d)} added`,
-  trackRemoved: (d) => `${trackText(d)} removed`,
+  trackRemoved: (d) => `${trackText(d)} removed${tempoRemoved(d.tempoDropped)}`,
   trackMoved: (d) => `Track${d.name ? ` ${d.name}` : ''} moved to position ${d.n}`,
   measureSet: (d) => (Object.hasOwn(MEASURE_TEXT, d.key) ? `${MEASURE_TEXT[d.key](d.value)}${d.key === 'clef' || d.key === 'timeSignature' || d.key === 'keySignature' ? (d.value == null ? ' at' : ' from') : ' at'} measure ${d.n}${d.tabOnly && d.value != null ? ', not shown on TAB only' : ''}` : ''),
   measureUpdated: (d) => `Measure ${d.n} settings updated${d.tabOnly ? ', clef not shown on TAB only' : ''}`,
@@ -96,6 +96,8 @@ const MEASURE_TEXT = {
   section: (v) => (v != null ? `Section ${typeof v === 'string' ? v : [v.letter, v.text].filter(Boolean).join(' ')}` : 'Section removed'),
 };
 
+/** ', 1 tempo mark removed' / ', 2 tempo marks removed' (empty for none). */
+export const tempoRemoved = (n) => (n ? `, ${n} tempo mark${n === 1 ? '' : 's'} removed` : '');
 /** 'Track 2 Bass' / 'Track 2'. */
 const trackText = (d) => `Track ${d.n}${d.name ? ` ${d.name}` : ''}`;
 

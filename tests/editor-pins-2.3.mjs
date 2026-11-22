@@ -45,26 +45,26 @@ export function drawnTempos(score, width = 900) {
   return textsOf(box.children[0], 'tempo-change-bpm');
 }
 
-// (a) tempoAt reads the cursor track only
-test('pin (a): tempoAt is per track: null for a mark on another track; on the slot `here` is false', () => {
+// (a) tempoAt reads the cursor track only. Inverted on purpose in 2.3: tempoAt is score-wide.
+test('pin (a), inverted in 2.3: tempoAt is score-wide: a mark on another track is in force; on the slot `here` is false', () => {
   const s = model({ tracks: [
     tab([{ beats: [nt('quarter', 1, 0, { tempo: 90 }), nt('quarter')] }, { beats: [nt('whole')] }]),
     tab([{ beats: [nt('quarter'), nt('quarter')] }, { beats: [nt('half')] }], { name: 'B' }),
   ] });
-  eq(SC.tempoAt(s, cur(1, 0, 0)), null, 'mark on track 0, cursor on track 1');
-  eq(SC.tempoAt(s, cur(1, 1, 0)), null);
+  eq(SC.tempoAt(s, cur(1, 0, 0)), { bpm: 90, unit: 'quarter', dots: 0, text: null, here: true }, 'mark on track 0, cursor on track 1 at its onset');
+  eq(SC.tempoAt(s, cur(1, 1, 0)), { bpm: 90, unit: 'quarter', dots: 0, text: null, here: false });
   eq(SC.tempoAt(s, cur(0, 0, 2)), { bpm: 90, unit: 'quarter', dots: 0, text: null, here: false }, 'slot');
   eq(SC.tempoAt(s, cur(0, 0, 0)).here, true);
 });
 
-// (b) removeTrack drops a mark that only the removed track has
-test('pin (b): removeTrack(0) loses a tempo mark that exists only on track 0; the announcement does not mention it', () => {
+// (b) removeTrack drops a mark that only the removed track has. Inverted on purpose in 2.3: the mark moves to track 1.
+test('pin (b), inverted in 2.3: removeTrack(0) moves a tempo mark that exists only on track 0 to track 1 (a beat at that onset); nothing is announced for a moved mark', () => {
   const s = model({ tracks: [
     tab([{ beats: [nt('quarter', 1, 0, { tempo: 90 }), nt('half')] }]),
     tab([{ beats: [nt('quarter'), nt('half')] }], { name: 'B' }),
   ] });
   const r = TS.removeTrack(s, cur(0, 0, 0), 0);
-  eq(JSON.stringify(r.score).includes('tempo'), false, 'no mark left');
+  eq(r.score.tracks[0].measures[0].beats[0].tempo, 90, 'moved to the remaining track');
   eq(describe(r.announce), 'Track 1 Gtr removed');
 });
 

@@ -143,5 +143,10 @@ for (const c of cases) {
   const { summary } = await import('./editor-pins-2.3.mjs');
   fail += summary();
 }
+// 2.3.0 score-wide tempo and pickup measure: criteria, render parity (tests/editor-tempo.mjs)
+{
+  const { summary } = await import('./editor-tempo.mjs');
+  fail += await summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);

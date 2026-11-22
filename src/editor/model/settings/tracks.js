@@ -9,7 +9,8 @@
  * LIMITS.tracks tracks (tooManyTracks).
  *
  * removeTrack(ti): refused for the only track (onlyTrack) and the only
- * visible one (lastVisible); column fields only it sets move to the others.
+ * visible one (lastVisible); column fields only it sets move to the others,
+ * and so do its tempo marks (tempo.js migrateTempo; the dropped ones are counted).
  *
  * moveTrack(from, to): the track keeps its identity; so does the cursor's.
  */
@@ -20,6 +21,7 @@ import { INSTRUMENTS } from './instruments.js';
 import { canonicalTuning } from './tuning.js';
 import { checkClef, checkCapo, otherVisible, trackName, uniqueName } from './track.js';
 import { newTrackMeasures, migrateRemoved } from './column.js';
+import { migrateTempo } from './tempo.js';
 
 const SPEC_KEYS = ['preset', 'name', 'label', 'clef', 'tuning', 'showStandardNotation', 'showTablature', 'capo'];
 
@@ -76,7 +78,7 @@ export function removeTrack(score, cursor, ti) {
   index(ti, tracks.length, 'Track index');
   if (tracks.length === 1) return { refused: { id: 'onlyTrack' } };
   if (isVisible(tracks[ti]) && !otherVisible(score, ti)) return { refused: { id: 'lastVisible' } };
-  const migrated = migrateRemoved(score, ti);
+  const { score: migrated, dropped } = migrateTempo(migrateRemoved(score, ti), ti);
   const next = tracksOf(migrated).slice();
   next.splice(ti, 1);
   let track = cursor.track;
@@ -85,7 +87,7 @@ export function removeTrack(score, cursor, ti) {
   return {
     score: { ...migrated, tracks: next },
     cursor: { ...cursor, track },
-    announce: { id: 'trackRemoved', n: ti + 1, name: trackName(tracks[ti]) },
+    announce: { id: 'trackRemoved', n: ti + 1, name: trackName(tracks[ti]), tempoDropped: dropped },
   };
 }
 

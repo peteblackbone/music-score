@@ -208,7 +208,7 @@ test('tempoAt: nearest tempo the renderer reads, backwards on voice 1 into earli
   eq(S.tempoAt(s, cur(0, 1, 1)), { bpm: 70, unit: 'half', dots: 0, text: 'Slow', here: true });
   eq(S.tempoAt(s, cur(0, 1, 2)).here, false);
   eq(S.tempoAt(s, cur(0, 2, 0)).bpm, 70, 'empty measure: carried from earlier measures');
-  eq(S.tempoAt(s, cur(1, 0, 0)), null, 'per track');
+  eq(S.tempoAt(s, cur(1, 0, 0)), { bpm: 90, unit: 'quarter', dots: 0, text: null, here: true }, 'score-wide since 2.3 (was per track)');
 });
 
 // ---------- keySignatureAt / cursorInfo additions ----------
