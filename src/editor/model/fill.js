@@ -1,0 +1,62 @@
+/**
+ * model/fill.js — how full a measure is (voice 1 only; hidden rests count).
+ * Time signatures carry forward as in normalize.js: the track's, else the
+ * score's, else 4/4, replaced by every measure up to the one asked about
+ * that sets its own.
+ */
+import { R, ZERO, add, cmp } from '../../rational.js';
+import { durationR } from '../../duration.js';
+import { trackAt, tracksOf, measureAt, beatsOf, isGrace, clampDots, measureCount } from './access.js';
+
+const COMMON = { beats: 4, beatType: 4 };
+
+/** Time signature in force at measure `mi` of track `ti`. */
+export function timeSignatureAt(score, ti, mi) {
+  const track = trackAt(score, ti);
+  let cur = track?.timeSignature || score.timeSignature || COMMON;
+  for (let k = 0; k <= mi; k++) {
+    const m = measureAt(track, k);
+    if (m?.timeSignature) cur = m.timeSignature;
+  }
+  return cur;
+}
+
+/** Exact duration of a beat as layout reads it (dots clamped to 0..4). */
+export const beatR = (b) => durationR({ duration: b.duration, dots: clampDots(b.dots), tuplet: b.tuplet, tuplets: b.tuplets });
+
+/** Sum of the non-grace beats before index `i` (all of them when i = beats.length). */
+export function onsetOf(beats, i) {
+  let t = ZERO;
+  for (let k = 0; k < i && k < beats.length; k++) if (!isGrace(beats[k])) t = add(t, beatR(beats[k]));
+  return t;
+}
+
+export const measureTotal = (beats) => onsetOf(beats, beats.length);
+
+/** 'under' | 'full' | 'over' of `beats` against time signature `ts`; 'empty' with no non-grace beat. */
+export function fillOf(beats, ts) {
+  if (!beats.some((b) => !isGrace(b))) return 'empty';
+  const c = cmp(measureTotal(beats), R(ts.beats, ts.beatType));
+  return c < 0 ? 'under' : c > 0 ? 'over' : 'full';
+}
+
+/** Fill of track `ti` measure `mi`: 'under' | 'full' | 'over' (an empty measure or a hole is 'under'). */
+export function measureFill(score, ti, mi) {
+  const f = fillOf(beatsOf(measureAt(trackAt(score, ti), mi)), timeSignatureAt(score, ti, mi));
+  return f === 'empty' ? 'under' : f;
+}
+
+/** Per track, per measure column: 'empty' | 'under' | 'full' | 'over', in one forward pass. */
+export function fillTable(score) {
+  const count = measureCount(score);
+  return tracksOf(score).map((track) => {
+    let ts = track?.timeSignature || score.timeSignature || COMMON;
+    const out = [];
+    for (let mi = 0; mi < count; mi++) {
+      const m = measureAt(track, mi);
+      if (m?.timeSignature) ts = m.timeSignature;
+      out.push(fillOf(beatsOf(m), ts));
+    }
+    return out;
+  });
+}

@@ -83,6 +83,11 @@ for (const c of cases) {
   const { summary } = await import('./structure.mjs');
   fail += await summary();
 }
+// 2.0.0 editor: pure model, keymap, announcements, geometry and demo helpers (tests/editor-model.mjs)
+{
+  const { summary } = await import('./editor-model.mjs');
+  fail += summary();
+}
 // 2.0.0 editor: renderer hit map and the ScoreEditor controller under the DOM shim (tests/editor-dom.mjs)
 {
   const { summary } = await import('./editor-dom.mjs');
