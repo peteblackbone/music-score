@@ -22,6 +22,7 @@ import { clearSlices } from './model/rangeEdit.js';
 import { exportedLength } from './model/io.js';
 import { EDITOR_LIMITS } from './model/limits.js';
 import { describe } from './announce.js';
+import { method } from './install.js';
 
 /** The clipboard shared by every editor on the page: clip JSON text, or null. */
 let internal = null;
@@ -37,11 +38,10 @@ function writeClip(data, text) {
   }
 }
 
-const hidden = (value) => ({ value, enumerable: false, writable: true, configurable: true });
 
 /** Install copy, cut, paste and the clipboard event handler on `Editor` (ScoreEditor). */
 export function installClipboard(Editor) {
-  const def = (name, fn) => Object.defineProperty(Editor.prototype, name, hidden(fn));
+  const def = (name, fn) => method(Editor, name, fn);
 
   /** The clip of the selection or the cursor beat → `{ text, kind, count, range }`, or null on the slot. */
   def('_clip', function clip() {
@@ -91,13 +91,13 @@ export function installClipboard(Editor) {
   /** Paste clip `src` (text or object; null: nothing to paste) as one undo step; refusals are announced; returns a boolean. */
   def('_pasteFrom', function pasteFrom(src) {
     this._cancelBuffer();
-    if (this._readOnly) return this._settingsRefused({ id: 'readOnly' });
-    if (src == null) return this._settingsRefused({ id: 'nothingToPaste' });
+    if (this._readOnly) return this._refused({ id: 'readOnly' });
+    if (src == null) return this._refused({ id: 'nothingToPaste' });
     const p = parseClip(src);
-    if (p.refused) return this._settingsRefused(p.refused);
+    if (p.refused) return this._refused(p.refused);
     const r = applyPaste(this._model, this._cursor, this._selection, p.clip);
-    if (r.refused) return this._settingsRefused(r.refused);
-    if (exportedLength(r.score) > EDITOR_LIMITS.jsonChars) return this._settingsRefused({ id: 'tooLarge' });
+    if (r.refused) return this._refused(r.refused);
+    if (exportedLength(r.score) > EDITOR_LIMITS.jsonChars) return this._refused({ id: 'tooLarge' });
     return this._applyModel('paste', 'paste', r);
   });
 

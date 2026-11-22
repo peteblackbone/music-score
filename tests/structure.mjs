@@ -42,7 +42,7 @@ const CALL_ORDER = ['renderTiesAndSlurs', 'renderGraceSlurs', 'renderTabArticula
 
 const EDITOR = 'src/editor';
 // Pure editor modules: no DOM tokens (the controller lives in view.js, overlay.js and ScoreEditor.js).
-const isPureEditor = (n) => n.startsWith(`${EDITOR}/model/`) || ['settings.js', 'selection.js', 'clipboard.js', 'keymap.js', 'announce.js', 'geometry.js', 'style.js', 'options.js', 'emitter.js'].some((b) => n === `${EDITOR}/${b}`);
+const isPureEditor = (n) => n.startsWith(`${EDITOR}/model/`) || ['settings.js', 'selection.js', 'clipboard.js', 'install.js', 'keymap.js', 'announce.js', 'geometry.js', 'style.js', 'options.js', 'emitter.js'].some((b) => n === `${EDITOR}/${b}`);
 const DOM_TOKENS = /\b(document|window|requestAnimationFrame|addEventListener)\b/g;
 // Renderer modules any editor file may import, and the ones only named editor files may import.
 // 2.1: the effect canonicalizers (pure, DOM-free) are shared rather than copied, so the editor classifies values as the renderer draws them.

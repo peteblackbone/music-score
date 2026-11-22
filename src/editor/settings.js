@@ -30,47 +30,48 @@ import { EDITOR_LIMITS } from './model/limits.js';
 import { exportedLength } from './model/io.js';
 import { clampCursor, syncDuration, sameCursor } from './model/cursor.js';
 import { describe } from './announce.js';
+import { method } from './install.js';
 
 /** The public names settings.js installs on ScoreEditor.prototype (the 7 calls, getMeasureSettings and the lastMessage getter). */
 export const SETTINGS_API = Object.freeze([...Object.keys(SETTINGS), 'getMeasureSettings', 'lastMessage']);
 
-const hidden = (value) => ({ value, enumerable: false, writable: true, configurable: true });
 
 /** Install the settings API on `Editor` (ScoreEditor): prototype methods, the lastMessage getter, helpers and statics. */
 export function installSettings(Editor) {
   const proto = Editor.prototype;
   for (const name of Object.keys(SETTINGS)) {
-    Object.defineProperty(proto, name, hidden({ [name](...args) { return this._settings(name, args); } }[name]));
+    method(Editor, name, { [name](...args) { return this._settings(name, args); } }[name]);
   }
-  Object.defineProperty(proto, 'getMeasureSettings', hidden(function getMeasure(mi, ti) {
+  method(Editor, 'getMeasureSettings', function getMeasure(mi, ti) {
     this._alive();
     return getMeasureSettings(this._model, mi, ti === undefined ? this._cursor.track : ti);
-  }));
+  });
   Object.defineProperty(proto, 'lastMessage', {
     get() { this._alive(); return this._lastMessage ?? ''; },
     enumerable: false,
     configurable: true,
   });
-  Object.defineProperty(proto, '_settings', hidden(function runSettings(name, args) {
+  method(Editor, '_settings', function runSettings(name, args) {
     this._alive();
     const def = SETTINGS[name];
     const r = def.fn(this._model, this._cursor, ...args); // throws before any state change
     this._cancelBuffer();
-    if (this._readOnly) return this._settingsRefused({ id: 'readOnly' });
-    if (r.refused) return this._settingsRefused(r.refused);
-    if (r.score === this._model) return this._settingsRefused({ id: 'noChange' });
-    if (exportedLength(r.score) > EDITOR_LIMITS.jsonChars) return this._settingsRefused({ id: 'tooLarge' });
+    if (this._readOnly) return this._refused({ id: 'readOnly' });
+    if (r.refused) return this._refused(r.refused);
+    if (r.score === this._model) return this._refused({ id: 'noChange' });
+    if (exportedLength(r.score) > EDITOR_LIMITS.jsonChars) return this._refused({ id: 'tooLarge' });
     return this._applyModel(name, r.label ?? def.label, r);
-  }));
-  Object.defineProperty(proto, '_settingsRefused', hidden(function refused(d) {
+  });
+  /** Refuse a call: say why (kept in the live region, lastMessage) and return false. Shared with clipboard.js. */
+  method(Editor, '_refused', function refused(d) {
     this._sayKept(describe(d));
     return false;
-  }));
-  Object.defineProperty(proto, '_sayKept', hidden(function sayKept(text) {
+  });
+  method(Editor, '_sayKept', function sayKept(text) {
     this._lastMessage = text;
     this._view.announce(text, true);
-  }));
-  Object.defineProperty(proto, '_applyModel', hidden(function applyModel(name, label, r) {
+  });
+  method(Editor, '_applyModel', function applyModel(name, label, r) {
     this._dropSelection(); // 2.3: an edit clears the selection (selection(null) first)
     const before = { score: this._model, cursor: this._cursor };
     const cursor = clampCursor(r.score, r.cursor ?? this._cursor);
@@ -87,7 +88,7 @@ export function installSettings(Editor) {
     this._view.requestScroll();
     this._view.scheduleRender();
     return true;
-  }));
+  });
   const frozen = (value) => ({ value, enumerable: true, writable: false, configurable: false });
   Object.defineProperty(Editor, 'INSTRUMENTS', frozen(INSTRUMENTS));
   Object.defineProperty(Editor, 'TUNINGS', frozen(TUNINGS));

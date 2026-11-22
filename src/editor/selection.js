@@ -22,12 +22,12 @@ import { clampCursor, syncDuration } from './model/cursor.js';
 import { tracksOf } from './model/access.js';
 import { removeTrackImpact } from './model/settings/tracks.js';
 import { describe } from './announce.js';
+import { method } from './install.js';
 import { installClipboard } from './clipboard.js';
 
 /** The public names selection.js installs on ScoreEditor.prototype. */
 export const SELECTION_API = Object.freeze(['getSelection', 'setSelection', 'clearSelection', 'getRemoveTrackImpact', 'copy', 'cut', 'paste']);
 
-const hidden = (value) => ({ value, enumerable: false, writable: true, configurable: true });
 const same = (a, b) => JSON.stringify(a?.info ?? null) === JSON.stringify(b?.info ?? null);
 
 /** `p` checked to be `{ track?, measure, beat }` with finite numbers (truncated); TypeError otherwise. */
@@ -43,7 +43,7 @@ function point(p, what) {
 /** Install the selection API, and the clipboard (clipboard.js), on `Editor` (ScoreEditor). */
 export function installSelection(Editor) {
   installClipboard(Editor);
-  const def = (name, fn) => Object.defineProperty(Editor.prototype, name, hidden(fn));
+  const def = (name, fn) => method(Editor, name, fn);
 
   def('getSelection', function getSelection() { this._alive(); return selectionInfo(this._selection); });
 
