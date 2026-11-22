@@ -29,7 +29,11 @@ export const hasNotation = (track) => !!track && (track.showStandardNotation ===
 export const isVisible = (track) => hasTab(track) || hasNotation(track);
 
 /** Number of measure columns: the longest track's, hidden tracks included; at least 1. */
-export const measureCount = (score) => Math.max(1, ...tracksOf(score).map((t) => measuresOf(t).length));
+export function measureCount(score) {
+  let n = 1;
+  for (const t of tracksOf(score)) n = Math.max(n, measuresOf(t).length);
+  return n;
+}
 
 /** Track `track`'s measure `mi` when it is an object, else null (a hole). */
 export function measureAt(track, mi) {

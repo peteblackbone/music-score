@@ -108,6 +108,8 @@ test('access: track helpers (stringCount, hasTab, hasNotation, isVisible, measur
   eq(A.isVisible({ showStandardNotation: false, showTablature: true }), true);
   eq(A.measureCount({}), 1);
   eq(A.measureCount(sc(tab([{}, {}]), { showStandardNotation: false, measures: [{}, {}, {}] })), 3);
+  const many = { tracks: Array.from({ length: 300000 }, (_, i) => ({ measures: i === 7 ? [{}, {}] : [] })) };
+  eq(A.measureCount(many), 2, 'a loop, not Math.max(...spread): no RangeError on huge track counts');
 });
 test('access: updateBeats copies only the edited path; a two-voice measure keeps voice 2 and measure.beats by reference (C8)', () => {
   const v1 = { beats: [nt('whole')], extra: 1 };

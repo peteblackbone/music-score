@@ -70,10 +70,13 @@ export class ScoreEditor {
   /** Replace the score (object or JSON string); clears history; emits change {source:'load'} after the render, then cursor. */
   loadScore(input) {
     this._alive();
+    // everything that can throw runs on locals first, so a failed load changes nothing
     const model = parseInput(input);
+    const cursor = clampCursor(model, START);
+    const state = syncDuration(model, cursor, freshState());
     this._model = model;
-    this._cursor = clampCursor(model, START);
-    this._state = syncDuration(model, this._cursor, freshState());
+    this._cursor = cursor;
+    this._state = state;
     this._history.clear();
     this._digitEntry = null;
     this._syncRoot();

@@ -44,7 +44,8 @@ function cursorSpan(m, els, info, style, s, theme) {
   if (!info.appendSlot) {
     const el = els.find((e) => e.beatIndex === info.beat);
     if (!el) return null;
-    const ink = Math.max(0, ...info.frets.map((f) => fretLabelWidth(String(f), theme)));
+    let ink = 0;
+    for (const f of info.frets) ink = Math.max(ink, fretLabelWidth(String(f), theme));
     const w = Math.max(ink + style.colPadSp * s, style.colMinSp * s);
     return { x: el.x, x0: Math.max(el.x - w / 2, m.x + inset), x1: Math.min(el.x + w / 2, m.endX - inset), slot: false };
   }
@@ -54,7 +55,8 @@ function cursorSpan(m, els, info, style, s, theme) {
     const x1 = Math.max(x0 + style.slotMinSp * s, Math.min(x0 + style.slotWidthSp * s, m.endX - inset));
     return { x: (x0 + x1) / 2, x0, x1, slot: true };
   }
-  const lastX = Math.max(...mains.map((e) => e.x));
+  let lastX = -Infinity;
+  for (const e of mains) lastX = Math.max(lastX, e.x);
   const w = Math.max(style.slotMinSp * s, Math.min(style.slotWidthSp * s, m.endX - lastX - style.slotGapSp * s));
   const x = (lastX + m.endX) / 2;
   return { x, x0: x - w / 2, x1: x + w / 2, slot: true };

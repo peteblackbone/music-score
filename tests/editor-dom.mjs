@@ -249,6 +249,21 @@ test('B3: loadScore resets cursor and history, emits change {source:"load"} afte
   let msg = ''; try { ed.loadScore({ schemaVersion: 2, tracks: [] }); } catch (e) { msg = e.message; }
   eq(msg, 'Unsupported schemaVersion');
 });
+test('B3 (atomic): a load that throws leaves model, cursor, history, events and DOM unchanged', () => {
+  const { ed, events, svg, box } = mk(twoBar());
+  ed.setCursor({ measure: 1, beat: 1, string: 6 });
+  press(ed, '4');
+  events.length = 0;
+  const before = { score: JSON.stringify(ed.getScore()), cursor: ed.getCursor(), undo: ed.canUndo(), svg: svg(), dom: serialize(box) };
+  for (const bad of ['{x', '[]', { schemaVersion: 3 }, 42]) {
+    let threw = false; try { ed.loadScore(bad); } catch { threw = true; }
+    ok(threw, JSON.stringify(bad));
+  }
+  eq([JSON.stringify(ed.getScore()), ed.getCursor(), ed.canUndo()], [before.score, before.cursor, before.undo]);
+  ok(svg() === before.svg && serialize(box) === before.dom, 'DOM untouched');
+  eq(events, []);
+  ok(ed.undo(), 'history still usable');
+});
 test('B4: getScore / toJSON give a deep clone with schemaVersion 1; loadScore(x); getScore() == {schemaVersion:1, ...sanitizeScore(x)} for every snapshot case', () => {
   const { ed } = mk(twoBar());
   const a = ed.getScore();
