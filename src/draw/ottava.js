@@ -18,11 +18,12 @@
  * render and handed to both: renderOttavaAlta runs after the fade / wah
  * marks and before pass 6 (its boxes go into `run.aboveBoxes` for the
  * fermatas, and chord symbols rise above it); renderOttavaBassa runs after
- * pass 6, below the dynamics line.
+ * pass 6, below the dynamics line and the lyrics band (draw/lyrics.js).
  */
 import { group, glyphText, line } from './svgUtil.js';
 import { breakEndX, breakStartX, HEAD_HALF_SP } from './passes/common.js';
 import { inkBounds } from '../layout/ink.js';
+import { lyricsBottom } from './lyrics.js';
 import { glyphStringBox } from '../glyphMetrics.js';
 import { ottavaGlyph } from '../glyphs.js';
 import { smuflFontSizePx } from '../theme.js';
@@ -109,7 +110,9 @@ function drawSegment(seg, alta, theme) {
     if (hookInk && Number.isFinite(hookInk.top)) baseline -= Math.max(0, midOf(baseline) + HOOK_SP * s - (hookInk.top - HOOK_INK_SP * s));
   } else {
     const lineBottom = seg.run.notationBaselineY;
-    const top = Math.max(lineBottom + STAFF_CLEAR_SP * s, (Number.isFinite(span.bottom) ? span.bottom : lineBottom) + INK_CLEAR_SP * s);
+    // below the lyrics band too (draw/lyrics.js), not only the lyrics under the span
+    const spanBottom = Math.max(span.bottom, lyricsBottom(g, theme));
+    const top = Math.max(lineBottom + STAFF_CLEAR_SP * s, (Number.isFinite(spanBottom) ? spanBottom : lineBottom) + INK_CLEAR_SP * s);
     baseline = top + box.top * s;
     if (hookInk && Number.isFinite(hookInk.bottom)) baseline += Math.max(0, hookInk.bottom + HOOK_INK_SP * s - (midOf(baseline) - HOOK_SP * s));
   }

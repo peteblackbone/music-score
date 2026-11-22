@@ -63,7 +63,9 @@
  * renderTabOnlyArticulations after 2 (tab-only tracks with
  * tabArticulations; seeds pass 3 so labels move outward), renderFadeWah
  * and renderOttavaAlta after 5 (so pass 6 measures their ink and chord
- * symbols rise above them), renderOttavaBassa (8vb / 15mb) after 6 (below
+ * symbols rise above them), lyrics (draw/lyrics.js renderLyrics) after
+ * those (the dynamics line, 8vb / 15mb and beat text below measure them),
+ * renderOttavaBassa (8vb / 15mb) after 6 (below
  * the dynamics line), renderTabOnlyFermatas after 7, beat text (draw/beatText.js renderBeatText) after 7,
  * then navigation, then the score tempo text and tempo changes
  * (draw/tempoMarks.js) outermost above the system.

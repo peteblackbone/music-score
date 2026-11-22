@@ -223,7 +223,8 @@ export function tabColumnMarks(elements, elements2) {
   elements2.forEach((le) => {
     const { type, duration, dots, tuplet } = le.el;
     const taken = le.t && !le.wholeMeasureRest ? fretted.get(key(le.t)) : null;
-    le.tabEl = { type, duration, dots, tuplet, notes: (le.el.notes || []).filter((n) => !taken || !taken.has(n.string)) };
+    // `tuplets` only when the beat has it: the key stays absent otherwise, so pre-1.12 snapshots / model hashes don't change
+    le.tabEl = { type, duration, dots, tuplet, ...(le.el.tuplets !== undefined ? { tuplets: le.el.tuplets } : {}), notes: (le.el.notes || []).filter((n) => !taken || !taken.has(n.string)) };
     if (!le.t || le.wholeMeasureRest || type !== 'note') return;
     const v1 = v1At.get(key(le.t));
     if (!v1 || v1.el.type !== 'note') {

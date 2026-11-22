@@ -102,7 +102,7 @@ This keeps the module testable and reusable on its own (a plain demo page,
 unit tests, or even a completely different host app later) without ever
 being coupled to one backend's schema or API shape.
 
-## Drawing order of the score-wide marks (1.10.0, with 1.11.0 calls)
+## Drawing order of the score-wide marks (1.10.0, with the 1.11.0 and 1.12.0 calls)
 
 `MusicScoreRenderer.render()` draws every system first, then runs the
 score-wide marks. The seven numbered passes live in the `draw/passes.js`
@@ -121,17 +121,24 @@ they are.
 3. `ottavaSegments` (`draw/ottava.js`, layout only), then `renderOttavaAlta`:
    the 8va and 15ma brackets above the notation staff. Their boxes also go
    into `run.aboveBoxes`.
+   Then `renderLyrics` (`draw/lyrics.js`, 1.12.0): the lyrics under the staff.
+   It is a non-pass call and writes no boxes. It runs after passes 1 to 5 and
+   before pass 6, so the staff ink it measures holds every mark above it.
 4. Pass 6 (`renderChordSymbolsAndDynamics`): chord symbols and diagrams, then
    the dynamics line from `draw/dynamicsLine.js` (voice 1 and voice 2
    dynamics, and hairpins). Pass 6 measures the staff's ink first, so chord
-   symbols rise above the marks of step 2 and 3.
-5. `renderOttavaBassa`: the 8vb and 15mb brackets, below the dynamics line.
+   symbols rise above the marks of step 2 and 3. The staff's ink now includes
+   the lyrics (1.12.0), so the dynamics line moves down only on systems that
+   have lyrics.
+5. `renderOttavaBassa`: the 8vb and 15mb brackets, below the dynamics line and
+   below the lyrics band of their system (`lyricsBottom`, `draw/lyrics.js`), so a
+   bracket never sits in a verse row with no syllable under its span.
 6. Pass 7 (`renderFermatas`): fermatas clear the chord boxes and
    `run.aboveBoxes`. The boxes reach pass 7 through `collectBeats` in
    `passes/notationBeats.js`.
    `renderTabOnlyFermatas` (`draw/tabOnlyMarks.js`, 1.11.0) follows pass 7 and
    clears the ink of each column in the TAB group. It is not a pass.
-7. Beat text (`draw/beatText.js`), then the navigation marks per system
+7. Beat text (`draw/beatText.js`; text below also clears the lyrics band), then the navigation marks per system
    (`draw/navigation.js`). Then the tempo: `tempoChanges` and the score's
    `tempoText` in `MusicScoreRenderer.js` (the `drawTempo` in `draw/decor.js`
    takes an optional shared baseline), then `renderTempoChanges`
@@ -220,3 +227,67 @@ The two calls are named `renderTabOnlyArticulations` and
 `renderTabOnlyFermatas` so that they do not match the pass-name pattern that
 `tests/structure.mjs` checks. Both are called from `MusicScoreRenderer.js`,
 outside `passes/`.
+
+## Lyrics, on-beat graces and nested tuplets (1.12.0)
+
+1.12.0 adds lyrics under the staff, grace notes drawn without a slash on the
+beat, and tuplets nested two levels deep. Each one reads a field that scores
+did not set before, so a score without these fields keeps the same layout and
+drawing output. The 77 snapshots from before 1.12.0 are unchanged.
+
+Modules:
+
+- `src/lyrics.js` (no DOM): the canonical `beat.lyric` (`canonicalLyrics`,
+  `lyricsOf`) and the horizontal room a syllable needs (`lyricExtents`).
+  `layout/timeline.js` widens the left and right extents of voice 1 note beats
+  with it. `normalize.js` keeps the raw field, so the normalized model is
+  unchanged.
+- `src/draw/lyrics.js`: `renderLyrics`, the non-pass call before pass 6 (see
+  the order above), and `lyricsBottom`, the lowest ink of a staff's lyric band.
+  The 8vb and 15mb brackets (`draw/ottava.js`) and the below-staff beat text
+  (`draw/beatText.js`) also clear it.
+- `src/layout/tuplets.js` (no DOM): `hasNestedTuplets` and `nestedTupletGroups`.
+  `layout/beams.js` hands a voice to `nestedTupletGroups` only when one of its
+  non-grace beats has a valid two-entry `tuplets`. Every other voice runs the
+  existing `tupletGroups` loop unchanged.
+- `src/duration.js`: `validTuplets` (the strict `tuplets` check) and
+  `tupletChain` (a beat's ratios, outer first: `tuplets` when valid, else
+  `tuplet`). `durationR` multiplies by every ratio of the chain, so a one-entry
+  chain gives the same product as before.
+- `src/layout/beams.js`: `outerOf` reads `tupletChain(b)[0]`, which equals
+  `normalizeTuplet(b.tuplet)` when no `tuplets` is set. The `normalizeTuplet`
+  import is gone from this file.
+- `src/layout/voices.js`: `tabEl.tuplets` is copied only when the beat has a
+  `tuplets` field, so the key order of existing `tabEl` objects is unchanged.
+- `src/layout/multiRest.js`: `lyric` is in `REST_KEYS`, so a lyric on a rest
+  does not stop a multi-measure rest from forming.
+- `src/draw/notation.js` (`renderGraceNote`): the grace note's parts go into a
+  `grace-on-beat` group when `el.onBeat === true`, and the slash is not drawn.
+  Otherwise the path is the same as before.
+- `src/draw/system.js` (`drawTupletBrackets`) and `src/draw/tabRhythm.js`
+  (`drawTuplets`): groups with a `depth` key are drawn in their own loops. Inner
+  groups (`depth: 1`) are drawn first, in today's order. Outer groups
+  (`depth: 0`) are placed outside their inner groups.
+
+Design notes:
+
+- Lyric clearance is ink-based. `renderLyrics` measures the lowest ink of the
+  staff group it draws into (notation, else TAB) after passes 1 to 5, and puts
+  verse 1 0.8 sp below it. Later marks below the staff measure ink too, so they
+  move down only where lyrics exist. `placeStaves` runs after the passes, so a
+  TAB staff under notation, and the next system, make room.
+- Nothing may draw into a staff group between `renderLyrics` and pass 6,
+  because pass 6 measures that ink. `tests/structure.mjs` checks the order of
+  the seven passes and ignores the non-pass calls.
+- Only the left and right extents of a syllable's beat widen. `ownLeft`, which
+  grace notes anchor to, is not changed.
+- Grace notes take no time, `onBeat` included. Their `duration` is still
+  ignored. `durationR` is not applied to graces.
+- Nested grouping is gated, so a score with no two-entry `tuplets` takes the
+  old path. Inner groups are timed in the outer frame: each beat's outer-frame
+  unit is its written value times its inner ratios, and the inner cells are
+  taken in that frame.
+- Beam grouping is not changed for nested tuplets (a documented limitation).
+- The `tuplets` bounds (integer count 2 to 64, `of` 1 to 64) are enforced in
+  `validTuplets`. `splitRun` always advances its index, so a non-finite time
+  cannot loop forever.

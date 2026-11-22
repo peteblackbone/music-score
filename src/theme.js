@@ -25,6 +25,7 @@ export const defaultTheme = {
 
   dynamicColor: '#1a1a1a',
   dynamicFontSize: 15,
+  lyricFontSize: 13,          // px; lyrics under the staff (draw/lyrics.js), textFontFamily
 
   tabFontSize: 12,
   tabFretColor: '#1a1a1a',

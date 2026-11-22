@@ -2040,7 +2040,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   // the 52 pre-1.4 cases (the 1.4.0 two-voice fixtures char-voices-*, the 1.5.0 char-note-effects-*, the 1.6.0
   // char-score-text-*, the 1.7.0 char-ornaments-* and the 1.9.0 char-bends-slides-* came later)
   const isVoices = (id) => id.startsWith('char-voices-');
-  const isPost14 = (id) => /^char-(voices|note-effects|score-text|ornaments|bends-slides|expression|clefs|multirest|slashes|tab-articulations)-/.test(id);
+  const isPost14 = (id) => /^char-(voices|note-effects|score-text|ornaments|bends-slides|expression|clefs|multirest|slashes|tab-articulations|tuplets-nested|graces-onbeat|lyrics)-/.test(id);
   const cases = (await import('./cases.mjs')).cases.filter((c) => !isPost14(c.id));
   const { computeLayout } = await imp('src/layout/index.js');
   const { resolveMeasureAccidentals } = await imp('src/layout/accidentals.js');
@@ -2660,7 +2660,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   const { group: svgGroup } = await imp('src/draw/svgUtil.js');
   // the 57 pre-1.6 cases (the 1.6.0 char-score-text-* fixtures use the new fields on purpose; the 1.7.0
   // char-ornaments-* and the 1.9.0 char-bends-slides-* came later)
-  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression|clefs|multirest|slashes|tab-articulations)-/.test(c.id));
+  const allCases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(score-text|ornaments|voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression|clefs|multirest|slashes|tab-articulations|tuplets-nested|graces-onbeat|lyrics)-/.test(c.id));
   const thm = resolveTheme({});
   const s = thm.staffLineSpacing;
   const ok = (c, m) => { if (!c) throw new Error(m); };
@@ -3850,7 +3850,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     return r;
   };
   // The pins describe the 63 pre-1.8 cases (the 1.8 fixtures exercise these triggers on purpose; the 1.9 char-bends-slides-* came later).
-  const pre18 = cases.filter((c) => !/^char-(voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression|clefs|multirest|slashes|tab-articulations)-/.test(c.id));
+  const pre18 = cases.filter((c) => !/^char-(voices-marks|voices-tab-rhythm|voices-tied-frets|bends-slides|expression|clefs|multirest|slashes|tab-articulations|tuplets-nested|graces-onbeat|lyrics)-/.test(c.id));
   const scans = new Map(pre18.map((c) => [c.id, scan(c)]));
   const twoVoiceIds = [...scans].filter(([, r]) => r.two.length).map(([id]) => id);
 
@@ -4589,7 +4589,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
 
   test('pre-1.9 scan: none of the 67 cases (raw or normalized) uses a compound bend, legato slide, feedback harmonic, trill tied forward, whammyScoop / whammyBar key', () => {
     // the 1.9.0 char-bends-slides-* fixtures use them on purpose
-    const pre19 = cases.filter((c) => !/^char-(bends-slides|expression|clefs|multirest|slashes|tab-articulations)-/.test(c.id));
+    const pre19 = cases.filter((c) => !/^char-(bends-slides|expression|clefs|multirest|slashes|tab-articulations|tuplets-nested|graces-onbeat|lyrics)-/.test(c.id));
     eq(pre19.length, 67);
     const zero = { compound: 0, legato: 0, feedback: 0, trillTie: 0, whammyKeys: 0 };
     for (const c of pre19) {
@@ -4668,7 +4668,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
 // ---------- pre-1.10 characterization: dynamics, tempoText and staff positions (pins taken before the 1.10.0 change) ----------
 {
   // the 1.10.0 char-expression-* fixtures use the new keys on purpose
-  const cases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(expression|clefs|multirest|slashes|tab-articulations)-/.test(c.id));
+  const cases = (await import('./cases.mjs')).cases.filter((c) => !/^char-(expression|clefs|multirest|slashes|tab-articulations|tuplets-nested|graces-onbeat|lyrics)-/.test(c.id));
   const { createHash } = await import('node:crypto');
   const { staffPosition } = await imp('src/pitch.js');
   const sha = (v) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
@@ -4756,7 +4756,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
 // ---------- pre-1.11 characterization: clef, key signature and header output (pins taken before the 1.11.0 change) ----------
 {
   // the 1.11.0 char-clefs-*, char-multirest-*, char-slashes-* and char-tab-articulations-* fixtures use the new keys on purpose
-  const NEW_FIXTURE = /^char-(clefs|multirest|slashes|tab-articulations)-/;
+  const NEW_FIXTURE = /^char-(clefs|multirest|slashes|tab-articulations|tuplets-nested|graces-onbeat|lyrics)-/;
   const cases = (await import('./cases.mjs')).cases.filter((c) => !NEW_FIXTURE.test(c.id));
   const { createHash } = await import('node:crypto');
   const { keySignatureLayout } = await imp('src/pitch.js');
@@ -4866,6 +4866,180 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
       }
     }
     if (!seen) throw new Error('no class attributes scanned');
+  });
+}
+
+// ---------- pre-1.12 characterization: tuplet, grace and below-staff output (pins taken before the 1.12.0 change) ----------
+{
+  // the 1.12.0 char-tuplets-nested-*, char-graces-onbeat-* and char-lyrics-* fixtures use the new keys on purpose
+  const NEW_FIXTURE = /^char-(tuplets-nested|graces-onbeat|lyrics)-/;
+  const cases = (await import('./cases.mjs')).cases.filter((c) => !NEW_FIXTURE.test(c.id));
+  const { createHash } = await import('node:crypto');
+  const { normalizeTuplet, durationR } = await imp('src/duration.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { renderNotationElement } = await imp('src/draw/notation.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { group } = await imp('src/draw/svgUtil.js');
+  const sha = (v) => createHash('sha256').update(typeof v === 'string' ? v : JSON.stringify(v)).digest('hex');
+  const lists = (m) => (m.voices ? m.voices.map((v, i) => [i, v.beats || []]) : [[0, m.beats || []], [1, m.voice2Beats || []]]);
+  // [track, measure, [voice 1 groups, voice 2 groups]]; the two tracks are identical
+  const TUPLET_SPANS_TABLE = [
+    [0, 0, [[{ indices: [0,1,2], count: 3 }], []]],
+    [0, 1, [[{ indices: [0,1], count: 3 }, { indices: [2,3], count: 3 }, { indices: [4,5,6,7], count: 3 }], []]],
+    [0, 2, [[{ indices: [0,1,2,3,4,5], count: 6 }, { indices: [6,7,8,9,10], count: 5 }], []]],
+    [0, 3, [[{ indices: [0,1,2], count: 3 }], []]],
+    [0, 4, [[{ indices: [1,2,3], count: 3 }], []]],
+    [0, 5, [[{ indices: [0,1], count: 2 }], []]],
+    [0, 6, [[{ indices: [0,2,3], count: 3 }, { indices: [4,5,6], count: 3 }], []]],
+    [1, 0, [[{ indices: [0,1,2], count: 3 }], []]],
+    [1, 1, [[{ indices: [0,1], count: 3 }, { indices: [2,3], count: 3 }, { indices: [4,5,6,7], count: 3 }], []]],
+    [1, 2, [[{ indices: [0,1,2,3,4,5], count: 6 }, { indices: [6,7,8,9,10], count: 5 }], []]],
+    [1, 3, [[{ indices: [0,1,2], count: 3 }], []]],
+    [1, 4, [[{ indices: [1,2,3], count: 3 }], []]],
+    [1, 5, [[{ indices: [0,1], count: 2 }], []]],
+    [1, 6, [[{ indices: [0,2,3], count: 3 }, { indices: [4,5,6], count: 3 }], []]],
+  ];
+  const MEASURES_PIN = [797, 51], TUPLET_GROUPS_SHA = "678cda8d8dbaa31d413c6836d7a3188579f55ccaeac15a5bece86afb0ebed9f0", GRACE_COUNT = 49, GRACE_SHA = "e06d6eed172168dc46c23f43dd348b6a0925b8284b47ba7a1e3daf1c0627c878", BELOW_COUNTS = { dynamic: 29, tuplet: 49, 'tab-tuplet': 33, 'beat-text-below': 5, hairpin: 5, 'ottava-below': 1 }, BELOW_SHA = "7552705101616f3c8df81cec95070624da5f62f47b38304d3d66d0a82b42f1de";
+  const NEW_KEYS = ['lyric', 'onBeat', 'tuplets'];
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const renderCase = (c) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, clone(c.score), { width: c.width, ...(c.options || {}) }).render();
+    return box.children[0];
+  };
+
+  test('pre-1.12 scan: none of the 77 cases (raw or normalized, both voices, graces included) has a lyric, onBeat or tuplets key', () => {
+    eq(cases.length, 77);
+    let beatsSeen = 0;
+    for (const c of cases) {
+      for (const [label, sc] of [['raw', c.score], ['normalized', normalizeScore(clone(c.score))]]) {
+        (sc.tracks || []).forEach((t) => (t.measures || []).forEach((m) => {
+          for (const [, beats] of lists(m)) for (const b of beats) {
+            beatsSeen++;
+            for (const k of NEW_KEYS) if (k in b) throw new Error(`${c.id} ${label}: beat has ${k}`);
+            (b.graces || []).forEach((gr) => { for (const k of NEW_KEYS) if (k in gr) throw new Error(`${c.id} ${label}: grace has ${k}`); });
+          }
+        }));
+      }
+    }
+    if (!beatsSeen) throw new Error('no beats scanned');
+  });
+
+  test('pre-1.12 pin: none of the 77 snapshot SVGs has a lyrics, lyric, lyric-hyphen, lyric-extender, grace-on-beat, tuplet-outer or tab-tuplet-outer class token', () => {
+    const dir = path.join(root0, 'tests', 'snapshots');
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.svg') && !NEW_FIXTURE.test(f));
+    eq(files.length, 77);
+    const BAN = new Set(['lyrics', 'lyric', 'lyric-hyphen', 'lyric-extender', 'grace-on-beat', 'tuplet-outer', 'tab-tuplet-outer']);
+    let seen = 0;
+    for (const f of files) {
+      const svg = fs.readFileSync(path.join(dir, f), 'utf8');
+      for (const m of svg.matchAll(/class="([^"]*)"/g)) for (const tok of m[1].split(/\s+/)) {
+        seen++;
+        if (BAN.has(tok)) throw new Error(`${f}: class token ${tok}`);
+      }
+    }
+    if (!seen) throw new Error('no class attributes scanned');
+  });
+
+  // tupletGroups(beats, timeSignature) over every measure of every normalized case, voice 1 then voice 2
+  const allGroups = () => {
+    const out = []; let measures = 0, nonEmpty = 0;
+    for (const c of cases) {
+      const sc = normalizeScore(clone(c.score));
+      sc.tracks.forEach((t, ti) => {
+        let ts = { beats: 4, beatType: 4 };
+        (t.measures || []).forEach((m, mi) => {
+          if (m.timeSignature) ts = m.timeSignature;
+          const g = lists(m).map(([, beats]) => tupletGroups(beats, ts));
+          measures++; if (g.some((x) => x.length)) nonEmpty++;
+          out.push([c.id, ti, mi, g]);
+        });
+      });
+    }
+    return { out, measures, nonEmpty };
+  };
+  test('pre-1.12 pin: tupletGroups of every measure (voice 1, voice 2) of every normalized case (sha256)', () => {
+    const { out, measures, nonEmpty } = allGroups();
+    eq([measures, nonEmpty], MEASURES_PIN);
+    eq(sha(out), TUPLET_GROUPS_SHA);
+  });
+  test('pre-1.12 pin: tupletGroups literal table for the char-tuplet-spans measures', () => {
+    const rows = allGroups().out.filter((r) => r[0] === 'char-tuplet-spans-w900').map((r) => [r[1], r[2], r[3]]);
+    eq(rows, TUPLET_SPANS_TABLE);
+  });
+
+  test('pre-1.12 pin: normalizeTuplet loose parsing table', () => {
+    eq(normalizeTuplet(null), null);
+    eq(normalizeTuplet(undefined), null);
+    eq(normalizeTuplet(3), { count: 3, of: 2 });
+    eq(normalizeTuplet('3'), { count: 3, of: 2 });
+    eq(normalizeTuplet({}), { count: 3, of: 2 });
+    eq(normalizeTuplet({ count: 5 }), { count: 5, of: 2 });
+    eq(normalizeTuplet({ of: 3 }), { count: 3, of: 3 });
+    eq(normalizeTuplet({ count: 6, of: 4 }), { count: 6, of: 4 });
+    eq(normalizeTuplet(0), { count: 0, of: 2 });
+  });
+  test('pre-1.12 pin: durationR of an 8th under each loose tuplet value; tuplet: 0 throws', () => {
+    const d = (t) => durationR({ duration: '8th', tuplet: t });
+    eq(d(undefined), { n: 1, d: 8 });
+    eq(d(3), { n: 1, d: 12 });
+    eq(d('3'), { n: 1, d: 12 });
+    eq(d({}), { n: 1, d: 12 });
+    eq(d({ count: 5 }), { n: 1, d: 20 });
+    eq(d({ of: 3 }), { n: 1, d: 8 });
+    eq(d({ count: 6, of: 4 }), { n: 1, d: 12 });
+    let msg = null;
+    try { d(0); } catch (e) { msg = e.message; }
+    eq(msg, 'rational: zero denominator');
+  });
+
+  // grace notes: renderNotationElement output (serialized SVG + returned info) of every grace layout element of every case
+  test('pre-1.12 pin: renderNotationElement output of every grace layout element across the 77 layouts (sha256)', () => {
+    const out = []; let graces = 0;
+    for (const c of cases) {
+      const theme = resolveTheme(c.options?.theme);
+      const sc = normalizeScore(clone(c.score));
+      const layout = computeLayout(sc, theme, c.width);
+      layout.systems.forEach((system, si) => sc.tracks.forEach((track, ti) => {
+        if (!track.showStandardNotation) return;
+        system.tracks[ti].measures.forEach((measure) => {
+          for (const key of ['elements', 'elements2']) (measure[key] || []).forEach((le) => {
+            if (le.el.type !== 'grace') return;
+            const g = group({});
+            const info = renderNotationElement(g, { ...le, baselineY: 100 }, measure, track, theme, {});
+            graces++;
+            out.push([c.id, si, ti, measure.measureIndex, key, le.index, serialize(g), info]);
+          });
+        });
+      }));
+    }
+    eq(graces, GRACE_COUNT);
+    eq(sha(out), GRACE_SHA);
+  });
+
+  // below-staff geometry read from the 77 rendered trees
+  test('pre-1.12 pin: below-staff geometry (dynamic y, hairpin d, beat-text-below y, 8vb/15mb children, tuplet and tab-tuplet path d) across the 77 renders (sha256)', () => {
+    const out = []; const counts = {};
+    const bump = (k) => { counts[k] = (counts[k] || 0) + 1; };
+    for (const c of cases) {
+      const rows = [];
+      for (const { nd } of walk(renderCase(c))) {
+        const cl = (nd.getAttribute && nd.getAttribute('class')) || '';
+        const toks = cl.split(/\s+/);
+        if (toks.includes('dynamic')) { rows.push(['dynamic', nd.getAttribute('y')]); bump('dynamic'); }
+        else if (toks.includes('hairpin')) { rows.push(['hairpin', nd.getAttribute('d')]); bump('hairpin'); }
+        else if (toks.includes('beat-text-below')) { rows.push(['beat-text-below', nd.getAttribute('y')]); bump('beat-text-below'); }
+        else if (toks.includes('ottava-8vb') || toks.includes('ottava-15mb')) {
+          rows.push([cl, nd.children.map((ch) => [ch.tag, ch.attrs, ch.textContent])]); bump('ottava-below');
+        } else if (toks.includes('tuplet') || toks.includes('tab-tuplet')) {
+          const k = toks.includes('tuplet') ? 'tuplet' : 'tab-tuplet';
+          rows.push([k, nd.children.filter((ch) => ch.getAttribute('d')).map((ch) => ch.getAttribute('d'))]); bump(k);
+        }
+      }
+      out.push([c.id, rows]);
+    }
+    eq(counts, BELOW_COUNTS);
+    eq(sha(out), BELOW_SHA);
   });
 }
 
@@ -5552,7 +5726,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
   });
   test('1.10 the 70 snapshot cases: no note gets ottavaShift; notePosition === staffPosition everywhere', () => {
     let count = 0;
-    for (const c of cases.filter((x) => !/^char-(expression|clefs|multirest|slashes|tab-articulations)-/.test(x.id))) {
+    for (const c of cases.filter((x) => !/^char-(expression|clefs|multirest|slashes|tab-articulations|tuplets-nested|graces-onbeat|lyrics)-/.test(x.id))) {
       for (const t of normalizeScore(c.score).tracks) for (const m of t.measures) for (const b of [...m.beats, ...(m.voice2Beats || [])]) {
         for (const n of b.notes || []) {
           if ('ottavaShift' in n) throw new Error(`${c.id}: ottavaShift`);
@@ -6407,7 +6581,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const dir = path.join(root0, 'tests', 'snapshots');
     let n = 0;
     for (const c of cases) {
-      if (c.id.startsWith('char-multirest-')) continue; // the multirest fixture collapses on purpose
+      if (c.id.startsWith('char-multirest-') || c.id.startsWith('char-lyrics-break-')) continue; // the multirest and lyrics-break fixtures collapse on purpose
       const file = path.join(dir, `${c.id}.svg`);
       if (!fs.existsSync(file)) continue;
       const box = makeContainer();
@@ -6497,7 +6671,7 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     const off = (beats) => (beats || []).map((b) => ({ ...b, slash: false }));
     let n = 0;
     for (const c of cases) {
-      if (c.id.startsWith('char-slashes-')) continue; // the slashes fixture has note beats without notes (they need slash: true)
+      if (c.id.startsWith('char-slashes-') || c.id === 'char-lyrics-w900') continue; // the slashes fixture has note beats without notes (they need slash: true); char-lyrics has a slash beat on purpose
       const file = path.join(dir, `${c.id}.svg`);
       if (!fs.existsSync(file)) continue;
       const sc = JSON.parse(JSON.stringify(c.score));
@@ -6708,6 +6882,390 @@ test('layoutChord mixed chord: widest head is the stem reference; diamond stem-s
     eq(serialize(render(slashed)[0]), serialize(render(base)[0]));
   });
 }
+
+// ---------- 1.12.0: nested tuplets (duration.js validTuplets / tupletChain, layout/tuplets.js) ----------
+{
+  const { validTuplets, tupletChain, durationR, normalizeTuplet } = await imp('src/duration.js');
+  const { tabColumnMarks } = await imp('src/layout/voices.js');
+  const e8 = (extra = {}) => ({ type: 'note', duration: '8th', notes: [{ pitch: 'E4' }], ...extra });
+  const eq4 = (extra = {}) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }], ...extra });
+
+  test('1.12 validTuplets: accepted forms (integers >= 2, { count, of } with of defaulting to 2), outer first', () => {
+    eq(validTuplets([3]), [{ count: 3, of: 2 }]);
+    eq(validTuplets([3, 3]), [{ count: 3, of: 2 }, { count: 3, of: 2 }]);
+    eq(validTuplets([{ count: 5, of: 4 }, 3]), [{ count: 5, of: 4 }, { count: 3, of: 2 }]);
+    eq(validTuplets([{ count: 2 }]), [{ count: 2, of: 2 }]);
+    eq(validTuplets([{ count: 7, of: 1 }]), [{ count: 7, of: 1 }]);
+  });
+  test('1.12 validTuplets: any invalid entry or a wrong length ignores the whole field (null)', () => {
+    const bad = [undefined, null, 3, '3', {}, { count: 3 }, [], [3, 3, 3], [1], [0], [-3], [2.5], ['3'], [null], [[3]], [{}],
+      [{ count: 1 }], [{ count: 3, of: 0 }], [{ count: 3, of: 1.5 }], [{ count: '3' }], [{ count: 3, of: '2' }], [3, { count: 1 }], [3, 'x']];
+    bad.forEach((b) => eq(validTuplets(b), null, JSON.stringify(b)));
+  });
+  test('1.12 tupletChain: valid tuplets overrides tuplet; invalid tuplets falls back to tuplet; neither -> []', () => {
+    eq(tupletChain(e8({ tuplets: [3], tuplet: 5 })), [{ count: 3, of: 2 }]);
+    eq(tupletChain(e8({ tuplets: [3, 3, 3], tuplet: 5 })), [{ count: 5, of: 2 }]);
+    eq(tupletChain(e8({ tuplets: [{ count: 1 }] })), []);
+    eq(tupletChain(e8({ tuplets: ['3'], tuplet: { count: 6, of: 4 } })), [{ count: 6, of: 4 }]);
+    eq(tupletChain(e8({ tuplet: 3 })), [normalizeTuplet(3)]);
+    eq(tupletChain(e8()), []);
+  });
+  test('1.12 durationR: nested chains multiply every ratio (8th x [3,3] = 1/18 whole; 8th x [5:4, 3] = 1/15); 1-entry = tuplet', () => {
+    eq(durationR(e8({ tuplets: [3, 3] })), { n: 1, d: 18 });
+    eq(durationR(e8({ tuplets: [{ count: 5, of: 4 }, 3] })), { n: 1, d: 15 });
+    eq(durationR(eq4({ tuplets: [3, { count: 5, of: 4 }], dots: 1 })), { n: 1, d: 5 });
+    eq(durationR(e8({ tuplets: [3] })), durationR(e8({ tuplet: 3 })));
+    eq(durationR(e8({ tuplets: [{ count: 6, of: 4 }] })), durationR(e8({ tuplet: { count: 6, of: 4 } })));
+    eq(durationR(e8({ tuplets: [3], tuplet: 5 })), { n: 1, d: 12 });
+    eq(durationR(e8({ tuplets: [3, 3, 3], tuplet: 5 })), { n: 1, d: 20 });
+    let msg = null;
+    try { durationR(e8({ tuplets: 'x', tuplet: 0 })); } catch (e) { msg = e.message; }
+    eq(msg, 'rational: zero denominator');
+  });
+  test('1.12 tupletGroups: a 1-entry tuplets groups exactly like the same tuplet (and overrides tuplet)', () => {
+    const shapes = [[3, 3, 3], [{ count: 5 }], [{ count: 6, of: 4 }]];
+    for (const t of shapes) {
+      const a = Array.from({ length: 6 }, () => e8({ tuplet: t[0] }));
+      const b = Array.from({ length: 6 }, () => e8({ tuplets: [t[0]], tuplet: 7 }));
+      eq(tupletGroups(b, T44), tupletGroups(a, T44), JSON.stringify(t));
+    }
+    const q = [eq4({ tuplets: [3] }), eq4({ tuplets: [3] }), eq4({ tuplets: [3] }), { type: 'note', duration: 'half', notes: [{ pitch: 'E4' }] }];
+    eq(tupletGroups(q, T44), [{ indices: [0, 1, 2], count: 3 }]);
+  });
+  test('1.12 tabEl: voice-2 tabEl copies tuplets only when the beat has the key (key order unchanged otherwise)', () => {
+    const els = [{ el: e8({ tuplet: 3 }) }, { el: e8({ tuplets: [3, 3], tuplet: 3 }) }];
+    tabColumnMarks([], els);
+    eq(Object.keys(els[0].tabEl), ['type', 'duration', 'dots', 'tuplet', 'notes']);
+    eq(Object.keys(els[1].tabEl), ['type', 'duration', 'dots', 'tuplet', 'tuplets', 'notes']);
+    eq(els[1].tabEl.tuplets, [3, 3]);
+  });
+  const { nestedTupletGroups, hasNestedTuplets } = await imp('src/layout/tuplets.js');
+  const G = (indices, count, depth) => (depth === undefined ? { indices, count } : { indices, count, depth });
+  const half = { type: 'note', duration: 'half', notes: [{ pitch: 'E4' }] };
+  const grace8 = { type: 'grace', duration: '16th', notes: [{ pitch: 'D4' }], tuplets: [3, 3] };
+  test('1.12 nested tupletGroups m1: quarter triplet with an inner 8th triplet -> outer depth 0, inner depth 1', () => {
+    const m1 = [eq4({ tuplet: 3 }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), eq4({ tuplet: 3 }), half];
+    eq(tupletGroups(m1, T44), [G([0, 1, 2, 3, 4], 3, 0), G([1, 2, 3], 3, 1)]);
+  });
+  test('1.12 nested tupletGroups m2: 5:4 eighths with an inner triplet', () => {
+    const o = { count: 5, of: 4 };
+    const m2 = [e8({ tuplets: [o] }), e8({ tuplets: [o] }), e8({ tuplets: [o, 3] }), e8({ tuplets: [o, 3] }), e8({ tuplets: [o, 3] }), e8({ tuplets: [o] }), half];
+    eq(tupletGroups(m2, T44), [G([0, 1, 2, 3, 4, 5], 5, 0), G([2, 3, 4], 3, 1)]);
+  });
+  test('1.12 nested tupletGroups: a plain triplet in a nested voice keeps no depth; graces are skipped inside the inner run', () => {
+    const v = [e8({ tuplet: 3 }), e8({ tuplet: 3 }), e8({ tuplet: 3 }), e8({ tuplets: [3] }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), half];
+    eq(tupletGroups(v, T44), [G([0, 1, 2], 3), G([3, 4, 5, 6], 3, 0), G([4, 5, 6], 3, 1)]);
+    const g = [eq4({ tuplets: [3] }), e8({ tuplets: [3, 3] }), grace8, e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), eq4({ tuplets: [3] }), half];
+    eq(tupletGroups(g, T44), [G([0, 1, 3, 4, 5], 3, 0), G([1, 3, 4], 3, 1)]);
+  });
+  test('1.12 nested tupletGroups: an incomplete outer run falls back to one group per beat cell; incomplete inner per frame cell', () => {
+    const v = [e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), eq4(), half];
+    eq(tupletGroups(v, T44), [G([0, 1], 3, 0), G([0, 1], 3, 1)]);
+  });
+  test('1.12 nested gate: only a valid 2-entry tuplets on a non-grace beat switches to nestedTupletGroups; otherwise no depth key', () => {
+    eq(hasNestedTuplets([e8({ tuplets: [3, 3, 3] }), e8({ tuplets: [3] }), grace8, e8({ tuplet: 3 })]), false);
+    eq(hasNestedTuplets([e8({ tuplets: [3, { count: 3, of: 2 }] })]), true);
+    const plain = [e8({ tuplets: [3, 3, 3], tuplet: 3 }), e8({ tuplet: 3 }), e8({ tuplet: 3 }), grace8, e8({ tuplets: [5] }), e8({ tuplets: [5] })];
+    const out = tupletGroups(plain, T44);
+    eq(out.some((x) => 'depth' in x), false);
+    eq(out, [G([0, 1, 2], 3), G([4, 5], 5)]);
+    // nestedTupletGroups on a voice without nesting gives today's groups (same rule, unit = written value)
+    const pins = [Array(12).fill(e8({ tuplet: 3 })), [eq4({ tuplet: 3 }), eq4({ tuplet: 3 }), eq4({ tuplet: 3 }), half],
+      Array(6).fill({ ...n16, tuplet: { count: 6, of: 4 } }), [e8({ tuplet: 3 }), { ...n16, tuplet: 3 }, { ...n16, tuplet: 3 }, e8({ tuplet: 3 })]];
+    pins.forEach((b) => eq(nestedTupletGroups(b, T44), tupletGroups(b, T44)));
+  });
+  test('1.12 nested tupletGroups: compound meter cells and a dotted outer member', () => {
+    const T68 = { beats: 6, beatType: 8 };
+    const v = [eq4({ tuplets: [{ count: 2, of: 3 }] }), e8({ tuplets: [{ count: 2, of: 3 }, 3] }), e8({ tuplets: [{ count: 2, of: 3 }, 3] }), e8({ tuplets: [{ count: 2, of: 3 }, 3] }), { ...eq4(), dots: 1 }];
+    eq(tupletGroups(v, T68), [G([0, 1, 2, 3], 2, 0), G([1, 2, 3], 3, 1)]);
+  });
+  test('1.12 validTuplets bounds: count 2-64, of 1-64 (integers); 65, 0 and 1e300 reject the whole field', () => {
+    eq(validTuplets([64, { count: 64, of: 64 }]), [{ count: 64, of: 2 }, { count: 64, of: 64 }]);
+    for (const bad of [[65], [1e300], [{ count: 65 }], [{ count: 3, of: 65 }], [{ count: 1e300, of: 1 }], [3, { count: 3, of: 1e300 }], [Infinity], [NaN]]) {
+      eq(validTuplets(bad), null, JSON.stringify(bad));
+    }
+    eq(tupletChain(e8({ tuplets: [{ count: 1e300, of: 1 }, { count: 1e300, of: 1 }], tuplet: 3 })), [{ count: 3, of: 2 }]);
+  });
+  test('1.12 nested tupletGroups always finish: huge tuplets entries next to a nested beat, and legacy huge tuplet values (NaN time) in a nested voice', () => {
+    const huge = { count: 1e300, of: 1 };
+    const a = [e8({ tuplets: [huge, huge] }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] })];
+    eq(tupletGroups(a, T44), [G([1, 2, 3], 3, 0), G([1, 2, 3], 3, 1)]);
+    const b = [e8({ tuplet: 1e300 }), e8({ tuplet: 1e300 }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] })];
+    const out = tupletGroups(b, T44);
+    eq(out.flatMap((x) => x.indices).every((i) => i >= 0 && i < b.length), true);
+    eq(out.filter((x) => x.depth !== 1).flatMap((x) => x.indices), [0, 1, 2, 3, 4]); // every beat in exactly one outer / plain group
+    for (const beats of [a, b]) {
+      const box = makeContainer();
+      new MusicScoreRenderer(box, { tracks: [{ showTablature: true, tabRhythm: true, measures: [{ beats }] }] }, { width: 900 }).render();
+      eq(box.children.length, 1);
+    }
+  });
+}
+
+// ---------- 1.12.0: on-beat grace notes (draw/notation.js renderGraceNote) ----------
+{
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { renderNotationElement } = await imp('src/draw/notation.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { group } = await imp('src/draw/svgUtil.js');
+  const theme = resolveTheme({});
+  const graceInfos = (score) => {
+    const sc = normalizeScore(JSON.parse(JSON.stringify(score)));
+    const layout = computeLayout(sc, theme, 900);
+    const out = [];
+    layout.systems.forEach((system) => system.tracks.forEach((tr, ti) => tr.measures.forEach((m) => {
+      for (const key of ['elements', 'elements2']) (m[key] || []).forEach((le) => {
+        if (le.el.type !== 'grace') return;
+        const g = group({});
+        out.push({ info: renderNotationElement(g, { ...le, baselineY: 100 }, m, sc.tracks[ti], theme, {}), g, onBeat: le.el.onBeat });
+      });
+    })));
+    return out;
+  };
+  const gr = (pitch, extra = {}) => ({ type: 'grace', duration: '16th', notes: [{ pitch }], ...extra });
+  const qn = (pitch) => ({ type: 'note', duration: 'quarter', notes: [{ pitch }] });
+  const score = (onBeat) => ({ tracks: [{ measures: [
+    { beats: [gr('F#5', onBeat), qn('G5'), gr('C4', onBeat), qn('D4'), gr('A3', onBeat), qn('B3'), qn('C5')] },
+    { voices: [{ beats: [qn('E5'), gr('G5', onBeat), qn('A5'), { type: 'note', duration: 'half', notes: [{ pitch: 'B5' }] }] },
+      { beats: [qn('E4'), gr('D4', onBeat), qn('C4'), { type: 'note', duration: 'half', notes: [{ pitch: 'B3' }] }] }] },
+  ] }] });
+  test('1.12 on-beat grace: same returned info and the same children minus the slash, wrapped in <g class="grace-on-beat">', () => {
+    const a = graceInfos(score({ onBeat: true })); const b = graceInfos(score({}));
+    eq(a.length, 5);
+    a.forEach((x, i) => {
+      eq(x.info, b[i].info);
+      eq(x.g.children.length, 1);
+      const w = x.g.children[0];
+      eq([w.tag, w.getAttribute('class')], ['g', 'grace-on-beat']);
+      const plain = b[i].g.children;
+      eq(serialize(w).includes('stroke-width="1.3"'), false);
+      eq(w.children.length, plain.length - 1);
+      eq(w.children.map((c) => serialize(c)), plain.slice(0, -1).map((c) => serialize(c)));
+      eq([plain[plain.length - 1].tag, plain[plain.length - 1].getAttribute('stroke-width')], ['line', '1.3']);
+    });
+  });
+  test('1.12 on-beat grace: only onBeat === true counts (truthy non-true values draw the slashed grace unwrapped)', () => {
+    const b = graceInfos(score({}));
+    for (const v of ['yes', 1, 'true', {}, false, null]) {
+      const a = graceInfos(score({ onBeat: v }));
+      a.forEach((x, i) => eq(serialize(x.g), serialize(b[i].g), JSON.stringify(v)));
+    }
+  });
+}
+
+/// ---------- 1.12.0: lyrics parsing and room (lyrics.js, layout/timeline.js, layout/multiRest.js) ----------
+{
+  const { canonicalLyrics, lyricsOf, lyricExtents } = await imp('src/lyrics.js');
+  const LYRIC_PAD_SP = 0.25, HYPHEN_ROOM_SP = 0.6; // the spec's numbers (src/lyrics.js keeps them private)
+  const { estimateTextWidth } = await imp('src/textMetrics.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { isRestMeasure } = await imp('src/layout/multiRest.js');
+  const theme = resolveTheme({});
+  const S = (text, hyphen = false, extend = false) => ({ text, hyphen, extend });
+  const qn = (lyric) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }], ...(lyric === undefined ? {} : { lyric }) });
+
+  test('1.12 canonicalLyrics: string shorthand (trim, collapse, one trailing marker: - hyphen, _ extend)', () => {
+    eq(canonicalLyrics('love'), [S('love')]);
+    eq(canonicalLyrics('  hap-  '), [S('hap', true)]);
+    eq(canonicalLyrics('day_'), [S('day', false, true)]);
+    eq(canonicalLyrics('two  words '), [S('two words')]);
+    eq(canonicalLyrics('a -'), [S('a', true)]);
+    eq(canonicalLyrics('x--'), [S('x-', true)]);
+    eq(canonicalLyrics('x_-'), [S('x_', true)]);
+    eq(canonicalLyrics('x-_'), [S('x-', false, true)]);
+    eq(canonicalLyrics('-day'), [S('-day')]);
+  });
+  test('1.12 canonicalLyrics: object form (text canonical, hyphen === true, extend === true, hyphen wins)', () => {
+    eq(canonicalLyrics({ text: ' Oh ', extend: true }), null, 'a bare object is not an array of verses');
+    eq(canonicalLyrics([{ text: ' Oh ', extend: true }]), [S('Oh', false, true)]);
+    eq(canonicalLyrics([{ text: 'Hal', hyphen: true, extend: true }]), [S('Hal', true)]);
+    eq(canonicalLyrics([{ text: 'go-', hyphen: 'yes', extend: 1 }]), [S('go-')]);
+    eq(canonicalLyrics([{ text: '' }, { text: 3 }, { hyphen: true }, ['x']]), null);
+  });
+  test('1.12 canonicalLyrics: verses (index = verse, null holes kept), at most 8, nothing left -> null', () => {
+    eq(canonicalLyrics(['one', null, 'three-']), [S('one'), null, S('three', true)]);
+    eq(canonicalLyrics([null, 'two']), [null, S('two')]);
+    const ten = Array.from({ length: 10 }, (_, i) => `v${i + 1}`);
+    eq(canonicalLyrics(ten).length, 8);
+    eq(canonicalLyrics([...Array(8).fill(null), 'ninth']), null);
+    for (const raw of [undefined, null, '', '   ', '-', '_', ' - ', 3, true, {}, [], [''], ['-', '_'], [5, null]]) eq(canonicalLyrics(raw), null, JSON.stringify(raw));
+  });
+  test('1.12 canonicalLyrics is idempotent', () => {
+    const inputs = ['hap-', 'day_', ['a', null, 'b-'], [{ text: 'x', extend: true }], ' p  q ', 'x--'];
+    inputs.forEach((raw) => { const once = canonicalLyrics(raw); eq(canonicalLyrics(once), once, JSON.stringify(raw)); });
+  });
+  test('1.12 lyricsOf: note beats only (slash beats count); rests, hidden rests and graces -> null', () => {
+    eq(lyricsOf(qn('la')), [S('la')]);
+    eq(lyricsOf({ type: 'note', duration: 'quarter', slash: true, lyric: 'la' }), [S('la')]);
+    eq(lyricsOf({ type: 'rest', duration: 'quarter', lyric: 'la' }), null);
+    eq(lyricsOf({ type: 'rest', duration: 'quarter', hidden: true, lyric: 'la' }), null);
+    eq(lyricsOf({ type: 'grace', duration: '16th', notes: [{ pitch: 'E4' }], lyric: 'la' }), null);
+    eq(lyricsOf(qn()), null);
+  });
+  test('1.12 lyricExtents: half the widest syllable + 0.25 sp; a hyphenated verse adds the hyphen width + 0.6 sp on the right', () => {
+    const s = theme.staffLineSpacing; const size = theme.lyricFontSize;
+    eq(size, 13);
+    const w = (t) => estimateTextWidth(t, size);
+    eq(lyricExtents(qn('Hallelujah'), theme), { left: w('Hallelujah') / 2 + LYRIC_PAD_SP * s, right: w('Hallelujah') / 2 + LYRIC_PAD_SP * s });
+    const h = w('to') / 2 + LYRIC_PAD_SP * s;
+    eq(lyricExtents(qn('to-'), theme), { left: h, right: h + w('-') + HYPHEN_ROOM_SP * s });
+    const long = w('morning') / 2 + LYRIC_PAD_SP * s;
+    eq(lyricExtents(qn(['to-', 'morning']), theme), { left: long, right: Math.max(long, h + w('-') + HYPHEN_ROOM_SP * s) });
+    eq(lyricExtents(qn(), theme), null);
+    eq(lyricExtents(qn(''), theme), null);
+    eq(lyricExtents({ type: 'rest', duration: 'quarter', lyric: 'Hallelujah' }, theme), null);
+  });
+  const layoutX = (score) => computeLayout(normalizeScore(JSON.parse(JSON.stringify(score))), theme, 900);
+  const xs = (lay) => lay.systems.flatMap((sy) => sy.tracks.flatMap((t) => t.measures.flatMap((m) => [...m.elements, ...(m.elements2 || [])].map((le) => le.x))));
+  const strip = (v) => JSON.parse(JSON.stringify(v, (k, x) => (k === 'lyric' ? undefined : x)));
+  const LONG = 'Supercalifragilistic';
+  test('1.12 layout: a long syllable widens its beat; empty / rest / grace / voice-2 lyrics and lyric-free scores lay out exactly as before', () => {
+    const base = { tracks: [{ showTablature: true, measures: [{ beats: [qn(), qn(), qn(), qn()] }] }] };
+    const withLyric = (lyric) => { const sc = JSON.parse(JSON.stringify(base)); sc.tracks[0].measures[0].beats[1].lyric = lyric; return sc; };
+    const a = layoutX(base);
+    const b = layoutX(withLyric(LONG));
+    if (!(xs(b)[2] - xs(b)[1] > xs(a)[2] - xs(a)[1] + 20)) throw new Error(`not widened ${xs(a)} / ${xs(b)}`);
+    eq(JSON.stringify(strip(layoutX(withLyric('')))), JSON.stringify(a)); // el keeps its own lyric key; nothing else differs
+    eq(JSON.stringify(strip(layoutX(withLyric(['', null])))), JSON.stringify(a));
+    const rest = { tracks: [{ measures: [{ beats: [qn(), { type: 'rest', duration: 'quarter', lyric: LONG }, { type: 'grace', duration: '16th', notes: [{ pitch: 'D4' }], lyric: LONG }, qn(), qn()] }] }] };
+    eq(xs(layoutX(rest)), xs(layoutX(strip(rest))));
+    const two = { tracks: [{ measures: [{ voices: [{ beats: [qn(), qn(), qn(), qn()] }, { beats: [qn(LONG), qn(), qn(), qn()] }] }] }] };
+    eq(xs(layoutX(two)), xs(layoutX(strip(two))));
+    const two1 = strip(two); two1.tracks[0].measures[0].voices[0].beats[0].lyric = LONG;
+    if (!(xs(layoutX(two1))[1] > xs(layoutX(strip(two)))[1] + 20)) throw new Error('voice-1 lyric in a two-voice measure not widened');
+  });
+  test('1.12 layout: a lyric keeps grace notes anchored to the note (same distance from the beat x)', () => {
+    const gr = { type: 'grace', duration: '16th', notes: [{ pitch: 'D4' }] };
+    const sc = (lyric) => ({ tracks: [{ measures: [{ beats: [qn(), gr, qn(lyric), qn(), qn()] }] }] });
+    const d = (lay) => { const els = lay.systems[0].tracks[0].measures[0].elements; return els[2].x - els[1].x; };
+    eq(d(layoutX(sc(LONG))), d(layoutX(sc(undefined))));
+  });
+  test('1.12 multi-measure rests: a whole rest carrying a lyric still collapses', () => {
+    const wr = (extra = {}) => ({ beats: [{ type: 'rest', duration: 'whole', ...extra }] });
+    const sc = normalizeScore({ multiMeasureRests: true, tracks: [{ measures: [wr({ lyric: 'la' }), wr({ lyric: ['a', 'b'] }), wr()] }] });
+    eq([0, 1, 2].map((mi) => isRestMeasure(sc, mi)), [true, true, true]);
+    const fer = normalizeScore({ multiMeasureRests: true, tracks: [{ measures: [wr({ lyric: 'la', fermata: true })] }] });
+    eq(isRestMeasure(fer, 0), false);
+  });
+}
+
+// ---------- 1.12.0: lyrics drawing edge cases and nested tuplet timing (inline scores) ----------
+{
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { resolveTheme } = await imp('src/theme.js');
+  const { estimateTextWidth } = await imp('src/textMetrics.js');
+  const { HEAD_HALF_SP } = await imp('src/draw/passes/common.js');
+  const { durationR } = await imp('src/duration.js');
+  const theme = resolveTheme({});
+  const S = theme.staffLineSpacing;
+  const walk = (n, out = []) => { out.push(n); n.children.forEach((c) => walk(c, out)); return out; };
+  const cl = (n) => n.getAttribute('class') || '';
+  const q = (lyric) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }], ...(lyric === undefined ? {} : { lyric }) });
+  const rest = (extra = {}) => ({ type: 'rest', duration: 'quarter', ...extra });
+  const render = (score, width = 900) => {
+    const box = makeContainer();
+    new MusicScoreRenderer(box, JSON.parse(JSON.stringify(score)), { width }).render();
+    const nodes = walk(box);
+    const verse = (n) => n.getAttribute('data-verse');
+    return {
+      syl: nodes.filter((n) => cl(n) === 'lyric'), hy: nodes.filter((n) => cl(n) === 'lyric-hyphen'),
+      ext: nodes.filter((n) => cl(n) === 'lyric-extender'), groups: nodes.filter((n) => cl(n) === 'lyrics'), verse,
+    };
+  };
+  const xs = (score, mi = 0) => computeLayout(normalizeScore(JSON.parse(JSON.stringify(score))), theme, 900).systems[0].tracks[0].measures[mi].elements.map((le) => le.x);
+  const one = (...measures) => ({ tracks: [{ measures: measures.map((beats) => ({ beats })) }] });
+  const num = (n, a) => Number(n.getAttribute(a));
+  const headRight = (score, mi, i) => xs(score, mi)[i] + HEAD_HALF_SP * S;
+  const near1 = (a, b, m) => { if (!(Math.abs(a - b) < 1e-6)) throw new Error(`${m}: ${a} vs ${b}`); };
+  const w = (t) => estimateTextWidth(t, theme.lyricFontSize);
+
+  test('1.12 lyrics draw: an extender ends at the last note head before a rest, a hidden rest, the next syllable or the score end', () => {
+    const cases = [
+      ['rest', one([q('a_'), q(), rest(), q()]), 1],
+      ['hidden rest', one([q('a_'), q(), rest({ hidden: true }), q()]), 1],
+      ['next syllable', one([q('a_'), q(), q('b'), q()]), 1],
+      ['score end', one([q(), q(), q('a_'), q()]), 3],
+    ];
+    for (const [name, sc, last] of cases) {
+      const r = render(sc);
+      eq(r.ext.length, 1, name);
+      const a = r.syl.find((t) => t.textContent === 'a');
+      near1(num(r.ext[0], 'x1'), num(a, 'x') + w('a') / 2 + 0.2 * S, `${name} start`);
+      near1(num(r.ext[0], 'x2'), headRight(sc, 0, last), `${name} end`);
+    }
+  });
+  test('1.12 lyrics draw: an extender stops at a multi-measure rest, an empty measure and a whole-rest measure', () => {
+    const whole = [{ type: 'rest', duration: 'whole' }];
+    const mk = (extra, second) => ({ ...extra, tracks: [{ measures: [{ beats: [q('a_'), q(), q(), q()] }, { beats: second }, { beats: [q(), q(), q(), q()] }] }] });
+    for (const [name, sc] of [['multi-rest', mk({ multiMeasureRests: true }, whole)], ['whole rest', mk({}, whole)], ['empty measure', mk({}, [])]]) {
+      const r = render(sc);
+      eq(r.ext.length, 1, name);
+      near1(num(r.ext[0], 'x2'), headRight(sc, 0, 3), name);
+    }
+  });
+  test('1.12 lyrics draw: a syllable wider than its head has no extender (length <= 0 dropped)', () => {
+    eq(render(one([q('Hallelujah_'), rest(), q(), q()])).ext.length, 0);
+  });
+  test('1.12 lyrics draw: hyphen wins over extend; no hyphen without a next syllable; a hyphen reaches over a rest', () => {
+    const both = render(one([q([{ text: 'a', hyphen: true, extend: true }]), q(), q('b'), q()]));
+    eq([both.hy.length, both.ext.length], [1, 0]);
+    eq(render(one([q('a-'), q(), q(), q()])).hy.length, 0);
+    const over = render(one([q('a-'), rest(), q('b'), q()]));
+    eq(over.hy.length, 1);
+    const a = over.syl.find((t) => t.textContent === 'a'); const b = over.syl.find((t) => t.textContent === 'b');
+    near1(num(over.hy[0], 'x'), (num(a, 'x') + w('a') / 2 + num(b, 'x') - w('b') / 2) / 2, 'hyphen midway');
+  });
+  test('1.12 lyrics draw: verses are independent (a verse-2 syllable does not stop a verse-1 extender)', () => {
+    const sc = one([q(['a_']), q([null, 'b']), q(), q()]);
+    const r = render(sc);
+    eq(r.ext.length, 1);
+    eq(r.verse(r.ext[0]), '1');
+    near1(num(r.ext[0], 'x2'), headRight(sc, 0, 3), 'to the last head');
+  });
+  test('1.12 lyrics draw: more than 8 verses draw only verses 1-8; verse baselines are shared and 1.3 x size apart', () => {
+    const ten = Array.from({ length: 10 }, (_, i) => `v${i + 1}`);
+    const r = render(one([q(ten), q()]));
+    eq(r.syl.map((t) => r.verse(t)), ['1', '2', '3', '4', '5', '6', '7', '8']);
+    const ys = render(one([q(['a']), q([null, 'b']), q([null, null, 'c']), q()])).syl.map((t) => num(t, 'y'));
+    near1(ys[1] - ys[0], 1.3 * theme.lyricFontSize, 'verse 2 step');
+    near1(ys[2] - ys[1], 1.3 * theme.lyricFontSize, 'verse 3 step');
+  });
+  test('1.12 lyrics draw: no lyrics group when no beat has a usable syllable', () => {
+    const r = render(one([q(''), q({}), q(['', null, '-']), rest({ lyric: 'la' })], [{ type: 'grace', duration: '16th', notes: [{ pitch: 'D4' }], lyric: 'g' }, q(5)]));
+    eq([r.groups.length, r.syl.length], [0, 0]);
+  });
+  test('1.12 nested tuplets: the nested measures of the fixtures sum to exactly one whole (exact rationals)', () => {
+    const e8 = (extra) => ({ type: 'note', duration: '8th', notes: [{ pitch: 'E4' }], ...extra });
+    const qq = (extra) => ({ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4' }], ...extra });
+    const half = { type: 'note', duration: 'half', notes: [{ pitch: 'E4' }] };
+    const O = { count: 5, of: 4 };
+    const bars = [
+      [qq({ tuplet: 3 }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), e8({ tuplets: [3, 3] }), qq({ tuplet: 3 }), half],
+      [e8({ tuplets: [O] }), e8({ tuplets: [O] }), e8({ tuplets: [O, 3] }), e8({ tuplets: [O, 3] }), e8({ tuplets: [O, 3] }), e8({ tuplets: [O] }), half],
+    ];
+    bars.forEach((beats, i) => {
+      let n = 0; let d = 1;
+      beats.forEach((b) => { const r = durationR(b); n = n * r.d + r.n * d; d *= r.d; });
+      eq(n === d, true, `bar ${i + 1}: ${n}/${d}`);
+    });
+  });
+}
+
+// ---------- browser DOM parity: no array methods on .children (HTMLCollection in browsers, array in the shim) ----------
+test('browser parity: src never calls array methods directly on .children', () => {
+  const bad = [];
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).forEach((d) => {
+    const p = path.join(dir, d.name);
+    if (d.isDirectory()) return walk(p);
+    if (!d.name.endsWith('.js')) return;
+    fs.readFileSync(p, 'utf8').split('\n').forEach((line, i) => {
+      if (/\.children\.(find|filter|map|some|every|forEach|reduce|includes|indexOf|flatMap|at)\(/.test(line)) bad.push(`${path.relative(root0, p)}:${i + 1}`);
+    });
+  });
+  walk(path.join(root0, 'src'));
+  eq(bad, []);
+});
 
 // ---------- report ----------
 export function summary() {

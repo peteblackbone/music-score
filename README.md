@@ -1,6 +1,6 @@
 # music-score
 
-Version 1.11.0 · MIT licence
+Version 1.12.0 · MIT licence
 
 A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL).
 
@@ -98,7 +98,7 @@ Spacing and margin keys (all in staff spaces, `Sp`):
 Other keys:
 
 - `staffLineWidth`, `stemWidth`, `beamWidth`: line thickness in px.
-- `tabFontSize`, `dynamicFontSize`: text sizes in px.
+- `tabFontSize`, `dynamicFontSize`, `lyricFontSize`: text sizes in px. `lyricFontSize` (default 13) sizes the lyrics under the staff (see [Lyrics](#lyrics)).
 - `tabStaffLineSpacing`: distance between tab strings in px (default 15). This is a plain px value and does not scale with `staffLineSpacing`.
 - Rhythm on TAB staves (see [Rhythm on TAB staves](#rhythm-on-tab-staves)), in staff spaces:
 
@@ -241,9 +241,11 @@ Beats are the rhythmic events in a measure, in order. Each beat is one note, one
 | `duration` | `'whole'`, `'half'`, `'quarter'`, `'8th'`, `'16th'`, `'32nd'`, `'64th'` | Required, except for grace notes. An unknown name throws an error. |
 | `dots` | integer, 0 to 4 | Augmentation dots. Default 0. Values above 4 are capped at 4, fractions are rounded down, and numeric strings count as their number (`'1'` is one dot). Anything else that isn't a number counts as 0. |
 | `tuplet` | number or `{ count, of }` | `3` means a triplet (3 notes in the time of 2). `of` defaults to 2. Consecutive beats with the same ratio form one bracket once they add up to a complete tuplet. |
+| `tuplets` | array of 1 or 2 entries, outer ratio first | Nested tuplets, such as a triplet inside a triplet. An entry is a whole number `n` (n notes in the time of 2) or `{ count, of }`, with `count` from 2 to 64 and `of` from 1 to 64 (`of` defaults to 2). A valid `tuplets` overrides `tuplet` on the same beat. If the array has more than two entries, or any entry is invalid, the whole field is ignored and `tuplet` applies. See [Nested tuplets](#nested-tuplets). |
 | `hidden` | boolean | Rests only (`{ type: 'rest', hidden: true }`). The rest takes its time but draws nothing and takes no room. Works in any measure. See [Voices](#voices). |
 | `slash` | `true` | Rhythm slash on a voice 1 note beat: one slash head on the middle line of the notation staff, and a slash on the TAB staff, instead of the notes. The beat's `notes` are not drawn and may be left out. Other values, and rests, grace notes and voice 2 beats, are drawn as usual. See [Rhythm slashes](#rhythm-slashes). |
 | `notes` | array of notes | Required for `note` and `grace`. Several entries make a chord. Rests have no notes. |
+| `onBeat` | `true` | Grace beats only. Draws the grace note without its slash, in the same place as an ordinary grace note. It still takes no time. Other values draw the usual slashed grace note. See [Grace notes on the beat](#grace-notes-on-the-beat). |
 | `dynamic` | string | `'p'`, `'pp'`, `'ppp'`, `'mp'`, `'mf'`, `'f'`, `'ff'`, `'fff'`, `'sfz'`, `'rfz'`, `'n'`. Other values print as plain text. Drawn below the notation staff. A dynamic on a voice 2 beat is drawn too, at voice 2's position; if voice 1 has a dynamic at the same time, voice 2's is not drawn. See [Voices](#voices). |
 | `chord` | string | Chord symbol drawn above the staff, e.g. `'C'` or `'F/A'`. With a chord diagram, the name is centred above the diagram. |
 | `chordDiagram` | shape object or `false` | Optional. A shape for this beat's chord diagram, used instead of the `chordShapes` entry. `false` hides the diagram and keeps the plain chord symbol. See [Chord diagrams](#chord-diagrams). |
@@ -265,6 +267,7 @@ Beats are the rhythmic events in a measure, in order. Each beat is one note, one
 | `pickScrape` | `true`, `'down'` or `'up'` | "P.S." label run (pick scrape), like let ring. Consecutive scraped beats share one label whichever direction they use. The direction is accepted but not drawn. See [Ornaments, fingering and hand marks](#ornaments-fingering-and-hand-marks). |
 | `barre` | a fret `1` to `24` (number or digit string), or `{ fret, half }` | Barre label run: `"C II"` for `barre: 2`, `"½C V"` for `{ fret: 5, half: true }`. Only `half: true` makes a half barre. Other values draw nothing. See [Ornaments, fingering and hand marks](#ornaments-fingering-and-hand-marks). |
 | `text` | string or `{ text, below }` | Free italic text above the staff, or under it with `below: true`. Voice 1 note and rest beats only: grace notes and voice 2 ignore it. See [Beat text](#beat-text). |
+| `lyric` | string, or array of strings and `{ text, hyphen, extend }` objects | Syllables under a voice 1 note beat. A string is verse 1. In an array, entry 1 is verse 1, entry 2 is verse 2, up to 8 verses. A trailing `-` makes a hyphen and a trailing `_` an extender line (the marker is removed). Rests, grace notes and voice 2 ignore it. See [Lyrics](#lyrics). |
 | `hairpin` | `'cresc'` or `'dim'` | Crescendo or diminuendo hairpin on the dynamics line below the notation staff. Consecutive beats with the same value form one hairpin. Aliases: `'<'` and `'crescendo'` for `'cresc'`; `'>'`, `'diminuendo'`, `'decresc'` and `'decrescendo'` for `'dim'`. Any case. Other values draw nothing. See [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo). |
 | `fade` | `'in'`, `'out'` or `'swell'` | Fade-in, fade-out or volume-swell sign above the top staff. Any case. Other values draw nothing. See [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo). |
 | `wah` | `'open'` (or `'o'`) or `'closed'` (or `'close'`, `'+'`) | Wah-pedal sign above the top staff, above a fade on the same beat. Any case. Other values draw nothing. See [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo). |
@@ -822,6 +825,60 @@ On a tab-only track (`showStandardNotation: false`, `showTablature: true`), set 
 
 SVG classes: `tab-articulations` (one group per beat column) and `tab-fermata` (the group around a fermata drawn above the TAB, with the usual `fermata` and `fermata-short` or `fermata-long` classes inside).
 
+## Lyrics
+
+Syllables under the notes, one line per verse, as in a song sheet. Set `lyric` on a voice 1 note beat.
+
+```json
+{ "type": "note", "duration": "quarter", "lyric": ["Hap-", "Hel-"], "notes": [{ "pitch": "E4" }] }
+```
+
+- **Verses.** A string is verse 1. An array gives one entry per verse: entry 1 is verse 1, entry 2 is verse 2, and so on. Up to 8 verses are drawn, and later entries are ignored. An empty entry leaves that verse blank under the beat. Each verse sits on its own line, 1.3 times `lyricFontSize` below the one above, and every verse of a track uses the same lines across a system.
+- **Markers.** A trailing `-` in a string makes a hyphen: `'Hap-'` is the syllable "Hap" followed by a hyphen. A trailing `_` makes an extender: `'sing_'` is "sing" followed by a line. Only that one marker is removed. Spaces at the ends are trimmed and inner spaces are collapsed. A string that is only a marker is not a syllable.
+- **Objects.** An array entry may be `{ text, hyphen, extend }`, with `hyphen: true` or `extend: true`. If both are true, the hyphen wins. A single object as the whole `lyric` is ignored: use a string or an array.
+- **Hyphens.** The hyphen is one "-" centred between the syllable and the next syllable of the same verse, wherever that syllable is in the track. Rests in between are skipped. If the next syllable is on a later system, the hyphen runs from the syllable to the end of this system's last barline, and nothing is drawn at the start of the next system. A hyphen with no later syllable in its verse is not drawn.
+- **Extenders.** The line starts just after the syllable and runs along the verse's line to the right edge of the last note before the next syllable of that verse. It ends at a rest (hidden rests too), at a multi-measure rest or an empty measure, or at the end of the score. Notes without a syllable do not end it, so one line can cover a melisma. Ties do not extend a syllable by themselves: put `_` on the syllable. A line that crosses a system break stops at the last barline and continues from the start of the next system's music.
+- **Placement.** Lyrics sit under the notation staff, or under the TAB staff on a track without notation (below its rhythm band, if shown). On a track with both, the TAB staff moves down to make room. From the staff outward, the order is: the notes and their marks, the technique labels on a notation-only track, the lyrics, then the dynamics line, the 8vb and 15mb brackets, and beat text marked `below`. The top of verse 1 sits 0.8 staff spaces below the lowest mark of the staff. Only systems with lyrics move the dynamics line, the octave brackets and the text below the staff down.
+- **Room.** A syllable takes horizontal room for half its width, so a long word can push its neighbours apart, and a hyphen adds room after its syllable. Systems without lyrics are spaced as before. Widths are estimated.
+- **Which beats.** Voice 1 note beats, including slash beats (`slash: true`). `lyric` on a rest, a grace note or a voice 2 beat is ignored, and a lyric on a rest does not stop a multi-measure rest from forming.
+- **Text.** Lyrics use `textFontFamily` at `lyricFontSize` (13 px by default), in `noteColor`.
+- **Not included.** Words are not split into syllables, and there are no elisions, no lyric import and no lyrics on voice 2. Write each syllable on its own beat.
+
+SVG classes: `lyrics` (one group per track in each system, inside the notation or TAB group), `lyric` (one text per syllable), `lyric-hyphen` (one per hyphen) and `lyric-extender` (one line per segment). `lyric`, `lyric-hyphen` and `lyric-extender` carry `data-verse`, the verse number from 1.
+
+## Grace notes on the beat
+
+A grace note is normally drawn with a slash through its stem, just before the next beat. Set `onBeat: true` on a `grace` beat to draw it without the slash.
+
+```json
+{ "type": "grace", "onBeat": true, "notes": [{ "pitch": "F#4" }] }
+```
+
+- **What changes.** Only the drawing. The grace note has no slash, and its parts are wrapped in a `grace-on-beat` group.
+- **What stays.** Its place is the same as an ordinary grace note: just before the next beat, and slurred to it. Accidentals, chords and mixing with ordinary grace notes in one run work as before. TAB is unchanged.
+- **Timing.** An on-beat grace takes no time, exactly like an ordinary grace note, and its `duration` is still ignored. The next note keeps its place. The time a grace note takes from the note after it is not shown.
+- Only `true` counts. Other values draw the usual slashed grace note.
+
+## Nested tuplets
+
+A tuplet inside another tuplet, such as eighth notes in a triplet of triplets. Set `tuplets` on the beat to an array of one or two ratios, outer ratio first.
+
+```json
+{ "type": "note", "duration": "8th", "tuplets": [3, 3], "notes": [{ "string": 3, "fret": 5 }] }
+```
+
+Each of these eighths lasts 1/18 of a whole note, so nine of them fill a half note.
+
+- **Entries.** Each entry is a whole number `n`, meaning `n` notes in the time of 2, or `{ count, of }`, meaning `count` notes in the time of `of`. `count` is a whole number from 2 to 64, and `of` a whole number from 1 to 64 (default 2). `[3]` is one triplet, the same as `tuplet: 3`.
+- **Duration.** A beat lasts its written value multiplied by every ratio. An eighth in `[3, 3]` lasts 1/8 × 2/3 × 2/3.
+- **Fallback.** An array with more than two entries, or with any invalid entry, is ignored as a whole, and the beat uses `tuplet` as before. For example, `[3, 3, 3]` and `[{ count: 1 }]` are both ignored. The 2 to 64 limit applies to `tuplets` only: `tuplet` is read as it was before.
+- **Override.** A valid `tuplets` replaces `tuplet` on the same beat.
+- **Brackets.** Consecutive beats with the same outer ratio form one outer bracket once they make a complete outer tuplet, as a single tuplet does. Inside it, consecutive beats with the same inner ratio form an inner bracket. Beats with only the outer ratio share the outer bracket.
+- **Notation.** The inner bracket is drawn as a normal tuplet bracket. The outer bracket sits 1.2 staff spaces further from the staff: above the stems in voice 1, and below them in voice 2. Both show their count only.
+- **TAB.** The inner tuplet is drawn as usual. The outer bracket is always drawn as a bracket, below the rhythm under its span and below the inner bracket.
+- **Depth.** Two levels only.
+- SVG classes: an outer bracket has `tuplet-outer` on notation and `tab-tuplet-outer` on TAB, in addition to the usual `tuplet` or `tab-tuplet` class. Inner brackets keep the usual classes.
+
 ## Known limitations
 
 - **Dots on chords with seconds.** Augmentation dots on a chord whose notes sit a second apart may not be placed cleanly.
@@ -901,6 +958,14 @@ SVG classes: `tab-articulations` (one group per beat column) and `tab-fermata` (
 - **Capo is display only.** The capo line does not transpose the music, change the pitches, or move the fret numbers. Transposition is not supported.
 - **Tuning chart compares with usual tunings.** A bass-clef 6-string track that keeps the default guitar tuning lists every string, because that tuning is not its usual one. Any string count other than 4 to 8 lists every string.
 - **Header words are English.** "Words by", "Music by", "Capo fret" and "Track N" are fixed text.
+- **Lyrics: voice 1 only.** Lyrics on voice 2 are ignored.
+- **Lyrics: estimated widths.** Syllable widths are estimated, so the spacing and the ends of hyphens and extenders are approximate.
+- **Lyrics: one hyphen.** A hyphen is one centred "-", whatever the gap between the syllables. A hyphen that crosses a system break ends at the barline, and nothing is drawn on the next system.
+- **Lyrics: no word splitting, elision or import.** Each syllable is written on its own beat.
+- **Lyrics: taller systems.** On a system with lyrics, the dynamics line, the 8vb and 15mb brackets and the text below the staff move down, so the system takes more height.
+- **On-beat grace notes: no time.** An `onBeat` grace takes no time, and its `duration` is still ignored (see [Grace notes on the beat](#grace-notes-on-the-beat)).
+- **Nested tuplets: two levels.** A third level is not supported. A `tuplets` array with three entries is ignored.
+- **Nested tuplets: beams.** Beams are grouped as they were before 1.12.0. The brackets follow the nested structure, but beams are not regrouped to match it.
 - **Not included:** playback, an editor, and import/export of other file formats.
 
 ## Running tests
@@ -927,6 +992,20 @@ It prints `ALL PASSED` and exits with code 0 on success.
 - To run one group on its own: `node tests/units.mjs`, `node tests/engraving.mjs`, or `node tests/articulations.mjs`.
 
 ## Changelog
+
+### 1.12.0 — 2026-11-22
+
+Lyrics, grace notes on the beat and nested tuplets. This completes the 1.x roadmap. Scores that use none of the inputs listed below draw as before, and no input that worked before 1.12.0 draws differently.
+
+The three beat fields below were ignored before 1.12.0, so a score that already sets `lyric`, `onBeat` or `tuplets` will now draw them. One side effect: with `multiMeasureRests: true`, a whole-rest measure that carries a `lyric` used to stay out of a multi-measure rest and now joins one, because lyrics on rests are ignored. Check any score that uses them.
+
+New:
+
+- `beat.lyric` on a voice 1 note beat: syllables under the notes, with up to 8 verses, hyphens and extenders. See [Lyrics](#lyrics).
+- `onBeat: true` on a grace beat: the grace note is drawn without its slash. It still takes no time. See [Grace notes on the beat](#grace-notes-on-the-beat).
+- `beat.tuplets`: nested tuplets, outer ratio first. An invalid `tuplets` is ignored and `tuplet` applies. See [Nested tuplets](#nested-tuplets).
+- `theme.lyricFontSize` (default 13 px): the size of the lyric text.
+- New SVG classes: `lyrics`, `lyric`, `lyric-hyphen`, `lyric-extender`, `grace-on-beat`, `tuplet-outer` and `tab-tuplet-outer`.
 
 ### 1.11.0 — 2026-11-22
 
@@ -1147,6 +1226,7 @@ Initial public release.
   - `expression.js`: the canonical values of the `hairpin`, `fade`, `wah`, `ottava` and `tempo` fields, and the ottava display shift that normalize adds to the notes inside a bracket.
   - `clef.js`: the clef names, the clef in force on each track at each measure, the clef's staff positions and key signatures, and its glyphs.
   - `slash.js`: rhythm slashes (the `slash` flag, the slash notehead on the staff and the slash on TAB).
+  - `lyrics.js`: the `lyric` field (canonical verses and syllables) and the horizontal room a syllable needs.
   - `twoVoice.js`: the one shared rule for two voices (a voice 2 counts only when it has a beat that is not a hidden rest), which voice a layout element belongs to, and which beat supplies each TAB mark of a column.
   - `layout/`: positioning, no drawing.
     - `index.js`: `computeLayout`. Ties the layout steps together and sets element positions.
@@ -1155,7 +1235,8 @@ Initial public release.
     - `accidentals.js`: accidentals carried through a measure.
     - `voices.js`: the shared columns of a two-voice measure (clash shift, shared accidentals, dots, rest positions), shared unison noteheads, merged rests and the TAB marks of each column.
     - `systems.js`: system breaking, justification, headers, courtesy signatures, instrument-name indents.
-    - `beams.js`: beams and tuplet groups, including compound meters.
+    - `beams.js`: beams and tuplet groups, including compound meters. A voice with nested tuplets is grouped by `tuplets.js`.
+    - `tuplets.js`: nested tuplet groups (outer and inner brackets) for a voice with a two-entry `tuplets` beat.
     - `vertical.js`: places each staff vertically from its content.
     - `ink.js`: measures the drawn extent of each staff. An opt-in overlap mode counts every mark whose width reaches into an x range.
     - `navigation.js`: groups endings into volta brackets, splits them at line breaks and places the segno, coda, jump and repeat-count marks and the section markers horizontally.
@@ -1178,6 +1259,7 @@ Initial public release.
     - `handMarks.js`: the shapes of ornaments, the golpe, right-hand letters and left-hand fingering digits. The passes and `system.js` place them.
     - `tabRhythm.js`: rhythm on TAB staves (stems, beams, flags, dots, tuplets and rests), drawn per measure, with a second row for voice 2 in two-voice measures.
     - `multiRest.js`: the bar and count of a multi-measure rest, on notation and TAB.
+    - `lyrics.js`: lyrics under the staff (`renderLyrics`, drawn between passes 5 and 6) and `lyricsBottom`, which lets the marks below the staff clear them.
     - `tabOnlyMarks.js`: articulations and fermatas above the TAB staff of tab-only tracks. Articulations are drawn between passes 2 and 3, and fermatas after pass 7.
     - `chordDiagram.js`: one chord diagram (the fretboard box with its dots, barres, fingers and name).
     - `passes.js`: the score-wide passes, drawn after all systems; re-exports them from `passes/` and documents their order.
@@ -1199,7 +1281,7 @@ Initial public release.
     - `svgUtil.js`: small SVG helpers.
   - `theme.js`: theme defaults and the pixel-key conversion.
   - `glyphs.js`: Bravura glyph names. `glyphMetrics.js`: approximate glyph bounding boxes. `textMetrics.js`: estimated text widths.
-  - `font.js`: font loading. `pitch.js`, `duration.js`: pitch and duration helpers. `rational.js`: exact fractions for note timing.
+  - `font.js`: font loading. `pitch.js`, `duration.js`: pitch and duration helpers, including a beat's tuplet chain. `rational.js`: exact fractions for note timing.
 - `examples/`: sample scores.
 - `fonts/`: the Bravura font (SIL Open Font License; see `fonts/BRAVURA-LICENSE.txt`).
 - `tests/`: snapshot tests, unit checks, engraving checks, assertions and structural guards (`run.js`, `units.mjs`, `engraving.mjs`, `articulations.mjs`, `structure.mjs`), the test hooks and DOM shim the runner uses (`hooks.mjs`, `dom-shim.mjs`), the characterization fixtures (`fixtures/characterization.js`), and the saved snapshots (`snapshots/`).

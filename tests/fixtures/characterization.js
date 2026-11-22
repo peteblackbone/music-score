@@ -1835,3 +1835,132 @@ const rhythmOffCase = (name) => {
   characterizationCases.push({ name: 'release-adjacent', width: 600, score: ra.score });
 }
 characterizationCases.push(...['tab-only', 'harmonics', 'tab-marks', 'directions'].map(rhythmOffCase));
+
+// ---------- 1.12.0 fixtures (appended so the earlier cases keep their order) ----------
+{
+  // 1.12.0 nested tuplets (beat.tuplets, outer first) on notation + TAB with TAB rhythm: m1 a quarter triplet
+  // holding an 8th triplet; m2 5:4 eighths holding a triplet; m3 two voices, voice 2 nested (mirrored below);
+  // m4 tuplets: [3] overrides tuplet: 5; m5 invalid tuplets ([3,3,3], [{count:1}], ['3']) fall back to tuplet;
+  // m6 a fermata and an H/P slur over a nested group.
+  const t = (d, string, fret, extra = {}, note = {}) => ({ type: 'note', duration: d, notes: [{ string, fret, ...note }], ...extra });
+  const N = { tuplets: [3, 3] }; const T3 = { tuplet: 3 }; const O54 = { count: 5, of: 4 };
+  characterizationCases.push({
+    name: 'tuplets-nested', width: 900,
+    score: {
+      tracks: [{
+        name: 'Gtr', showStandardNotation: true, showTablature: true, tabRhythm: true,
+        measures: [
+          { beats: [t('quarter', 2, 0, T3), t('8th', 2, 1, N), t('8th', 2, 3, N), t('8th', 1, 0, N), t('quarter', 1, 2, T3), t('half', 3, 2)] },
+          { beats: [t('8th', 3, 0, { tuplets: [O54] }), t('8th', 3, 2, { tuplets: [O54] }), t('8th', 2, 0, { tuplets: [O54, 3] }),
+            t('8th', 2, 1, { tuplets: [O54, 3] }), t('8th', 2, 3, { tuplets: [O54, 3] }), t('8th', 1, 0, { tuplets: [O54] }), t('half', 3, 2)] },
+          vm([t('quarter', 1, 0, T3), t('quarter', 1, 1, T3), t('quarter', 1, 3, T3), t('half', 2, 3)],
+            [t('quarter', 5, 3, T3), t('8th', 4, 0, N), t('8th', 4, 2, N), t('8th', 4, 3, N), t('quarter', 5, 2, T3), t('half', 5, 0)]),
+          { beats: [t('8th', 3, 0, { tuplets: [3], tuplet: 5 }), t('8th', 3, 2, { tuplets: [3], tuplet: 5 }), t('8th', 3, 4, { tuplets: [3], tuplet: 5 }),
+            t('quarter', 2, 0), t('half', 2, 1)] },
+          { beats: [t('8th', 3, 0, { tuplets: [3, 3, 3], tuplet: 3 }), t('8th', 3, 2, { tuplets: [{ count: 1 }], tuplet: 3 }), t('8th', 3, 4, { tuplets: ['3'], tuplet: 3 }),
+            t('quarter', 2, 0), t('half', 2, 1)] },
+          { beats: [t('quarter', 1, 3, T3), t('8th', 1, 5, { ...N, fermata: true }, { hammerPull: true }), t('8th', 1, 7, N, { hammerPull: true }), t('8th', 1, 8, N),
+            t('quarter', 1, 7, { ...T3, fermata: true }), t('half', 2, 5)] },
+        ],
+      }],
+    },
+  });
+}
+{
+  // 1.12.0 on-beat grace notes (grace.onBeat === true: no slash, same place and no time) on notation + TAB:
+  // m1 a single on-beat grace, then a before-beat one for comparison; m2 a mixed run (before-beat then on-beat);
+  // m3 an on-beat grace with an accidental and one into a chord; m4 two voices with a voice-2 on-beat grace;
+  // m5 onBeat: 'yes' (not true -> before-beat, slashed).
+  const gr = (frets, extra = {}) => ({ type: 'grace', duration: '16th', notes: frets.map(([string, fret]) => ({ string, fret })), ...extra });
+  const ob = { onBeat: true };
+  const t = (d, frets, extra = {}) => ({ type: 'note', duration: d, notes: frets.map(([string, fret]) => ({ string, fret })), ...extra });
+  characterizationCases.push({
+    name: 'graces-onbeat', width: 900,
+    score: {
+      tracks: [{
+        name: 'Gtr', showStandardNotation: true, showTablature: true,
+        measures: [
+          { beats: [gr([[2, 3]], ob), t('quarter', [[2, 5]]), t('quarter', [[2, 3]]), gr([[2, 3]]), t('quarter', [[2, 5]]), t('quarter', [[1, 0]])] },
+          { beats: [t('quarter', [[3, 2]]), gr([[3, 0]]), gr([[3, 2]], ob), t('quarter', [[3, 4]]), t('half', [[2, 3]])] },
+          { beats: [gr([[1, 2]], ob), t('quarter', [[1, 3]]), t('quarter', [[2, 1]]), gr([[3, 0]], ob), t('half', [[4, 2], [3, 2], [2, 3]])] },
+          vm([t('quarter', [[1, 0]]), t('quarter', [[1, 2]]), t('half', [[1, 3]])],
+            [t('quarter', [[5, 3]]), gr([[4, 0]], ob), t('quarter', [[4, 2]]), t('half', [[5, 2]])]),
+          { beats: [gr([[2, 3]], { onBeat: 'yes' }), t('quarter', [[2, 5]]), gr([[2, 3]], ob), t('quarter', [[2, 5]]), t('half', [[3, 2]])] },
+        ],
+      }],
+    },
+  });
+}
+{
+  // 1.12.0 lyrics on notation + TAB (track 1) and on notation only (track 2, same music): two verses; m1 hyphens,
+  // p + cresc hairpin, "day_" / "py_" extenders through a tied note to the last note before a rest (m2, whose rest
+  // and grace lyrics are ignored); m3 a long syllable widening its beat, a grace with a lyric (ignored), a rhythm
+  // slash with a syllable, an { text, extend } object form, beat text below; m4 two voices (voice-2 lyrics ignored)
+  // under an 8vb bracket with mf.
+  const L = (string, fret, lyric, extra = {}, d = 'quarter', note = {}) => ({ type: 'note', duration: d, notes: [{ string, fret, ...note }], ...(lyric ? { lyric } : {}), ...extra });
+  const measures = [
+    { beats: [L(3, 0, ['Hap-', 'Ma-'], { dynamic: 'p', hairpin: 'cresc' }), L(3, 2, ['py', 'ny'], { hairpin: 'cresc' }), L(2, 0, ['birth-', 'hap-'], { hairpin: 'cresc' }),
+      L(2, 1, ['day_', 'py_'], { dynamic: 'f' }, 'quarter', { tieStart: true })] },
+    { beats: [L(2, 1, null, {}, 'half', { tieEnd: true }), { type: 'grace', duration: '16th', notes: [{ string: 2, fret: 2 }], lyric: 'grace' }, L(2, 3, null),
+      { type: 'rest', duration: 'quarter', lyric: 'rest' }] },
+    { beats: [L(1, 0, ['Supercalifragilistic', 'turn-']), { type: 'grace', duration: '16th', notes: [{ string: 1, fret: 1 }], lyric: ['g', 'g'] }, L(1, 2, ['to', 'ing']),
+      { type: 'note', duration: 'quarter', slash: true, notes: [{ string: 1, fret: 2 }], lyric: ['you', 'round'] }, L(1, 3, [{ text: 'all', extend: true }, null], { text: { text: 'rit.', below: true } })] },
+    vm([L(1, 0, ['two', 'and'], { ottava: '8vb', dynamic: 'mf' }), L(1, 2, ['voi-', 'a-'], { ottava: '8vb' }), L(1, 3, ['ces', 'gain'], { ottava: '8vb' }, 'half')],
+      [L(4, 2, 'lower', {}, 'half'), L(4, 0, ['v2', 'v2'], {}, 'half')]),
+  ];
+  characterizationCases.push({
+    name: 'lyrics', width: 900,
+    score: {
+      tracks: [
+        { name: 'Gtr', showStandardNotation: true, showTablature: true, measures },
+        { name: 'Vox', showStandardNotation: true, showTablature: false, measures },
+      ],
+    },
+  });
+}
+{
+  // 1.12.0 lyrics across system breaks (600), multiMeasureRests on: a hyphen whose next syllable starts the next
+  // system ("sys- / tem"); an "Ah_" melisma from m3 over the whole third system, ending on m9's last note (the next
+  // syllable is m10's); two whole rests with a lyric still collapse into one multi-measure rest, which a hyphen jumps ("end- / ing").
+  const L = (fret, lyric, d = 'quarter') => ({ type: 'note', duration: d, notes: [{ string: 2, fret }], ...(lyric ? { lyric } : {}) });
+  const bar = (lyrics) => ({ beats: [0, 1, 2, 3].map((i) => L([1, 3, 5, 3][i], lyrics[i])) });
+  characterizationCases.push({
+    name: 'lyrics-break', width: 600,
+    score: {
+      multiMeasureRests: true,
+      tracks: [{
+        name: 'Gtr', showStandardNotation: true, showTablature: true,
+        measures: [
+          bar(['Hel-', 'lo', 'and', 'wel-']),
+          bar(['come', 'to', 'the', 'sys-']),
+          bar(['tem', 'Ah_', null, null]),
+          bar([]), bar([]), bar([]), bar([]), bar([]), bar([]),
+          { beats: [L(1, 'end-'), L(3), L(5), { type: 'rest', duration: 'quarter' }] },
+          { beats: [{ type: 'rest', duration: 'whole', lyric: 'la' }] },
+          { beats: [{ type: 'rest', duration: 'whole', lyric: ['la', 'la'] }] },
+          { beats: [L(1, 'ing'), L(3), L(5, 'fin', 'half')] },
+        ],
+      }],
+    },
+  });
+}
+{
+  // 1.12.0 lyrics on a tab-only staff with TAB rhythm: three verses under the rhythm band, hyphens and an extender,
+  // beat text below under the lyrics, a two-voice measure (voice 2's band row above the lyrics).
+  const L = (string, fret, lyric, extra = {}, d = 'quarter') => ({ type: 'note', duration: d, notes: [{ string, fret }], ...(lyric ? { lyric } : {}), ...extra });
+  characterizationCases.push({
+    name: 'lyrics-tab-only', width: 900,
+    score: {
+      tracks: [{
+        name: 'TAB', showStandardNotation: false, showTablature: true, tabRhythm: true,
+        measures: [
+          { beats: [L(3, 0, ['Once', 'Twice', 'Thrice']), L(3, 2, ['up-', 'a-', 'o-']), L(2, 0, ['on', 'gain', 'ver'], { text: { text: 'softly', below: true } }),
+            L(2, 1, ['a_', 'and_', 'the_'])] },
+          { beats: [L(2, 1, null, {}, '8th'), L(2, 3, null, {}, '8th'), L(2, 1, null, {}, 'quarter'), L(1, 0, ['time', 'more', 'hill']), L(1, 0, null, { text: { text: 'end', below: true } })] },
+          vm([L(1, 3, ['we', 'they', 'you']), L(1, 2, ['sang', 'sing', 'sung'], {}, 'quarter'), L(1, 0, ['too', 'two', 'to'], {}, 'half')],
+            [L(4, 2, 'x', {}, '8th'), L(4, 0, null, {}, '8th'), L(5, 2, null, {}, 'quarter'), L(5, 0, null, {}, 'half')]),
+        ],
+      }],
+    },
+  });
+}

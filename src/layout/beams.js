@@ -2,8 +2,11 @@
  * layout/beams.js — rhythmic-cell bucketing of a measure's beats, and the
  * beam and tuplet groupings built on it. Pure functions, no DOM/SVG here.
  */
-import { isBeamable, normalizeTuplet, durationR, beamCellValue } from '../duration.js';
+import {
+  isBeamable, tupletChain, durationR, beamCellValue, writtenR, isPow2Value, sameRatio,
+} from '../duration.js';
 import { R, ZERO, add, mul, cmp } from '../rational.js';
+import { hasNestedTuplets, nestedTupletGroups } from './tuplets.js';
 
 /**
  * The rhythmic cell index each beat starts in, using `beamCellValue` (one
@@ -45,11 +48,8 @@ export function groupBeams(beats, timeSignature) {
   return groups;
 }
 
-/** Written (notated) duration: dots applied, tuplet ratio ignored. */
-const writtenR = (el) => durationR({ duration: el.duration, dots: el.dots });
-/** Whether a reduced rational is 1/2^n (a plain, undotted note value). */
-const isPow2Value = (q) => q.n === 1 && (q.d & (q.d - 1)) === 0;
-const sameRatio = (a, b) => !!b && a.count === b.count && a.of === b.of;
+/** A beat's outermost tuplet ratio (its `tuplets` chain head, else its `tuplet`), or null. */
+const outerOf = (b) => tupletChain(b)[0] ?? null;
 
 /**
  * Group consecutive beats sharing the same normalized tuplet ratio into one
@@ -69,8 +69,12 @@ const sameRatio = (a, b) => !!b && a.count === b.count && a.of === b.of;
  *   on that cell's end (so [8th, 16th, 16th, 8th] as a triplet stays one
  *   group). A run that never completes falls back to one bracket per
  *   rhythmic cell (beatCells), as before.
+ * A voice with nested tuplets goes to nestedTupletGroups (layout/tuplets.js);
+ * keep this close rule in sync with splitRun there.
  */
 export function tupletGroups(beats, timeSignature) {
+  // a voice with nested tuplets (some 2-entry `tuplets`) is grouped by layout/tuplets.js
+  if (hasNestedTuplets(beats)) return nestedTupletGroups(beats, timeSignature);
   const cell = beamCellValue(timeSignature);
   const cells = beatCells(beats, timeSignature);
   const onset = [];
@@ -79,12 +83,12 @@ export function tupletGroups(beats, timeSignature) {
   const out = [];
   let qi = 0;
   while (qi < beats.length) {
-    const t0 = beats[qi].type === 'grace' ? null : normalizeTuplet(beats[qi].tuplet);
+    const t0 = beats[qi].type === 'grace' ? null : outerOf(beats[qi]);
     if (!t0) { qi++; continue; }
     const run = [];
     for (let i = qi; i < beats.length; i++) {
       if (beats[i].type === 'grace') continue;
-      if (!sameRatio(t0, normalizeTuplet(beats[i].tuplet))) break;
+      if (!sameRatio(t0, outerOf(beats[i]))) break;
       run.push(i);
     }
     const cellEnd = mul(R(cells[qi] + 1), cell);
