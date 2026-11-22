@@ -353,6 +353,8 @@ The design sources are `.12sp/requirements-2.0.md`, `.12sp/design.md` and
 | `src/editor/model/cursor.js` | Positions, cursor clamping, the moves and `cursorInfo`. |
 | `src/editor/model/ties.js` | Repairing ties across the seams that edits create. Finding the previous and next main beat. |
 | `src/editor/model/notes.js` | Fret entry (with the two-digit buffer), delete note and toggle tie. |
+| `src/editor/model/effectTable.js` | The effect rows (`EFFECTS`, 2.1.0), `EFFECT_KEYS`, `EFFECT_BY_NAME`, `SUFFIXES` and the bend, dynamic and articulation classifiers. |
+| `src/editor/model/effects.js` | `effectCommand(def)`, the step logic, the dead-note add and `effectState` (the effect words and steps at a position). |
 | `src/editor/model/beats.js` | Durations, dots, triplets, the rest and note toggle, delete beat and insert beat. |
 | `src/editor/model/measures.js` | Insert, delete and append measures. |
 | `src/editor/model/commands.js` | The command registry and `run()`, which clamps the cursor and syncs the duration. |
@@ -372,7 +374,9 @@ the same file: it breaks the rule on purpose and checks that the check fails.
    `style.js`, `options.js` and `emitter.js`) contain no `document`, `window`,
    `requestAnimationFrame` or `addEventListener` tokens.
 3. Files under `model/` import from outside `src/editor/` only
-   `src/sanitize.js`, `src/duration.js` and `src/rational.js`.
+   `src/sanitize.js`, `src/duration.js` and `src/rational.js`. From 2.1.0 they
+   may also import `src/directions.js`, `src/harmonics.js` and
+   `src/noteEffects.js` (see "Editor effects (2.1.0)").
 4. Renderer modules outside `src/editor/` may be imported only by the editor
    files on an allowlist: `MusicScoreRenderer.js` by `view.js` and
    `ScoreEditor.js` only; `hitMap.js` by `view.js` and `geometry.js`;
@@ -507,3 +511,120 @@ apply them.
   a render.
 - Full re-render per edit is the only cost model in 2.0. Incremental rendering is
   not built. It is the next step if the speed targets are missed.
+
+## Editor effects (2.1.0)
+
+2.1.0 adds the effect keys (H, S, B, V, P, X, G, N, D, A and their Shift
+variants). The user-facing description is in the README, under "Editing rules",
+"Effects". The design sources are `.12sp/requirements-2.1.md` and
+`.12sp/design-2.1.md`. The effects are data: one table row per command. The
+commands, keys, announcements and cursor info are built from that table, so a
+new effect is mostly a new row.
+
+### The table
+
+`src/editor/model/effectTable.js` exports `EFFECTS`, a frozen array with one
+row per command (15 rows: hammerPull, slide, slideInOut, bend, bendBack, vibrato,
+palmMute, deadNote, ghostNote, harmonic, letRing, louder, softer, accent,
+staccato). A row has these fields:
+
+- `name`, `key`, `shift`: the command name and its key. `EFFECT_KEYS` maps a key
+  such as `'h'` or `'Shift+s'` to the name.
+- `level`: `'note'` (the voice-1 note on the cursor string) or `'beat'` (the
+  cursor beat).
+- `fields`: the JSON keys the row owns. Turning the effect off deletes them.
+- `steps`: the patches written in cycle order. `dir` (1 forward, -1 backward)
+  and `start` (the step written from nothing) set how the cycle moves.
+- `classify(target)`: the current step index, or -1 for nothing or a value the
+  row doesn't write.
+- `exclusive`, `onRest`, `creates`: the keys removed when the effect turns on,
+  whether a beat row also works on rests, and whether X adds a dead note.
+- `write(target, step, def)`: an optional replacement for the default write.
+  Accent and staccato use it, because their steps are articulation names.
+- `suffix`: a key of `SUFFIXES`, the spoken text added after an "on" result.
+- `say`, `off`, `added`, `label`, `info`: the spoken words, the undo label and
+  the words that `getCursorInfo()` lists.
+- `custom`: whether a value the row doesn't write still counts as present. It is
+  false for the articulation rows, because their words list every articulation.
+- `reverseOf`: set on the backward rows (`reverse()` builds them from the
+  forward row). They share its classification and words.
+
+`SUFFIXES` holds the three spoken suffixes (`link`, `tabArtic`, `noNotation`).
+Each has its text and an `applies(score, loc, track)` test.
+
+### Command factory
+
+`src/editor/model/effects.js` turns a row into a 2.0-style command with
+`effectCommand(def)`. The command has the form `(score, loc, state)` and returns
+`{ score?, announce }`. It checks, in order:
+
+1. A note row on a track without TAB: `needsTab`.
+2. X where there is no note: `addDeadNote`, which reuses the digit path (fret 0),
+   so the seam and tie repair and the current duration come from fret entry.
+3. The end-of-measure position: `noBeat`.
+4. A note row with no note on the string: `noNoteHere`. A beat row on a rest
+   that doesn't set `onRest`: `needsNote`.
+
+Then `nextStep` picks the step, `writeStep` writes it through `updateNote` or
+`updateBeat`, and the command announces `{ id: 'effect', name, step, suffix }`.
+Writes never use `false`, and an empty `articulations` array is deleted.
+`effectState(score, loc)` gives the words and the steps at a position. It skips
+the backward rows.
+
+### Wiring
+
+- `model/commands.js` registers `EFFECTS.map(...)` in a loop. Each undo label is
+  the row's `label`.
+- `keymap.js` looks up a letter, with the Shift prefix, in `EFFECT_KEYS`. It
+  uses own-property lookups, as the rest of the keymap does.
+- `announce.js` finds the words through `EFFECT_BY_NAME`. The move announcement
+  puts the effect words after the duration.
+- `model/cursor.js` (`cursorInfo`) adds `effects`, `noteEffects`, `beatEffects`
+  and `effectSteps` from `effectState`. The slot gives empty values.
+- `model/notes.js` (`fretIntoNote`) clears `mute` when a digit is typed on a
+  dead note, including at the same fret.
+
+### Renderer canonicalizers
+
+The classifiers use the renderer's own pure functions, not copies of them:
+`bendOf`, `isLegatoSlide`, `linkTarget`, `slideInOf` and `slideOutOf` from
+`src/directions.js`, `harmonicKind` from `src/harmonics.js`, and `vibratoOf`
+from `src/noteEffects.js`. A value therefore counts as the same step the renderer
+draws. The spoken "no next note on this string" suffix also uses `linkTarget`,
+over the cursor note and the later voice-1 notes. On unusual input this can differ
+from the renderer's run flattening, which affects only the suffix (an accepted
+risk in `design-2.1.md`).
+
+These three modules are in `EDITOR_SHARED` in `tests/structure.mjs`, with
+`sanitize.js`, `duration.js` and `rational.js`. `draw/*` is still forbidden to the
+model. A mutation case checks that a model file importing `draw/tab.js` fails.
+Renderer code is never changed for the editor's sake.
+
+### `effectSteps` for user interfaces
+
+Interfaces should read `getCursorInfo().effectSteps` and never parse the spoken
+words. It maps each effect name to its cycle position (0 for the first value, -1
+for a custom value). For `louder`, the position is on the dynamic scale, so
+`ppp` is 0 and `fff` is 7. The demo's `effectButtonState` in
+`examples/editor-demo-effects.js` works this way. The button labels live in that
+demo file, not in the table.
+
+### Adding an effect (the 2.6 extension point)
+
+A new effect on the existing note and beat targets takes:
+
+- one row in `EFFECTS`, which gives the command, the key and the undo label;
+- the key lists in the tests (the random-key fuzzers and the reserved-key test),
+  so the invariant `sanitizeScore(model) === model` is still checked for the new
+  writes;
+- the README Keyboard table and Effects table, the demo's Effects buttons
+  (`editor.html`, `examples/editor-demo-effects.js`) and the shortcuts panel.
+  These are not generated from the table. The header of `effectTable.js` says so.
+
+Voice-2 and grace targets are the planned extension point, not built. Note rows
+act on `cursorNote` and beat rows on `beatAt`, and the cursor is always voice 1
+and skips grace notes (`model/cursor.js`). Supporting voice 2 or grace notes
+would need the cursor and a target chooser for each row. The row would say which
+notes it reads and writes, and `effectCommand` and `effectState` would take that
+target in place of `cursorNote` and `beatAt`. The effect files must stay at or
+under 300 lines, as the other `src/editor/` files do.

@@ -1,8 +1,8 @@
 # music-score
 
-Version 2.0.0 · MIT licence
+Version 2.1.0 · MIT licence
 
-A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL). From 2.0.0 it also includes a keyboard editor for tablature (`ScoreEditor`). See [Editing scores](#editing-scores-scoreeditor).
+A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL). From 2.0.0 it also includes a keyboard editor for tablature (`ScoreEditor`), and from 2.1.0 that editor can add playing techniques such as hammer-ons, slides, bends and accents from the keyboard. See [Editing scores](#editing-scores-scoreeditor).
 
 - No build step and no dependencies. Plain ES modules.
 - Standard notation staves, tab staves, or both, stacked per track.
@@ -175,7 +175,7 @@ The pixel keys are not in `defaultTheme`. Reading or changing `renderer.theme.sy
 
 From 2.0.0, `ScoreEditor` lets a person type and edit tablature from the keyboard. It draws the score with the same renderer as above. Users can type frets, change rhythms, and add or delete measures, with undo and redo. The editor keeps the score in memory and gives you the score as JSON. It stores nothing itself, so saving is up to your page.
 
-Editing is keyboard-only. A mouse click places the cursor, but there is no mouse pitch entry, no range selection and no copy and paste yet. See [Limitations in 2.0](#limitations-in-20).
+Editing is keyboard-only. A mouse click places the cursor, but there is no mouse pitch entry, no range selection and no copy and paste yet. See [Limitations in 2.1](#limitations-in-21).
 
 ### Try the editor
 
@@ -185,7 +185,8 @@ Start the demo server as in [Running the demo](#running-the-demo), then open htt
 - **Example** loads `lead-riff`, `lead-solo-f` or `example-score`.
 - **Open JSON…** and **Download JSON** read and write a score file. Files over 5 MB are refused. A downloaded file is named after the title. Only letters, digits, spaces, hyphens and underscores are kept, and the name falls back to `score.json`.
 - **Undo** and **Redo**, a duration palette (whole to 64th, dots and triplet), and a **Read-only** checkbox.
-- A status bar that shows the track, measure, beat, string, fret, duration and fill of the cursor.
+- An **Effects** group of buttons, one for each effect key (see [Effects](#effects)). Each button presses its key, so the same refusals apply. A button shows the cursor's current state, such as "Slide: legato" or "Dynamic + (mf)", and the group is disabled in read-only mode.
+- A status bar that shows the track, measure, beat, string, fret, duration, fill and effects of the cursor.
 - **Autosave.** After each edit, undo or redo, the score is saved in this browser (localStorage key `music-score-editor:autosave`), 500 ms after the last change. Loading an example or a file is not saved until you edit. The next visit restores the saved score. If the saved data can't be read, the lead-riff example loads with a notice. If a restore never finishes drawing, the next visit in the same tab skips it.
 - **First visit.** With nothing saved, the lead-riff example loads.
 - **Unsaved changes.** New, Example and Open JSON ask first when the score has changed since the last load, New or Download, and always after a restored session (it was never downloaded). The autosave doesn't count as a save.
@@ -235,7 +236,7 @@ A value that isn't a number falls back to the default. `maxFret` and `historyLim
 | `getScore()` / `toJSON()` | object | A copy of the score with `schemaVersion: 1`. Changing the copy does not change the editor. |
 | `getCursor()` | `{ track, measure, beat, string }` | Positions count from 0. |
 | `setCursor({ track?, measure?, beat?, string? })` | the cursor | Missing fields keep their values. The result is moved to the nearest valid position. |
-| `getCursorInfo()` | object | What a status bar needs: fret, duration, dots, triplet, rest, fill, track name, string count, tuning note and more. |
+| `getCursorInfo()` | object | What a status bar needs: fret, duration, dots, triplet, rest, fill, track name, string count, tuning note, effects and more. The effect fields are described below the table. |
 | `getMeasureFill(track, measure)` | `'under'`, `'full'` or `'over'` | An empty measure is `'under'`. Throws `RangeError` for an index out of range. |
 | `handleKey(event)` | `true` if the key was used | Runs the command for a keyboard event (`key`, `code`, `ctrlKey`, `shiftKey`, `altKey`, `metaKey`). The editor calls this for you. Use it to drive the editor from your own buttons, for example `handleKey({ key: '.' })` for the dots button. |
 | `setDuration(name)` | `true` or `false` | Sets the cursor beat's duration, or the duration of the next note on the end-of-measure position. Names: `whole`, `half`, `quarter`, `8th`, `16th`, `32nd`, `64th`. Returns `false` for an unknown name or in read-only mode. |
@@ -247,6 +248,12 @@ A value that isn't a number falls back to the default. `maxFret` and `historyLim
 | `focus()` | nothing | Moves keyboard focus to the editor. |
 | `on(type, fn)` / `off(type, fn)` | `on` returns an unsubscribe function | Listen for `change` and `cursor`. See [Events](#events). |
 | `destroy()` | nothing | Removes the editor's elements and listeners. Safe to call twice. Other methods then throw `Error('ScoreEditor destroyed')`. |
+
+The effect fields of `getCursorInfo()` (2.1.0) describe the effects at the cursor. Use them to build your own effect controls:
+
+- `effects`: the effect words at the cursor, as strings, in a fixed order: note words first (for example `hammer/pull`, `bend full`, `dead`), then beat words (`vibrato`, `palm mute`, `let ring`, the dynamic such as `mf`, then the articulations). `[]` on the end-of-measure position.
+- `noteEffects` and `beatEffects`: the note words and the beat words on their own. Note words come only on a TAB track with a note on the cursor string.
+- `effectSteps`: an object keyed by effect name (`hammerPull`, `slide`, `slideInOut`, `bend`, `deadNote`, `ghostNote`, `harmonic`, `vibrato`, `palmMute`, `letRing`, `louder`, `accent`, `staccato`). Each value is the position of the current value in that effect's cycle, counting from 0, or `-1` for a value the editor doesn't write. For `louder`, the value is the position on the dynamic scale, so `ppp` is 0 and `fff` is 7. Shift+B and Shift+D have no entry of their own, because the forward key covers them. `{}` on the end-of-measure position.
 
 `ScoreEditor.LIMITS` is a static property with the input size limits. See [Saving and loading](#saving-and-loading).
 
@@ -284,6 +291,21 @@ The editor acts only while it has focus. Tab and Shift+Tab are never taken, so k
 | M | Insert an empty measure after the current one, in every track. |
 | Shift+M | Insert an empty measure before the current one, in every track. |
 | Shift+Delete or Shift+Backspace | Delete the current measure, in every track. |
+| H | Hammer-on or pull-off on / off. |
+| S | Slide → legato slide → off. |
+| Shift+S | Slide in from below → slide in from above → slide out down → slide out up → off. |
+| B | Bend: full → half → full and release → pre-bend full → release → off. |
+| Shift+B | Bend, the same values backwards. |
+| V | Vibrato → wide vibrato → off. |
+| P | Palm mute on / off. Works on rests too. |
+| X | Dead note on / off. On an empty string, a rest or the end of a measure, adds a dead note. |
+| G | Ghost note on / off. |
+| N | Harmonic: natural → pinch → off. |
+| Shift+L | Let ring on / off. |
+| D | Dynamic louder: mf, then f, ff, fff, then off. Works on rests too. |
+| Shift+D | Dynamic softer: mp, then p, pp, ppp, then off. Works on rests too. |
+| A | Accent → marcato → off. |
+| Shift+A | Staccato → staccatissimo → off. |
 | Ctrl+Z | Undo. |
 | Ctrl+Y or Ctrl+Shift+Z | Redo. |
 | Esc | Cancel a two-digit fret in progress. Otherwise not used. |
@@ -293,7 +315,7 @@ Notes:
 - On a Mac, Cmd works in place of Ctrl.
 - Keys are matched by the character they type, so they follow your keyboard layout.
 - Browser shortcuts are not taken: Ctrl+W, Ctrl+T, Ctrl+N, Ctrl+1 to 9 and the others. Alt combinations and the F-keys are not taken either.
-- H, S, B, V, P, X and G are reserved for later releases and do nothing yet. Shift with R, L, I or an arrow key does nothing.
+- Shift+R, Shift+I, Shift+H, Shift+V, Shift+P, Shift+X, Shift+G and Shift+N do nothing, and so does Shift with an arrow key. The effect keys are listed in [Effects](#effects).
 
 ### Editing rules
 
@@ -341,6 +363,69 @@ Notes:
 **Undo and redo.** Each command is one step. Ctrl+Z undoes the last step, and Ctrl+Y or Ctrl+Shift+Z redoes it. Undo and redo also put the cursor back where it was. Up to 200 steps are kept by default (`historyLimit`). Loading a score clears the history.
 
 **Read-only mode.** Read-only mode lets people move the cursor and read the score, and refuses every edit with the message "Read-only". Undo and redo are off. `loadScore()` still replaces the score.
+
+#### Effects
+
+Effect keys add a playing technique to a note or a beat. Each key steps through a short cycle of values. Pressing it again moves to the next value, and after the last value the effect turns off.
+
+- **Note effects** (H, S, Shift+S, B, Shift+B, X, G and N) apply to the note on the cursor string, in voice 1. Other notes in a chord are not changed.
+- **Beat effects** (V, P, Shift+L, D, Shift+D, A and Shift+A) apply to the whole cursor beat.
+- Turning an effect off removes its field from the JSON. The editor never writes `false`.
+- Each press is one undo step. Effects don't move the cursor or change the current duration.
+- Effects can go on any note, including a tied one.
+
+The table shows what each key writes, in the score format described under [Score format](#score-format).
+
+| Key | Writes | Cycle |
+|---|---|---|
+| H | `"hammerPull": true` | on → off |
+| S | `"slide": true`, then `"slide": "legato"` | slide → legato slide → off |
+| Shift+S | `"slideIn": "below"`, `"slideIn": "above"`, `"slideOut": "down"`, `"slideOut": "up"` | slide in from below → slide in from above → slide out down → slide out up → off |
+| B | `"bend"`: `"full"`, `"1/2"`, `"full release"`, `"prebend full"`, `"release"` | full → half → full and release → pre-bend full → release → off |
+| Shift+B | the same bend values | the same cycle backwards |
+| V | `"vibrato": true`, then `"vibrato": "wide"` | vibrato → wide vibrato → off |
+| P | `"palmMute": true` | on → off |
+| X | `"mute": true` | dead note on → off |
+| G | `"ghost": true` | on → off |
+| N | `"harmonic": "natural"`, then `"harmonic": "pinch"` | natural → pinch → off |
+| Shift+L | `"letRing": true` | on → off |
+| D | `"dynamic"`: `"mf"`, `"f"`, `"ff"`, `"fff"` | mf → f → ff → fff → off |
+| Shift+D | `"dynamic"`: `"mp"`, `"p"`, `"pp"`, `"ppp"` | mp → p → pp → ppp → off |
+| A | `"articulations"` gets `"accent"`, then `"marcato"` | accent → marcato → off |
+| Shift+A | `"articulations"` gets `"staccato"`, then `"staccatissimo"` | staccato → staccatissimo → off |
+
+**Where effects can't be entered.** Each refused key changes nothing and adds no undo step.
+
+- A note effect on a rest, or on an empty string: "No note on this string". X is the exception.
+- A note or beat effect on the end-of-measure position: "No beat here". X is the exception.
+- V, Shift+L, A and Shift+A on a rest: "Needs a note". P, D and Shift+D work on rests.
+- On a track with notation only: H, S, Shift+S, B, Shift+B, X, G and N say "Needs a TAB staff". V, P, Shift+L, D, Shift+D, A and Shift+A work.
+- In read-only mode, every effect key says "Read-only".
+
+**Exclusions.** Turning on H removes `slide`. Turning on S removes `hammerPull`. Turning on X removes `harmonic`. Turning on N removes `mute`. Shift+S doesn't touch `slide`.
+
+**Dead notes.** X on a note turns its dead note on or off. X on an empty string, on a rest or at the end of a measure adds a dead note at fret 0, as typing 0 would. At the end of a measure, the new note takes the current duration.
+
+**Typing a fret on a dead note.** A digit clears the dead note, even when the fret stays the same. The note's other effects stay.
+
+**Values the editor doesn't list.** A value the cycle doesn't include, such as `"slide": "up"` or a dynamic of `"sfz"`, counts as "nothing yet". The next press writes the first step, and undo puts the old value back. From nothing, B writes `full`, Shift+B writes `release`, D writes `mf`, and Shift+D writes `mp`. Dynamics such as `sfz`, `rfz` and `n` are replaced in the same way.
+
+**Spoken text.** Each press speaks the new state, such as "Slide" or "Bend half". Three cases add more text. The value is still written.
+
+- Turning on H, or S, when no later note on that string follows in the track: ", no next note on this string". The track is searched across measures.
+- Turning on A or Shift+A on a TAB-only track without `tabArticulations`: ", not shown on TAB only".
+- Turning on D or Shift+D on a track with no notation staff: ", not shown on TAB only".
+
+Moving the cursor speaks the effects at the new position, after the duration. Up and Down speak only the note effects. The status bar's Effects item lists the same words.
+
+**What the score draws.** The editor writes the JSON, and the renderer draws it as it does for any score. These cases don't show the effect the way you might expect:
+
+- H or S with no later note on the string draws nothing.
+- A slide out is not drawn on a note with a bend, or on an S slide that links to a later note on the string.
+- A slide in is not drawn on a note that an earlier hammer-on, pull-off or slide leads to.
+- A dead note is drawn as an x (as `(x)` when it is also a ghost note). It is never drawn as a harmonic, even if it has one in the JSON.
+- Dynamics and hairpins are never drawn on a TAB-only track.
+- Articulations on a TAB-only track are drawn above the TAB staff only when the track has `"tabArticulations": true`. The editor doesn't set this, so set it in the JSON.
 
 ### Saving and loading
 
@@ -417,13 +502,14 @@ When the editor loses focus, the cursor is drawn dimmer.
 - **Focus ring.** Keep a visible focus ring, as shown under [Styling](#styling).
 - **Touch.** The editor needs a hardware keyboard. Tapping can place the cursor, but there is no on-screen keypad. The demo's hint says so on touch devices.
 
-### Limitations in 2.0
+### Limitations in 2.1
 
-- **No effects.** Hammer-ons, pull-offs, slides, bends and other effects can't be entered from the keyboard yet. The keys for them are reserved for 2.1.0.
+- **Only the effects in [Effects](#effects) can be entered.** These can't be entered from the keyboard yet: tremolo picking, tap, slap and pop, trill, artificial and tapped harmonics, fermata, tenuto, hairpins, whammy bar, fade and wah, ornaments and fingering. Explicit `h` and `p` hammer values and up and down slide values can't be written either, and neither can custom bend amounts. Existing values in the JSON are kept as they are.
+- **No effects on a range.** Effects go on one note or one beat at a time.
 - **No mouse pitch entry or dragging.** Clicks only place the cursor.
 - **No selection, copy or paste.** Each edit works on one beat, one string or one measure.
-- **Score settings are not editable.** Tracks, tuning, capo, header text, time and key signatures, and navigation marks can't be changed in the editor. The time signature is set only in New. Change these in the JSON.
-- **No voice 2 or grace note editing.** These stay as they are in the file.
+- **Score settings are not editable.** Tracks, tuning, capo, header text, time and key signatures, navigation marks, `tabArticulations` and the choice of notation or TAB staves can't be changed in the editor. The time signature is set only in New. Change these in the JSON.
+- **No voice 2 or grace note editing.** These stay as they are in the file, and no effect can be set on them.
 - **No tuplets other than the triplet toggle.**
 - **No playback and no import.** Guitar Pro and other formats are not read.
 - **Measures are not reflowed.** Underfull and overfull measures are shown, not fixed.
@@ -1286,7 +1372,7 @@ Each of these eighths lasts 1/18 of a whole note, so nine of them fill a half no
 - **On-beat grace notes: no time.** An `onBeat` grace takes no time, and its `duration` is still ignored (see [Grace notes on the beat](#grace-notes-on-the-beat)).
 - **Nested tuplets: two levels.** A third level is not supported. A `tuplets` array with three entries is ignored.
 - **Nested tuplets: beams.** Beams are grouped as they were before 1.12.0. The brackets follow the nested structure, but beams are not regrouped to match it.
-- **Not included:** playback, and import or export of formats other than the editor's JSON. For what the editor can't edit yet, see [Limitations in 2.0](#limitations-in-20).
+- **Not included:** playback, and import or export of formats other than the editor's JSON. For what the editor can't edit yet, see [Limitations in 2.1](#limitations-in-21).
 
 ## Running tests
 
@@ -1316,6 +1402,27 @@ It prints `ALL PASSED` and exits with code 0 on success.
 
 ## Changelog
 
+### 2.1.0 — 2026-11-22
+
+Effects from the keyboard. The editor can now add hammer-ons and pull-offs, slides, bends, vibrato, palm mute, dead and ghost notes, harmonics, let ring, dynamics, accents and staccato. Each effect has its own key, and pressing it steps through the values. See [Effects](#effects).
+
+Rendering is unchanged. The renderer and the score format are the same as in 2.0.0, and every existing snapshot is byte-identical. Existing scores need no changes.
+
+New:
+
+- The effect keys, listed under [Keyboard](#keyboard): H, S, Shift+S, B, Shift+B, V, P, X, G, N, Shift+L, D, Shift+D, A and Shift+A.
+- An Effects group of buttons on the demo page, `editor.html`, and an Effects item in its status bar.
+- Move announcements speak the effects at the cursor, after the duration.
+- `getCursorInfo()` adds `effects`, `noteEffects`, `beatEffects` and `effectSteps`.
+
+Behaviour changes from 2.0:
+
+- The letters H, S, B, V, P, X, G, N, D and A, and Shift+S, Shift+B, Shift+L, Shift+D and Shift+A, are now used by the editor. In 2.0 they did nothing. Plain L still ties to the previous note.
+- Typing a digit on a dead note clears its dead note (`mute`), even when the fret stays the same. In 2.0 the dead note stayed.
+- `handleKey` no longer throws on keys such as `"toString"`. Those keys are not used by the editor, and `handleKey` returns `false`.
+
+See [Limitations in 2.1](#limitations-in-21) for what the editor still can't enter.
+
 ### 2.0.0 — 2026-11-22
 
 Edit mode. The new `ScoreEditor` class lets people type and edit guitar and bass tablature from the keyboard, with undo and redo. It reads and writes the score as JSON. See [Editing scores](#editing-scores-scoreeditor).
@@ -1333,7 +1440,7 @@ Behaviour notes:
 
 - The editor draws each multi-measure rest as separate measures, and keeps the setting in the JSON.
 - The editor's JSON loads only with `schemaVersion` missing or 1. Other values are refused with `Unsupported schemaVersion`. The renderer still accepts them, because it ignores the key.
-- Not in 2.0: effects, mouse pitch entry, selection and clipboard, editing of voice 2 and grace notes, track and score settings, playback and import. See [Limitations in 2.0](#limitations-in-20).
+- Not in 2.0: effects, mouse pitch entry, selection and clipboard, editing of voice 2 and grace notes, track and score settings, playback and import. Effects were added in 2.1.0. For the current list, see [Limitations in 2.1](#limitations-in-21).
 
 ### 1.12.1 — 2026-11-22
 
@@ -1574,7 +1681,7 @@ Initial public release.
 - `src/`: the renderer. Rendering runs normalize, then layout, then draw.
   - `MusicScoreRenderer.js`: the entry point (the `MusicScoreRenderer` class). It runs the pipeline and mounts the SVG.
   - `hitMap.js`: the hit map behind `getHitMap()` and `hitTest()`. It builds plain data from the last render.
-  - `editor/`: the `ScoreEditor` keyboard editor (2.0.0). Its files and their roles are listed in `docs/ARCHITECTURE.md`, under "Editor (2.0.0)".
+  - `editor/`: the `ScoreEditor` keyboard editor (2.0.0), with its effect keys (2.1.0). Its files and their roles are listed in `docs/ARCHITECTURE.md`, under "Editor (2.0.0)" and "Editor effects (2.1.0)".
   - `normalize.js`: fills in score defaults (sticky time and key signatures, barlines, measure count, pitch from string and fret, written and sounding pitch, `tabRhythm`, padded measures).
   - `harmonics.js`: guitar harmonic kinds and the helpers that layout, drawing and labels share.
   - `directions.js`: the playing direction fields (let ring, pick strokes, strum, arpeggio, tap, slap, pop, whammy, rake, trill, slide in and out, the bend grammar) and their canonical values.
@@ -1647,7 +1754,7 @@ Initial public release.
 - `tests/`: snapshot tests, unit checks, engraving checks, assertions and structural guards (`run.js`, `units.mjs`, `engraving.mjs`, `articulations.mjs`, `structure.mjs`), the test hooks and DOM shim the runner uses (`hooks.mjs`, `dom-shim.mjs`), the characterization fixtures (`fixtures/characterization.js`), and the saved snapshots (`snapshots/`).
 - `index.html`: the demo page. `lead-riff.html` and `lead-solo-f.html`: demo pages for the lead-riff and lead-solo examples. `editor.html`: the keyboard editor demo.
 - `docs/features.html`: feature summary page with live examples (serve over http, like the demo).
-- `docs/ARCHITECTURE.md`: design notes for the module boundaries. The editor (2.0.0) is described there. Import, playback and the other proposed layers are not built yet.
+- `docs/ARCHITECTURE.md`: design notes for the module boundaries. The editor (2.0.0, with its effects in 2.1.0) is described there. Import, playback and the other proposed layers are not built yet.
 
 ## License
 
