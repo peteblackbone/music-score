@@ -245,6 +245,47 @@ test('criterion 25 (controller): Insert in measure 1 of 4 full measures, then on
   t.ed.destroy();
 });
 
+// ---------- B10 (controller) ----------
+const { clampCursor } = await imp('src/editor/model/cursor.js');
+const { selectionRange } = await imp('src/editor/model/selection.js');
+test('B10 (controller, 300 steps): keys (transpose, range effects, Ctrl+Shift+Home / End, the reflow cascade), Ctrl+V and Ctrl+Shift+V with native events or the fallback, blur, keep sanitizeScore(model) === model, a valid cursor and a valid selection; undo all restores the start, redo all the end', () => {
+  function mulberry32(a) {
+    return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  const rnd = mulberry32(2311);
+  const pick = (xs) => xs[Math.floor(rnd() * xs.length)];
+  const CS = { ctrlKey: true, shiftKey: true };
+  const KEYS = [key('ArrowRight'), key('ArrowLeft'), key('ArrowDown'), key('5'), key('7'), key('r'), key('f'), key('F', SHIFT), key('F', SHIFT), key('Delete'), key('Delete', CTRL), key('Delete', SHIFT),
+    key('ArrowRight', SHIFT), key('ArrowRight', SHIFT), key('End', SHIFT), key('ArrowRight', CS), key('Home', CS), key('End', CS), key('a', CTRL), key('Escape'), key('m'), key('i'), key('Insert'),
+    key('ArrowUp', CTRL), key('ArrowDown', CTRL), key('ArrowUp', CS), key('ArrowDown', CS), key('p'), key('h'), key('x'), key('d'), key('a'), key('PageDown'), key('PageUp')];
+  const t = mk({ tracks: [
+    tab([{ beats: [1, 2, 3, 4].map((f) => nt('quarter', 1, f)) }, { beats: [nt('half', 2, 5), nt('half', 2, 7, { dots: 1 })] }, { beats: [] }, { beats: [nt('whole', 3, 0, { tempo: 90 })] }]),
+    tab([{ beats: [nt('whole', 4, 3)] }], { name: 'Bass', showStandardNotation: false, tuning: ['E1', 'A1', 'D2', 'G2'] }),
+  ] }, { historyLimit: 1000 });
+  t.ed.focus();
+  const start = t.ed._model;
+  const down = (k) => t.rootEl.dispatch('keydown', { ...k, target: t.rootEl });
+  for (let i = 0; i < 300; i++) {
+    const r = rnd();
+    if (r < 0.08) t.ed.copy();
+    else if (r < 0.14) { down(key('v', CTRL)); if (rnd() < 0.5) firePaste(null); }
+    else if (r < 0.20) { down(key('V', CS)); if (rnd() < 0.5) firePaste(null); }
+    else if (r < 0.22) { t.rootEl.blur(); t.ed.focus(); }
+    else t.ed.handleKey(pick(KEYS));
+    t.clock.advance(1000);
+    ok(sanitizeScore(t.ed._model) === t.ed._model, `step ${i}`);
+    eq(clampCursor(t.ed._model, t.ed._cursor), t.ed._cursor, `step ${i}: valid cursor`);
+    const sel = t.ed._selection;
+    if (sel) eq(selectionRange(t.ed._model, sel.track, sel.anchor, sel.focus)?.info, sel.info, `step ${i}: valid selection`);
+  }
+  const end = t.ed._model;
+  while (t.ed.undo());
+  ok(t.ed._model === start, 'undo all');
+  while (t.ed.redo());
+  ok(t.ed._model === end, 'redo all');
+  t.ed.destroy();
+});
+
 // ---------- report ----------
 export async function summary() {
   let fail = 0;

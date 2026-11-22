@@ -408,6 +408,118 @@ test('criterion 27 / D-D2: the pieces carry the fields by table (first / last / 
   eq(v1(r.score, 0, 1)[0].notes[0].tieStart, true, 'the original tieStart (to the next measure\'s tieEnd) is on the last piece');
 });
 
+// ---------- B10 / E12 ----------
+const { exampleScore } = await imp('examples/example-score.js');
+const { leadRiff } = await imp('examples/lead-riff.js');
+const { leadSoloF } = await imp('examples/lead-solo-f.js');
+const { defaultScore } = await imp('src/editor/model/defaultScore.js');
+const { EFFECTS } = await imp('src/editor/model/effectTable.js');
+const B10_START = () => [
+  ['default', defaultScore()], ['lead-riff', model(leadRiff)], ['lead-solo-f', model(leadSoloF)], ['example-score', model(exampleScore)],
+  ['rich', model({ tracks: [tab([{ beats: [nt('quarter'), grace(), tn('quarter', 2, 2, { tieStart: true }), rest('quarter', { hidden: true }), nt('quarter', 1, 0, { dots: 1 })] },
+    { voices: [{ beats: [grace(), tn('half', 2, 2, { tieEnd: true }), nt('half', 1, 0, { tempo: 80 }), nt('8th', 1, 1, { tuplet: 3 })] }, { beats: [nt('whole', 4, 0)] }] }, { beats: [{ type: 'note', duration: 'whole', slash: true }] }, null, { beats: [] }, { beats: [] }]),
+  { name: 'Hidden', showStandardNotation: false, measures: [{ beats: [nt('half', 1, 0, { tempo: 70 })] }] }] })],
+  ['mixed', model({ timeSignature: { beats: 3, beatType: 4 }, tracks: [{ name: 'Notes', measures: [{ beats: [{ type: 'note', duration: 'half', notes: [{ pitch: 'C4' }, { string: 2, fret: 22 }] }] }] }, tab([{ beats: [] }], { tuning: ['E1', 'A1', 'D2', 'G2'], showStandardNotation: false })] })],
+];
+const NAVS = ['moveLeft', 'moveRight', 'moveRight', 'moveUp', 'moveDown', 'prevMeasure', 'nextMeasure', 'measureStart', 'measureEnd', 'scoreStart', 'scoreEnd', 'prevTrack', 'nextTrack'];
+const EDITS = ['digit', 'digit', 'digit', 'deleteNote', 'deleteBeat', 'deleteMeasure', 'toggleRest', 'toggleTie', 'shorter', 'longer', 'cycleDots', 'toggleTriplet', 'insertBeat', 'insertMeasureAfter', 'insertMeasureBefore',
+  'fill', 'reflow', 'reflow', 'reflow', 'transpose', 'transpose', 'transpose', ...EFFECTS.map((d) => d.name)];
+const SELECTS = ['selectLeft', 'selectRight', 'selectRight', 'selectMeasureStart', 'selectMeasureEnd', 'selectPrevMeasure', 'selectNextMeasure', 'selectAll', 'selectScoreStart', 'selectScoreEnd'];
+const SEMIS = [1, -1, 12, -12];
+test('B10 (2.3.1): 6 start scores x 2000 random steps mixing commands, selections (blank ones too), range effects, transpose, the reflow cascade and both pastes keep sanitizeScore(model) === model, a valid cursor and a valid selection; undo all restores the start, redo all the end', () => {
+  const rnd = mulberry32(20261231);
+  const pick = (xs) => xs[Math.floor(rnd() * xs.length)];
+  for (const [label, start] of B10_START()) {
+    let s = start;
+    let c = C.clampCursor(s, cur(0, 0, 0));
+    let state = st();
+    let sel = null;
+    let clipboard = null;
+    const history = [];
+    const seen = { pasteOver: 0, insert: 0, rangeFx: 0, transpose: 0, cascade: 0, blank: 0 };
+    for (let i = 0; i < 2000; i++) {
+      const r0 = rnd();
+      const before = { s, c };
+      let next = null;
+      if (r0 < 0.22) {
+        const name = pick(SELECTS);
+        const anchor = CMD.COMMANDS[name].fromStart ? SEL.startOf(s, c) : sel?.anchor ?? { measure: c.measure, beat: c.beat };
+        const r = CMD.run(name, s, c, state, { allowAppend: false });
+        c = r.cursor; state = r.state;
+        sel = SEL.selectionRange(s, c.track, anchor, c);
+        if (sel && !sel.info.beatCount) seen.blank++;
+      } else if (r0 < 0.30) {
+        const range = sel ?? CL.cursorRange(s, c);
+        if (range) clipboard = CL.buildClip(s, range).text;
+      } else if (r0 < 0.40) {
+        if (clipboard) {
+          const insert = rnd() < 0.4;
+          const r = PA.applyPaste(s, c, sel, CL.parseClip(clipboard).clip, { insert });
+          if (!r.refused && io.exportedLength(r.score) <= L.jsonChars) {
+            next = r;
+            if (insert) seen.insert++;
+            if (r.announce.id === 'pastedOver') seen.pasteOver++;
+            sel = null;
+          }
+        }
+      } else {
+        const name = rnd() < 0.3 ? pick(NAVS) : pick(EDITS);
+        const arg = name === 'transpose' ? pick(SEMIS) : Math.floor(rnd() * 10);
+        const r = CMD.run(name, s, c, state, { maxFret: 24, now: i * 1000, twoDigitDelayMs: 800, allowAppend: true, selection: sel }, arg);
+        state = r.state;
+        if (r.changed) {
+          next = r;
+          if (sel && CMD.COMMANDS[name].keepsSelection) seen[name === 'transpose' ? 'transpose' : 'rangeFx']++;
+          if (r.announce?.id === 'reflowedMany') seen.cascade++;
+        } else c = r.cursor;
+        if (r.changed && sel && CMD.COMMANDS[name].keepsSelection) sel = SEL.selectionRange(r.score, sel.track, sel.anchor, sel.focus);
+        else if (r.changed || CMD.COMMANDS[name].kind === 'nav') sel = null;
+      }
+      if (next) {
+        s = next.score;
+        c = C.clampCursor(s, next.cursor ?? c);
+        state = C.syncDuration(s, c, state);
+        history.push({ before, after: { s, c } });
+      }
+      ok(sanitizeScore(s) === s, `${label} step ${i}: sanitize identity`);
+      eq(C.clampCursor(s, c), c, `${label} step ${i}: valid cursor`);
+      if (sel) eq(SEL.selectionRange(s, sel.track, sel.anchor, sel.focus)?.info, sel.info, `${label} step ${i}: valid selection`);
+    }
+    ok(seen.insert > 10 && seen.rangeFx > 10 && seen.pasteOver > 5 && seen.transpose > 2 && seen.cascade > 2 && seen.blank > 10 && history.length > 300, `${label}: ${JSON.stringify(seen)}, ${history.length} steps`);
+    const end = s;
+    for (let k = history.length - 1; k >= 0; k--) { ok(history[k].after.s === s); s = history[k].before.s; }
+    ok(s === start, `${label}: undo all restores the start`);
+    for (const h of history) s = h.after.s;
+    ok(s === end, `${label}: redo all reaches the end`);
+  }
+});
+test('E12 (2.3.1): unknown fields survive overwrite pastes (measure-level ones kept), range effects, transpose and the reflow split (beat and note fields on the first piece) when the operation does not own them', () => {
+  const x = { keep: [1, { deep: true }] };
+  const s0 = model({ x, tracks: [
+    { x, name: 'A', showTablature: true, measures: [
+      { x, beats: [{ x, type: 'note', duration: 'quarter', notes: [{ x, string: 1, fret: 2 }] }, { x, type: 'rest', duration: 'quarter' }, { x, type: 'note', duration: 'half', notes: [{ x, string: 2, fret: 1 }] }] },
+      { x, voices: [{ x, beats: [{ x, type: 'note', duration: 'half', notes: [{ x, string: 2, fret: 1 }] }] }, { x, beats: [] }] },
+      { x, beats: [] },
+    ] },
+    { x, name: 'B', showTablature: true, measures: [{ x, beats: [] }, { x, beats: [] }, { x, beats: [] }] },
+  ] });
+  const count = (v) => (Array.isArray(v) ? v.reduce((a, y) => a + count(y), 0) : v && typeof v === 'object' ? (JSON.stringify(v.x) === JSON.stringify(x) ? 1 : 0) + Object.values(v).reduce((a, y) => a + count(y), 0) : 0);
+  const n0 = count(s0);
+  const all = SEL.selectionRange(s0, 0, P(0, 0), P(1, 1));
+  eq(count(run('palmMute', s0, cur(0, 1, 1), all).score), n0);
+  eq(count(run('ghostNote', s0, cur(0, 1, 1), all).score), n0);
+  eq(count(run('transpose', s0, cur(0, 1, 1), all, 3).score), n0);
+  eq(count(run('transpose', s0, cur(0, 0, 0), null, 3).score), n0);
+  const clip = CL.parseClip(CL.buildClip(s0, SEL.selectionRange(s0, 0, P(0, 0), P(0, 2))).text).clip;
+  const over = PA.applyPaste(s0, cur(0, 2, 0), null, clip);
+  eq([over.announce.id, count(over.score)], ['pastedOver', n0 + 5], 'the blank measure 3 keeps its own field; the pasted beats and notes bring theirs');
+  const onto = PA.applyPaste(s0, cur(0, 1, 0), SEL.selectionRange(s0, 0, P(1, 0), P(1, 1)), clip);
+  eq(count(onto.score), n0 - 4 + 5, 'measure 2 keeps its field; its two voices and their beats and note go');
+  const long = model({ tracks: [tab([{ x, beats: [nt('half'), nt('quarter'), { x, type: 'note', duration: 'half', notes: [{ x, string: 1, fret: 0 }] }] }])] });
+  const r = run('reflow', long, cur(0, 0, 0), null);
+  eq([count(long), count(r.score)], [3, 3], 'the unknown fields go to the first piece only');
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

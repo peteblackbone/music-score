@@ -77,3 +77,50 @@ console.log(`J2: cursor-only move max median ${Math.max(...rows.map((r) => r.mov
   ed.destroy();
   console.log(`\n2.3 (200 measures x 2 tracks): Ctrl+A ${median(selAll).toFixed(1)} ms | copy ${median(copy).toFixed(1)} ms | paste 200 measures (with render) ${median(paste).toFixed(1)} ms | tempoAt after an edit (rescan) ${median(tempo).toFixed(2)} ms, memoized ${median(tempoMemo).toFixed(3)} ms`);
 }
+
+// 2.3.1: the Reflow cascade through 2000 measures (model, target <= 250 ms); Ctrl+A then Ctrl+Up on 2000 measures
+// (keystrokes, the render left pending); a range effect (P) on 200 measures x 2 tracks and an overwrite paste of
+// 100 measures over a measures selection, both with the synchronous render.
+{
+  const { run } = await imp('src/editor/model/commands.js');
+  const { parseInput } = await imp('src/editor/model/io.js');
+  const q = (f) => ({ type: 'note', duration: 'quarter', notes: [{ string: 1, fret: f }] });
+  const long = parseInput({ tracks: [{ showTablature: true, measures: Array.from({ length: 2000 }, (_, mi) => ({ beats: Array.from({ length: mi === 0 ? 5 : mi === 1999 ? 3 : 4 }, (_, k) => q((mi + k) % 13)) })) }] });
+  const cascade = [];
+  let steps = '';
+  for (let i = 0; i < RUNS; i++) {
+    cascade.push(time(() => { steps = run('reflow', long, { track: 0, measure: 0, beat: 0, string: 1 }, { duration: 'quarter', dots: 0, digit: null }, { maxFret: 24 }).announce.id; }));
+  }
+  const big = synthetic(2000, 1);
+  const clockA = makeClock(); // animation frames never fire: the keystroke cost without the render
+  const edA = new ScoreEditor(makeContainer(), synthetic(4, 1), { width: 1200, clock: clockA, historyLimit: 1000 });
+  edA.loadScore(big);
+  const selT = []; const trans = [];
+  for (let i = 0; i < RUNS; i++) {
+    edA.setCursor({ measure: 0, beat: 0 });
+    selT.push(time(() => edA.handleKey({ ...key('a'), ctrlKey: true })));
+    trans.push(time(() => edA.handleKey({ ...key('ArrowUp'), ctrlKey: true, shiftKey: i % 2 === 1 })));
+    edA.undo();
+  }
+  edA.destroy();
+  const clock = makeClock();
+  clock.requestAnimationFrame = null;
+  clock.cancelAnimationFrame = null;
+  const ed = new ScoreEditor(makeContainer(), synthetic(200), { width: 1200, clock, historyLimit: 1000 });
+  const fx = []; const over = [];
+  for (let i = 0; i < RUNS; i++) {
+    ed.setSelection({ anchor: { track: 0, measure: 0, beat: 0 }, focus: { track: 0, measure: 199, beat: 7 } });
+    fx.push(time(() => ed.handleKey(key('p'))));
+    ed.undo();
+    ed.setSelection({ anchor: { track: 0, measure: 0, beat: 0 }, focus: { track: 0, measure: 99, beat: 7 } });
+    const clip = ed.copy();
+    ed.setSelection({ anchor: { track: 0, measure: 100, beat: 0 }, focus: { track: 0, measure: 199, beat: 7 } });
+    over.push(time(() => ed.paste(clip)));
+    ed.undo();
+  }
+  ed.destroy();
+  const c = median(cascade);
+  console.log(`\n2.3.1: Reflow cascade through 2000 measures (${steps}) ${c.toFixed(1)} ms (target <= 250): ${c <= 250 ? 'OK' : 'OVER'}`);
+  console.log(`2.3.1 (2000 measures x 1 track, keystroke without render): Ctrl+A ${median(selT).toFixed(1)} ms | Ctrl+Up / Ctrl+Shift+Up over the selection ${median(trans).toFixed(1)} ms`);
+  console.log(`2.3.1 (200 measures x 2 tracks, with render): P over 1600 beats ${median(fx).toFixed(1)} ms | paste 100 measures over a measures selection ${median(over).toFixed(1)} ms`);
+}
