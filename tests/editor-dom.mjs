@@ -417,11 +417,12 @@ test('E2 / F1: two digits typed within the delay are one fret and one undo step;
   ed.undo();
   eq(beats(ed)[0].notes[0].fret, 1);
   press(ed, '1');
-  ed.handleKey(key('Backspace'));
-  eq(beats(ed)[0].notes[0].fret, 1, 'Backspace clears the active buffer instead of deleting');
-  clock.advance(900);
-  ed.handleKey(key('Backspace'));
-  eq(beats(ed)[0], { type: 'rest', duration: 'quarter' }, 'after the delay Backspace deletes the note; the last note leaves a rest');
+  eq(ed.handleKey(key('Backspace')), true);
+  eq(beats(ed)[0], { type: 'rest', duration: 'quarter' }, 'Backspace right after a digit deletes the note (the last note leaves a rest)');
+  press(ed, '2');
+  eq(beats(ed)[0].notes[0].fret, 2, 'the buffer was cleared: 2 is not combined with the deleted 1');
+  ed.undo(); ed.undo();
+  eq(beats(ed)[0].notes[0].fret, 1, 'delete and re-fret are separate undo steps');
 });
 test('F4: history is capped at historyLimit', () => {
   const { ed } = mk(twoBar(), { historyLimit: 3 });

@@ -118,7 +118,7 @@ export class ScoreEditor {
     const c = keyToCommand(e);
     if (!c) return false;
     const kind = COMMANDS[c.name].kind;
-    if (kind === 'buffer' || (c.name === 'deleteNote' && this._bufferActive())) {
+    if (kind === 'buffer') {
       if (!this._bufferActive()) return false;
       this._state = { ...this._state, digit: null };
       this._digitEntry = null;
