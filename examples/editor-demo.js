@@ -127,7 +127,9 @@ export function startEditorDemo(doc) {
     try {
       editor = new ScoreEditor(card, saved.score, { width: width() });
       notify('info', 'Restored your last session from this browser.');
-      win.requestAnimationFrame(() => clearRestoring(session));
+      // the constructor renders synchronously, so reaching here means the first render finished
+      // (not an animation frame: background tabs pause those and the flag would stick)
+      clearRestoring(session);
     } catch {
       clearRestoring(session);
       saved.status = 'corrupt';
