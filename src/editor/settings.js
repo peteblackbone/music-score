@@ -80,11 +80,11 @@ export function installSettings(Editor) {
     this._state = syncDuration(this._model, cursor, this._state);
     this._syncRoot();
     const message = describe(r.announce);
+    this._sayKept(message); // before any handler runs: with no animation frames the render (and `change`) is synchronous
     if (!sameCursor(before.cursor, cursor)) this._emitCursor();
     this._events.queue('change', { source: 'edit', command: name, message });
     this._view.requestScroll();
     this._view.scheduleRender();
-    this._sayKept(message);
     return true;
   }));
   const frozen = (value) => ({ value, enumerable: true, writable: false, configurable: false });

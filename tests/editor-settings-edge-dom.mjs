@@ -259,6 +259,21 @@ test('the size limit: a result whose getScore() JSON is exactly LIMITS.jsonChars
   }
 });
 
+test('lastMessage equals detail.message inside cursor and change handlers, with and without requestAnimationFrame (was a bug: without it the handlers ran before the message was stored)', () => {
+  for (const raf of [false, true]) {
+    const { ed, clock } = mk({ title: 'x', tracks: [{ name: 'G', showTablature: true, measures: [{ beats: [] }] }, { name: 'B', showTablature: true, measures: [{ beats: [] }] }] }, { raf });
+    const seen = [];
+    ed.on('change', (e) => { if (e.source === 'edit') seen.push([e.message, ed.lastMessage]); });
+    ed.on('cursor', () => seen.push(['cursor', ed.lastMessage]));
+    ed.updateScore({ title: 'New' });
+    if (raf) clock.frame(); // one call per render (calls batched into one frame all see the latest message)
+    ed.addTrack('bass4', 0);
+    if (raf) clock.frame();
+    eq(seen.filter((s) => s[0] !== 'cursor'), [['Title set', 'Title set'], ['Track 1 Bass added', 'Track 1 Bass added']], `raf ${raf}: change handlers`);
+    ok(seen.filter((s) => s[0] === 'cursor').every((s) => s[1] === 'Track 1 Bass added'), `raf ${raf}: the cursor handler sees the new message`);
+  }
+});
+
 // ---------- lastMessage for every outcome ----------
 test('lastMessage: every success message, every refusal, no-ops, undo / redo, key commands and settings in sequence', () => {
   const { ed } = mk({ tracks: [
