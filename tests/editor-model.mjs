@@ -788,6 +788,40 @@ test('geometry: fill bands over the track staves; overfull tint + bar, underfull
   eq([sh[2].tag, sh[2].attrs.y1, sh[2].attrs.x1, sh[2].attrs.x2, sh[2].attrs['stroke-opacity'], sh[2].attrs['stroke-width'], sh[2].attrs.stroke], ['line', 300 - 12.5 + 1.25, 100, 300, 0.7, 1, '#62636a']);
 });
 
+// ---------- demo helpers (examples/editor-demo.js, H4–H5) ----------
+const demo = await imp('examples/editor-demo.js');
+test('demo: sanitizeFilename keeps [A-Za-z0-9-_ ], trims, adds .json, falls back to score.json', () => {
+  eq([demo.sanitizeFilename('Lead Riff in A Minor'), demo.sanitizeFilename('  a/b\\c:<x>?_1-2  '), demo.sanitizeFilename('ÅÄÖ…'), demo.sanitizeFilename(''), demo.sanitizeFilename(undefined), demo.sanitizeFilename('../../etc/passwd')],
+    ['Lead Riff in A Minor.json', 'abcx_1-2.json', 'score.json', 'score.json', 'score.json', 'etcpasswd.json']);
+});
+test('demo: newScore presets (guitar, bass clef, 7-string), time signature on the track, TAB-only, clamped inputs; sanitize-stable', () => {
+  const g = demo.newScore({ title: ' My song ', beats: 3, beatType: 8 });
+  eq(g, { title: 'My song', tracks: [{ name: 'Guitar', clef: 'treble', showStandardNotation: true, showTablature: true, tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'], timeSignature: { beats: 3, beatType: 8 }, measures: [{ beats: [] }] }] });
+  const b = demo.newScore({ preset: 'bass4', tabOnly: true });
+  eq([b.tracks[0].name, b.tracks[0].clef, b.tracks[0].tuning, b.tracks[0].showStandardNotation, b.title], ['Bass', 'bass', ['E1', 'A1', 'D2', 'G2'], false, 'Untitled']);
+  const n = normalizeScore({ tracks: [{ ...b.tracks[0], showStandardNotation: true, measures: [{ beats: [nt('quarter', 4, 0)] }] }] }).tracks[0];
+  eq([n.clef, n.octaveClef], ['bass', true], 'bass clef with the 8vb (octave) clef from fret-derived pitches');
+  eq(demo.newScore({ preset: 'guitar7' }).tracks[0].tuning.length, 7);
+  eq(demo.newScore({ beats: 40, beatType: 5, preset: 'nope' }).tracks[0].timeSignature, { beats: 16, beatType: 4 });
+  eq(demo.newScore({ beats: 0 }).tracks[0].timeSignature.beats, 1);
+  [g, b].forEach((x) => ok(sanitizeScore(x) === x));
+});
+test('demo: readAutosave reports ok / none / corrupt / unavailable', () => {
+  const store = (v) => ({ getItem: (k) => (k === demo.AUTOSAVE_KEY ? v : null) });
+  eq(demo.readAutosave(store('{"tracks":[]}')), { status: 'ok', score: { tracks: [] } });
+  eq(demo.readAutosave(store(null)), { status: 'none' });
+  eq(demo.readAutosave(store('{bad')), { status: 'corrupt' });
+  eq(demo.readAutosave(store('[1]')), { status: 'corrupt' });
+  eq(demo.readAutosave(store('null')), { status: 'corrupt' });
+  eq(demo.readAutosave({ getItem: () => { throw new Error('blocked'); } }), { status: 'unavailable' });
+  eq(demo.AUTOSAVE_KEY, 'music-score-editor:autosave');
+});
+test('demo: checkUpload rejects files over 5 MB before reading', () => {
+  eq(demo.checkUpload({ name: 'a.json', size: 5 * 1024 * 1024 }), { ok: true });
+  eq(demo.checkUpload({ name: 'big.json', size: 5 * 1024 * 1024 + 1 }), { ok: false, error: 'Couldn\'t open "big.json": the file is larger than 5 MB.' });
+  eq(demo.checkUpload(null).ok, false);
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
