@@ -24,7 +24,14 @@ export function insertMeasureAt(score, at) {
   let out = { ...score, tracks: tracks.map((t) => {
     const measures = measuresOf(t).slice();
     while (measures.length < at) measures.push(empty());
-    measures.splice(at, 0, empty());
+    // Before the opening measure: its time / key signature and clef move to the new first measure,
+    // so the score still starts with them (as Guitar Pro does) instead of changing at measure 2.
+    const first = at === 0 && measureAt(t, 0);
+    if (first && CARRY.some((k) => first[k] != null)) {
+      const rest = { ...first };
+      CARRY.forEach((k) => { delete rest[k]; });
+      measures.splice(0, 1, { ...carried(first), beats: [] }, rest);
+    } else measures.splice(at, 0, empty());
     return { ...t, measures };
   }) };
   tracks.forEach((_, ti) => {

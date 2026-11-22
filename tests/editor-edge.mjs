@@ -823,6 +823,23 @@ test('H: the three demo examples and the default score load into the model as sa
   }
 });
 
+// ---------- orchestrator follow-ups (2.0.0) ----------
+test('E9: Shift+M before the opening measure moves its time / key signature and clef to the new first measure', () => {
+  const sc = { tracks: [{ tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'], measures: [
+    { timeSignature: { beats: 3, beatType: 4 }, keySignature: 2, clef: 'treble', barline: 'repeatStart', beats: [{ type: 'note', duration: 'half', dots: 1, notes: [{ string: 1, fret: 3 }] }] },
+  ] }] };
+  const ms = play(sc, { at: cur(0, 0, 0) }).key('M', { shiftKey: true }).score.tracks[0].measures;
+  eq(ms[0], { timeSignature: { beats: 3, beatType: 4 }, keySignature: 2, clef: 'treble', beats: [] });
+  eq(ms[1], { barline: 'repeatStart', beats: [{ type: 'note', duration: 'half', dots: 1, notes: [{ string: 1, fret: 3 }] }] });
+  const after = play(sc).key('M', { shiftKey: true }).score;
+  eq(sanitizeScore(after) === after, true, 'model stays sanitize-stable');
+  const plain = play({ tracks: [{ measures: [{ beats: [] }] }] }).key('M', { shiftKey: true }).score.tracks[0].measures;
+  eq(plain, [{ beats: [] }, { beats: [] }], 'no signature: plain empty measure');
+});
+test('H5: sanitizeFilename caps the name at 100 characters', () => {
+  eq(demo.sanitizeFilename('a'.repeat(300)), `${'a'.repeat(100)}.json`);
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

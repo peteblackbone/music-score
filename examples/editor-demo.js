@@ -31,7 +31,7 @@ const PRESETS = {
 
 /** Download file name from a title: only [A-Za-z0-9-_ ], trimmed, + '.json'; 'score.json' when nothing is left. */
 export function sanitizeFilename(title) {
-  const s = String(title ?? '').replace(/[^A-Za-z0-9\-_ ]/g, '').trim();
+  const s = String(title ?? '').replace(/[^A-Za-z0-9\-_ ]/g, '').slice(0, 100).trim();
   return s ? `${s}.json` : 'score.json';
 }
 
