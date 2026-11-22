@@ -158,5 +158,10 @@ for (const c of cases) {
   const { summary } = await import('./editor-select-dom.mjs');
   fail += await summary();
 }
+// 2.3.0 edge cases against the criteria and decisions: holes, two voices, graces, ties, odd meters, limits, pickup, tempo parity, native clipboard events, hostile clips (tests/editor-select-edge.mjs)
+{
+  const { summary } = await import('./editor-select-edge.mjs');
+  fail += await summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);
