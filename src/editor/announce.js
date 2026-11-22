@@ -11,6 +11,7 @@
 import { FILL_WORDS, durationWords } from './model/durations.js';
 import { EFFECT_BY_NAME, SUFFIXES } from './model/effectTable.js';
 import { formatBpm } from '../expression.js';
+import { canonicalEnding, endingLabel } from '../navigation.js';
 
 export { durationWords };
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
@@ -73,7 +74,26 @@ export const MESSAGES = Object.freeze({
   trackAdded: (d) => `${trackText(d)} added`,
   trackRemoved: (d) => `${trackText(d)} removed`,
   trackMoved: (d) => `Track${d.name ? ` ${d.name}` : ''} moved to position ${d.n}`,
+  measureSet: (d) => (Object.hasOwn(MEASURE_TEXT, d.key) ? `${MEASURE_TEXT[d.key](d.value)}${d.key === 'clef' || d.key === 'timeSignature' || d.key === 'keySignature' ? (d.value == null ? ' at' : ' from') : ' at'} measure ${d.n}${d.tabOnly && d.value != null ? ', not shown on TAB only' : ''}` : ''),
+  measureUpdated: (d) => `Measure ${d.n} settings updated${d.tabOnly ? ', clef not shown on TAB only' : ''}`,
 });
+
+/** 'no sharps or flats' / '1 sharp' / '3 flats'. */
+export const keyWords = (k) => (!k ? 'no sharps or flats' : `${Math.abs(k)} ${k > 0 ? 'sharp' : 'flat'}${Math.abs(k) === 1 ? '' : 's'}`);
+const BARLINE_WORDS = { single: 'Single', double: 'Double', final: 'Final', repeatStart: 'Repeat start', repeatEnd: 'Repeat end' };
+/** The words of one measure field (before ' from measure n' / ' at measure n'). */
+const MEASURE_TEXT = {
+  timeSignature: (v) => (v ? `Time signature ${v.beats}/${v.beatType}` : 'Time signature change removed'),
+  keySignature: (v) => (v != null ? `Key signature ${keyWords(v)}` : 'Key signature change removed'),
+  clef: (v) => (v ? `Clef ${v.replace(/(8v[ab]|15m[ab])$/, ' $1')}` : 'Clef change removed'),
+  barline: (v) => (v ? `${BARLINE_WORDS[v]} barline` : 'Barline removed'),
+  repeatCount: (v) => (v ? `Repeat count ${v}` : 'Repeat count removed'),
+  ending: (v) => (v != null ? `Ending ${endingLabel(canonicalEnding(v))}` : 'Ending removed'),
+  segno: (v) => (v ? 'Segno' : 'Segno removed'),
+  coda: (v) => (v ? 'Coda' : 'Coda removed'),
+  jump: (v) => v ?? 'Jump removed',
+  section: (v) => (v != null ? `Section ${typeof v === 'string' ? v : [v.letter, v.text].filter(Boolean).join(' ')}` : 'Section removed'),
+};
 
 /** 'Track 2 Bass' / 'Track 2'. */
 const trackText = (d) => `Track ${d.n}${d.name ? ` ${d.name}` : ''}`;

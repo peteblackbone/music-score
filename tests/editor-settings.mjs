@@ -425,6 +425,153 @@ test('moveTrack: the track list reorders, the cursor stays on its track (every f
   throwsClean(s, () => TS.moveTrack(s, cur(0, 0, 0), 0.5, 1), RangeError);
 });
 
+// ---------- updateMeasure / getMeasureSettings ----------
+const MS = await imp('src/editor/model/settings/measureSettings.js');
+const { clefAt } = await imp('src/clef.js');
+const measureScore = () => model({ keySignature: 1, tracks: [
+  tab([{ beats: [nt('whole')] }, { beats: [] }, { beats: [] }, { beats: [] }], { name: 'Gtr', timeSignature: { beats: 3, beatType: 4 } }),
+  tab([{ beats: [] }, { beats: [], clef: 'bass' }], { name: 'Bass', clef: 'bass', showStandardNotation: false, keySignature: -2 }),
+  tab([{ beats: [] }], { name: 'Hidden', showTablature: false, showStandardNotation: false }),
+] });
+test('updateMeasure time / key: equality with the value in force decided per track; written on every track (padding holes), deleted when equal; null deletes; measure 0 throws on null', () => {
+  const s = measureScore();
+  const c = cur(0, 0, 0);
+  const r = MS.updateMeasure(s, c, 2, { timeSignature: { beats: 3, beatType: 4 } });
+  eq(r.score.tracks.map((t) => t.measures[2] ?? null), [{ beats: [] }, { beats: [], timeSignature: { beats: 3, beatType: 4 } }, { beats: [], timeSignature: { beats: 3, beatType: 4 } }], 'Gtr is already in 3/4: nothing written there; others padded');
+  eq(say(r), 'Time signature 3/4 from measure 3');
+  ok(r.score.tracks[0] === s.tracks[0] && sanitizeScore(r.score) === r.score);
+  const k0 = MS.updateMeasure(s, c, 0, { keySignature: 1 });
+  eq(k0.score.tracks.map((t) => t.measures[0].keySignature ?? null), [null, 1, null], 'at measure 0: compared with track, else score key');
+  eq(say(k0), 'Key signature 1 sharp from measure 1');
+  const t0 = MS.updateMeasure(s, c, 0, { timeSignature: { beats: 4, beatType: 4 } });
+  eq(t0.score.tracks.map((t) => t.measures[0].timeSignature ?? null), [{ beats: 4, beatType: 4 }, null, null]);
+  const del = MS.updateMeasure(r.score, c, 2, { timeSignature: null });
+  eq(del.score.tracks.map((t) => 'timeSignature' in (t.measures[2] ?? {})), [false, false, false]);
+  eq(say(del), 'Time signature change removed at measure 3');
+  ok(MS.updateMeasure(s, c, 3, { timeSignature: null, keySignature: null }).score === s, 'deleting nothing: same score, no measures created');
+  ok(MS.updateMeasure(s, c, 1, { keySignature: 1 }).score !== s && MS.updateMeasure(s, c, 1, { keySignature: 1 }).score.tracks[0] === s.tracks[0]);
+  eq(describe({ id: 'measureSet', key: 'keySignature', value: 0, n: 5 }), 'Key signature no sharps or flats from measure 5');
+  eq(describe({ id: 'measureSet', key: 'keySignature', value: -3, n: 5 }), 'Key signature 3 flats from measure 5');
+  eq(describe({ id: 'measureSet', key: 'keySignature', value: null, n: 5 }), 'Key signature change removed at measure 5');
+  throwsClean(s, () => MS.updateMeasure(s, c, 0, { timeSignature: null }), RangeError);
+  throwsClean(s, () => MS.updateMeasure(s, c, 0, { keySignature: null }), RangeError);
+  for (const bad of [{ beats: 33, beatType: 4 }, { beats: 0, beatType: 4 }, { beats: 3, beatType: 3 }, { beats: 3, beatType: 64 }, { beats: 2.5, beatType: 4 }]) throwsClean(s, () => MS.updateMeasure(s, c, 1, { timeSignature: bad }), RangeError, '', JSON.stringify(bad));
+  for (const bad of [[3, 4], '3/4', { beats: 3 }, { beats: 3, beatType: 4, x: 1 }]) throwsClean(s, () => MS.updateMeasure(s, c, 1, { timeSignature: bad }), TypeError, '', JSON.stringify(bad));
+  for (const bad of [8, -8, 1.5]) throwsClean(s, () => MS.updateMeasure(s, c, 1, { keySignature: bad }), RangeError);
+  throwsClean(s, () => MS.updateMeasure(s, c, 1, { keySignature: '1' }), TypeError);
+  for (const beatType of [1, 2, 4, 8, 16, 32]) { const x = MS.updateMeasure(s, c, 1, { timeSignature: { beats: 32, beatType } }).score; ok(sanitizeScore(x) === x, `32/${beatType} sanitize-stable`); }
+});
+test('updateMeasure clef: per track (option or cursor track), equal to the clef in force deletes, measure 0 throws, TAB-only announced', () => {
+  const s = measureScore();
+  const r = MS.updateMeasure(s, cur(0, 0, 0), 2, { clef: 'Bass' });
+  eq([r.score.tracks[0].measures[2].clef, r.score.tracks[1] === s.tracks[1]], ['bass', true]);
+  eq(say(r), 'Clef bass from measure 3');
+  const b = MS.updateMeasure(s, cur(0, 0, 0), 2, { clef: 'treble8vb' }, { track: 1 });
+  eq(say(b), 'Clef treble 8vb from measure 3, not shown on TAB only');
+  eq(b.score.tracks[1].measures[2].clef, 'treble8vb');
+  ok(MS.updateMeasure(s, cur(0, 0, 0), 1, { clef: 'bass' }, { track: 1 }).score !== s, 'measure 1 of Bass sets bass, equal to the clef in force: deleted');
+  eq('clef' in MS.updateMeasure(s, cur(0, 0, 0), 1, { clef: 'bass' }, { track: 1 }).score.tracks[1].measures[1], false);
+  eq(say(MS.updateMeasure(s, cur(1, 0, 0), 1, { clef: null })), 'Clef change removed at measure 2');
+  ok(MS.updateMeasure(s, cur(0, 0, 0), 3, { clef: 'treble' }).score === s);
+  throwsClean(s, () => MS.updateMeasure(s, cur(0, 0, 0), 0, { clef: 'bass' }), RangeError, 'updateTrack');
+  throwsClean(s, () => MS.updateMeasure(s, cur(0, 0, 0), 0, { clef: null }), RangeError);
+  throwsClean(s, () => MS.updateMeasure(s, cur(0, 0, 0), 1, { clef: 'soprano' }), RangeError);
+  throwsClean(s, () => MS.updateMeasure(s, cur(0, 0, 0), 1, { clef: 'bass' }, { track: 3 }), RangeError);
+  throwsClean(s, () => MS.updateMeasure(s, cur(0, 0, 0), 1, { clef: 'bass' }, { staff: 1 }), TypeError, 'Unknown option field: staff');
+  throwsClean(s, () => MS.updateMeasure(s, cur(0, 0, 0), 1, { clef: 'bass' }, 1), TypeError);
+});
+test('updateMeasure barline / repeatCount: column-wide; non-repeatEnd removes the count in the same step; a count needs repeatEnd (patch or column)', () => {
+  const s = measureScore();
+  const c = cur(0, 0, 0);
+  const r = MS.updateMeasure(s, c, 1, { barline: 'repeatEnd', repeatCount: 3 });
+  eq(r.score.tracks.map((t) => [t.measures[1].barline, t.measures[1].repeatCount]), [['repeatEnd', 3], ['repeatEnd', 3], ['repeatEnd', 3]]);
+  eq(say(r), 'Measure 2 settings updated');
+  eq(say(MS.updateMeasure(r.score, c, 1, { repeatCount: 4 })), 'Repeat count 4 at measure 2');
+  const d = MS.updateMeasure(r.score, c, 1, { barline: 'double' });
+  eq(d.score.tracks.map((t) => [t.measures[1].barline, 'repeatCount' in t.measures[1]]), [['double', false], ['double', false], ['double', false]]);
+  eq(say(d), 'Double barline at measure 2');
+  eq(say(MS.updateMeasure(r.score, c, 1, { barline: null })), 'Barline removed at measure 2');
+  ok(!('repeatCount' in MS.updateMeasure(r.score, c, 1, { barline: null }).score.tracks[0].measures[1]));
+  eq(say(MS.updateMeasure(s, c, 1, { barline: 'repeatEnd' })), 'Repeat end barline at measure 2');
+  ok(MS.updateMeasure(r.score, c, 1, { repeatCount: null }).score.tracks.every((t) => !('repeatCount' in t.measures[1])));
+  ok(MS.updateMeasure(r.score, c, 1, { barline: 'repeatEnd', repeatCount: 3 }).score === r.score, 'no change');
+  throwsClean(s, () => MS.updateMeasure(s, c, 1, { repeatCount: 3 }), RangeError, 'repeat end');
+  throwsClean(s, () => MS.updateMeasure(r.score, c, 1, { barline: 'final', repeatCount: 3 }), RangeError, 'repeat end');
+  for (const bad of [1, 100, 2.5]) throwsClean(r.score, () => MS.updateMeasure(r.score, c, 1, { repeatCount: bad }), RangeError);
+  throwsClean(s, () => MS.updateMeasure(s, c, 1, { barline: 'thick' }), RangeError);
+  throwsClean(s, () => MS.updateMeasure(s, c, 1, { barline: true }), TypeError);
+  eq(MS.updateMeasure(r.score, c, 1, { repeatCount: 2 }).score.tracks[0].measures[1].repeatCount, 2, 'R9: 2 is accepted (the renderer draws x2)');
+});
+test('updateMeasure ending / segno / coda / jump / section: stored shortest, trimmed, canonical; column-wide overwrite of conflicting values; bad values throw', () => {
+  const s = model({ tracks: [tab([{ beats: [] }, { beats: [], ending: 5, jump: 'Fine' }]), tab([{ beats: [] }, { beats: [], ending: 7, jump: 'Custom words' }])] });
+  const c = cur(0, 0, 0);
+  const end = (v) => MS.updateMeasure(s, c, 1, { ending: v }).score.tracks.map((t) => t.measures[1].ending);
+  eq(end(2), [2, 2], 'conflicting values overwritten');
+  eq(end([3, 1]), [[1, 3], [1, 3]]);
+  eq(end([4])[0], 4);
+  eq(end({ numbers: [2, 1] })[0], [1, 2]);
+  eq(end({ numbers: [1], text: ' Last ', open: true })[0], { numbers: 1, text: 'Last', open: true });
+  eq(end({ numbers: 1, open: false })[0], { numbers: 1, open: false });
+  eq(end({ numbers: [1, 2], text: ' ' })[0], [1, 2]);
+  eq(say(MS.updateMeasure(s, c, 1, { ending: [1, 2] })), 'Ending 1., 2. at measure 2');
+  eq(say(MS.updateMeasure(s, c, 1, { ending: null })), 'Ending removed at measure 2');
+  for (const bad of [0, 100, [], Array.from({ length: 33 }, (_, i) => i + 1), [1, 1], 1.5, { numbers: [] }, { numbers: 1, text: 'a\nb' }]) throwsClean(s, () => MS.updateMeasure(s, c, 1, { ending: bad }), RangeError, '', JSON.stringify(bad));
+  for (const bad of ['1', { numbers: '1' }, { numbers: 1, open: 'yes' }, { numbers: 1, label: 'x' }, true]) throwsClean(s, () => MS.updateMeasure(s, c, 1, { ending: bad }), TypeError, '', JSON.stringify(bad));
+  eq(MS.updateMeasure(s, c, 1, { ending: Array.from({ length: 32 }, (_, i) => 32 - i) }).score.tracks[0].measures[1].ending.length, 32);
+  const nav = MS.updateMeasure(s, c, 0, { segno: true, coda: true, jump: ' d.s.  al coda ', section: { letter: ' A ', text: ' Verse ' } });
+  eq(nav.score.tracks.map((t) => t.measures[0]), Array(2).fill({ beats: [], segno: true, coda: true, jump: 'D.S. al Coda', section: { letter: 'A', text: 'Verse' } }));
+  eq(say(MS.updateMeasure(s, c, 0, { jump: 'To Coda' })), 'To Coda at measure 1');
+  eq(say(MS.updateMeasure(s, c, 1, { jump: null })), 'Jump removed at measure 2');
+  eq(say(MS.updateMeasure(s, c, 0, { segno: true })), 'Segno at measure 1');
+  eq(say(MS.updateMeasure(nav.score, c, 0, { coda: false })), 'Coda removed at measure 1');
+  eq(say(MS.updateMeasure(s, c, 0, { section: { letter: 'A', text: 'Verse' } })), 'Section A Verse at measure 1');
+  eq(say(MS.updateMeasure(s, c, 0, { section: ' Chorus ' })), 'Section Chorus at measure 1');
+  eq(say(MS.updateMeasure(nav.score, c, 0, { section: null })), 'Section removed at measure 1');
+  eq(MS.updateMeasure(s, c, 0, { section: { letter: '😀ab' } }).score.tracks[0].measures[0].section, { letter: '😀ab' });
+  ok(MS.updateMeasure(s, c, 0, { section: '  ', segno: false, coda: null, jump: null, ending: null }).score === s);
+  for (const bad of ['Da Capo', 'Custom words']) throwsClean(s, () => MS.updateMeasure(s, c, 1, { jump: bad }), RangeError);
+  throwsClean(s, () => MS.updateMeasure(s, c, 1, { jump: 1 }), TypeError);
+  for (const bad of [{ letter: 'ABCD' }, { letter: '' }, { letter: ' ' }, 'x'.repeat(201), 'a\nb', { letter: 'A', text: 'x'.repeat(201) }]) throwsClean(s, () => MS.updateMeasure(s, c, 1, { section: bad }), RangeError, '', JSON.stringify(bad));
+  for (const bad of [{ text: 'Verse' }, { letter: 1 }, { letter: 'A', name: 'x' }, 5]) throwsClean(s, () => MS.updateMeasure(s, c, 1, { section: bad }), TypeError, '', JSON.stringify(bad));
+  throwsClean(s, () => MS.updateMeasure(s, c, 1, { segno: 'yes' }), TypeError);
+  throwsClean(s, () => MS.updateMeasure(s, c, 2, {}), RangeError);
+  throwsClean(s, () => MS.updateMeasure(s, c, 1, { bogus: 1 }), TypeError, 'Unknown measure field: bogus');
+  throwsClean(s, () => MS.updateMeasure(s, c, 1, { segno: true, beats: [] }), TypeError, 'beats');
+  throwsClean(s, () => MS.updateMeasure(s, c, 1, JSON.parse('{"__proto__":{}}')), TypeError);
+  throwsClean(s, () => MS.updateMeasure(s, c, 1), TypeError);
+  ok([nav].every((x) => sanitizeScore(x.score) === x.score));
+});
+test('getMeasureSettings: in force + here + inherited; navigation equals normalizeScore(...).navigation[mi]; clef equals clefAt; custom jumps reported', () => {
+  const s = model({ keySignature: 1, tracks: [
+    tab([{ beats: [] }, { beats: [], timeSignature: { beats: 6, beatType: 8 }, ending: [2, 1], barline: 'repeatEnd', repeatCount: 3 }, { beats: [], jump: 'Play twice', section: { letter: 'B' } }, { beats: [], keySignature: -1, segno: true }], { timeSignature: { beats: 3, beatType: 4 } }),
+    tab([{ beats: [], clef: 'alto' }, { beats: [], ending: 9, barline: 'double', coda: true }, null, { beats: [], clef: 'bass', jump: 'Fine' }], { clef: 'tenor', keySignature: -2 }),
+  ] });
+  const n = normalizeScore(s);
+  for (let mi = 0; mi < 4; mi++) for (let ti = 0; ti < 2; ti++) {
+    const g = MS.getMeasureSettings(s, mi, ti);
+    const col = n.navigation[mi];
+    eq([g.ending, g.segno, g.coda, g.jump, g.section, g.repeatCount], [col.ending, col.segno, col.coda, col.jump, col.section ?? null, col.repeatCount ?? null], `nav ${mi}`);
+    eq(g.clef.value, clefAt(s.tracks[ti], mi));
+    const nm = n.tracks[ti].measures[mi];
+    eq([g.timeSignature.beats, g.timeSignature.beatType, g.keySignature.value], [nm.timeSignature.beats, nm.timeSignature.beatType, nm.keySignature], `${mi}/${ti}`);
+    if (mi > 0) {
+      const prev = n.tracks[ti].measures[mi - 1];
+      eq([g.timeSignature.inherited, g.keySignature.inherited, g.clef.inherited], [{ beats: prev.timeSignature.beats, beatType: prev.timeSignature.beatType }, prev.keySignature, clefAt(s.tracks[ti], mi - 1)]);
+    }
+  }
+  const a = MS.getMeasureSettings(s, 1, 0);
+  eq(a, { measure: 1, track: 0, timeSignature: { beats: 6, beatType: 8, here: true, inherited: { beats: 3, beatType: 4 } }, keySignature: { value: 1, here: false, inherited: 1 }, clef: { value: 'treble', here: false, inherited: 'treble' },
+    barline: 'repeatEnd', repeatCount: 3, ending: { numbers: [1, 2], text: null, open: null }, segno: false, coda: true, jump: null, jumpCustom: false, section: null });
+  const z = MS.getMeasureSettings(s, 0, 1);
+  eq([z.clef, z.keySignature, z.timeSignature.inherited], [{ value: 'alto', here: true, inherited: 'tenor' }, { value: -2, here: false, inherited: -2 }, { beats: 4, beatType: 4 }]);
+  eq([MS.getMeasureSettings(s, 2, 1).jump, MS.getMeasureSettings(s, 2, 1).jumpCustom], ['Play twice', true]);
+  eq(MS.getMeasureSettings(s, 3, 1).clef, { value: 'bass', here: true, inherited: 'alto' });
+  eq(MS.getMeasureSettings(s, 2, 1).barline, null);
+  throws(() => MS.getMeasureSettings(s, 4, 0), RangeError);
+  throws(() => MS.getMeasureSettings(s, 0, 2), RangeError);
+  throws(() => MS.getMeasureSettings(s, '0', 0), TypeError);
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
