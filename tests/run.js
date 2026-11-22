@@ -103,5 +103,10 @@ for (const c of cases) {
   const { summary } = await import('./editor-edge-dom.mjs');
   fail += await summary();
 }
+// 2.1.0 editor effects: effect table, effect commands, keymap letters (tests/editor-effects.mjs)
+{
+  const { summary } = await import('./editor-effects.mjs');
+  fail += summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);
