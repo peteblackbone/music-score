@@ -380,6 +380,81 @@ test('toggleTie: ties to the previous main beat (also across a barline), copies 
   eq(N.toggleTie(sc(tab([{ beats: [rest(), nt('half', 1, 1)] }])), cur(0, 0, 1, 1)).announce.id, 'nothingToTie');
 });
 
+// ---------- beats (E4, E6, E8, rhythm keys) ----------
+const B = await imp('src/editor/model/beats.js');
+test('shorter / longer: step the cursor beat duration and the state; limits at whole and 64th; slot changes the state only (E4)', () => {
+  const s = sc(tab([{ beats: [nt('quarter', 1, 0, { dots: 1 }), nt('whole'), nt('64th')] }]));
+  const a = B.shorter(s, cur(0, 0, 0), ST);
+  eq([beatsOf(a.score)[0], a.state.duration, a.announce], [nt('8th', 1, 0, { dots: 1 }), '8th', { id: 'duration', duration: '8th', dots: 1 }]);
+  ok(beatsOf(a.score)[1] === beatsOf(s)[1], 'other beats untouched');
+  eq(B.longer(s, cur(0, 0, 0), ST).state.duration, 'half');
+  eq(B.longer(s, cur(0, 0, 1), ST), { announce: { id: 'limit' } });
+  eq(B.shorter(s, cur(0, 0, 2), ST), { announce: { id: 'limit' } });
+  const u = sc(tab([{ beats: [nt('half')] }]));
+  const slot = B.shorter(u, cur(0, 0, 1), ST);
+  eq([slot.score, slot.state.duration, slot.announce.id], [undefined, '8th', 'nextDuration']);
+});
+test('setDuration: sets the duration directly; unknown names are refused; same duration is no change', () => {
+  const s = sc(tab([{ beats: [nt('quarter')] }]));
+  eq(beatsOf(B.setDuration(s, cur(0, 0, 0), ST, CTX, '16th').score)[0].duration, '16th');
+  ok(B.setDuration(s, cur(0, 0, 0), ST, CTX, 'quarter').score === s);
+  eq(B.setDuration(s, cur(0, 0, 0), ST, CTX, 'breve'), { announce: { id: 'limit' } });
+});
+test('cycleDots: 0 -> 1 -> 2 -> 0, 3 or 4 -> 0, key deleted at 0; slot changes the state only', () => {
+  const run = (dots) => beatsOf(B.cycleDots(sc(tab([{ beats: [nt('quarter', 1, 0, dots === undefined ? {} : { dots })] }])), cur(0, 0, 0), ST).score)[0].dots;
+  eq([undefined, 1, 2, 3, 4, '1'].map(run), [1, 2, undefined, undefined, undefined, 2]);
+  const r = B.cycleDots(sc(tab([{ beats: [] }])), cur(0, 0, 0), { ...ST, dots: 1 });
+  eq([r.score, r.state.dots, r.announce], [undefined, 2, { id: 'dots', duration: 'quarter', dots: 2 }]);
+});
+test('toggleTriplet: sets tuplet 3 / deletes any tuplet; refused on the slot and with valid nested tuplets', () => {
+  const s = sc(tab([{ beats: [nt('8th'), nt('8th', 1, 0, { tuplet: { count: 5 } }), nt('8th', 1, 0, { tuplets: [3, 3] }), nt('8th', 1, 0, { tuplets: 'x' })] }]));
+  eq([beatsOf(B.toggleTriplet(s, cur(0, 0, 0)).score)[0].tuplet, B.toggleTriplet(s, cur(0, 0, 0)).announce.id], [3, 'tripletOn']);
+  eq(['tuplet' in beatsOf(B.toggleTriplet(s, cur(0, 0, 1)).score)[1], B.toggleTriplet(s, cur(0, 0, 1)).announce.id], [false, 'tripletOff']);
+  eq(B.toggleTriplet(s, cur(0, 0, 2)), { announce: { id: 'nestedTuplet' } });
+  eq(beatsOf(B.toggleTriplet(s, cur(0, 0, 3)).score)[3].tuplet, 3, 'invalid nested tuplets are ignored');
+  eq(B.toggleTriplet(sc(tab([{ beats: [] }])), cur(0, 0, 0)), { announce: { id: 'noBeat' } });
+});
+test('toggleRest: note -> rest (notes, slash dropped, ties repaired); rest -> fret 0 on TAB; refused without TAB; slot appends a rest', () => {
+  const s = sc(tab([{ beats: [tn('half', 2, 3, { tieStart: true }), { type: 'note', duration: 'half', slash: false, lyric: 'la', notes: [{ string: 2, fret: 3, tieEnd: true }] }] }]));
+  const a = B.toggleRest(s, cur(0, 0, 1, 2), ST);
+  eq(beatsOf(a.score)[1], { type: 'rest', duration: 'half', lyric: 'la' });
+  eq(beatsOf(a.score)[0].notes[0], { string: 2, fret: 3 });
+  const b = B.toggleRest(a.score, cur(0, 0, 1, 4), ST);
+  eq(beatsOf(b.score)[1], { type: 'note', duration: 'half', lyric: 'la', notes: [{ string: 4, fret: 0 }] });
+  eq(B.toggleRest(sc({ measures: [{ beats: [rest()] }] }), cur(0, 0, 0), ST).announce.id, 'refusedNoTab');
+  const n = B.toggleRest(sc({ measures: [{ beats: [nt('quarter')] }] }), cur(0, 0, 0), ST);
+  eq(beatsOf(n.score)[0], rest(), 'note -> rest works without TAB');
+  const h = B.toggleRest(sc(tab([{ beats: [rest('quarter', { hidden: true })] }])), cur(0, 0, 0, 1), ST);
+  eq(beatsOf(h.score)[0], { type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 0 }] });
+  const slot = B.toggleRest(sc(tab([{ beats: [nt('half')] }])), cur(0, 0, 1), { ...ST, duration: '8th', dots: 1 });
+  eq([beatsOf(slot.score)[1], slot.cursor.beat], [rest('8th', { dots: 1 }), 1]);
+  [a, b, n, h, slot].forEach((r) => ok(sanitizeScore(r.score) === r.score));
+});
+test('deleteBeat: removes the beat with its leading graces, bridges ties across the gap, keeps the index (E6)', () => {
+  const s = sc(tab([{ beats: [tn('quarter', 1, 5, { tieStart: true }), graceB(), graceB(), tn('quarter', 1, 5, { tieEnd: true }), nt('half')] }]));
+  const a = B.deleteBeat(s, cur(0, 0, 3));
+  eq(beatsOf(a.score).map((b) => b.duration), ['quarter', 'half']);
+  eq(beatsOf(a.score)[0].notes[0], { string: 1, fret: 5 }, 'dangling tieStart removed');
+  eq(a.cursor.beat, 1);
+  const chain = sc(tab([{ beats: [tn('quarter', 1, 5, { tieStart: true }), tn('quarter', 1, 5, { tieStart: true, tieEnd: true }), tn('half', 1, 5, { tieEnd: true })] }]));
+  const c = B.deleteBeat(chain, cur(0, 0, 1));
+  eq(beatsOf(c.score).map((b) => b.notes[0]), [{ string: 1, fret: 5, tieStart: true }, { string: 1, fret: 5, tieEnd: true }], 'a chain stays tied');
+  const last = B.deleteBeat(sc(tab([{ beats: [nt('whole')] }])), cur(0, 0, 0));
+  eq(beatsOf(last.score), [], 'a measure may end up empty');
+  eq(B.deleteBeat(sc(tab([{ beats: [] }])), cur(0, 0, 0)), { announce: { id: 'noBeat' } });
+});
+test('insertBeat: a rest with the current duration before the beat and its leading graces; on the slot before trailing graces (E8)', () => {
+  const s = sc(tab([{ beats: [tn('quarter', 1, 5, { tieStart: true }), graceB(), tn('quarter', 1, 5, { tieEnd: true }), graceB()] }]));
+  const a = B.insertBeat(s, cur(0, 0, 2), { ...ST, duration: '16th' });
+  eq(beatsOf(a.score).map((b) => b.type), ['note', 'rest', 'grace', 'note', 'grace']);
+  eq([a.cursor.beat, beatsOf(a.score)[1]], [1, rest('16th')]);
+  eq([beatsOf(a.score)[0].notes[0].tieStart, beatsOf(a.score)[3].notes[0].tieEnd], [undefined, undefined], 'tie broken by the rest');
+  const b = B.insertBeat(s, cur(0, 0, 4), ST);
+  eq(beatsOf(b.score).map((x) => x.type), ['note', 'grace', 'note', 'rest', 'grace']);
+  eq(b.cursor.beat, 3);
+  ok(sanitizeScore(a.score) === a.score && sanitizeScore(b.score) === b.score);
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
