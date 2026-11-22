@@ -28,6 +28,7 @@ import {
 } from './selection.js';
 import { ranged, clearRange, removeRange, deleteSelectedColumns } from './rangeEdit.js';
 import { fill, reflow } from './reflow.js';
+import { transpose } from './transpose.js';
 
 const nav = (fn, label) => ({ fn, kind: 'nav', label });
 const edit = (fn, label) => ({ fn, kind: 'edit', label });
@@ -63,6 +64,7 @@ export const COMMANDS = Object.freeze({
   deleteMeasure: edit(ranged(deleteMeasure, deleteSelectedColumns), (d) => (d?.id === 'columnsDeleted' ? 'delete measures' : 'delete measure')),
   fill: edit(fill, 'fill'),
   reflow: edit(reflow, 'reflow'),
+  transpose: keep(edit(transpose, 'transpose')), // 2.3.1, arg: semitones
   // 2.1 effects, one command per row of effectTable.js; 2.3.1: over the selection when there is one
   ...Object.fromEntries(EFFECTS.map((d) => [d.name, keep(edit(ranged(effectCommand(d), effectRange(d)), d.label))])),
   // 2.3 selection

@@ -261,6 +261,70 @@ test('criterion 21 (effects): graces, voice 2, pitch-only notes (note rows need 
   ok(g.score.tracks[0].measures[1] === s.tracks[0].measures[1] && same(g.score), 'the tie partner outside is untouched');
 });
 
+// ---------- C. transpose ----------
+test('criterion 18: the cursor note moves one fret up (pitch removed, mute and harmonic kept, harmonicFret shifted, ties removed on both sides) or an octave down; the slot, a rest or an empty string say "No note here"; needsTab without TAB', () => {
+  const s = model({ tracks: [tab([{ beats: [
+    { type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 5, pitch: 'A4', mute: true, tieStart: true }, { string: 2, fret: 12, harmonic: 'natural', harmonicFret: 12 }] },
+    tn('quarter', 1, 5, { tieEnd: true }), tn('quarter', 3, 14), rest('quarter'),
+  ] }, { beats: [nt('half')] }])] });
+  const up = run('transpose', s, cur(0, 0, 0, 1), null, 1);
+  eq(v1(up.score, 0, 0)[0].notes[0], { string: 1, fret: 6, mute: true });
+  eq(v1(up.score, 0, 0)[1].notes[0], { string: 1, fret: 5 }, 'the partner loses tieEnd');
+  eq([said(up), CMD.undoLabel('transpose')], ['Fret 6, up 1 semitone', 'transpose']);
+  const h = run('transpose', s, cur(0, 0, 0, 2), null, 1);
+  eq(v1(h.score, 0, 0)[0].notes[1], { string: 2, fret: 13, harmonic: 'natural', harmonicFret: 13 });
+  const oct = run('transpose', s, cur(0, 0, 2, 3), null, -12);
+  eq([v1(oct.score, 0, 0)[2].notes[0].fret, said(oct)], [2, 'Fret 2, down an octave']);
+  for (const c of [cur(0, 0, 3, 1), cur(0, 0, 2, 1), cur(0, 1, 1, 1)]) eq(said(run('transpose', s, c, null, 1)), 'No note here');
+  const n = model({ tracks: [{ name: 'N', measures: [q4()] }] });
+  eq(said(run('transpose', n, cur(0, 0, 0), null, 1)), 'Needs a TAB staff');
+  ok(same(up.score) && same(h.score) && same(oct.score));
+});
+test('criterion 19: all or nothing: a selection with fret 0 and Ctrl+Down, fret 24 at maxFret 24 and Ctrl+Up, or a harmonicFret leaving the range are refused naming the first measure; nothing changes', () => {
+  const s = model({ tracks: [tab([q4(), { beats: [tn('whole', 1, 0)] }, { beats: [tn('whole', 1, 24)] }])] });
+  const all = SEL.selectionRange(s, 0, P(0, 0), P(2, 0));
+  const down = run('transpose', s, cur(0, 2, 0), all, -1);
+  eq([down.changed, said(down)], [false, "Can't transpose, measure 2 would go below fret 0"]);
+  const upr = run('transpose', s, cur(0, 2, 0), all, 1);
+  eq([upr.changed, said(upr)], [false, "Can't transpose, measure 3 would go above fret 24"]);
+  eq(said(run('transpose', s, cur(0, 2, 0), null, 1)), "Can't transpose, measure 3 would go above fret 24", 'the cursor note too');
+  const hf = model({ tracks: [tab([{ beats: [{ type: 'note', duration: 'whole', notes: [{ string: 1, fret: 3, harmonic: 'natural', harmonicFret: 24 }] }] }])] });
+  eq(run('transpose', hf, cur(0, 0, 0), SEL.selectionRange(hf, 0, P(0, 0), P(0, 0)), 1).changed, false);
+  const ok12 = run('transpose', s, cur(0, 2, 0), SEL.selectionRange(s, 0, P(0, 0), P(0, 3)), 12);
+  eq([v1(ok12.score, 0, 0).map((b) => b.notes[0].fret), said(ok12)], [[13, 14, 15, 16], 'Transposed 4 notes up an octave']);
+});
+test('criterion 20: a tie inside the selection is kept; a tie whose other note is outside (across the barline too) or is pitch-only loses both flags; ties on graces are left alone', () => {
+  const s = model({ tracks: [tab([
+    { beats: [tn('quarter', 1, 3, { tieStart: true }), tn('quarter', 1, 3, { tieEnd: true, tieStart: true }), tn('half', 1, 3, { tieEnd: true, tieStart: true })] },
+    { beats: [tn('whole', 1, 3, { tieEnd: true })] },
+  ])] });
+  const r = run('transpose', s, cur(0, 0, 2), SEL.selectionRange(s, 0, P(0, 0), P(0, 2)), 2);
+  eq(v1(r.score, 0, 0).map((b) => b.notes[0]), [{ string: 1, fret: 5, tieStart: true }, { string: 1, fret: 5, tieEnd: true, tieStart: true }, { string: 1, fret: 5, tieEnd: true }]);
+  eq(v1(r.score, 0, 1)[0].notes[0], { string: 1, fret: 3 }, 'the partner outside loses tieEnd');
+  const left = run('transpose', s, cur(0, 1, 0), SEL.selectionRange(s, 0, P(0, 2), P(1, 0)), 1);
+  eq([v1(left.score, 0, 0)[1].notes[0], v1(left.score, 0, 0)[2].notes[0], v1(left.score, 0, 1)[0].notes[0]], [{ string: 1, fret: 3, tieEnd: true }, { string: 1, fret: 4, tieStart: true }, { string: 1, fret: 4, tieEnd: true }]);
+  const g = model({ tracks: [tab([{ beats: [{ type: 'grace', duration: '16th', notes: [{ string: 1, fret: 2, tieStart: true }] }, tn('whole', 1, 2, { tieEnd: true })] }])] });
+  const gr = run('transpose', g, cur(0, 0, 1), SEL.selectionRange(g, 0, P(0, 1), P(0, 1)), 1);
+  eq(v1(gr.score, 0, 0).map((b) => b.notes[0]), [{ string: 1, fret: 3, tieStart: true }, { string: 1, fret: 3 }], 'the grace comes with its main beat and keeps its flag; the main beat has no main partner, so its tieEnd goes');
+  ok(same(r.score) && same(left.score));
+});
+test('criterion 21 (transpose): pitch-only notes and voice 2 are unchanged and pitch-only notes counted; graces included; a selection needs no TAB staff; nothing fretted is refused', () => {
+  const s = model({ tracks: [tab([{ voices: [{ beats: [grace(2, 3), { type: 'note', duration: 'half', notes: [{ pitch: 'C4' }, { string: 2, fret: 1 }] }, rest('half')] }, { beats: [nt('whole', 4, 4)] }] }])] });
+  const r = run('transpose', s, cur(0, 0, 2), SEL.selectionRange(s, 0, P(0, 1), P(0, 2)), 1);
+  const m = r.score.tracks[0].measures[0];
+  eq([m.voices[0].beats[0].notes[0].fret, m.voices[0].beats[1].notes], [4, [{ pitch: 'C4' }, { string: 2, fret: 2 }]]);
+  ok(m.voices[1] === s.tracks[0].measures[0].voices[1], 'voice 2 untouched');
+  eq(said(r), 'Transposed 2 notes up 1 semitone, 1 pitch-only note skipped');
+  const n = model({ tracks: [{ name: 'N', measures: [{ beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'C4' }, { string: 3, fret: 2 }] }] }] }] });
+  const nr = run('transpose', n, cur(0, 0, 0), SEL.selectionRange(n, 0, P(0, 0), P(0, 0)), -1);
+  eq([nr.score.tracks[0].measures[0].beats[0].notes, said(nr)], [[{ pitch: 'C4' }, { string: 3, fret: 1 }], 'Transposed 1 note down 1 semitone, 1 pitch-only note skipped']);
+  const p = model({ tracks: [{ name: 'N', measures: [{ beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'C4' }] }] }, { beats: [] }] }] });
+  const none = run('transpose', p, cur(0, 0, 0), SEL.selectionRange(p, 0, P(0, 0), P(0, 0)), 1);
+  eq([none.changed, said(none)], [false, 'No fretted notes to transpose, 1 pitch-only note skipped']);
+  eq(said(run('transpose', p, cur(0, 1, 0), SEL.selectionRange(p, 0, P(1, 0), P(1, 0)), 1)), 'No fretted notes to transpose', 'a blank selection');
+  ok(CMD.COMMANDS.transpose.keepsSelection && same(r.score) && same(nr.score));
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

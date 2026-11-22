@@ -69,6 +69,11 @@ export const MESSAGES = Object.freeze({
   effectRange: (d) => (Object.hasOwn(EFFECT_BY_NAME, d.name) ? rangeEffectText(EFFECT_BY_NAME[d.name], d) : ''),
   noNotesInSelection: () => 'No notes in the selection',
   noBeatsInSelection: () => 'No beats in the selection',
+  // 2.3.1 transpose
+  transposed: (d) => (d.fret != null ? `Fret ${d.fret}, ${semitoneText(d.semitones)}` : `Transposed ${plural(d.count, 'note')} ${semitoneText(d.semitones)}${skippedText(d.skipped)}`),
+  transposeRange: (d) => `Can't transpose, measure ${d.measure} would go ${d.up ? `above fret ${d.max}` : 'below fret 0'}`,
+  noNoteToTranspose: () => 'No note here',
+  nothingToTranspose: (d) => `No fretted notes to transpose${skippedText(d.skipped)}`,
   // 2.2 settings
   noChange: () => 'No change',
   scoreUpdated: (d) => `${!d.key ? 'Score settings updated' : FLAG_KEYS.includes(d.key) ? `${d.label} ${d.on ? 'on' : 'off'}` : `${d.label} ${d.on ? 'set' : 'removed'}`}${d.mmrOn ? ', shown when rendered, not in the editor' : ''}`,
@@ -152,6 +157,10 @@ const MEASURE_TEXT = {
   pickup: (v) => (v ? 'Pickup' : 'Pickup removed'),
 };
 
+/** 'up 1 semitone' / 'down an octave'. */
+const semitoneText = (n) => `${n > 0 ? 'up' : 'down'} ${Math.abs(n) === 12 ? 'an octave' : plural(Math.abs(n), 'semitone')}`;
+/** ', 2 pitch-only notes skipped' (empty for none). */
+const skippedText = (n) => (n ? `, ${plural(n, 'pitch-only note')} skipped` : '');
 /** ', 2 notes on missing strings dropped' (empty for none). */
 const droppedText = (n) => (n ? `, ${plural(n, 'note')} on missing strings dropped` : '');
 /** ', 1 tempo mark removed' / ', 2 tempo marks removed' (empty for none). */
