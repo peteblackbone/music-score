@@ -15,7 +15,7 @@
  */
 import { tempoOf } from '../../../expression.js';
 import { ZERO, add, cmp } from '../../../rational.js';
-import { tracksOf, trackAt, measuresOf, measureAt, beatsOf, beatsAt, beatAt, isGrace, updateBeat } from '../access.js';
+import { tracksOf, trackAt, measuresOf, measureAt, beatsOf, beatsAt, beatAt, isGrace, updateBeat, mainBeatNumber } from '../access.js';
 import { beatR, onsetOf, measureTotal } from '../fill.js';
 import { object, checkKeys, text, withField } from './validate.js';
 import { EDITOR_LIMITS } from '../limits.js';
@@ -98,9 +98,6 @@ export function tempoAt(score, cursor) {
   return { ...w.tempo, here: cursor.beat < beats.length && sameSpot(w, spot) };
 }
 
-/** Number of the beat at `cursor` counting non-grace beats from 1. */
-const beatNumber = (score, cursor) => beatsAt(score, cursor).slice(0, cursor.beat + 1).filter((b) => !isGrace(b)).length;
-
 /** setTempo(value): writes or removes `beat.tempo` on the cursor beat and removes the other readable marks at its onset; refused on the slot. */
 export function setTempo(score, cursor, value) {
   const stored = checkTempo(value);
@@ -112,7 +109,7 @@ export function setTempo(score, cursor, value) {
     out = updateBeat(out, { track: m.track, measure: m.measure, beat: m.beat }, (b) => withField(b, 'tempo', undefined));
   }
   const t = stored === undefined ? null : tempoOf(stored);
-  return { score: out, announce: { id: 'tempoSet', tempo: t, measure: cursor.measure + 1, beat: beatNumber(score, cursor) } };
+  return { score: out, announce: { id: 'tempoSet', tempo: t, measure: cursor.measure + 1, beat: mainBeatNumber(beatsAt(score, cursor), cursor.beat) } };
 }
 
 /** Index of the voice-1 main beat of track `ti` measure `mi` at exactly `onset`, or -1. */

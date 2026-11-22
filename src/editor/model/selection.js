@@ -13,7 +13,7 @@
  * Select commands are moves `(score, cursor, state, ctx) → { cursor,
  * announce? }`: they never return a score and run in read-only mode.
  */
-import { tracksOf, trackAt, measureAt, beatsOf, isGrace, measureCount } from './access.js';
+import { tracksOf, trackAt, measureAt, beatsOf, isGrace, measureCount, mainBeatNumber } from './access.js';
 import { baseTimeSignature, fillOf } from './fill.js';
 import { leadingGraces } from './beats.js';
 import { positions, moveLeft, moveRight, measureStart, measureEnd } from './cursor.js';
@@ -84,8 +84,6 @@ export function selectionRange(score, ti, anchor, focus) {
 /** A copy of the public info of `sel` (null without one). */
 export const selectionInfo = (sel) => (sel ? { ...sel.info, start: { ...sel.info.start }, end: { ...sel.info.end }, measures: [...sel.info.measures] } : null);
 
-/** Main-beat number (from 1) of beat index `k` in its measure. */
-const beatNumber = (score, ti, mi, k) => beatsOf(measureAt(trackAt(score, ti), mi)).slice(0, k + 1).filter((b) => !isGrace(b)).length;
 
 /** The announcement descriptor of selection `sel` (`all`: made by Select all). */
 export function selectionWords(score, sel, all = false) {
@@ -95,7 +93,7 @@ export function selectionWords(score, sel, all = false) {
     return { id: 'selectedAll', n: info.track + 1, name: t ? String(t.name || t.label || '') : '', measures: measureCount(score) };
   }
   if (info.kind === 'measures') return { id: 'selectedMeasures', a: info.measures[0] + 1, b: info.measures[1] + 1, count: info.beatCount };
-  const num = (p) => beatNumber(score, info.track, p.measure, p.beat);
+  const num = (p) => mainBeatNumber(beatsOf(measureAt(trackAt(score, info.track), p.measure)), p.beat);
   return { id: 'selectedBeats', m1: info.start.measure + 1, b1: num(info.start), m2: info.end.measure + 1, b2: num(info.end), count: info.beatCount };
 }
 

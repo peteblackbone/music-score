@@ -16,7 +16,7 @@
  * repaired; tempo marks stay on their beats.
  */
 import { R, ZERO, add, sub, cmp } from '../../rational.js';
-import { beatsAt, isGrace, isPickup, measureCount, updateBeats } from './access.js';
+import { beatsAt, isGrace, isPickup, measureCount, updateBeats, mainBeatNumber } from './access.js';
 import { beatR, measureTotal, timeSignatureAt } from './fill.js';
 import { DURATIONS } from './durations.js';
 import { leadingGraces } from './beats.js';
@@ -74,9 +74,6 @@ export function fill(score, cursor, state, ctx) {
   return { score: out, announce: { id: 'filledMany', count: filled, total, rests: added } };
 }
 
-/** Main-beat number (from 1) of index `k` in `beats`. */
-const numberOf = (beats, k) => beats.slice(0, k + 1).filter((x) => !isGrace(x)).length;
-
 /** Shift+F: move the overflow of the cursor measure to the next measure (see the header). */
 export function reflow(score, cursor) {
   const loc = { track: cursor.track, measure: cursor.measure };
@@ -89,7 +86,7 @@ export function reflow(score, cursor) {
     if (isGrace(beats[i])) continue;
     if (cmp(t, C) >= 0) { k = i; break; }
     const end = add(t, beatR(beats[i]));
-    if (cmp(end, C) > 0) crossing = numberOf(beats, i);
+    if (cmp(end, C) > 0) crossing = mainBeatNumber(beats, i);
     t = end;
   }
   if (k < 0) return { announce: crossing ? { id: 'reflowCrossing', beat: crossing } : { id: 'reflowNothing' } };
