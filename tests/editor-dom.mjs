@@ -171,6 +171,358 @@ test('hitTestMap: guards (null map, NaN coordinates)', () => {
   eq(hitTestMap(r.getHitMap(), NaN, 10), null);
 });
 
+// ---------- ScoreEditor controller (B, F, G, I) ----------
+const { makeClock, scrollLog } = await import('./editor-shim.mjs');
+const barrel = await imp('index.js');
+const { ScoreEditor } = await imp('src/editor/ScoreEditor.js');
+const { sanitizeScore } = await imp('src/sanitize.js');
+const { leadRiff } = await imp('examples/lead-riff.js');
+const tn = (duration, string, fret, flags = {}) => ({ type: 'note', duration, notes: [{ string, fret, ...flags }] });
+const key = (k, mods = {}) => ({ key: k, ctrlKey: false, shiftKey: false, altKey: false, metaKey: false, ...mods });
+/** An editor in a fresh container with a manual clock; `raf: true` coalesces renders until clock.frame(). */
+function mk(score, opts = {}, { raf = false } = {}) {
+  const clock = makeClock();
+  if (!raf) { clock.requestAnimationFrame = null; clock.cancelAnimationFrame = null; }
+  const box = makeContainer();
+  const ed = new ScoreEditor(box, score, { width: 900, clock, ...opts });
+  const events = [];
+  ed.on('change', (e) => events.push(['change', e]));
+  ed.on('cursor', (e) => events.push(['cursor', e]));
+  const rootEl = box.children[0];
+  return { ed, box, clock, events, root: rootEl, host: rootEl.children[0], live: rootEl.children[1], svg: () => rootEl.children[0].children[0] };
+}
+const press = (ed, ...keys) => keys.map((k) => ed.handleKey(typeof k === 'string' ? key(k) : k));
+const beats = (ed, ti = 0, mi = 0) => { const m = ed.getScore().tracks[ti].measures[mi]; return m.voices ? m.voices[0].beats : m.beats; };
+const lastChild = (n) => n.children[n.children.length - 1];
+const findAll = (n, f, out = []) => { if (f(n)) out.push(n); n.children.forEach((c) => findAll(c, f, out)); return out; };
+const byClass = (n, c) => findAll(n, (x) => (x.getAttribute?.('class') || '').split(' ').includes(c));
+const attrs = (n) => Object.fromEntries(n.attrs);
+const twoBar = () => ({ title: 'Two bars', tracks: [{ name: 'Gtr', showTablature: true, measures: [
+  { beats: [nt('quarter', 1, 3), nt('quarter', 2, 5), nt('half', 3, 7)] },
+  { beats: [nt('half', 1, 0), nt('quarter', 6, 3)] },
+] }] });
+
+test('B1: index.js exports ScoreEditor (and the renderer unchanged)', () => {
+  ok(barrel.ScoreEditor === ScoreEditor && barrel.MusicScoreRenderer === MusicScoreRenderer);
+});
+test('B2 / I1: builds root, render host and live region inside the container only; default score; synchronous first render', () => {
+  const { box, root, host, live, svg, ed } = mk(undefined);
+  eq(box.children.length, 1);
+  eq(attrs(root), { class: 'music-score-editor', tabindex: '0', role: 'application', 'aria-roledescription': 'tablature editor', style: 'position:relative', 'aria-label': 'Untitled' });
+  eq(attrs(host), { class: 'music-score-editor-host' });
+  eq([live.getAttribute('class'), live.getAttribute('aria-live'), live.getAttribute('aria-atomic')], ['music-score-editor-live', 'polite', 'true']);
+  ok(/clip-path:inset\(50%\)/.test(live.getAttribute('style')) && !/outline/.test(root.getAttribute('style')), 'visually hidden live region; no outline:none');
+  eq(svg().tag, 'svg');
+  eq(ed.getScore().tracks[0].measures, [{ beats: [] }]);
+  eq(ed.getScore().title, 'Untitled');
+  eq(mk({ tracks: [] }).root.getAttribute('aria-label'), 'Untitled score');
+});
+test('B2: a bad score throws before anything is written to the container; options are validated', () => {
+  const box = makeContainer();
+  let threw = 0;
+  for (const bad of ['{nope', '[1]', { schemaVersion: 2, tracks: [] }]) { try { new ScoreEditor(box, bad); } catch { threw++; } }
+  eq([threw, box.children.length], [3, 0]);
+  try { new ScoreEditor(null); } catch (e) { threw++; ok(e instanceof TypeError); }
+  eq(threw, 4);
+  const { ed } = mk(twoBar(), { maxFret: 200, historyLimit: -3, twoDigitDelayMs: -1 });
+  ed.setCursor({ beat: 0, string: 1 });
+  ok(ed.handleKey(key('9')));
+  eq(beats(ed)[0].notes[0].fret, 9, 'maxFret clamped to 99 still allows 9');
+  eq(ed.canUndo(), false, 'historyLimit clamped to 0');
+});
+test('B3: loadScore resets cursor and history, emits change {source:"load"} after its render, then cursor; bad input changes nothing', () => {
+  const { ed, events, svg } = mk(twoBar());
+  press(ed, 'ArrowRight', '5');
+  eq(ed.canUndo(), true);
+  events.length = 0;
+  const before = svg();
+  ed.loadScore(JSON.stringify({ schemaVersion: 1, title: 'New', tracks: [{ showTablature: true, measures: [{ beats: [nt('whole', 2, 2)] }] }] }));
+  ok(svg() !== before, 'rendered');
+  eq(events, [['change', { source: 'load' }], ['cursor', { track: 0, measure: 0, beat: 0, string: 1, voice: 1 }]]);
+  eq([ed.getCursor(), ed.canUndo(), ed.canRedo()], [{ track: 0, measure: 0, beat: 0, string: 1 }, false, false]);
+  const snap = JSON.stringify(ed.getScore());
+  for (const bad of [{ schemaVersion: 2 }, '{x', 'null']) {
+    let threw = false; try { ed.loadScore(bad); } catch { threw = true; }
+    ok(threw, JSON.stringify(bad));
+  }
+  eq(JSON.stringify(ed.getScore()), snap);
+  let msg = ''; try { ed.loadScore({ schemaVersion: 2, tracks: [] }); } catch (e) { msg = e.message; }
+  eq(msg, 'Unsupported schemaVersion');
+});
+test('B4: getScore / toJSON give a deep clone with schemaVersion 1; loadScore(x); getScore() == {schemaVersion:1, ...sanitizeScore(x)} for every snapshot case', () => {
+  const { ed } = mk(twoBar());
+  const a = ed.getScore();
+  a.tracks[0].measures[0].beats.length = 0;
+  eq(beats(ed).length, 3, 'clone');
+  eq(Object.keys(ed.toJSON())[0], 'schemaVersion');
+  eq(ed.toJSON(), ed.getScore());
+  for (const c of cases.filter((x, i) => i % 3 === 0)) {
+    ed.loadScore(clone(c.score));
+    eq(ed.getScore(), { schemaVersion: 1, ...clone(sanitizeScore(clone(c.score))) }, c.id);
+  }
+});
+test('B5: on returns an unsubscribe, off works, listener errors go to console.error; change once per model change, cursor on every move', () => {
+  const { ed, events } = mk(twoBar());
+  const seen = [];
+  const un = ed.on('cursor', (e) => seen.push(e.beat));
+  const bad = () => { throw new Error('boom'); };
+  ed.on('cursor', bad);
+  const orig = console.error; const errs = []; console.error = (e) => errs.push(e.message);
+  try { press(ed, 'ArrowRight'); } finally { console.error = orig; }
+  eq([seen, errs], [[1], ['boom']]);
+  un(); ed.off('cursor', bad);
+  press(ed, 'ArrowRight', '7', 'ArrowUp', 'ArrowDown');
+  eq(seen, [1]);
+  eq(events.map((e) => e[0]), ['cursor', 'cursor', 'change', 'cursor']);
+  eq(events[2][1], { source: 'edit', command: 'digit' });
+  eq(events[3][1], { track: 0, measure: 0, beat: 2, string: 2, voice: 1 });
+});
+test('B6: setCursor clamps and returns the cursor; getMeasureFill; RangeError out of range; setWidth re-renders; focus', () => {
+  const { ed, svg, root } = mk(twoBar());
+  eq(ed.setCursor({ measure: 1, beat: 99, string: 9 }), { track: 0, measure: 1, beat: 2, string: 6 });
+  eq(ed.setCursor({ beat: 'x' }), { track: 0, measure: 1, beat: 2, string: 6 });
+  eq([ed.getMeasureFill(0, 0), ed.getMeasureFill(0, 1)], ['full', 'under']);
+  let n = 0;
+  for (const [t, m] of [[1, 0], [0, 2], [-1, 0], [0, 0.5]]) { try { ed.getMeasureFill(t, m); } catch (e) { if (e instanceof RangeError) n++; } }
+  eq(n, 4);
+  ed.setWidth(600);
+  eq(svg().getAttribute('width'), '600');
+  let threw = false; try { ed.setWidth(0); } catch (e) { threw = e instanceof RangeError; }
+  ok(threw);
+  ed.focus();
+  ok(document.activeElement === root);
+  root.blur();
+});
+test('B7: handleKey returns true for consumed keys only; the keydown listener prevents default only then and ignores other targets', () => {
+  const { ed, root } = mk(twoBar());
+  eq(press(ed, 'ArrowRight', 'Tab', key('w', { ctrlKey: true }), 'h', 'Escape', 'ArrowUp'), [true, false, false, false, false, true]);
+  const e1 = root.dispatch('keydown', key('ArrowRight'));
+  const e2 = root.dispatch('keydown', key('Tab'));
+  const e3 = root.dispatch('keydown', { ...key('ArrowRight'), target: {} });
+  const e4 = root.dispatch('keydown', { ...key('ArrowRight'), defaultPrevented: true });
+  eq([e1.defaultPrevented, e2.defaultPrevented, e3.defaultPrevented], [true, false, false]);
+  eq(ed.getCursor().beat, 2, 'only e1 moved');
+  ok(e4.defaultPrevented);
+  ed.setCursor({ beat: 0 });
+  press(ed, '5');
+  eq(ed.handleKey(key('Escape')), true, 'Escape consumed while the buffer is active');
+  eq(ed.handleKey(key('Escape')), false);
+});
+test('B8: destroy removes DOM, listeners and timers; idempotent; other methods throw "ScoreEditor destroyed"', () => {
+  const { ed, box, root, host, clock } = mk(twoBar(), {}, { raf: true });
+  press(ed, '7');
+  ok(clock.pendingFrames() === 1 && clock.pendingTimers() === 1, 'a frame and the live timer are pending');
+  ed.destroy();
+  ed.destroy();
+  eq([box.children.length, clock.pendingFrames(), clock.pendingTimers(), root.listenerCount(), host.listenerCount()], [0, 0, 0, 0, 0]);
+  let msgs = [];
+  for (const f of [() => ed.getScore(), () => ed.handleKey(key('ArrowRight')), () => ed.loadScore({}), () => ed.on('change', () => {}), () => ed.undo(), () => ed.setCursor({})]) {
+    try { f(); } catch (e) { msgs.push(e.message); }
+  }
+  eq(new Set(msgs).size === 1 && msgs.length, 6);
+  eq(msgs[0], 'ScoreEditor destroyed');
+});
+test('B9: read-only allows navigation, clicks and getScore; edits, undo and Right-append return false with no change event', () => {
+  const { ed, events, root } = mk(twoBar(), { readOnly: true });
+  eq([ed.isReadOnly(), root.getAttribute('aria-readonly'), root.getAttribute('class'), root.getAttribute('aria-label')], [true, 'true', 'music-score-editor music-score-editor--readonly', 'Two bars, read-only']);
+  const before = JSON.stringify(ed.getScore());
+  eq(press(ed, '5', 'r', '+', '.', '/', 'Delete', key('z', { ctrlKey: true }), 'm'), [false, false, false, false, false, false, false, false]);
+  eq(ed.setDuration('half'), false);
+  ed.setCursor({ measure: 0, beat: 2 });
+  ed.setCursor({ measure: 1 });
+  ed.setCursor({ measure: 1, beat: 1 });
+  ed.setReadOnly(false); press(ed, 'ArrowRight'); ed.setReadOnly(true);
+  eq(ed.getCursor().beat, 2, 'append slot reachable');
+  ed.setCursor({ measure: 0, beat: 2 });
+  ok(ed.handleKey(key('ArrowRight')) && ed.handleKey(key('End', { ctrlKey: true })));
+  eq(JSON.stringify(ed.getScore()), before);
+  eq(events.filter((e) => e[0] === 'change'), []);
+  eq([ed.canUndo(), ed.undo()], [false, false]);
+  ed.setReadOnly(false);
+  eq([root.getAttribute('aria-readonly'), root.getAttribute('aria-label')], [null, 'Two bars']);
+  ok(ed.handleKey(key('5')));
+});
+test('C4 / F1: Right from the last beat of a full last measure appends a measure as one undo step; not in read-only', () => {
+  const sc = { tracks: [{ showTablature: true, measures: [{ beats: [nt('whole')] }] }] };
+  const { ed, events } = mk(sc);
+  ok(ed.handleKey(key('ArrowRight')));
+  eq([ed.getScore().tracks[0].measures.length, ed.getCursor().measure], [2, 1]);
+  eq(events.filter((e) => e[0] === 'change').map((e) => e[1]), [{ source: 'edit', command: 'moveRight' }]);
+  ed.undo();
+  eq([ed.getScore().tracks[0].measures.length, ed.getCursor().measure], [1, 0]);
+  const ro = mk(sc, { readOnly: true });
+  ok(ro.ed.handleKey(key('ArrowRight')));
+  eq(ro.ed.getScore().tracks[0].measures.length, 1);
+});
+test('F2-F5: undo restores the exact model and cursor, redo the state after; a new command clears redo; events carry undo / redo; empty stacks', () => {
+  const { ed, events } = mk(twoBar());
+  const s0 = ed.getScore();
+  ed.setCursor({ beat: 1, string: 2 });
+  press(ed, 'ArrowRight', '9');
+  const s1 = ed.getScore();
+  const c1 = ed.getCursor();
+  events.length = 0;
+  eq(ed.undo(), true);
+  eq([ed.getScore(), ed.getCursor()], [s0, { track: 0, measure: 0, beat: 2, string: 2 }]);
+  eq(ed.redo(), true);
+  eq([ed.getScore(), ed.getCursor()], [s1, c1]);
+  eq(events.filter((e) => e[0] === 'change').map((e) => e[1].source), ['undo', 'redo']);
+  ed.undo(); press(ed, '4');
+  eq(ed.canRedo(), false);
+  ed.undo();
+  eq([ed.undo(), ed.canUndo()], [false, false]);
+  ok(ed.handleKey(key('z', { ctrlKey: true })), 'Ctrl+Z is consumed on an empty stack');
+  eq(ed.redo(), true);
+  eq(ed.redo(), false);
+});
+test('E2 / F1: two digits typed within the delay are one fret and one undo step; after the delay they replace', () => {
+  const { ed, clock } = mk(twoBar());
+  press(ed, '1');
+  clock.advance(300);
+  press(ed, '2');
+  eq(beats(ed)[0].notes[0].fret, 12);
+  ed.undo();
+  eq(beats(ed)[0].notes[0].fret, 3, 'one undo step back to the original');
+  press(ed, '1');
+  clock.advance(900);
+  press(ed, '2');
+  eq(beats(ed)[0].notes[0].fret, 2);
+  ed.undo();
+  eq(beats(ed)[0].notes[0].fret, 1);
+  press(ed, '1');
+  ed.handleKey(key('Backspace'));
+  eq(beats(ed)[0].notes[0].fret, 1, 'Backspace clears the active buffer instead of deleting');
+  clock.advance(900);
+  ed.handleKey(key('Backspace'));
+  eq(beats(ed)[0], { type: 'rest', duration: 'quarter' }, 'after the delay Backspace deletes the note; the last note leaves a rest');
+});
+test('F4: history is capped at historyLimit', () => {
+  const { ed } = mk(twoBar(), { historyLimit: 3 });
+  for (const d of ['1', '2', '3', '4', '5']) { press(ed, d); press(ed, 'ArrowRight', 'ArrowLeft'); }
+  let n = 0; while (ed.undo()) n++;
+  eq(n, 3);
+});
+test('A6: the editor renders multiMeasureRests off while the JSON keeps the author value', () => {
+  const sc = { multiMeasureRests: true, tracks: [{ showTablature: true, measures: [{ beats: [nt('whole')] }, { beats: [{ type: 'rest', duration: 'whole' }] }, { beats: [{ type: 'rest', duration: 'whole' }] }] }] };
+  const { ed, svg } = mk(sc);
+  eq(ed.getScore().multiMeasureRests, true);
+  ok(!/multi-rest|multirest/i.test(serialize(svg())), 'no multi-rest drawn');
+  ed.setCursor({ measure: 2 });
+  eq(ed.getCursor().measure, 2);
+});
+test('G1: overlay is the svg last child with fill and cursor groups; column + string box on TAB, notation column too', () => {
+  const { svg, ed } = mk(twoBar());
+  const ov = lastChild(svg());
+  eq([ov.getAttribute('class'), ov.getAttribute('pointer-events'), ov.children.map((c) => c.getAttribute('class'))], ['editor-overlay', 'none', ['editor-fill', 'editor-cursor']]);
+  eq(ov.children[1].children.map((c) => c.getAttribute('class')), ['editor-col editor-col-notation', 'editor-col editor-col-tab', 'editor-string']);
+  ed.setCursor({ measure: 1, beat: 2 });
+  eq(byClass(svg(), 'editor-slot').length, 2, 'append slot on both staves');
+  eq(byClass(svg(), 'editor-band-under').length, 1, 'underfull band on measure 2');
+  ed.loadScore({ tracks: [{ showTablature: true, measures: [{ beats: [nt('whole'), nt('whole')] }, { beats: [] }] }] });
+  eq([byClass(svg(), 'editor-band-over').length, byClass(svg(), 'editor-band-under').length], [2, 0], 'overfull tint + bar; empty measure has no band');
+  const plain = rendered(twoBar(), 900).svg;
+  eq(byClass(plain, 'editor-overlay').length, 0);
+});
+test('G2: three edits in one frame render once and emit three change events; cursor moves do not render', () => {
+  const { ed, clock, events, svg } = mk(twoBar(), {}, { raf: true });
+  const v = ed._view;
+  const r0 = v.renders;
+  press(ed, '5', 'ArrowRight', '7', 'r');
+  eq([v.renders, clock.pendingFrames()], [r0, 1]);
+  eq(events.filter((e) => e[0] === 'change').length, 0, 'change waits for the render');
+  clock.frame();
+  eq(v.renders, r0 + 1);
+  eq(events.filter((e) => e[0] === 'change').map((e) => e[1].command), ['digit', 'digit', 'toggleRest']);
+  const s = svg();
+  press(ed, 'ArrowRight', 'ArrowDown', 'Home');
+  eq([v.renders, clock.pendingFrames(), svg() === s], [r0 + 1, 0, true]);
+  eq(lastChild(svg()).children[1].children.length, 3, 'cursor redrawn in place');
+});
+test('G3 / G6: focus toggles the --focused class and the cursor opacity; re-renders keep focus on the root', () => {
+  const { ed, root, svg } = mk(twoBar());
+  const col = () => byClass(svg(), 'editor-col-tab')[0];
+  eq(col().getAttribute('stroke-opacity'), '0.35');
+  root.focus();
+  eq([root.getAttribute('class'), col().getAttribute('stroke-opacity'), col().getAttribute('fill-opacity')], ['music-score-editor music-score-editor--focused', '1', '0.1']);
+  press(ed, '5', 'ArrowRight', '3');
+  ok(document.activeElement === root, 'root keeps focus through renders');
+  root.blur();
+  eq([root.getAttribute('class'), col().getAttribute('stroke-opacity')], ['music-score-editor', '0.35']);
+  root.focus(); press(ed, 'm');
+  ok(document.activeElement === root);
+  eq(byClass(svg(), 'editor-slot')[0].getAttribute('stroke-opacity'), '1');
+  root.blur();
+  eq(byClass(svg(), 'editor-slot')[0].getAttribute('stroke-opacity'), '0.35');
+});
+test('G5: the cursor scrolls into view (nearest, instant) after moves and edits, not on focus', () => {
+  const { ed, root } = mk(twoBar());
+  scrollLog.length = 0;
+  root.focus(); root.blur();
+  eq(scrollLog.length, 0);
+  press(ed, 'ArrowRight');
+  press(ed, '5');
+  eq(scrollLog.length, 2);
+  eq(scrollLog[0].opts, { block: 'nearest', inline: 'nearest', behavior: 'auto' });
+  eq(scrollLog[1].node.getAttribute('class'), 'editor-cursor');
+});
+test('I2: announcements are debounced to 150 ms, only the last is spoken; a repeat gets a trailing no-break space', () => {
+  const { ed, live, clock } = mk(twoBar());
+  press(ed, 'ArrowRight', 'ArrowRight');
+  eq(live.textContent, '');
+  clock.advance(149);
+  eq(live.textContent, '');
+  clock.advance(1);
+  eq(live.textContent, 'Beat 3, string 1, empty, half');
+  press(ed, 'ArrowDown', 'ArrowDown', 'ArrowDown');
+  clock.advance(150);
+  eq(live.textContent, 'String 4, empty');
+  press(ed, 'ArrowDown', 'ArrowUp');
+  clock.advance(150);
+  eq(live.textContent, 'String 4, empty ');
+  press(ed, '7'); clock.advance(150);
+  eq(live.textContent, 'Fret 7 added, chord of 2');
+  ed.setReadOnly(true); press(ed, '5'); clock.advance(150);
+  eq(live.textContent, 'Read-only');
+  ed.setReadOnly(false);
+  ed.setCursor({ track: 0, measure: 1, beat: 0, string: 1 }); clock.advance(150);
+  eq(live.textContent, 'Measure 2, beat 1, string 1, fret 0, half, underfull');
+  ed._view.root.focus(); clock.advance(150);
+  eq(live.textContent, 'Track 1 Gtr, measure 2, beat 1, string 1, fret 0, half, underfull');
+  press(ed, 'ArrowRight', 'ArrowRight', '+'); clock.advance(150);
+  eq(live.textContent, 'Next: eighth');
+  ed._view.root.blur();
+});
+test('click: mousedown (button 0) focuses the root, flushes a pending render, hit-tests and moves the cursor; other buttons ignored', () => {
+  const { ed, host, root, clock } = mk(twoBar(), {}, { raf: true });
+  press(ed, '9');
+  // fret 9 on string 1 is a high note: the staves move down, so only the post-edit layout hits the target
+  const map = rendered(clone(ed.getScore()), 900).r.getHitMap();
+  ok(map.staves[1].y !== ed._view.renderer.getHitMap().staves[1].y, 'the pending render changes the layout');
+  const tab = map.staves.find((s) => s.kind === 'tab');
+  const target = map.elements.find((e) => e.measureIndex === 1 && e.beatIndex === 1);
+  const e = host.dispatch('mousedown', { button: 0, clientX: target.x + 1, clientY: tab.y + 5 * 15 - 2 });
+  ok(e.defaultPrevented && document.activeElement === root);
+  eq(clock.pendingFrames(), 0, 'pending render flushed first');
+  eq(ed.getCursor(), { track: 0, measure: 1, beat: 1, string: 6 });
+  const r = host.dispatch('mousedown', { button: 2, clientX: 10, clientY: 10 });
+  ok(!r.defaultPrevented);
+  host.dispatch('mousedown', { button: 0, clientX: 5, clientY: 1 });
+  eq(ed.getCursor(), { track: 0, measure: 1, beat: 1, string: 6 }, 'outside every staff: no move');
+  root.blur();
+});
+test('E12: editing a 1.x-rich score keeps every untouched field and object', () => {
+  const { ed } = mk(leadRiff);
+  const start = ed.getScore();
+  ed.setCursor({ measure: 3, beat: 0, string: 2 });
+  press(ed, '9', 'ArrowRight', 'r', 'm');
+  const end = ed.getScore();
+  const strip = (s) => { const c = clone(s); c.tracks[0].measures.splice(3, 2); return c; };
+  eq(strip(end).tracks[0].measures, (() => { const c = clone(start); c.tracks[0].measures.splice(3, 1); return c.tracks[0].measures; })());
+  eq({ ...end, tracks: null }, { ...start, tracks: null });
+  const m = ed._model;
+  ok(m.tracks[0].measures[0] === ed._history.top().before.score.tracks[0].measures[0], 'untouched measures shared by reference');
+});
+
 export async function summary() {
   let fail = 0;
   for (const t of tests) {

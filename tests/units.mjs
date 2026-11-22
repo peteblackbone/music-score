@@ -7673,9 +7673,9 @@ test('browser parity: src never calls array methods directly on .children', () =
   });
 
   // ---- 7. public barrel ----
-  test('2.0 pin: index.js exports exactly MusicScoreRenderer and defaultTheme', () => {
-    // 2.0.0 will add ScoreEditor here: update this expected list deliberately to ['MusicScoreRenderer', 'ScoreEditor', 'defaultTheme'].
-    eq(Object.keys(barrel).sort(), ['MusicScoreRenderer', 'defaultTheme']);
+  test('2.0 pin: index.js exports exactly MusicScoreRenderer, ScoreEditor and defaultTheme', () => {
+    // Updated deliberately in 2.0.0, which added ScoreEditor (src/editor/ScoreEditor.js).
+    eq(Object.keys(barrel).sort(), ['MusicScoreRenderer', 'ScoreEditor', 'defaultTheme']);
     if (barrel.MusicScoreRenderer !== MusicScoreRenderer) throw new Error('barrel exports the same class');
   });
 
