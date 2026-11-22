@@ -526,7 +526,8 @@ test('B10 (2.3): 6 start scores x 2000 random steps mixing commands, selection, 
         const r = CMD.run(name, s, c, state, { maxFret: 24, now: i * 1000, twoDigitDelayMs: 800, allowAppend: true, selection: sel }, Math.floor(rnd() * 10));
         state = r.state;
         if (r.changed) { next = r; if (sel && ['deleteNote', 'deleteBeat', 'deleteMeasure', 'fill'].includes(name)) ranged++; } else c = r.cursor;
-        if (r.changed || CMD.COMMANDS[name].kind === 'nav') sel = null;
+        if (r.changed && sel && CMD.COMMANDS[name].keepsSelection) sel = SEL.selectionRange(r.score, sel.track, sel.anchor, sel.focus); // 2.3.1: re-derived
+        else if (r.changed || CMD.COMMANDS[name].kind === 'nav') sel = null;
       }
       if (next) {
         s = next.score;

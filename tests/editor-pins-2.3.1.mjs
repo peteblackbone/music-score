@@ -78,12 +78,12 @@ test('pin (b): Shift+F moves the overflow of one measure only (the next one stay
 });
 
 // (c) effect keys clear the selection. Inverted in 2.3.1: they act on every selected beat and keep the selection.
-test('pin (c): controller: P with a 2-beat selection changes only the cursor beat and clears the selection', () => {
+test('pin (c), inverted in 2.3.1: controller: P with a 2-beat selection changes both selected beats and keeps the selection', () => {
   const { ed } = mk({ tracks: [tab([{ beats: [nt('quarter'), nt('quarter'), nt('half')] }])] });
   ed.setSelection({ anchor: { measure: 0, beat: 0 }, focus: { measure: 0, beat: 1 } });
   eq(ed.handleKey(key('p')), true);
-  eq(ed.getScore().tracks[0].measures[0].beats.map((b) => !!b.palmMute), [false, true, false]);
-  eq(ed.getSelection(), null);
+  eq(ed.getScore().tracks[0].measures[0].beats.map((b) => !!b.palmMute), [true, true, false]);
+  eq(ed.getSelection().beatCount, 2);
   ed.destroy();
 });
 

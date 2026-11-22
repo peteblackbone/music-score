@@ -293,12 +293,15 @@ test('criterion 28 / D8: ties at both edges repaired; Shift+Delete on a beats se
   }
   eq(ro.ed.getSelection().beatCount, 3);
 });
-test('effect keys and other edits act on the cursor beat and clear the selection (D6); a no-op edit keeps it', () => {
+test('2.3.1: effect keys act on every selected beat and keep the selection; other edits act on the cursor beat and clear the selection (D6); a no-op edit keeps it', () => {
   const { ed, press } = mk(fixture());
   selectMeasure2to3(ed);
   press('v');
+  eq(ed.getSelection().measures, [1, 2], 'kept');
+  eq(ed.getScore().tracks[0].measures.slice(1, 3).map((m) => m.beats.map((b) => b.vibrato ?? null)), [[true, null, true], [true]], 'every selected main beat, not the grace');
+  press('.');
   eq(ed.getSelection(), null);
-  eq(ed.getScore().tracks[0].measures[2].beats[0].vibrato, true, 'on the cursor beat (the focus)');
+  eq(ed.getScore().tracks[0].measures[2].beats[0].dots, 1, 'on the cursor beat (the focus)');
   selectMeasure2to3(ed);
   ed.setDuration('whole');
   ok(ed.getSelection() !== null, 'the cursor beat is already a whole: no change keeps the selection');

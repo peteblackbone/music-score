@@ -19,6 +19,8 @@ const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 const fillWord = (f) => FILL_WORDS[f]?.word ?? f;
 /** The effect text of `def` for descriptor `d`: added, the step's words, or off; plus the suffix. */
 const effectText = (def, d) => `${d.added ? def.added : d.step >= 0 ? def.say[d.step] : def.off}${Object.hasOwn(SUFFIXES, d.suffix ?? '') ? SUFFIXES[d.suffix].text : ''}`;
+/** 'Palm mute on, 8 beats' / 'Accent, 8 beats, not shown on TAB only': the step's words, the count of `unit`, the suffix. */
+const rangeEffectText = (def, d) => `${d.step >= 0 ? def.say[d.step] : def.off}, ${plural(d.count, d.unit)}${Object.hasOwn(SUFFIXES, d.suffix ?? '') ? SUFFIXES[d.suffix].text : ''}`;
 /** ', hammer/pull, palm mute' (empty when there are none). */
 const effectsText = (list) => (list?.length ? `, ${list.join(', ')}` : '');
 
@@ -63,6 +65,10 @@ export const MESSAGES = Object.freeze({
   noTrack: () => 'No visible track',
   needsNote: () => 'Needs a note',
   effect: (d) => (Object.hasOwn(EFFECT_BY_NAME, d.name) ? effectText(EFFECT_BY_NAME[d.name], d) : ''),
+  // 2.3.1 effects over a selection: the step's words, the count, the suffix once
+  effectRange: (d) => (Object.hasOwn(EFFECT_BY_NAME, d.name) ? rangeEffectText(EFFECT_BY_NAME[d.name], d) : ''),
+  noNotesInSelection: () => 'No notes in the selection',
+  noBeatsInSelection: () => 'No beats in the selection',
   // 2.2 settings
   noChange: () => 'No change',
   scoreUpdated: (d) => `${!d.key ? 'Score settings updated' : FLAG_KEYS.includes(d.key) ? `${d.label} ${d.on ? 'on' : 'off'}` : `${d.label} ${d.on ? 'set' : 'removed'}`}${d.mmrOn ? ', shown when rendered, not in the editor' : ''}`,

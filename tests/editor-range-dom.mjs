@@ -151,6 +151,37 @@ test('criteria 7 / 11: a measures clip on a beats selection is refused and annou
   t.ed.destroy();
 });
 
+// ---------- criteria 12, 16, 30: effects over a selection ----------
+test('criteria 12 / 30: P over a selection: one undo step each, the selection stays live without a new selection event (unchanged info), the overlay keeps it; undo clears it', () => {
+  const t = mk(four());
+  t.ed.setSelection({ anchor: { measure: 0, beat: 0 }, focus: { measure: 0, beat: 3 } });
+  t.spoken();
+  t.events.length = 0;
+  eq(t.press('p'), [true]);
+  eq(ms(t.ed)[0].beats.map((b) => b.palmMute), [true, true, true, true]);
+  eq([t.spoken(), t.ed.getSelection().beatCount], ['Palm mute on, 4 beats', 4]);
+  eq(t.events.map((e) => e[0]), ['change'], 'no selection event: the selection did not change');
+  ok(t.ed._selectionView().slices.length === 1);
+  t.press('p');
+  eq([ms(t.ed)[0].beats.some((b) => b.palmMute), t.spoken()], [false, 'Palm mute off, 4 beats']);
+  t.ed.undo();
+  eq([ms(t.ed)[0].beats.every((b) => b.palmMute), t.ed.getSelection(), t.spoken()], [true, null, 'Undo: palm mute']);
+  t.ed.undo();
+  ok(!t.ed.canUndo(), 'two edits, two steps');
+  stable(t.ed);
+  t.ed.destroy();
+});
+test('criterion 16 (controller): a refused range effect keeps the selection and announces; read-only refuses with the selection kept', () => {
+  const t = mk({ tracks: [tab([{ beats: [rest('half'), rest('half')] }])] });
+  t.ed.setSelection({ anchor: { measure: 0, beat: 0 }, focus: { measure: 0, beat: 1 } });
+  t.spoken();
+  t.press('h');
+  eq([t.spoken(), t.ed.getSelection().beatCount, t.ed.canUndo()], ['No notes in the selection', 2, false]);
+  t.ed.setReadOnly(true);
+  eq([t.press('p'), t.spoken(), t.ed.getSelection().beatCount], [[false], 'Read-only', 2]);
+  t.ed.destroy();
+});
+
 // ---------- report ----------
 export async function summary() {
   let fail = 0;

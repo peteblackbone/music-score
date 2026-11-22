@@ -12,10 +12,19 @@
  * suffix }` (step -1 = off). Note rows act on the voice-1 note on the
  * cursor string; other notes of a chord keep their identity. Turning an
  * effect off deletes its keys; it never writes `false`.
+ *
+ * effectRange(def) (2.3.1) is the same row over a selection
+ * (ctx.selection): note rows act on every voice-1 note with a string on the
+ * selected non-rest main beats (TAB tracks only), beat rows on every
+ * selected main beat (rests too with `onRest`); graces and voice 2 are left
+ * alone and X never adds a note. When every target is at the same step they
+ * all go to the next one, else all go to the start step. Ties are not
+ * touched, so they are not repaired either.
  */
 import {
-  trackAt, hasTab, beatAt, isRest, cursorNote, updateBeat, updateNote, without,
+  trackAt, hasTab, beatAt, isRest, isGrace, cursorNote, updateBeat, updateNote, without, measureAt, beatsOf, notesOf,
 } from './access.js';
+import { eachSlice } from './rangeEdit.js';
 import { fretIntoSlot, fretIntoRest, fretIntoNote } from './notes.js';
 import { EFFECTS, SUFFIXES } from './effectTable.js';
 
@@ -70,6 +79,37 @@ export function effectCommand(def) {
     const step = nextStep(def, def.classify(target));
     const out = (noteRow ? updateNote : updateBeat)(score, loc, (t) => writeStep(def, t, step));
     return { score: out, announce: { id: 'effect', name: def.name, step, suffix: step >= 0 ? suffixOf(def, out, loc) : null } };
+  };
+}
+
+/** The command of effect row `def` over the selection ctx.selection (see the header): one result, announced as `effectRange`. */
+export function effectRange(def) {
+  const noteRow = def.level === 'note';
+  const onBeat = (b) => !isGrace(b) && (noteRow ? !isRest(b) && Array.isArray(b.notes) : !isRest(b) || def.onRest);
+  const onNote = (n) => n.string != null;
+  return (score, cursor, state, ctx) => {
+    const { track: ti, slices } = ctx.selection;
+    const track = trackAt(score, ti);
+    if (noteRow && !hasTab(track)) return refuse('needsTab');
+    const targets = [];
+    for (const s of slices) {
+      const beats = beatsOf(measureAt(track, s.measure));
+      for (let k = s.from; k < s.to; k++) {
+        if (!onBeat(beats[k])) continue;
+        if (!noteRow) targets.push({ loc: { track: ti, measure: s.measure, beat: k }, t: beats[k] });
+        else for (const n of notesOf(beats[k])) if (onNote(n)) targets.push({ loc: { track: ti, measure: s.measure, beat: k, string: n.string }, t: n });
+      }
+    }
+    if (!targets.length) return refuse(!noteRow && def.onRest ? 'noBeatsInSelection' : 'noNotesInSelection');
+    const steps = targets.map((x) => def.classify(x.t));
+    const step = nextStep(def, steps.every((v) => v === steps[0]) ? steps[0] : -1);
+    const write = (b) => {
+      if (!onBeat(b)) return b;
+      return noteRow ? { ...b, notes: b.notes.map((n) => (onNote(n) ? writeStep(def, n, step) : n)) } : writeStep(def, b, step);
+    };
+    const out = eachSlice(score, ti, slices, (part) => part.map(write), false);
+    const suffix = step >= 0 && def.suffix && def.suffix !== 'link' ? suffixOf(def, out, targets[0].loc) : null;
+    return { score: out, announce: { id: 'effectRange', name: def.name, step, count: targets.length, unit: noteRow ? 'note' : 'beat', suffix } };
   };
 }
 

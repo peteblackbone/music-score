@@ -197,6 +197,70 @@ test('criterion 11 (model): the 2000-measure limit counts the appended columns; 
   eq(PA.targetMeasure(model({ tracks: [tab([{ beats: [grace()] }])] }), cur(0, 0, 1)), 0);
 });
 
+// ---------- B. effects over a selection ----------
+const q4 = (extra = {}) => ({ beats: [1, 2, 3, 4].map((f) => nt('quarter', 1, f, extra)) });
+test('criterion 12: P on 8 selected beats turns palm mute on for all, again off; on a mixed selection on for all; undo label palm mute', () => {
+  const s = model({ tracks: [tab([q4(), q4()])] });
+  const sel = SEL.selectionRange(s, 0, P(0, 0), P(1, 3));
+  const on = run('palmMute', s, cur(0, 1, 3), sel);
+  eq([on.score.tracks[0].measures.flatMap((m) => m.beats.map((b) => b.palmMute ?? null)), said(on)], [Array(8).fill(true), 'Palm mute on, 8 beats']);
+  const off = run('palmMute', on.score, cur(0, 1, 3), SEL.selectionRange(on.score, 0, P(0, 0), P(1, 3)));
+  eq([off.score.tracks[0].measures.flatMap((m) => m.beats.map((b) => b.palmMute ?? null)), said(off)], [Array(8).fill(null), 'Palm mute off, 8 beats']);
+  eq(off.score.tracks[0].measures, s.tracks[0].measures, 'off deletes the key, never writes false');
+  const mixed = model({ tracks: [tab([{ beats: [nt('half', 1, 0, { palmMute: true }), nt('half')] }])] });
+  const m = run('palmMute', mixed, cur(0, 0, 1), SEL.selectionRange(mixed, 0, P(0, 0), P(0, 1)));
+  eq(m.score.tracks[0].measures[0].beats.map((b) => b.palmMute), [true, true]);
+  eq([CMD.undoLabel('palmMute', on.announce), CMD.COMMANDS.palmMute.keepsSelection], ['palm mute', true]);
+  ok(same(on.score) && same(off.score));
+});
+test('criterion 13: dynamics mf, mf, f with D all become mf; all mf with D become f; a rest takes a dynamic (onRest); the noNotation suffix once on a TAB-only track', () => {
+  const s = model({ tracks: [tab([{ beats: [nt('quarter', 1, 0, { dynamic: 'mf' }), nt('quarter', 1, 0, { dynamic: 'mf' }), nt('quarter', 1, 0, { dynamic: 'f' }), rest('quarter')] }])] });
+  const sel = SEL.selectionRange(s, 0, P(0, 0), P(0, 3));
+  const r = run('louder', s, cur(0, 0, 3), sel);
+  eq([r.score.tracks[0].measures[0].beats.map((b) => b.dynamic), said(r)], [['mf', 'mf', 'mf', 'mf'], 'Dynamic mf, 4 beats']);
+  const r2 = run('louder', r.score, cur(0, 0, 3), SEL.selectionRange(r.score, 0, P(0, 0), P(0, 3)));
+  eq(r2.score.tracks[0].measures[0].beats.map((b) => b.dynamic), ['f', 'f', 'f', 'f']);
+  const t = model({ tracks: [tab([q4()], { showStandardNotation: false })] });
+  eq(said(run('louder', t, cur(0, 0, 3), SEL.selectionRange(t, 0, P(0, 0), P(0, 3)))), 'Dynamic mf, 4 beats, not shown on TAB only');
+  eq(said(run('accent', t, cur(0, 0, 3), SEL.selectionRange(t, 0, P(0, 0), P(0, 3)))), 'Accent, 4 beats, not shown on TAB only');
+  eq(said(run('accent', s, cur(0, 0, 3), sel)), 'Accent, 3 beats', 'a beat row without onRest skips the rest');
+});
+test('criteria 14 / 15: H over chords puts hammerPull on every note and removes slide (no link suffix for a range); X toggles mute on the existing notes only and never adds one', () => {
+  const chord = (f) => ({ type: 'note', duration: 'half', notes: [{ string: 1, fret: f, slide: true }, { string: 3, fret: f }] });
+  const s = model({ tracks: [tab([{ beats: [chord(1), chord(2)] }])] });
+  const sel = SEL.selectionRange(s, 0, P(0, 0), P(0, 1));
+  const h = run('hammerPull', s, cur(0, 0, 1), sel);
+  eq(h.score.tracks[0].measures[0].beats.map((b) => b.notes), [[{ string: 1, fret: 1, hammerPull: true }, { string: 3, fret: 1, hammerPull: true }], [{ string: 1, fret: 2, hammerPull: true }, { string: 3, fret: 2, hammerPull: true }]]);
+  eq(said(h), 'Hammer-on/pull-off on, 4 notes', 'no "no next note" suffix');
+  const x = model({ tracks: [tab([{ beats: [nt('quarter', 2, 5), rest('quarter'), { type: 'note', duration: 'half', notes: [{ string: 1, fret: 0, harmonic: 'natural' }, { string: 4, fret: 2 }] }] }])] });
+  const xs = run('deadNote', x, cur(0, 0, 2), SEL.selectionRange(x, 0, P(0, 0), P(0, 2)));
+  eq(xs.score.tracks[0].measures[0].beats, [nt('quarter', 2, 5, {}), rest('quarter'), { type: 'note', duration: 'half', notes: [{ string: 1, fret: 0 }, { string: 4, fret: 2 }] }].map((b, i) => (i === 1 ? b : { ...b, notes: b.notes.map((n) => ({ ...n, mute: true })) })), 'mute on the 3 notes, harmonic removed (exclusive), the rest stays a rest');
+  eq(said(xs), 'Dead note on, 3 notes');
+});
+test('criterion 16: a note row over rests only says "No notes in the selection" and an onRest beat row over no beat "No beats in the selection" (nothing changes); a note row on a track without TAB says needsTab', () => {
+  const s = model({ tracks: [tab([{ beats: [rest('half'), rest('half')] }, { beats: [] }])] });
+  const r = run('vibrato', s, cur(0, 0, 1), SEL.selectionRange(s, 0, P(0, 0), P(0, 1)));
+  eq([r.changed, said(r)], [false, 'No notes in the selection']);
+  eq(said(run('hammerPull', s, cur(0, 0, 1), SEL.selectionRange(s, 0, P(0, 0), P(0, 1)))), 'No notes in the selection');
+  const b = run('palmMute', s, cur(0, 1, 0), SEL.selectionRange(s, 0, P(1, 0), P(1, 0)));
+  eq([b.changed, said(b)], [false, 'No beats in the selection'], 'a blank selection');
+  const n = model({ tracks: [{ name: 'N', measures: [q4()] }] });
+  eq(said(run('slide', n, cur(0, 0, 1), SEL.selectionRange(n, 0, P(0, 0), P(0, 1)))), 'Needs a TAB staff');
+  const v = run('vibrato', n, cur(0, 0, 1), SEL.selectionRange(n, 0, P(0, 0), P(0, 1)));
+  eq(said(v), 'Vibrato, 2 beats', 'beat rows work on notation-only tracks');
+});
+test('criterion 21 (effects): graces, voice 2, pitch-only notes (note rows need a string) and ties are untouched', () => {
+  const s = model({ tracks: [tab([{ voices: [{ beats: [grace(), tn('half', 1, 3, { tieStart: true }), { type: 'note', duration: 'half', notes: [{ pitch: 'C4' }, { string: 2, fret: 1 }] }] }, { beats: [nt('whole', 4, 4)] }] }, { beats: [tn('whole', 1, 3, { tieEnd: true })] }])] });
+  const sel = SEL.selectionRange(s, 0, P(0, 1), P(0, 2));
+  const g = run('ghostNote', s, cur(0, 0, 2), sel);
+  const m = g.score.tracks[0].measures[0];
+  eq(m.voices[0].beats[0], grace(), 'grace untouched');
+  eq(m.voices[1], s.tracks[0].measures[0].voices[1], 'voice 2 untouched');
+  eq([m.voices[0].beats[1].notes[0], m.voices[0].beats[2].notes], [{ string: 1, fret: 3, tieStart: true, ghost: true }, [{ pitch: 'C4' }, { string: 2, fret: 1, ghost: true }]]);
+  eq(said(g), 'Ghost note on, 2 notes');
+  ok(g.score.tracks[0].measures[1] === s.tracks[0].measures[1] && same(g.score), 'the tie partner outside is untouched');
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
