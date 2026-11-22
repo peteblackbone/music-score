@@ -106,6 +106,16 @@ test('AC4: read-only refuses every effect key with "Read-only" (not consumed, no
   ed.destroy();
 });
 
+test('F1: handleKey with event keys named like Object.prototype members is not consumed and never throws', () => {
+  const { ed, events } = mk(score());
+  const before = ed._model;
+  for (const k of ['constructor', 'toString', 'valueOf', '__proto__', 'hasOwnProperty']) {
+    for (const mods of [{}, { shiftKey: true }, { ctrlKey: true }]) eq(ed.handleKey(key(k, mods)), false, `${k} ${JSON.stringify(mods)}`);
+  }
+  ok(ed._model === before && events.length === 0);
+  ed.destroy();
+});
+
 // ---------- AC12 / AC15: spoken text, cursor info, moves ----------
 test('AC12: spoken effect messages and suffixes, as listed', () => {
   const { ed, say } = mk(score());

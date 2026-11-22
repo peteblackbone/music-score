@@ -32,6 +32,8 @@ export const values = (field, list) => list.map((v) => ({ [field]: v }));
 const lower = (v) => (typeof v === 'string' ? v.trim().toLowerCase() : '');
 const flag = (field) => (t) => (t[field] ? 0 : -1);
 const word = (field, w) => (t) => (t[field] ? [w] : []);
+// A Map, not an object literal: a score value such as 'constructor' must not find an inherited property.
+const HAMMER_PULL_WORDS = new Map([['h', 'hammer-on'], ['p', 'pull-off']]);
 
 // ---- bend ----
 const BENDS = ['full', '1/2', 'full release', 'prebend full', 'release'];
@@ -81,7 +83,7 @@ export const EFFECTS = Object.freeze([
     name: 'hammerPull', key: 'h', level: 'note', fields: ['hammerPull'], steps: values('hammerPull', [true]),
     classify: flag('hammerPull'), exclusive: ['slide'], suffix: 'link',
     say: ['Hammer-on/pull-off on'], off: 'Hammer-on/pull-off off', label: 'hammer-on/pull-off',
-    info: (t) => (t.hammerPull ? [{ h: 'hammer-on', p: 'pull-off' }[lower(t.hammerPull)] ?? 'hammer/pull'] : []),
+    info: (t) => (t.hammerPull ? [HAMMER_PULL_WORDS.get(lower(t.hammerPull)) ?? 'hammer/pull'] : []),
   }),
   row({
     name: 'slide', key: 's', level: 'note', fields: ['slide'], steps: values('slide', [true, 'legato']),

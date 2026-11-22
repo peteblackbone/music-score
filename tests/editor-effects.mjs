@@ -434,6 +434,31 @@ test('announce: effect descriptors in words (added / step / off, suffixes), need
   eq(describeCursor({ ...prev, string: 2, effects: ['ghost', 'vibrato'], noteEffects: ['ghost'] }, prev), 'String 2, fret 3, ghost');
 });
 
+// ---------- inherited-property names in score values and keys ----------
+const PROTO_NAMES = ['constructor', 'toString', 'valueOf', '__proto__', 'hasOwnProperty', 'isPrototypeOf'];
+const { durationWords } = await imp('src/editor/model/durations.js');
+const demo = await imp('examples/editor-demo.js');
+test('object-keyed lookups: score values and event keys named like Object.prototype members never find inherited properties', () => {
+  for (const v of PROTO_NAMES) {
+    const note = { string: 1, fret: 0, hammerPull: v, slide: v, slideIn: v, slideOut: v, bend: v, harmonic: v, mute: v, ghost: v };
+    const beat = { type: 'note', duration: 'quarter', vibrato: v, palmMute: v, letRing: v, dynamic: v, articulations: [v], notes: [note] };
+    const w = E.effectWords(sc(tab([{ beats: [beat] }])), cur(0, 0, 0));
+    ok([...w.note, ...w.beat].every((x) => typeof x === 'string'), `${v}: every effect word is a string (${J([...w.note, ...w.beat])})`);
+    eq(w.note[0], 'hammer/pull', `${v}: hammerPull`);
+    eq(w.beat.includes(v), true, `${v}: dynamic / articulation shown as the string`);
+    for (const name of NAMES) {
+      const r = go(sc(tab([{ beats: [beat] }])), name);
+      ok(r.changed && sanitizeScore(r.score) === r.score, `${v}: ${name} runs`);
+    }
+    eq(K(v), null, `key ${v}`);
+    eq([K(v, { ctrlKey: true }), K(v, { shiftKey: true })], [null, null], `key ${v} with modifiers`);
+    eq(durationWords(v), v, `durationWords(${v})`);
+    eq(describe({ id: v }), '', `describe id ${v}`);
+    eq(describe({ id: 'effect', name: v, step: 0 }), '', `describe effect ${v}`);
+    eq(demo.newScore({ preset: v }).tracks[0].tuning, ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'], `preset ${v}`);
+  }
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

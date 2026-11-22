@@ -39,7 +39,7 @@ export function sanitizeFilename(title) {
 
 /** The score New… creates: one track of the preset, time signature on the track, one empty measure. */
 export function newScore({ title = 'Untitled', beats = 4, beatType = 4, preset = 'guitar6', tabOnly = false } = {}) {
-  const p = PRESETS[preset] || PRESETS.guitar6;
+  const p = Object.hasOwn(PRESETS, preset) ? PRESETS[preset] : PRESETS.guitar6;
   const b = Number.isInteger(Number(beats)) ? Math.min(16, Math.max(1, Number(beats))) : 4;
   const bt = [2, 4, 8, 16].includes(Number(beatType)) ? Number(beatType) : 4;
   return {
@@ -261,7 +261,8 @@ export function startEditorDemo(doc) {
   // Load example (the select alone does nothing)
   $('load-btn').addEventListener('click', () => {
     if (!okToReplace()) return;
-    replace(clone(EXAMPLES[$('example').value] || leadRiff));
+    const name = $('example').value;
+    replace(clone(Object.hasOwn(EXAMPLES, name) ? EXAMPLES[name] : leadRiff));
     editor.focus();
   });
 

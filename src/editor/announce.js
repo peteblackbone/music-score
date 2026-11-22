@@ -8,7 +8,7 @@
  * effects only).
  */
 
-import { DURATION_WORDS, FILL_WORDS, durationWords } from './model/durations.js';
+import { FILL_WORDS, durationWords } from './model/durations.js';
 import { EFFECT_BY_NAME } from './model/effectTable.js';
 
 export { durationWords };
@@ -30,7 +30,7 @@ export const MESSAGES = Object.freeze({
   changedToNote: () => 'Changed to note',
   duration: (d) => cap(durationWords(d.duration, d.dots)),
   nextDuration: (d) => `Next: ${durationWords(d.duration, d.dots)}`,
-  dots: (d) => (d.dots ? cap(durationWords(d.duration, d.dots)) : `${cap(DURATION_WORDS[d.duration] ?? d.duration)}, no dot`),
+  dots: (d) => (d.dots ? cap(durationWords(d.duration, d.dots)) : `${cap(durationWords(d.duration))}, no dot`),
   tripletOn: () => 'Triplet on',
   tripletOff: () => 'Triplet off',
   tiedTo: (d) => `Tied to fret ${d.fret}`,
@@ -60,12 +60,12 @@ export const MESSAGES = Object.freeze({
   lastTrack: () => 'Last track',
   noTrack: () => 'No visible track',
   needsNote: () => 'Needs a note',
-  effect: (d) => (EFFECT_BY_NAME[d.name] ? effectText(EFFECT_BY_NAME[d.name], d) : ''),
+  effect: (d) => (Object.hasOwn(EFFECT_BY_NAME, d.name) ? effectText(EFFECT_BY_NAME[d.name], d) : ''),
 });
 
 /** The text of descriptor `d` (empty for unknown ids). */
 export function describe(d) {
-  const f = d && MESSAGES[d.id];
+  const f = d && Object.hasOwn(MESSAGES, d.id) && MESSAGES[d.id];
   return f ? f(d) : '';
 }
 
