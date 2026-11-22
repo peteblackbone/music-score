@@ -19,14 +19,14 @@ import { defaultScore } from './model/defaultScore.js';
 import { clampCursor, cursorInfo, syncDuration, sameCursor } from './model/cursor.js';
 import { measureFill, fillTable } from './model/fill.js';
 import { tracksOf, measureCount } from './model/access.js';
-import { COMMANDS, run } from './model/commands.js';
+import { COMMANDS, run, undoLabel } from './model/commands.js';
 import { createHistory } from './model/history.js';
 import { bufferLive } from './model/notes.js';
 import { DURATIONS } from './model/durations.js';
 import { keyToCommand } from './keymap.js';
 import { resolveStyle } from './style.js';
 import { resolveOptions } from './options.js';
-import { describe, describeCursor, describeEdit, undoLabel } from './announce.js';
+import { describe, describeCursor, describeEdit } from './announce.js';
 
 const START = { track: 0, measure: 0, beat: 0, string: 1 };
 const freshState = () => ({ duration: 'quarter', dots: 0, digit: null });

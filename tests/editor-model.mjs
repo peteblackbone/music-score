@@ -548,7 +548,8 @@ test('Right from the last beat of a full last measure appends a measure (allowAp
 });
 
 // ---------- commands, history, keymap ----------
-const { run, COMMANDS } = await imp('src/editor/model/commands.js');
+const CMD = await imp('src/editor/model/commands.js');
+const { run, COMMANDS } = CMD;
 const { createHistory, clampLimit } = await imp('src/editor/model/history.js');
 const { keyToCommand } = await imp('src/editor/keymap.js');
 test('run: clamps the cursor, reports changed / moved, clears the buffer after other commands, re-syncs the duration', () => {
@@ -566,6 +567,12 @@ test('run: clamps the cursor, reports changed / moved, clears the buffer after o
   let threw = false; try { run('nope', s, cur(0, 0, 0), ST, CTX); } catch { threw = true; }
   ok(threw, 'unknown command throws');
   eq(Object.entries(COMMANDS).filter(([, v]) => v.kind === 'nav').length, 12);
+});
+test('commands: every edit command (and Right, which may append) carries an undo label', () => {
+  const { undoLabel } = CMD;
+  for (const [name, def] of Object.entries(COMMANDS)) if (def.kind === 'edit') ok(def.label, `${name} has a label`);
+  eq([undoLabel('digit', { fret: 5 }), undoLabel('toggleRest', { id: 'changedToRest' }), undoLabel('toggleRest', { id: 'changedToNote' }), undoLabel('insertMeasureBefore'), undoLabel('longer'), undoLabel('insertBeat'), undoLabel('moveRight'), undoLabel('deleteMeasure'), undoLabel('nope')],
+    ['fret 5', 'rest', 'note', 'insert measure', 'duration', 'insert rest', 'add measure', 'delete measure', 'nope']);
 });
 test('history: push clears redo, limit drops the oldest, coalesce replaces the top after, undo/redo walk entries (F1-F4)', () => {
   const h = createHistory(2);
@@ -753,8 +760,7 @@ test('announce: edit messages, fill suffix after an edit, beat deleted followed 
   eq(AN.describeEdit({ id: 'fret', fret: 3 }, infoOf(s1, cur(0, 0, 2)), infoOf(s0, cur(0, 0, 2))), 'Fret 3, measure full');
   eq(AN.describeEdit({ id: 'fret', fret: 3 }, infoOf(s1, cur(0, 0, 2)), infoOf(s1, cur(0, 0, 2))), 'Fret 3');
   eq(AN.describeEdit({ id: 'beatDeleted' }, infoOf(s0, cur(0, 0, 1)), infoOf(s0, cur(0, 0, 1))), 'Beat deleted. Beat 2, string 1, fret 0, quarter');
-  eq([AN.undoLabel('digit', { fret: 5 }), AN.undoLabel('toggleRest', { id: 'changedToRest' }), AN.undoLabel('toggleRest', { id: 'changedToNote' }), AN.undoLabel('insertMeasureBefore'), AN.undoLabel('longer'), AN.undoLabel('insertBeat')],
-    ['fret 5', 'rest', 'note', 'insert measure', 'duration', 'insert rest']);
+  eq(AN.undoLabel, undefined, 'undo labels live on the command registry');
 });
 
 // ---------- style and geometry (ui.md §3–§5) ----------

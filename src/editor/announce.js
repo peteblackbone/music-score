@@ -54,19 +54,6 @@ export const MESSAGES = Object.freeze({
   noTrack: () => 'No visible track',
 });
 
-const UNDO_LABELS = {
-  deleteNote: 'delete note', deleteBeat: 'delete beat', shorter: 'duration', longer: 'duration', setDuration: 'duration',
-  cycleDots: 'dots', toggleTriplet: 'triplet', toggleTie: 'tie', insertBeat: 'insert rest',
-  insertMeasureAfter: 'insert measure', insertMeasureBefore: 'insert measure', deleteMeasure: 'delete measure', moveRight: 'add measure',
-};
-
-/** The undo label of command `name` that announced `descriptor` ('fret 5', 'rest', 'insert measure' …). */
-export function undoLabel(name, descriptor) {
-  if (name === 'digit') return `fret ${descriptor?.fret}`;
-  if (name === 'toggleRest') return descriptor?.id === 'changedToNote' ? 'note' : 'rest';
-  return UNDO_LABELS[name] ?? name;
-}
-
 /** The text of descriptor `d` (empty for unknown ids). */
 export function describe(d) {
   const f = d && MESSAGES[d.id];
