@@ -683,7 +683,7 @@ test('demo helpers: Selection status text, clip text check, the Remove confirm w
 test('demo markup: Edit group (Copy, Cut, Paste) between History and Settings, Measures group (Fill, Reflow) after Duration, Selection status after Beat, the pickup checkbox in the Time signature fieldset, Tempo under All tracks, shortcut sections in order', () => {
   const at = (s) => html.indexOf(s);
   ok(at('aria-label="History"') < at('aria-label="Edit"') && at('aria-label="Edit"') < at('aria-label="Settings"'));
-  for (const [id, title] of [['copy-btn', 'Ctrl+C'], ['cut-btn', 'Ctrl+X'], ['paste-btn', 'Paste before the cursor (Ctrl+V)'], ['fill-btn', 'Fill the measure with rests (F)'], ['reflow-btn', 'Move overflow to the next measure (Shift+F)']]) {
+  for (const [id, title] of [['copy-btn', 'Ctrl+C'], ['cut-btn', 'Ctrl+X'], ['paste-btn', 'Paste over the selected or blank measures, else before the cursor (Ctrl+V)'], ['fill-btn', 'Fill the measure with rests (F)'], ['reflow-btn', 'Move overflow to the next measure (Shift+F)']]) {
     ok(new RegExp(`<button type="button" id="${id}" title="[^"]*${title.replace(/[()+]/g, '\\$&')}`).test(html), id);
   }
   ok(at('aria-label="Duration"') < at('aria-label="Measures"') && at('aria-label="Measures"') < at('id="readonly"'));
@@ -693,11 +693,11 @@ test('demo markup: Edit group (Copy, Cut, Paste) between History and Settings, M
   ok(at('<legend>Navigation</legend>') < at('id="ms-tempo-set"') && at('id="ms-tempo-set"') < at('id="ms-track-heading"'));
   ok(html.includes('Applies to every track. A mark at this beat on another track is replaced.'));
   const sections = [...html.matchAll(/<section><h3>([^<]+)<\/h3>/g)].map((x) => x[1]);
-  eq(sections, ['Move', 'Selection', 'Enter', 'Rhythm', 'Edit', 'Clipboard', 'Measures', 'Effects', 'Settings', 'History']);
+  eq(sections, ['Move', 'Selection', 'Enter', 'Rhythm', 'Edit', 'Clipboard', 'Measures', 'Transpose', 'Effects', 'Settings', 'History'], '2.3.1 adds Transpose');
 });
 test('demo wiring: buttons call the public API, Copy / Cut also try navigator.clipboard (refusal ignored), Paste reads the system clipboard only with the permission granted; disabled states; a focused button that turns disabled hands focus on', async () => {
   const mkBtn = (id) => ({ id, disabled: false, handlers: [], addEventListener(t, f) { this.handlers.push(f); }, focus() { fake.activeElement = this; }, click(detail = 0) { return Promise.all(this.handlers.map((f) => f({ detail }))); } });
-  const els = Object.fromEntries(['copy-btn', 'cut-btn', 'paste-btn', 'fill-btn', 'reflow-btn'].map((id) => [id, mkBtn(id)]));
+  const els = Object.fromEntries(['copy-btn', 'cut-btn', 'paste-btn', 'paste-new-btn', 'fill-btn', 'reflow-btn', 'transpose-down-1-btn', 'transpose-up-1-btn', 'transpose-down-12-btn', 'transpose-up-12-btn'].map((id) => [id, mkBtn(id)]));
   els['st-selection'] = { textContent: '' };
   const writes = [];
   let state = 'prompt';

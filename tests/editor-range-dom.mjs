@@ -245,6 +245,63 @@ test('criterion 25 (controller): Insert in measure 1 of 4 full measures, then on
   t.ed.destroy();
 });
 
+// ---------- criterion 29: the demo ----------
+const fsMod = await import('node:fs');
+const DE = await imp('examples/editor-demo-edit.js');
+const html = fsMod.readFileSync(path.join(root, 'editor.html'), 'utf8');
+const TRANSPOSE_IDS = ['transpose-down-1-btn', 'transpose-up-1-btn', 'transpose-down-12-btn', 'transpose-up-12-btn'];
+test('criterion 29: markup: Paste as new measures after Paste, the Paste title, a Transpose group after Measures with labelled buttons naming their keys, the new shortcuts', () => {
+  const at = (s) => html.indexOf(s);
+  ok(/<button type="button" id="paste-new-btn" title="Insert without replacing \(Ctrl\+Shift\+V\)">Paste as new measures<\/button>/.test(html));
+  ok(at('id="paste-btn"') < at('id="paste-new-btn"') && at('id="paste-new-btn"') < at('aria-label="Settings"'));
+  ok(html.includes('id="paste-btn" title="Paste over the selected or blank measures, else before the cursor (Ctrl+V)"'));
+  ok(at('aria-label="Measures"') < at('aria-label="Transpose"') && at('aria-label="Transpose"') < at('id="readonly"'));
+  for (const [id, label, title] of [['transpose-down-1-btn', 'Transpose down 1 semitone', 'Ctrl+↓'], ['transpose-up-1-btn', 'Transpose up 1 semitone', 'Ctrl+↑'],
+    ['transpose-down-12-btn', 'Transpose down an octave', 'Ctrl+Shift+↓'], ['transpose-up-12-btn', 'Transpose up an octave', 'Ctrl+Shift+↑']]) {
+    ok(html.includes(`id="${id}" aria-label="${label}" title="${title}"`), id);
+  }
+  for (const s of ['<dt>Ctrl+Shift+Home / End</dt>', '<dt>Ctrl+Shift+V</dt>', '<section><h3>Transpose</h3>', '<dt>Ctrl+↑ ↓</dt>', '<dt>Ctrl+Shift+↑ ↓</dt>', 'and on through the following measures', 'With a selection, each key acts on every selected beat or note.']) ok(html.includes(s), s);
+});
+test('criterion 29: wiring: Paste as new measures calls paste(text, { insert: true }) (system clipboard only when granted), Transpose buttons go through handleKey, every new button is disabled in read-only mode and hands focus on within its group', async () => {
+  const mkBtn = (id) => ({ id, disabled: false, handlers: [], addEventListener(tp, f) { this.handlers.push(f); }, focus() { fake.activeElement = this; }, click(detail = 0) { return Promise.all(this.handlers.map((f) => f({ detail }))); } });
+  const ids = ['copy-btn', 'cut-btn', 'paste-btn', 'paste-new-btn', 'fill-btn', 'reflow-btn', ...TRANSPOSE_IDS];
+  const els = Object.fromEntries(ids.map((id) => [id, mkBtn(id)]));
+  els['st-selection'] = { textContent: '' };
+  let state = 'prompt';
+  const fake = {
+    activeElement: null,
+    getElementById: (id) => els[id],
+    defaultView: { navigator: { clipboard: { writeText: async () => {}, readText: async () => clipText('measures', [{ beats: [nt('whole', 1, 9)] }]) }, permissions: { query: async () => ({ state }) } } },
+  };
+  const t = mk(four());
+  const refreshEdit = DE.wireEdit(fake, t.ed, { refresh: () => refreshEdit(t.ed.getCursorInfo(), t.ed.isReadOnly()) });
+  refreshEdit(t.ed.getCursorInfo(), false);
+  t.ed.setSelection({ anchor: { measure: 0, beat: 0 }, focus: { measure: 0, beat: 3 } });
+  t.ed.copy();
+  await els['paste-new-btn'].click();
+  eq([ms(t.ed).length, frets(t.ed, 0), frets(t.ed, 1), t.ed.lastMessage], [3, [1, 2, 3, 4], [1, 2, 3, 4], 'Inserted 1 measure at measure 1'], 'prompt state: the internal clipboard, inserted');
+  state = 'granted';
+  t.ed.setCursor({ measure: 2, beat: 0 });
+  await els['paste-btn'].click();
+  eq([ms(t.ed).length, frets(t.ed, 2), t.ed.lastMessage], [3, [9], 'Pasted 1 measure over measure 3'], 'granted: the system clipboard; Paste overwrites the blank measure');
+  t.ed.setCursor({ measure: 0, beat: 0 });
+  await els['transpose-up-12-btn'].click();
+  await els['transpose-down-1-btn'].click();
+  eq([frets(t.ed, 0)[0], t.ed.lastMessage], [12, 'Fret 12, down 1 semitone']);
+  await els['transpose-up-1-btn'].click();
+  await els['transpose-down-12-btn'].click();
+  eq(frets(t.ed, 0)[0], 1);
+  els['transpose-up-1-btn'].focus();
+  t.ed.setReadOnly(true);
+  refreshEdit(t.ed.getCursorInfo(), true);
+  eq(['paste-new-btn', ...TRANSPOSE_IDS].map((id) => els[id].disabled), [true, true, true, true, true]);
+  ok(document.activeElement === t.rootEl, 'no enabled sibling in the Transpose group: focus goes back to the editor');
+  els['paste-new-btn'].focus();
+  refreshEdit(t.ed.getCursorInfo(), true);
+  eq(fake.activeElement, els['copy-btn'], 'the Edit group hands focus to Copy');
+  t.ed.destroy();
+});
+
 // ---------- B10 (controller) ----------
 const { clampCursor } = await imp('src/editor/model/cursor.js');
 const { selectionRange } = await imp('src/editor/model/selection.js');
