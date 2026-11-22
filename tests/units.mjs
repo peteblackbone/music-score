@@ -7337,6 +7337,8 @@ test('browser parity: src never calls array methods directly on .children', () =
     eq(renders(one([q({ dynamic: 7 })])), renders(one([q()])));
     eq(renders(one([q()], { tuning: 'zzz' })), renders(one([q()])));
     eq(renders(one([q()], { timeSignature: { beats: 3, beatType: 0 } })), renders(one([q()])));
+    eq(renders(one([q({ notes: [{ pitch: 'E4', string: 9, fret: 0 }] })])), renders(one([q({ notes: [{ pitch: 'E4' }] })])));
+    ['D', Infinity, {}, 8, 1.5].forEach((k) => eq(renders(one([q()], { keySignature: k })), renders(one([q()])), `keySignature ${String(k)}`));
     eq(renders(one([null, q()])), renders(one([q()])));
     eq(renders(one([q({ notes: [{ string: 1, fret: 0 }, null, { pitch: 'zzz' }] })])), renders(one([q()])));
     eq(renders(one([{ type: 'note', duration: 'half', dynamic: 'p', notes: [] }])), renders(one([{ type: 'rest', duration: 'half', dynamic: 'p' }])));
@@ -7347,7 +7349,7 @@ test('browser parity: src never calls array methods directly on .children', () =
     const s = clone(ex); s.tracks.forEach((t) => { t.showStandardNotation = false; t.showTablature = false; });
     renders(s);
   });
-  test('hardening: sweep — every field of the example score set to each bad value renders without throwing', () => {
+  test('hardening: sweep — every field of the example score set to each bad value renders without throwing or NaN', () => {
     const BAD = [null, undefined, 0, -1, 1.5, NaN, Infinity, '', 'zzz', [], {}, true, 1e9, [null], [{}]];
     const fails = [];
     const seen = new Set();
@@ -7362,7 +7364,7 @@ test('browser parity: src never calls array methods directly on .children', () =
             const s = clone(ex); let t = s;
             np.slice(0, -1).forEach((kk) => { t = t[kk]; });
             t[np[np.length - 1]] = v;
-            try { renders(s); } catch (e) { fails.push(`${sig}=${String(v)}: ${e.message}`); }
+            try { if (/NaN/.test(renders(s))) fails.push(`${sig}=${String(v)}: NaN in the SVG`); } catch (e) { fails.push(`${sig}=${String(v)}: ${e.message}`); }
           });
         }
         walk(o[k], np);
