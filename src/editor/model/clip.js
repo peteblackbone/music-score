@@ -6,8 +6,8 @@
  *
  * A clip holds one track. Beats clips are the selected voice-1 beats with
  * their graces; measures clips keep each measure's beats or voices only
- * (no time / key signature, clef, barline, navigation, pickup). `tempo`
- * is never copied. parseClip treats its input as untrusted, the way
+ * (no time / key signature, clef, barline, navigation, pickup), and each
+ * voice only its beats. `tempo` is never copied. parseClip treats its input as untrusted, the way
  * io.js parseInput does: a `__proto__` key anywhere refuses the whole clip,
  * LIMITS apply, and the result goes through sanitize. It never throws.
  */
@@ -24,10 +24,15 @@ export const CLIP_VERSION = 1;
 
 /** `beats` deep-cloned without `tempo`. */
 const cleanBeats = (beats) => beats.map((b) => without(JSON.parse(JSON.stringify(b)), 'tempo'));
-/** Measure `m` (or a hole) as clip content: `{ voices }` or `{ beats }`, tempo removed everywhere. */
+/**
+ * Measure `m` (or a hole) as clip content: `{ voices: [{ beats }, …] }` or
+ * `{ beats }`, tempo removed from every beat. A voice keeps only its beats
+ * (the renderer reads nothing else there), so no voice-level field such as
+ * a stray `tempo` travels in a clip.
+ */
 function clipMeasure(m) {
   const voices = voicesOf(m);
-  if (voices) return { voices: voices.map((v) => (isObj(v) ? { ...JSON.parse(JSON.stringify(v)), beats: cleanBeats(beatsOf({ voices: [v] })) } : v)) };
+  if (voices) return { voices: voices.map((v) => ({ beats: cleanBeats(beatsOf({ voices: [v] })) })) };
   return { beats: cleanBeats(beatsOf(m)) };
 }
 

@@ -348,8 +348,8 @@ test('buildClip: beats clip = the slices\' beats with graces, deep clones withou
   eq(JSON.parse(m.text).tracks[0].measures, [
     { beats: [nt('quarter', 1, 1), grace(), nt('quarter', 2, 2, { zz: 1 }), nt('half')] },
     { beats: [] },
-    { voices: [{ beats: [nt('whole', 1, 0)], vz: 1 }, { beats: [grace(), nt('whole', 3, 3)] }] },
-  ]);
+    { voices: [{ beats: [nt('whole', 1, 0)] }, { beats: [grace(), nt('whole', 3, 3)] }] },
+  ], 'a voice keeps only its beats');
   ok(s.tracks[0].measures[0].beats[0].tempo === 90, 'the model is untouched');
   eq(CL.cursorRange(s, cur(0, 0, 2)).slices, [{ measure: 0, from: 1, to: 3, first: false, last: false }], 'the cursor beat with its leading grace');
   eq(CL.cursorRange(s, cur(0, 1, 0)), null);
@@ -403,6 +403,9 @@ test('parseClip cleans: tempo removed everywhere, measures reduced to beats or v
   ]));
   eq(p.clip.measures, [{ beats: [nt('whole')] }, { voices: [{ beats: [grace(), nt('whole')] }] }]);
   eq(CL.parseClip(clipText('beats', [{ ...grace(), tempo: 70 }, nt('quarter', 1, 0, { tempo: 71 })])).clip.beats, [grace(), nt('quarter')]);
+  eq(CL.parseClip(clipText('measures', [{ voices: [{ tempo: 90, zz: 1, beats: [nt('whole')] }, null] }])).clip.measures, [{ voices: [{ beats: [nt('whole')] }, { beats: [] }] }], 'voice-level tempo and other voice fields are dropped');
+  const vs = model({ tracks: [tab([{ voices: [{ tempo: 90, beats: [nt('whole', 1, 0, { tempo: 80 })] }, { beats: [] }] }])] });
+  ok(!CL.buildClip(vs, SEL.selectionRange(vs, 0, P(0, 0), P(0, 0))).text.includes('tempo'), 'buildClip drops a voice-level tempo too');
 });
 
 // ---------- applyPaste ----------
@@ -549,7 +552,7 @@ test('E12 (2.3): unknown fields at score, track, measure, voice, beat and note l
   eq(count(PA.applyPaste(s0, cur(0, 2, 0), null, clip).score), n0 + 3, 'two pasted beats and a note bring theirs');
   const mclip = CL.parseClip(CL.buildClip(s0, SEL.selectionRange(s0, 0, P(1, 0), P(1, 1))).text).clip;
   eq(mclip.kind, 'measures');
-  eq(count(PA.applyPaste(s0, cur(0, 0, 0), null, mclip).score), n0 + 4, 'a measures clip keeps voice and beat fields, never the measure\'s');
+  eq(count(PA.applyPaste(s0, cur(0, 0, 0), null, mclip).score), n0 + 2, 'a measures clip keeps beat and note fields, never the measure\'s or a voice\'s');
 });
 
 // ---------- report ----------
