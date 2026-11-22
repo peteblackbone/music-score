@@ -148,5 +148,10 @@ for (const c of cases) {
   const { summary } = await import('./editor-tempo.mjs');
   fail += await summary();
 }
+// 2.3.0 selection, range edits, fill / reflow, clips and paste at model level (tests/editor-select.mjs)
+{
+  const { summary } = await import('./editor-select.mjs');
+  fail += summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);
