@@ -9,8 +9,7 @@
  * other than Z, Y, the arrows, Home, End, Delete and Backspace (so the
  * browser keeps Ctrl+W/T/N/L/P/S/I/M, Ctrl+1–9, Ctrl+PageUp/PageDown),
  * Shift+arrows, Shift+Home/End and Shift+R / I (reserved). The effect
- * letters (H, S, Shift+S, B, Shift+B, V, P, X, G, N, Shift+L, D, Shift+D,
- * A, Shift+A) come from EFFECT_KEYS (model/effectTable.js).
+ * letters come from EFFECT_KEYS (the rows of model/effectTable.js).
  */
 import { EFFECT_KEYS } from './model/effectTable.js';
 

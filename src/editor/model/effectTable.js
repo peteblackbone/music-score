@@ -16,7 +16,7 @@
  *   is none.
  * - `write(target, step, def)`: replaces the default write (articulations,
  *   whose steps are the entry names rather than patches).
- * - `suffix`: 'link' | 'tabArtic' | 'noNotation' (spoken when it applies).
+ * - `suffix`: a key of SUFFIXES, spoken after an "on" result when it applies.
  * - `say[step]` / `off` / `added`: spoken text; `label`: the undo label;
  *   `info(target)`: the words getCursorInfo().effects lists.
  * - `reverseOf`: set on a row that steps another row's values backwards
@@ -24,10 +24,17 @@
  *
  * Values are classified with the renderer's own canonicalizers, so a
  * truthy unknown value counts the way the renderer draws it. Pure, no DOM.
+ *
+ * Not generated from this table: the demo's Effects buttons
+ * (examples/editor-demo-effects.js, editor.html) and the README key table
+ * are edited separately when a row is added. Note rows act on the voice-1
+ * note on the cursor string (effects.js effectCommand); voice-2 and grace
+ * targets are the extension point planned for 2.6.
  */
-import { bendOf, isLegatoSlide, slideInOf, slideOutOf } from '../../directions.js';
+import { bendOf, isLegatoSlide, linkTarget, slideInOf, slideOutOf } from '../../directions.js';
 import { harmonicKind } from '../../harmonics.js';
 import { vibratoOf } from '../../noteEffects.js';
+import { hasTab, hasNotation, beatsAt, isRest, notesOf, cursorNote, measureCount, locAt } from './access.js';
 
 /** Patches `{ [field]: v }` for each value of `list`. */
 export const values = (field, list) => list.map((v) => ({ [field]: v }));
@@ -79,6 +86,30 @@ const articWrite = (group) => (t, step, def) => {
   return rest;
 };
 const articInfo = (t) => [...new Set(articList(t).filter((a) => typeof a === 'string').map((a) => (a === 'heavyAccent' ? 'marcato' : a)))];
+
+// ---- spoken suffixes ----
+/**
+ * Whether the cursor note links to nothing: the renderer's linkTarget over
+ * the cursor note and every later voice-1 note of the track (graces
+ * included, across measures) finds no note on the same string.
+ */
+export function noLaterNoteOnString(score, loc) {
+  const items = [cursorNote(score, loc)];
+  const count = measureCount(score);
+  for (let mi = loc.measure; mi < count; mi++) {
+    const beats = beatsAt(score, locAt(loc, { measure: mi }));
+    for (let k = mi === loc.measure ? loc.beat + 1 : 0; k < beats.length; k++) {
+      if (!isRest(beats[k])) items.push(...notesOf(beats[k]));
+    }
+  }
+  return linkTarget(items, 0) < 0;
+}
+/** Spoken suffixes: `text` is appended when `applies(score, loc, track)` holds after an "on" result (`suffix` of a row). */
+export const SUFFIXES = Object.freeze({
+  link: Object.freeze({ text: ', no next note on this string', applies: (score, loc) => noLaterNoteOnString(score, loc) }),
+  tabArtic: Object.freeze({ text: ', not shown on TAB only', applies: (score, loc, track) => hasTab(track) && !hasNotation(track) && track.tabArticulations !== true }),
+  noNotation: Object.freeze({ text: ', not shown on TAB only', applies: (score, loc, track) => !hasNotation(track) }),
+});
 
 const row = (r) => Object.freeze({ shift: false, dir: 1, exclusive: [], onRest: false, creates: false, ...r });
 /**

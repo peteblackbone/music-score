@@ -13,12 +13,13 @@
  * cursor string; other notes of a chord keep their identity. Turning an
  * effect off deletes its keys; it never writes `false`.
  */
-import { linkTarget } from '../../directions.js';
 import {
-  trackAt, hasTab, hasNotation, beatsAt, beatAt, isRest, notesOf, cursorNote, measureCount, updateBeat, updateNote, without, locAt,
+  trackAt, hasTab, beatAt, isRest, cursorNote, updateBeat, updateNote, without,
 } from './access.js';
 import { fretIntoSlot, fretIntoRest, fretIntoNote } from './notes.js';
-import { EFFECTS } from './effectTable.js';
+import { EFFECTS, SUFFIXES } from './effectTable.js';
+
+export { noLaterNoteOnString } from './effectTable.js';
 
 const refuse = (id) => ({ announce: { id } });
 
@@ -49,30 +50,10 @@ export function addDeadNote(score, loc, state) {
   return { score: updateNote(r.score, loc, (n) => ({ ...n, mute: true })), announce: { id: 'effect', name: 'deadNote', added: true } };
 }
 
-/**
- * Whether the cursor note links to nothing: the renderer's linkTarget over
- * the cursor note and every later voice-1 note of the track (graces
- * included, across measures) finds no note on the same string.
- */
-export function noLaterNoteOnString(score, loc) {
-  const items = [cursorNote(score, loc)];
-  const count = measureCount(score);
-  for (let mi = loc.measure; mi < count; mi++) {
-    const beats = beatsAt(score, locAt(loc, { measure: mi }));
-    for (let k = mi === loc.measure ? loc.beat + 1 : 0; k < beats.length; k++) {
-      if (!isRest(beats[k])) items.push(...notesOf(beats[k]));
-    }
-  }
-  return linkTarget(items, 0) < 0;
-}
-
-/** The spoken-suffix kind of row `def` after writing an "on" value at `loc` in `score`, or null. */
+/** The spoken-suffix key (SUFFIXES) of row `def` after writing an "on" value at `loc` in `score`, or null. */
 export function suffixOf(def, score, loc) {
-  const track = trackAt(score, loc.track);
-  if (def.suffix === 'link') return noLaterNoteOnString(score, loc) ? 'link' : null;
-  if (def.suffix === 'tabArtic') return hasTab(track) && !hasNotation(track) && track.tabArticulations !== true ? 'tabArtic' : null;
-  if (def.suffix === 'noNotation') return hasNotation(track) ? null : 'noNotation';
-  return null;
+  const sfx = Object.hasOwn(SUFFIXES, def.suffix ?? '') ? SUFFIXES[def.suffix] : null;
+  return sfx && sfx.applies(score, loc, trackAt(score, loc.track)) ? def.suffix : null;
 }
 
 /** The command of effect row `def` (see the header). */

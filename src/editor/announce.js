@@ -9,14 +9,13 @@
  */
 
 import { FILL_WORDS, durationWords } from './model/durations.js';
-import { EFFECT_BY_NAME } from './model/effectTable.js';
+import { EFFECT_BY_NAME, SUFFIXES } from './model/effectTable.js';
 
 export { durationWords };
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 const fillWord = (f) => FILL_WORDS[f]?.word ?? f;
-const EFFECT_SUFFIX = { link: ', no next note on this string', tabArtic: ', not shown on TAB only', noNotation: ', not shown on TAB only' };
 /** The effect text of `def` for descriptor `d`: added, the step's words, or off; plus the suffix. */
-const effectText = (def, d) => `${d.added ? def.added : d.step >= 0 ? def.say[d.step] : def.off}${EFFECT_SUFFIX[d.suffix] ?? ''}`;
+const effectText = (def, d) => `${d.added ? def.added : d.step >= 0 ? def.say[d.step] : def.off}${Object.hasOwn(SUFFIXES, d.suffix ?? '') ? SUFFIXES[d.suffix].text : ''}`;
 /** ', hammer/pull, palm mute' (empty when there are none). */
 const effectsText = (list) => (list?.length ? `, ${list.join(', ')}` : '');
 

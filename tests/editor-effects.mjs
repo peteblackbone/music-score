@@ -14,7 +14,7 @@ const { normalizeBend } = await imp('src/draw/tab.js');
 const io = await imp('src/editor/model/io.js');
 const A = await imp('src/editor/model/access.js');
 const { run, COMMANDS, undoLabel } = await imp('src/editor/model/commands.js');
-const { EFFECTS, EFFECT_KEYS, EFFECT_BY_NAME, DYNAMIC_SCALE, bendStep } = await imp('src/editor/model/effectTable.js');
+const { EFFECTS, EFFECT_KEYS, EFFECT_BY_NAME, DYNAMIC_SCALE, SUFFIXES, bendStep } = await imp('src/editor/model/effectTable.js');
 const E = await imp('src/editor/model/effects.js');
 const { keyToCommand } = await imp('src/editor/keymap.js');
 const { describe, positionText, describeCursor } = await imp('src/editor/announce.js');
@@ -75,6 +75,8 @@ test('table: 15 rows in the documented order, frozen, every row registered as an
   }
   eq([EFFECT_BY_NAME.louder.start, EFFECT_BY_NAME.softer.start, EFFECT_BY_NAME.bendBack.start], [DYNAMIC_SCALE.indexOf('mf'), DYNAMIC_SCALE.indexOf('mp'), undefined]);
   eq(EFFECTS.filter((d) => d.reverseOf).map((d) => d.name), ['bendBack', 'softer']);
+  eq(Object.fromEntries(Object.entries(SUFFIXES).map(([k, v]) => [k, v.text])), { link: ', no next note on this string', tabArtic: ', not shown on TAB only', noNotation: ', not shown on TAB only' });
+  for (const d of EFFECTS) if (d.suffix) ok(Object.hasOwn(SUFFIXES, d.suffix), `${d.name}: suffix ${d.suffix} is in SUFFIXES`);
 });
 test('nextStep: from none the start (or first / last by direction); then by direction, off past the end', () => {
   const fwd = { steps: [1, 2, 3], dir: 1 };
