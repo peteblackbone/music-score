@@ -532,7 +532,8 @@ test('updateMeasure ending / segno / coda / jump / section: stored shortest, tri
   for (const bad of ['Da Capo', 'Custom words']) throwsClean(s, () => MS.updateMeasure(s, c, 1, { jump: bad }), RangeError);
   throwsClean(s, () => MS.updateMeasure(s, c, 1, { jump: 1 }), TypeError);
   for (const bad of [{ letter: 'ABCD' }, { letter: '' }, { letter: ' ' }, 'x'.repeat(201), 'a\nb', { letter: 'A', text: 'x'.repeat(201) }]) throwsClean(s, () => MS.updateMeasure(s, c, 1, { section: bad }), RangeError, '', JSON.stringify(bad));
-  for (const bad of [{ text: 'Verse' }, { letter: 1 }, { letter: 'A', name: 'x' }, 5]) throwsClean(s, () => MS.updateMeasure(s, c, 1, { section: bad }), TypeError, '', JSON.stringify(bad));
+  for (const bad of [{}, { letter: null }, { letter: null, text: ' ' }]) throwsClean(s, () => MS.updateMeasure(s, c, 1, { section: bad }), RangeError, 'letter or text', JSON.stringify(bad));
+  for (const bad of [{ letter: 1 }, { letter: 'A', name: 'x' }, 5]) throwsClean(s, () => MS.updateMeasure(s, c, 1, { section: bad }), TypeError, '', JSON.stringify(bad));
   throwsClean(s, () => MS.updateMeasure(s, c, 1, { segno: 'yes' }), TypeError);
   throwsClean(s, () => MS.updateMeasure(s, c, 2, {}), RangeError);
   throwsClean(s, () => MS.updateMeasure(s, c, 1, { bogus: 1 }), TypeError, 'Unknown measure field: bogus');
@@ -570,6 +571,21 @@ test('getMeasureSettings: in force + here + inherited; navigation equals normali
   throws(() => MS.getMeasureSettings(s, 4, 0), RangeError);
   throws(() => MS.getMeasureSettings(s, 0, 2), RangeError);
   throws(() => MS.getMeasureSettings(s, '0', 0), TypeError);
+});
+
+test('B3: getMeasureSettings section and ending go back into updateMeasure unchanged (text-only, letter-only and both; every ending form)', () => {
+  const sections = ['Verse', { letter: 'A' }, { letter: 'B', text: 'Bridge' }, { text: 'Coda' }, { letter: null, text: 'Outro' }];
+  const endings = [1, [1, 2], { numbers: [3], text: 'Last' }, { numbers: [1, 2], open: true }, { numbers: 4, open: false }];
+  const c = cur(0, 0, 0);
+  for (const [section, ending] of sections.map((x, i) => [x, endings[i]])) {
+    const s0 = model(sc(tab([{ beats: [] }, { beats: [] }]), tab([{ beats: [] }, { beats: [] }])));
+    const s = MS.updateMeasure(s0, c, 1, { section, ending }).score;
+    const g = MS.getMeasureSettings(s, 1, 0);
+    ok(MS.updateMeasure(s, c, 1, { section: g.section, ending: g.ending }).score === s, `${JSON.stringify(section)} / ${JSON.stringify(ending)}: no change`);
+    const fresh = MS.updateMeasure(s0, c, 1, { section: g.section, ending: g.ending }).score;
+    eq(MS.getMeasureSettings(fresh, 1, 1), MS.getMeasureSettings(s, 1, 1), 'the same settings when written fresh');
+  }
+  eq(MS.updateMeasure(model(sc(tab([{ beats: [] }]))), c, 0, { section: { text: ' Coda ' } }).score.tracks[0].measures[0].section, 'Coda', 'stored as text');
 });
 
 // ---------- B10: commands and settings calls mixed ----------

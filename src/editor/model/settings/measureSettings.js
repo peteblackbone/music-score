@@ -53,11 +53,21 @@ function checkEnding(v) {
   return { numbers, ...(words ? { text: words } : {}), ...(obj.open != null ? { open: obj.open } : {}) };
 }
 
+/**
+ * Stored section: trimmed text, or `{ letter, text? }`. An object without a
+ * letter (null or missing, as getMeasureSettings reports a text-only
+ * section) is stored as its text.
+ */
 function checkSection(v) {
   if (v === null) return undefined;
   if (typeof v === 'string') return text(v, { label: 'Section' });
   object(v, 'Section');
   checkKeys(v, ['letter', 'text'], 'section');
+  if (v.letter == null) {
+    const words = v.text == null ? undefined : text(v.text, { label: 'Section text' });
+    if (!words) throw new RangeError('A section needs a letter or text');
+    return words;
+  }
   if (typeof v.letter !== 'string') throw new TypeError('Section letter must be a string');
   const letter = v.letter.trim();
   if (/[\r\n]/.test(letter) || [...letter].length < 1 || [...letter].length > 3) throw new RangeError('Section letter must be 1 to 3 characters');
