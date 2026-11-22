@@ -153,5 +153,10 @@ for (const c of cases) {
   const { summary } = await import('./editor-select.mjs');
   fail += summary();
 }
+// 2.3.0 selection, range edits, fill / reflow and clipboard at controller level (tests/editor-select-dom.mjs)
+{
+  const { summary } = await import('./editor-select-dom.mjs');
+  fail += await summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);

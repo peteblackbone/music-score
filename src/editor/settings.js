@@ -71,6 +71,7 @@ export function installSettings(Editor) {
     this._view.announce(text, true);
   }));
   Object.defineProperty(proto, '_applyModel', hidden(function applyModel(name, label, r) {
+    this._dropSelection(); // 2.3: an edit clears the selection (selection(null) first)
     const before = { score: this._model, cursor: this._cursor };
     const cursor = clampCursor(r.score, r.cursor ?? this._cursor);
     this._model = r.score;

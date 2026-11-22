@@ -3,7 +3,7 @@
  * the renderer it owns, event listeners, render scheduling, the overlay,
  * scrolling and the live region. It holds no model state; it asks its
  * `host` (ScoreEditor) for what to draw:
- *   host.viewScore() · host.cursorInfo() · host.fills() · host.afterRender()
+ *   host.viewScore() · host.cursorInfo() · host.fills() · host.selection() · host.afterRender()
  *   host.onKey(e) → bool · host.onClick(hit) · host.onFocusChange(focused)
  *
  * DOM (ui.md §2), all inside the container:
@@ -18,7 +18,7 @@
  */
 import { MusicScoreRenderer } from '../MusicScoreRenderer.js';
 import { hitTestMap } from '../hitMap.js';
-import { indexHitMap, cursorShapes, fillShapes } from './geometry.js';
+import { indexHitMap, cursorShapes, fillShapes, selectionShapes } from './geometry.js';
 import { createOverlay, drawShapes } from './overlay.js';
 
 const LIVE_STYLE = 'position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;'
@@ -124,7 +124,7 @@ export class EditorView {
     }
   }
 
-  /** Render now: score, hit map, overlay (bands + cursor), scroll if asked, then host.afterRender(). */
+  /** Render now: score, hit map, overlay (bands, selection, cursor), scroll if asked, then host.afterRender(). */
   flush() {
     if (this._destroyed) return;
     if (this._raf != null) { this.clock.cancelAnimationFrame?.(this._raf); this._raf = null; }
@@ -136,7 +136,7 @@ export class EditorView {
     this.index = indexHitMap(this.renderer.getHitMap());
     this.overlay = createOverlay(this.svg);
     drawShapes(this.overlay.fill, fillShapes(this.index, this.host.fills(), this.style, this.renderer.theme));
-    this.drawCursor();
+    this.drawOverlay();
     this.host.afterRender();
   }
 
@@ -155,6 +155,18 @@ export class EditorView {
     this._scroll = true;
   }
 
+  /** Redraw the selection group (2.3; dimmed when unfocused). */
+  drawSelection() {
+    if (!this.overlay) return;
+    drawShapes(this.overlay.selection, selectionShapes(this.index, this.host.selection(), this.style, this.renderer.theme, this.focused));
+  }
+
+  /** Redraw the selection and cursor groups (after a selection change or a focus change). */
+  drawOverlay() {
+    this.drawSelection();
+    this.drawCursor();
+  }
+
   /** Redraw only the cursor group (dimmed when unfocused). */
   drawCursor() {
     if (!this.overlay) return;
@@ -170,11 +182,13 @@ export class EditorView {
    * window a later text replaces an earlier one, except a `keep` text (a
    * settings result): it stays, and the texts after it are joined to it
    * with ". " (the latest non-kept one only; a repeat is spoken once).
+   * `keep: 'lead'` (2.3 "Selection cleared") starts the window afresh with a kept text.
    */
   announce(text, keep = false) {
     if (this._destroyed) return;
     if (this._liveTimer != null) this.clock.clearTimeout(this._liveTimer);
-    else this._parts = [];
+    if (this._liveTimer == null || keep === 'lead') this._parts = [];
+    keep = !!keep;
     const last = this._parts[this._parts.length - 1];
     if (last && last.text === text) last.keep ||= keep; // the same text twice in a row is spoken once
     else if (last && !last.keep && !keep) last.text = text;

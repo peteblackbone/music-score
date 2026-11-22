@@ -1,6 +1,6 @@
 /**
  * geometry.js — where the overlay goes (ui.md §3–§4), as plain shape
- * descriptors `{ tag: 'rect' | 'line', attrs }` in SVG user units. Pure:
+ * descriptors `{ tag: 'rect' | 'line' | 'path', attrs }` in SVG user units. Pure:
  * overlay.js turns the descriptors into elements.
  *
  * Inputs: the hit map indexed by indexHitMap, the cursor summary
@@ -133,5 +133,100 @@ export function fillShapes(index, fills, style, theme) {
       } });
     }
   }
+  return out;
+}
+
+/** Half the selection extent of hit-map element `e`: max(width + pad, min) / 2. */
+const selHalf = (e, style, s) => Math.max(e.width + style.selPadSp * s, style.selMinSp * s) / 2;
+
+/** The x extent of one selection slice (`x0` null when a beats slice has no main beat drawn); null without a measure record. */
+function slicePart(index, ti, sl, kind, style, s) {
+  const m = index.measures.get(key(ti, sl.measure));
+  if (!m) return null;
+  if (kind === 'measures') return { m, x0: m.x, x1: m.endX };
+  const els = (index.elements.get(key(ti, sl.measure)) || []).filter((e) => e.beatIndex >= sl.from && e.beatIndex < sl.to);
+  let first = null;
+  let last = null;
+  for (const e of els) {
+    if (e.isGrace) continue;
+    if (!first || e.beatIndex < first.beatIndex) first = e;
+    if (!last || e.beatIndex > last.beatIndex) last = e;
+  }
+  if (!first) return { m, x0: null, x1: null };
+  let x0 = Infinity;
+  for (const e of els) if (e.beatIndex <= first.beatIndex) x0 = Math.min(x0, e.x - selHalf(e, style, s));
+  const inset = style.selInsetSp * s;
+  return { m, x0: Math.max(x0, m.x + inset), x1: Math.min(last.x + selHalf(last, style, s), m.endX - inset) };
+}
+
+const pt = (...v) => v.map(r2).join(' ');
+/** Closed tint path of a band open on the left and / or right; corners of radius r on closed ends only. */
+function tintPath(x0, y0, x1, y1, r, openL, openR) {
+  const start = openL ? `M${pt(x0, y0)}` : `M${pt(x0 + r, y0)}`;
+  const right = openR ? `L${pt(x1, y0)} L${pt(x1, y1)}` : `L${pt(x1 - r, y0)} Q${pt(x1, y0, x1, y0 + r)} L${pt(x1, y1 - r)} Q${pt(x1, y1, x1 - r, y1)}`;
+  const left = openL ? `L${pt(x0, y1)}` : `L${pt(x0 + r, y1)} Q${pt(x0, y1, x0, y1 - r)} L${pt(x0, y0 + r)} Q${pt(x0, y0, x0 + r, y0)}`;
+  return `${start} ${right} ${left} Z`;
+}
+/** Outline path of the same band: top, bottom and the closed end only. */
+function outlinePath(x0, y0, x1, y1, r, openL, openR) {
+  if (openL && openR) return `M${pt(x0, y0)} L${pt(x1, y0)} M${pt(x0, y1)} L${pt(x1, y1)}`;
+  if (openR) return `M${pt(x1, y0)} L${pt(x0 + r, y0)} Q${pt(x0, y0, x0, y0 + r)} L${pt(x0, y1 - r)} Q${pt(x0, y1, x0 + r, y1)} L${pt(x1, y1)}`;
+  return `M${pt(x0, y0)} L${pt(x1 - r, y0)} Q${pt(x1, y0, x1, y0 + r)} L${pt(x1, y1 - r)} Q${pt(x1, y1, x1 - r, y1)} L${pt(x0, y1)}`;
+}
+
+/**
+ * The selection shapes (ui-2.3 §2) for `sel` (`{ track, kind, slices }`
+ * or null): per system segment, on every staff of the track, a tint
+ * (`editor-sel`, no stroke) and an outline (`editor-sel-outline`, no
+ * fill). Beats: from the first selected main beat (and its graces) to the
+ * last one, straight across barlines and empty measures; measures: from
+ * the first measure's x to the last one's end. A segment that continues on
+ * another system runs to that system's edge and is open there (paths);
+ * one closed at both ends is a pair of rects. Dimmed when `focused` is false.
+ */
+export function selectionShapes(index, sel, style, theme, focused) {
+  if (!sel) return [];
+  const s = theme.staffLineSpacing;
+  const ti = sel.track;
+  const parts = sel.slices.map((sl) => slicePart(index, ti, sl, sel.kind, style, s)).filter(Boolean);
+  while (parts.length && parts[0].x0 == null) parts.shift();
+  while (parts.length && parts[parts.length - 1].x0 == null) parts.pop();
+  if (!parts.length) return [];
+  const segs = [];
+  for (const p of parts) {
+    const seg = segs[segs.length - 1];
+    if (seg && seg.sys === p.m.sysIdx) seg.parts.push(p);
+    else segs.push({ sys: p.m.sysIdx, parts: [p] });
+  }
+  const ext = new Map();
+  for (const m of index.map?.measures || []) {
+    if (m.ti !== ti) continue;
+    const e = ext.get(m.sysIdx);
+    ext.set(m.sysIdx, e ? { x0: Math.min(e.x0, m.x), x1: Math.max(e.x1, m.endX) } : { x0: m.x, x1: m.endX });
+  }
+  const op = focused ? style.focused : style.unfocused;
+  const color = style.selectionColor;
+  const r = style.selRadiusSp * s;
+  const tint = { class: 'editor-sel', fill: color, 'fill-opacity': op.selFill };
+  const line = { class: 'editor-sel-outline', fill: 'none', stroke: color, 'stroke-opacity': op.selStroke, 'stroke-width': style.selStrokeSp * s };
+  const out = [];
+  segs.forEach((seg, i) => {
+    const openL = i > 0;
+    const openR = i < segs.length - 1;
+    const x0 = openL ? ext.get(seg.sys).x0 : seg.parts[0].x0;
+    const x1 = openR ? ext.get(seg.sys).x1 : seg.parts[seg.parts.length - 1].x1;
+    for (const st of index.staves.get(key(seg.sys, ti)) || []) {
+      const notation = st.kind === 'notation';
+      const o = (notation ? style.notationColOverhangSp : style.tabColOverhangSp) * s;
+      const y0 = st.y - o;
+      const y1 = st.y + (notation ? style.notationStaffSp * s : st.lineBottom) + o;
+      if (!openL && !openR) {
+        out.push(rect(x0, y0, x1 - x0, y1 - y0, { ...tint, rx: r }), rect(x0, y0, x1 - x0, y1 - y0, { ...line, rx: r }));
+      } else {
+        out.push({ tag: 'path', attrs: { ...tint, d: tintPath(x0, y0, x1, y1, r, openL, openR) } });
+        out.push({ tag: 'path', attrs: { ...line, d: outlinePath(x0, y0, x1, y1, r, openL, openR) } });
+      }
+    }
+  });
   return out;
 }

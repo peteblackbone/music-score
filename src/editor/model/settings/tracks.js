@@ -15,13 +15,13 @@
  * moveTrack(from, to): the track keeps its identity; so does the cursor's.
  */
 import { EDITOR_LIMITS } from '../limits.js';
-import { tracksOf, isVisible } from '../access.js';
+import { tracksOf, isVisible, measuresOf, isObj } from '../access.js';
 import { object, checkKeys, index, text, bool } from './validate.js';
 import { INSTRUMENTS } from './instruments.js';
 import { canonicalTuning } from './tuning.js';
 import { checkClef, checkCapo, otherVisible, trackName, uniqueName } from './track.js';
 import { newTrackMeasures, migrateRemoved } from './column.js';
-import { migrateTempo } from './tempo.js';
+import { migrateTempo, lostTempoMarks } from './tempo.js';
 
 const SPEC_KEYS = ['preset', 'name', 'label', 'clef', 'tuning', 'showStandardNotation', 'showTablature', 'capo'];
 
@@ -89,6 +89,24 @@ export function removeTrack(score, cursor, ti) {
     cursor: { ...cursor, track },
     announce: { id: 'trackRemoved', n: ti + 1, name: trackName(tracks[ti]), tempoDropped: dropped },
   };
+}
+
+/** Notes in every beat array of `track` (beats, each voice's beats, graces included). */
+function noteTotal(track) {
+  let n = 0;
+  for (const m of measuresOf(track)) {
+    if (!isObj(m)) continue;
+    const arrays = [m.beats, ...(Array.isArray(m.voices) ? m.voices.map((v) => v?.beats) : [])];
+    for (const beats of arrays) if (Array.isArray(beats)) for (const b of beats) n += Array.isArray(b?.notes) ? b.notes.length : 0;
+  }
+  return n;
+}
+
+/** What removeTrack(ti) would delete (2.3, the demo's confirm): `{ notes, tempoMarks }` (moved marks not counted). */
+export function removeTrackImpact(score, ti) {
+  const tracks = tracksOf(score);
+  index(ti, tracks.length, 'Track index');
+  return { notes: noteTotal(tracks[ti]), tempoMarks: lostTempoMarks(score, ti) };
 }
 
 /** moveTrack(from, to). */

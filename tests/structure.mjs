@@ -42,7 +42,7 @@ const CALL_ORDER = ['renderTiesAndSlurs', 'renderGraceSlurs', 'renderTabArticula
 
 const EDITOR = 'src/editor';
 // Pure editor modules: no DOM tokens (the controller lives in view.js, overlay.js and ScoreEditor.js).
-const isPureEditor = (n) => n.startsWith(`${EDITOR}/model/`) || ['settings.js', 'keymap.js', 'announce.js', 'geometry.js', 'style.js', 'options.js', 'emitter.js'].some((b) => n === `${EDITOR}/${b}`);
+const isPureEditor = (n) => n.startsWith(`${EDITOR}/model/`) || ['settings.js', 'selection.js', 'clipboard.js', 'keymap.js', 'announce.js', 'geometry.js', 'style.js', 'options.js', 'emitter.js'].some((b) => n === `${EDITOR}/${b}`);
 const DOM_TOKENS = /\b(document|window|requestAnimationFrame|addEventListener)\b/g;
 // Renderer modules any editor file may import, and the ones only named editor files may import.
 // 2.1: the effect canonicalizers (pure, DOM-free) are shared rather than copied, so the editor classifies values as the renderer draws them.
@@ -51,7 +51,7 @@ const EDITOR_SHARED = ['src/sanitize.js', 'src/duration.js', 'src/rational.js', 
   'src/clef.js', 'src/navigation.js', 'src/scoreText.js', 'src/expression.js'];
 // Check names used both by the checks and by their mutation cases.
 const ALLOWLIST_CHECK = 'editor imports from outside src/editor/ follow the allowlist (model: sanitize, duration, rational, directions, harmonics, noteEffects, clef, navigation, scoreText, expression only)';
-const DOM_FREE_CHECK = 'editor model, keymap, announce, geometry and style are DOM-free';
+const DOM_FREE_CHECK = 'editor model, keymap, announce, geometry, style, settings, selection and clipboard are DOM-free';
 const EDITOR_ALLOWED = {
   'src/MusicScoreRenderer.js': [`${EDITOR}/view.js`, `${EDITOR}/ScoreEditor.js`],
   'src/hitMap.js': [`${EDITOR}/view.js`, `${EDITOR}/geometry.js`],
@@ -228,6 +228,8 @@ export function mutationProblems(files) {
       { [`${EDITOR}/model/settings/zz.js`]: imp('../../../layout/navigation.js') }],
     ['a shared module importing a DOM module is caught', 'renderer modules shared with the editor, and everything they import, are DOM-free',
       { 'src/pitch.js': imp('./font.js') + (files['src/pitch.js'] || '') }],
+    ['DOM token in selection.js is caught', DOM_FREE_CHECK,
+      { [`${EDITOR}/selection.js`]: 'export const d = () => document.activeElement;\n' }],
     ['DOM token in settings.js is caught', DOM_FREE_CHECK,
       { [`${EDITOR}/settings.js`]: 'export const d = () => document.title;\n' }],
     ['overlay importing MusicScoreRenderer is caught', ALLOWLIST_CHECK,

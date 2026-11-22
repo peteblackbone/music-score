@@ -6,10 +6,13 @@
  * Keys are matched on `key`, not `code` (keyboard layouts), letters case-
  * insensitively and only without Ctrl or Alt; Cmd counts as Ctrl. Never
  * bound: Tab, anything with Alt, F-keys, IME composition, Ctrl with keys
- * other than Z, Y, the arrows, Home, End, Delete and Backspace (so the
- * browser keeps Ctrl+W/T/N/L/P/S/I/M, Ctrl+1–9, Ctrl+PageUp/PageDown),
- * Shift+arrows, Shift+Home/End and Shift+R / I (reserved). The effect
- * letters come from EFFECT_KEYS (the rows of model/effectTable.js).
+ * other than Z, Y, A, the arrows, Home, End, Delete and Backspace (so the
+ * browser keeps Ctrl+W/T/N/L/P/S/I/M, Ctrl+1–9, Ctrl+PageUp/PageDown, and
+ * Ctrl+C / X / V / Insert and Shift+Insert reach the native clipboard
+ * events). 2.3 selection: Shift+Left / Right / Home / End, Ctrl+Shift+Left
+ * / Right and Ctrl+A. Reserved for 2.3.1: Shift+Up / Down, Ctrl+Up / Down,
+ * Ctrl+Shift+Home / End, Shift+R / I (any other Ctrl+Shift key is unbound).
+ * The effect letters come from EFFECT_KEYS (the rows of model/effectTable.js).
  */
 import { EFFECT_KEYS } from './model/effectTable.js';
 
@@ -25,6 +28,8 @@ const CTRL = {
   ArrowLeft: 'prevMeasure', ArrowRight: 'nextMeasure', Home: 'scoreStart', End: 'scoreEnd',
   Delete: 'deleteBeat', Backspace: 'deleteBeat',
 };
+const SHIFT = { ArrowLeft: 'selectLeft', ArrowRight: 'selectRight', Home: 'selectMeasureStart', End: 'selectMeasureEnd' };
+const CTRL_SHIFT = { ArrowLeft: 'selectPrevMeasure', ArrowRight: 'selectNextMeasure' };
 const NO_SHIFT = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown', 'Insert']);
 const LETTERS = { r: 'toggleRest', l: 'toggleTie', i: 'insertBeat' };
 /** `map[k]` when it is an own key (event keys such as 'toString' must not find inherited properties), else undefined. */
@@ -41,12 +46,15 @@ export function keyToCommand(e) {
     const k = key.length === 1 ? key.toLowerCase() : key;
     if (k === 'z') return cmd(shift ? 'redo' : 'undo');
     if (k === 'y') return cmd('redo');
-    if (shift || !own(CTRL, key)) return null;
+    if (k === 'a' && !shift) return cmd('selectAll');
+    if (shift) return own(CTRL_SHIFT, key) ? cmd(CTRL_SHIFT[key]) : null;
+    if (!own(CTRL, key)) return null;
     return cmd(CTRL[key]);
   }
   if (key === 'Delete' || key === 'Backspace') return cmd(shift ? 'deleteMeasure' : 'deleteNote');
   if (/^[0-9]$/.test(key)) return cmd('digit', Number(key));
   if (key === ',' && e.code === 'NumpadDecimal') return cmd('cycleDots');
+  if (shift && own(SHIFT, key)) return cmd(SHIFT[key]);
   if (own(PLAIN, key)) return shift && NO_SHIFT.has(key) ? null : cmd(PLAIN[key]);
   if (key.length === 1) {
     const l = key.toLowerCase();

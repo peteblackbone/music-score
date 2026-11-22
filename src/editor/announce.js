@@ -77,7 +77,18 @@ export const MESSAGES = Object.freeze({
   trackMoved: (d) => `Track${d.name ? ` ${d.name}` : ''} moved to position ${d.n}`,
   measureSet: (d) => (Object.hasOwn(MEASURE_TEXT, d.key) ? `${MEASURE_TEXT[d.key](d.value)}${d.key === 'clef' || d.key === 'timeSignature' || d.key === 'keySignature' ? (d.value == null ? ' at' : ' from') : ' at'} measure ${d.n}${d.tabOnly && d.value != null ? ', not shown on TAB only' : ''}` : ''),
   measureUpdated: (d) => `Measure ${d.n} settings updated${d.tabOnly ? ', clef not shown on TAB only' : ''}`,
+  // 2.3 selection
+  selectedBeats: (d) => `Selected measure ${d.m1} beat ${d.b1}${d.m1 !== d.m2 ? ` to measure ${d.m2} beat ${d.b2}` : d.b1 !== d.b2 ? ` to beat ${d.b2}` : ''}, ${beatsText(d.count)}`,
+  selectedMeasures: (d) => `Selected measure${d.a !== d.b ? `s ${d.a} to ${d.b}` : ` ${d.a}`}, ${beatsText(d.count)}`,
+  selectedAll: (d) => `Selected all of ${trackText(d)}, ${plural(d.measures, 'measure')}`,
+  selectionCleared: () => 'Selection cleared',
+  nothingToSelect: () => 'Nothing to select',
 });
+
+/** '1 beat' / '3 measures' (n of `word`). */
+export const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+/** 'no beats' / '1 beat' / '6 beats'. */
+export const beatsText = (n) => (n ? plural(n, 'beat') : 'no beats');
 
 /** 'no sharps or flats' / '1 sharp' / '3 flats'. */
 export const keyWords = (k) => (!k ? 'no sharps or flats' : `${Math.abs(k)} ${k > 0 ? 'sharp' : 'flat'}${Math.abs(k) === 1 ? '' : 's'}`);

@@ -13,6 +13,7 @@ const { makeContainer } = await import('./dom-shim.mjs');
 const { makeClock } = await import('./editor-shim.mjs');
 const { ScoreEditor } = await imp('src/editor/ScoreEditor.js');
 const { SETTINGS_API } = await imp('src/editor/settings.js');
+const { SELECTION_API } = await imp('src/editor/selection.js');
 const { INSTRUMENTS, TUNINGS } = await imp('src/editor/model/settings/instruments.js');
 const { sanitizeScore } = await imp('src/sanitize.js');
 
@@ -64,13 +65,13 @@ const CALLS = [
 ];
 
 // ---------- surface ----------
-test('surface: the 2.1 public methods plus SETTINGS_API exactly; the new ones are non-enumerable; INSTRUMENTS / TUNINGS static, frozen, the model tables', () => {
+test('surface: the 2.1 public methods plus SETTINGS_API and the 2.3 SELECTION_API exactly; the new ones are non-enumerable; INSTRUMENTS / TUNINGS static, frozen, the model tables', () => {
   const V21 = ['loadScore', 'getScore', 'toJSON', 'getCursor', 'setCursor', 'getCursorInfo', 'getMeasureFill', 'handleKey', 'setDuration', 'focus',
     'undo', 'redo', 'canUndo', 'canRedo', 'setReadOnly', 'isReadOnly', 'setWidth', 'refresh', 'on', 'off', 'destroy'];
   eq(SETTINGS_API, ['updateScore', 'updateTrack', 'addTrack', 'removeTrack', 'moveTrack', 'updateMeasure', 'setTempo', 'getMeasureSettings', 'lastMessage']);
   const pub = Object.getOwnPropertyNames(ScoreEditor.prototype).filter((n) => n !== 'constructor' && !n.startsWith('_'));
-  eq(pub.sort(), [...V21, ...SETTINGS_API].sort());
-  for (const n of [...SETTINGS_API, '_settings', '_applyModel']) eq(Object.getOwnPropertyDescriptor(ScoreEditor.prototype, n).enumerable, false, n);
+  eq(pub.sort(), [...V21, ...SETTINGS_API, ...SELECTION_API].sort());
+  for (const n of [...SETTINGS_API, ...SELECTION_API, '_settings', '_applyModel']) eq(Object.getOwnPropertyDescriptor(ScoreEditor.prototype, n).enumerable, false, n);
   eq(Object.keys(ScoreEditor.prototype), [], 'nothing enumerable on the prototype');
   ok(ScoreEditor.INSTRUMENTS === INSTRUMENTS && ScoreEditor.TUNINGS === TUNINGS && Object.isFrozen(ScoreEditor.INSTRUMENTS));
   throws(() => { 'use strict'; ScoreEditor.INSTRUMENTS = {}; }, TypeError);

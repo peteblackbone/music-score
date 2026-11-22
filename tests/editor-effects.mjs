@@ -436,7 +436,7 @@ test('AC16: the 15 effect keys map to their commands (either case without Shift 
     const letter = k[0];
     eq(K(letter, { shiftKey }), { name }, k);
     eq(K(shiftKey ? letter.toLowerCase() : letter.toUpperCase(), { shiftKey }), { name }, `${k} with Caps Lock`);
-    for (const mods of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { altKey: true, shiftKey: true }, { ctrlKey: true, shiftKey: true }]) eq(K(letter, { shiftKey, ...mods }), null, `${k} ${J(mods)}`);
+    for (const mods of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { altKey: true, shiftKey: true }, { ctrlKey: true, shiftKey: true }]) eq(K(letter, { shiftKey, ...mods }), letter === 'a' && !shiftKey && !mods.altKey && !mods.shiftKey ? { name: 'selectAll' } : null, `${k} ${J(mods)}`); // 2.3: Ctrl+A selects all
   }
   eq(new Set(rows.map(([, n]) => n)).size, 15);
   eq(Object.entries(EFFECT_KEYS).map(([k, n]) => `${k}=${n}`).sort(), rows.map(([k, n]) => `${k.endsWith('+') ? `Shift+${k[0].toLowerCase()}` : k}=${n}`).sort());

@@ -3,8 +3,9 @@
  * runs a command against the model.
  *
  * Kinds: 'nav' (moves; Right may append a measure), 'edit' (refused in
- * read-only mode), 'history' (undo / redo, run by the controller) and
- * 'buffer' (Escape, `cancelsBuffer`). History commands name their `step`. Commands that can change the model carry their undo
+ * read-only mode), 'history' (undo / redo, run by the controller),
+ * 'buffer' (Escape, `cancelsBuffer`) and 2.3 'select' (moves that extend
+ * the selection, run by the controller's _extend; `fromStart`: Select all). History commands name their `step`. Commands that can change the model carry their undo
  * `label`: a string, or a function of the command's announce descriptor. run() clamps the resulting cursor, clears the digit
  * buffer after anything but a digit, and re-syncs the current duration
  * when the position or the model changed.
@@ -19,9 +20,13 @@ import { insertMeasureAfter, insertMeasureBefore, deleteMeasure } from './measur
 import { trackAt, isVisible } from './access.js';
 import { EFFECTS } from './effectTable.js';
 import { effectCommand } from './effects.js';
+import {
+  selectLeft, selectRight, selectMeasureStart, selectMeasureEnd, selectPrevMeasure, selectNextMeasure, selectAll,
+} from './selection.js';
 
 const nav = (fn, label) => ({ fn, kind: 'nav', label });
 const edit = (fn, label) => ({ fn, kind: 'edit', label });
+const select = (fn, extra) => ({ fn, kind: 'select', ...extra });
 
 export const COMMANDS = Object.freeze({
   moveLeft: nav(moveLeft),
@@ -52,6 +57,14 @@ export const COMMANDS = Object.freeze({
   deleteMeasure: edit(deleteMeasure, 'delete measure'),
   // 2.1 effects, one command per row of effectTable.js
   ...Object.fromEntries(EFFECTS.map((d) => [d.name, edit(effectCommand(d), d.label)])),
+  // 2.3 selection
+  selectLeft: select(selectLeft),
+  selectRight: select(selectRight),
+  selectMeasureStart: select(selectMeasureStart),
+  selectMeasureEnd: select(selectMeasureEnd),
+  selectPrevMeasure: select(selectPrevMeasure),
+  selectNextMeasure: select(selectNextMeasure),
+  selectAll: select(selectAll, { fromStart: true }),
   undo: { fn: null, kind: 'history', step: 'undo' },
   redo: { fn: null, kind: 'history', step: 'redo' },
   clearBuffer: { fn: null, kind: 'buffer', cancelsBuffer: true },

@@ -1,14 +1,15 @@
 /**
  * style.js — every visual value of the editor overlay (ui.md §3–§5), in
  * staff spaces (sp: theme.staffLineSpacing) unless named otherwise. The
- * three colours can be overridden per editor (cursorColor, overfullColor,
- * underfullColor options); nothing else is an option in 2.0.
+ * four colours can be overridden per editor (cursorColor, overfullColor,
+ * underfullColor and the 2.3 selectionColor options); nothing else is an option.
  */
 
 export const EDITOR_STYLE = Object.freeze({
   cursorColor: '#3b5bdb',
   overfullColor: '#d92d20',
   underfullColor: '#62636a',
+  selectionColor: '#0b7285', // 2.3 (ui-2.3 §2): teal, about 5.6:1 on white
 
   // cursor column: centred on the element, width max(ink + pad, min), inset from the barlines
   colPadSp: 0.8,
@@ -41,9 +42,16 @@ export const EDITOR_STYLE = Object.freeze({
   underStrokePx: 1,
   underDashPx: [4, 3],
 
-  // opacities, focused / unfocused (ui.md §5)
-  focused: Object.freeze({ colStroke: 1, colFill: 0.1, stringStroke: 1, stringFill: 0.22, slotStroke: 1 }),
-  unfocused: Object.freeze({ colStroke: 0.35, colFill: 0.04, stringStroke: 0.5, stringFill: 0.08, slotStroke: 0.35 }),
+  // 2.3 selection (ui-2.3 §2): a tint and an outline per system segment; element extent max(width + pad, min), inset from the barlines
+  selPadSp: 0.8,
+  selMinSp: 1.8,
+  selInsetSp: 0.2,
+  selRadiusSp: 0.2,
+  selStrokeSp: 0.1,
+
+  // opacities, focused / unfocused (ui.md §5, ui-2.3 §2)
+  focused: Object.freeze({ colStroke: 1, colFill: 0.1, stringStroke: 1, stringFill: 0.22, slotStroke: 1, selFill: 0.14, selStroke: 1 }),
+  unfocused: Object.freeze({ colStroke: 0.35, colFill: 0.04, stringStroke: 0.5, stringFill: 0.08, slotStroke: 0.35, selFill: 0.06, selStroke: 0.4 }),
 });
 
 const colour = (v, d) => (typeof v === 'string' && v.trim() ? v.trim() : d);
@@ -55,5 +63,6 @@ export function resolveStyle(options = {}) {
     cursorColor: colour(options.cursorColor, EDITOR_STYLE.cursorColor),
     overfullColor: colour(options.overfullColor, EDITOR_STYLE.overfullColor),
     underfullColor: colour(options.underfullColor, EDITOR_STYLE.underfullColor),
+    selectionColor: colour(options.selectionColor, EDITOR_STYLE.selectionColor),
   });
 }

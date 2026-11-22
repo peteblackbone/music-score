@@ -116,6 +116,79 @@ test('fixTiesIn: half ties in measures m0 - 1 .. m1 + 1 of one track are removed
   ok(TI.fixTiesIn(r, 0, 0, 4) !== r, 'a full pass also repairs measure 0 and 4');
 });
 
+// ---------- selection math and select commands ----------
+const SEL = await imp('src/editor/model/selection.js');
+const CMD = await imp('src/editor/model/commands.js');
+const { describe } = await imp('src/editor/announce.js');
+const selFixture = () => model({ tracks: [
+  tab([
+    { beats: [nt('quarter'), grace(), nt('quarter'), nt('half')] },
+    { beats: [nt('quarter'), nt('quarter'), grace()] },
+    { beats: [] },
+    { beats: [nt('whole')] },
+  ]),
+  tab([{ beats: [nt('whole')] }], { name: 'Short' }),
+] });
+const P = (measure, beat) => ({ measure, beat });
+test('rangeSlices: both ends inclusive in either order; graces go with their main beat; a range to the end of a measure takes its trailing graces; a start on the slot takes nothing there', () => {
+  const s = selFixture();
+  eq(SEL.rangeSlices(s, 0, P(0, 2), P(0, 2)), [{ measure: 0, from: 1, to: 3, first: false, last: false }], 'one beat with its grace');
+  eq(SEL.rangeSlices(s, 0, P(1, 1), P(0, 2)), [
+    { measure: 0, from: 1, to: 4, first: false, last: true },
+    { measure: 1, from: 0, to: 2, first: true, last: false },
+  ], 'reverse order; the last main beat of a full measure takes everything after it');
+  eq(SEL.rangeSlices(s, 0, P(1, 3), P(3, 0)), [
+    { measure: 1, from: 3, to: 3, first: false, last: true },
+    { measure: 2, from: 0, to: 0, first: true, last: true },
+    { measure: 3, from: 0, to: 1, first: true, last: true },
+  ], 'from the slot: nothing in that measure (its trailing grace stays); an empty measure is whole');
+  eq(SEL.rangeSlices(s, 0, P(1, 0), P(1, 3)), [{ measure: 1, from: 0, to: 3, first: true, last: true }], 'to the slot: trailing graces included');
+  eq(SEL.rangeSlices(s, 1, P(0, 0), P(2, 0)).map((x) => [x.from, x.to, x.first, x.last]), [[0, 1, true, true], [0, 0, true, true], [0, 0, true, true]], 'measures past a short track are empty (slot)');
+});
+test('selectionRange: info shape, kinds, beat counts, null without a main beat; selectionInfo copies', () => {
+  const s = selFixture();
+  const a = SEL.selectionRange(s, 0, P(0, 2), P(1, 1));
+  eq(a.info, { kind: 'beats', track: 0, start: { measure: 0, beat: 2 }, end: { measure: 1, beat: 1 }, beatCount: 4, measures: [0, 1] });
+  const m = SEL.selectionRange(s, 0, P(0, 0), P(3, 0));
+  eq([m.info.kind, m.info.beatCount, m.info.measures], ['measures', 6, [0, 3]]);
+  eq(SEL.selectionRange(s, 0, P(1, 3), P(2, 0)), null, 'slot to empty measure: no beats');
+  eq(SEL.selectionRange(s, 0, P(2, 0), P(3, 0)).info.measures, [2, 3], 'a measures range keeps its first measure even with no beat in it');
+  eq(SEL.selectionRange(s, 0, P(1, 3), P(3, 0)).info.measures, [3, 3], 'a beats range spans its selected beats only');
+  const info = SEL.selectionInfo(a);
+  info.start.measure = 9; info.measures[0] = 9;
+  eq(a.info.start.measure, 0, 'a copy');
+  eq(SEL.selectionInfo(null), null);
+});
+test('select commands: Left / Right like the moves (Right never appends), measure start / end, previous / next measure boundary, Select all to the last position', () => {
+  const s = selFixture();
+  const go = (name, c) => CMD.run(name, s, c, st(), { allowAppend: true });
+  eq(go('selectRight', cur(0, 3, 0)), { score: s, cursor: cur(0, 3, 0), state: st(), changed: false, moved: false, announce: { id: 'endOfScore' }, coalesce: false });
+  eq(go('selectRight', cur(0, 0, 0)).cursor, cur(0, 0, 2), 'over the grace');
+  eq(go('selectLeft', cur(0, 1, 0)).cursor, cur(0, 0, 3));
+  eq([go('selectMeasureStart', cur(0, 0, 3)).cursor.beat, go('selectMeasureEnd', cur(0, 1, 0)).cursor.beat], [0, 3]);
+  eq(go('selectPrevMeasure', cur(0, 1, 1)).cursor, cur(0, 1, 0));
+  eq(go('selectPrevMeasure', cur(0, 1, 0)).cursor, cur(0, 0, 0));
+  eq(go('selectPrevMeasure', cur(0, 0, 0)).announce, { id: 'startOfScore' });
+  eq(go('selectNextMeasure', cur(0, 0, 0)).cursor, cur(0, 0, 3));
+  eq(go('selectNextMeasure', cur(0, 0, 3)).cursor, cur(0, 1, 3), 'the next measure\'s last position is its slot');
+  eq(go('selectNextMeasure', cur(0, 3, 0)).announce, { id: 'endOfScore' });
+  eq(go('selectAll', cur(0, 1, 1)).cursor, cur(0, 3, 0));
+  eq(SEL.startOf(s, cur(0, 2, 0)), P(0, 0));
+  ok(Object.entries(CMD.COMMANDS).filter(([, d]) => d.kind === 'select').length === 7 && CMD.COMMANDS.selectAll.fromStart);
+});
+test('selection words: across measures, in one measure, one beat, measures (one / several), Select all (with and without a name)', () => {
+  const s = selFixture();
+  const say = (a, f, all) => describe(SEL.selectionWords(s, SEL.selectionRange(s, 0, a, f), all));
+  eq(say(P(0, 2), P(1, 1)), 'Selected measure 1 beat 2 to measure 2 beat 2, 4 beats');
+  eq(say(P(0, 0), P(0, 2)), 'Selected measure 1 beat 1 to beat 2, 2 beats');
+  eq(say(P(0, 3), P(0, 3)), 'Selected measure 1 beat 3, 1 beat');
+  eq(say(P(3, 0), P(3, 0)), 'Selected measure 4, 1 beat');
+  eq(say(P(0, 0), P(1, 3)), 'Selected measures 1 to 2, 5 beats');
+  eq(say(P(0, 0), P(3, 0), true), 'Selected all of Track 1 Gtr, 4 measures');
+  const anon = model({ tracks: [{ showTablature: true, measures: [{ beats: [nt('whole')] }] }] });
+  eq(describe(SEL.selectionWords(anon, SEL.selectionRange(anon, 0, P(0, 0), P(0, 0)), true)), 'Selected all of Track 1, 1 measure');
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
