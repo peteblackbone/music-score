@@ -327,6 +327,231 @@ test('reflow: two-voice measures move voice 1 only; the 2000-measure and 256-bea
   eq(describe(run('reflow', full, cur(0, 0, 0), null).announce), 'The score would be too large');
 });
 
+// ---------- clip format: buildClip / parseClip ----------
+const CL = await imp('src/editor/model/clip.js');
+const PA = await imp('src/editor/model/paste.js');
+const L = EDITOR_LIMITS;
+const SEVEN = ['B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'];
+const clipText = (kind, content, extra = {}) => JSON.stringify({ type: 'music-score-clip', version: 1, kind, tracks: [{ tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'], [kind]: content, ...extra }] });
+const refusedId = (x) => CL.parseClip(x).refused?.id;
+test('buildClip: beats clip = the slices\' beats with graces, deep clones without tempo, the track tuning; measures clip = beats or voices per measure, holes empty, no measure fields; cursorRange is null on the slot', () => {
+  const s = model({ tracks: [tab([
+    { beats: [nt('quarter', 1, 1, { tempo: 90 }), grace(), nt('quarter', 2, 2, { zz: 1 }), nt('half')], timeSignature: { beats: 4, beatType: 4 }, barline: 'double', pickup: true },
+    null,
+    { voices: [{ beats: [nt('whole', 1, 0, { tempo: 70 })], vz: 1 }, { beats: [grace(), nt('whole', 3, 3)] }], segno: true },
+  ], { tuning: SEVEN })] });
+  const b = CL.buildClip(s, SEL.selectionRange(s, 0, P(0, 0), P(0, 2)));
+  eq([b.kind, b.count], ['beats', 2]);
+  eq(JSON.parse(b.text), { type: 'music-score-clip', version: 1, kind: 'beats', tracks: [{ tuning: SEVEN, beats: [nt('quarter', 1, 1), grace(), nt('quarter', 2, 2, { zz: 1 })] }] });
+  const m = CL.buildClip(s, SEL.selectionRange(s, 0, P(0, 0), P(2, 0)));
+  eq([m.kind, m.count], ['measures', 3]);
+  eq(JSON.parse(m.text).tracks[0].measures, [
+    { beats: [nt('quarter', 1, 1), grace(), nt('quarter', 2, 2, { zz: 1 }), nt('half')] },
+    { beats: [] },
+    { voices: [{ beats: [nt('whole', 1, 0)], vz: 1 }, { beats: [grace(), nt('whole', 3, 3)] }] },
+  ]);
+  ok(s.tracks[0].measures[0].beats[0].tempo === 90, 'the model is untouched');
+  eq(CL.cursorRange(s, cur(0, 0, 2)).slices, [{ measure: 0, from: 1, to: 3, first: false, last: false }], 'the cursor beat with its leading grace');
+  eq(CL.cursorRange(s, cur(0, 1, 0)), null);
+  eq(CL.parseClip(b.text), { clip: { kind: 'beats', tuning: SEVEN, beats: JSON.parse(b.text).tracks[0].beats } }, 'round trip');
+  eq(CL.parseClip(JSON.parse(m.text)).clip.measures, JSON.parse(m.text).tracks[0].measures, 'an object works too');
+});
+test('parseClip security: malformed JSON, wrong type or version, a bare array, __proto__ at any depth, more than 5 MB, every LIMITS dimension, deep nesting, a cycle, non-string input, a bad tuning, not exactly one track: refused, never thrown, nothing polluted', () => {
+  eq(refusedId('{'), 'clipInvalid');
+  eq(refusedId(''), 'clipInvalid');
+  eq(refusedId('{"type":"other","version":1}'), 'notClip');
+  eq(refusedId('{"version":1}'), 'notClip');
+  eq(refusedId(clipText('beats', []).replace('"version":1', '"version":2')), 'clipVersion');
+  eq(refusedId(clipText('beats', []).replace('"version":1', '"version":"1"')), 'clipVersion');
+  eq(refusedId('[]'), 'clipInvalid');
+  eq(refusedId(`[${clipText('beats', [])}]`), 'clipInvalid');
+  eq(refusedId(clipText('beats', [nt('quarter')]).replace('"type":"note"', '"__proto__":{"polluted":1},"type":"note"')), 'clipInvalid');
+  eq(refusedId('{"__proto__":{"x":1},"type":"music-score-clip","version":1,"kind":"beats","tracks":[{"beats":[]}]}'), 'clipInvalid');
+  eq(refusedId(clipText('beats', [{ type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 0, deep: { a: { b: JSON.parse('{"__proto__":1}') } } }] }])), 'clipInvalid', 'an own __proto__ key in an object input is refused too');
+  eq(refusedId(clipText('beats', [{ type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 0 }] }]).replace('"fret":0', '"fret":0,"x":{"y":{"__proto__":{"z":1}}}')), 'clipInvalid', 'deep __proto__');
+  eq(refusedId(' '.repeat(L.jsonChars + 1)), 'clipTooLarge');
+  eq(refusedId(clipText('beats', [nt('quarter')]) + ' '.repeat(L.jsonChars)), 'clipTooLarge');
+  eq(refusedId(clipText('beats', Array.from({ length: L.beatsPerVoice + 1 }, () => nt('64th')))), 'clipTooLarge', 'beats');
+  eq(refusedId(clipText('beats', [{ type: 'note', duration: 'quarter', notes: Array.from({ length: L.notesPerBeat + 1 }, (_, i) => ({ string: 1, fret: i })) }])), 'clipTooLarge', 'notes');
+  eq(refusedId(clipText('measures', Array.from({ length: L.measuresPerTrack + 1 }, () => ({ beats: [] })))), 'clipTooLarge', 'measures');
+  eq(refusedId(clipText('measures', [{ voices: Array.from({ length: L.voicesPerMeasure + 1 }, () => ({ beats: [] })) }])), 'clipTooLarge', 'voices');
+  eq(refusedId(clipText('measures', [{ voices: [{ beats: Array.from({ length: L.beatsPerVoice + 1 }, () => nt('64th')) }] }])), 'clipTooLarge', 'beats in a voice');
+  eq(refusedId(clipText('beats', [], { tuning: Array.from({ length: L.tuningStrings + 1 }, () => 'E2') })), 'clipInvalid', 'tuning strings');
+  let deep = '1';
+  for (let i = 0; i < 20000; i++) deep = `{"a":${deep}}`;
+  const d = CL.parseClip(clipText('beats', [nt('quarter')]).replace('"fret":0', `"fret":0,"deep":${deep}`));
+  ok(d.refused || sanitizeScore({ tracks: [{ measures: [{ beats: d.clip.beats }] }] }), 'deep nesting: refused or a clean clip, never a throw');
+  const cyc = { type: 'music-score-clip', version: 1, kind: 'beats', tracks: [{ beats: [] }] };
+  cyc.tracks[0].self = cyc;
+  eq(refusedId(cyc), 'clipInvalid', 'a cycle');
+  for (const x of [undefined, null, 5, true, () => 1, Symbol('x'), 10n]) eq(refusedId(x), 'clipInvalid', String(typeof x));
+  for (const tuning of [[], ['H2'], ['E2', 5], 'E2', [null]]) eq(refusedId(clipText('beats', [], { tuning })), 'clipInvalid', JSON.stringify(tuning));
+  eq(refusedId(JSON.stringify({ type: 'music-score-clip', version: 1, kind: 'beats', tracks: [{ beats: [] }, { beats: [] }] })), 'clipInvalid', 'two tracks');
+  eq(refusedId(JSON.stringify({ type: 'music-score-clip', version: 1, kind: 'beats', tracks: [] })), 'clipInvalid', 'no track');
+  eq(refusedId(JSON.stringify({ type: 'music-score-clip', version: 1, kind: 'beats', tracks: [[]] })), 'clipInvalid');
+  eq(refusedId(JSON.stringify({ type: 'music-score-clip', version: 1, kind: 'notes', tracks: [{ beats: [] }] })), 'clipInvalid', 'kind');
+  eq(refusedId(JSON.stringify({ type: 'music-score-clip', version: 1, kind: 'beats', tracks: [{ measures: [] }] })), 'clipInvalid', 'beats missing');
+  eq(refusedId(clipText('measures', [{ beats: [] }, 3])), 'clipInvalid', 'a measure that is not an object');
+  ok(({}).polluted === undefined && ({}).z === undefined && ({}).x === undefined);
+  eq(CL.looksLikeClip('{"type":"music-score-clip"}'), true);
+  eq([CL.looksLikeClip('hello'), CL.looksLikeClip('music-score-clip'), CL.looksLikeClip(null), CL.looksLikeClip('["music-score-clip"]')], [false, false, false, false]);
+});
+test('parseClip cleans: tempo removed everywhere, measures reduced to beats or voices (no column or settings fields), the content sanitized', () => {
+  const p = CL.parseClip(clipText('measures', [
+    { beats: [nt('whole', 1, 0, { tempo: 60 })], timeSignature: { beats: 3, beatType: 4 }, barline: 'final', pickup: true, clef: 'bass', ending: 1 },
+    { voices: [{ beats: [grace(), nt('whole', 1, 0, { tempo: 61 })] }], beats: [nt('half')] },
+  ]));
+  eq(p.clip.measures, [{ beats: [nt('whole')] }, { voices: [{ beats: [grace(), nt('whole')] }] }]);
+  eq(CL.parseClip(clipText('beats', [{ ...grace(), tempo: 70 }, nt('quarter', 1, 0, { tempo: 71 })])).clip.beats, [grace(), nt('quarter')]);
+});
+
+// ---------- applyPaste ----------
+const six = (measures) => model({ tracks: [tab(measures), tab([{ beats: [nt('whole')] }], { name: 'B' })] });
+const parse = (text) => CL.parseClip(text).clip;
+test('applyPaste beats: before the cursor beat and its graces; on the slot; over a selection (replaced); cursor after the pasted beats; overflow stays; one sanitize-stable result', () => {
+  const s = six([{ beats: [nt('half'), grace(), nt('half')] }, { beats: [nt('half')] }]);
+  const clip = parse(clipText('beats', [nt('quarter', 3, 3), nt('quarter', 4, 4)]));
+  const r = PA.applyPaste(s, cur(0, 0, 2), null, clip);
+  eq(v1(r.score, 0, 0).map((b) => b.type + b.duration), ['notehalf', 'notequarter', 'notequarter', 'grace16th', 'notehalf']);
+  eq(r.cursor, cur(0, 0, 4), 'still on the original beat');
+  eq(describe(r.announce), 'Pasted 2 beats');
+  ok(sanitizeScore(r.score) === r.score);
+  const slot = PA.applyPaste(s, cur(0, 1, 1), null, clip);
+  eq([v1(slot.score, 0, 1).length, slot.cursor.beat], [3, 3]);
+  const sel = SEL.selectionRange(s, 0, P(0, 0), P(0, 2));
+  const over = PA.applyPaste(s, cur(0, 0, 2), sel, clip);
+  eq(v1(over.score, 0, 0).map((b) => b.duration), ['quarter', 'quarter']);
+  eq(describe(over.announce), 'Pasted 2 beats, replaced 2');
+  eq(over.cursor, cur(0, 0, 2));
+});
+test('applyPaste fits the clip to the track: 7 strings into 6 drops (counted, an emptied beat becomes a rest), a different tuning drops pitch from string+fret notes, a stray tieEnd is removed, no tempo arrives', () => {
+  const s = six([{ beats: [nt('half')] }]);
+  const seven = clipText('beats', [{ type: 'note', duration: 'quarter', notes: [{ string: 7, fret: 2 }, { string: 1, fret: 1, tieEnd: true }] }, { type: 'note', duration: 'quarter', notes: [{ string: 7, fret: 0 }], tempo: 50 }], { tuning: SEVEN });
+  const r = PA.applyPaste(s, cur(0, 0, 0), null, parse(seven));
+  eq(v1(r.score, 0, 0).slice(0, 2), [{ type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 1 }] }, { type: 'rest', duration: 'quarter' }]);
+  eq(describe(r.announce), 'Pasted 2 beats, 2 notes on missing strings dropped');
+  const drop = clipText('beats', [{ type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 0, pitch: 'F4' }, { string: 2, fret: 1, pitch: 'C4' }] }], { tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'F4'] });
+  eq(v1(PA.applyPaste(s, cur(0, 0, 0), null, parse(drop)).score, 0, 0)[0].notes, [{ string: 1, fret: 0 }, { string: 2, fret: 1, pitch: 'C4' }], 'only the retuned string loses pitch');
+  ok(!JSON.stringify(r.score).includes('tempo'));
+});
+test('applyPaste measures: inserted before the cursor measure (the selection\'s first) in every track, other tracks get empty measures, no measure fields, carried fields at measure 1 kept; cursor on the original measure', () => {
+  const s = model({ tracks: [tab([{ beats: [nt('whole')], timeSignature: { beats: 3, beatType: 4 } }, { beats: [nt('half')] }]), tab([{ beats: [nt('whole')] }], { name: 'B' })] });
+  const clip = parse(clipText('measures', [{ beats: [nt('half', 2, 2)] }, { voices: [{ beats: [nt('whole', 3, 3)] }, { beats: [nt('whole', 4, 4)] }] }]));
+  const r = PA.applyPaste(s, cur(0, 0, 0), null, clip);
+  eq(r.score.tracks[0].measures, [{ timeSignature: { beats: 3, beatType: 4 }, beats: [nt('half', 2, 2)] }, { voices: [{ beats: [nt('whole', 3, 3)] }, { beats: [nt('whole', 4, 4)] }] }, { beats: [nt('whole')] }, { beats: [nt('half')] }]);
+  eq(r.score.tracks[1].measures, [{ beats: [] }, { beats: [] }, { beats: [nt('whole')] }]);
+  eq([r.cursor.measure, describe(r.announce)], [2, 'Pasted 2 measures at measure 1']);
+  ok(sanitizeScore(r.score) === r.score);
+  const sel = SEL.selectionRange(s, 0, P(1, 0), P(0, 0));
+  eq(PA.applyPaste(s, cur(0, 0, 0), sel, clip).announce.at, 1, 'before the selection\'s first measure');
+});
+test('applyPaste limits: 256 beats in a measure and 2000 measures are refused; an empty clip pastes nothing', () => {
+  const s = six([{ beats: Array.from({ length: 255 }, () => nt('64th')) }]);
+  eq(PA.applyPaste(s, cur(0, 0, 0), null, parse(clipText('beats', [nt('quarter'), nt('quarter')]))), { refused: { id: 'tooLarge' } });
+  ok(PA.applyPaste(s, cur(0, 0, 0), null, parse(clipText('beats', [nt('quarter')]))).score, '256 is fine');
+  const big = model({ tracks: [tab(Array.from({ length: L.measuresPerTrack - 1 }, () => ({ beats: [] })))] });
+  eq(PA.applyPaste(big, cur(0, 0, 0), null, parse(clipText('measures', [{ beats: [] }, { beats: [] }]))), { refused: { id: 'tooLarge' } });
+  eq(PA.applyPaste(s, cur(0, 0, 0), null, parse(clipText('beats', []))), { refused: { id: 'nothingToPaste' } });
+});
+
+// ---------- B10 / E12 extensions ----------
+const { exampleScore } = await imp('examples/example-score.js');
+const { leadRiff } = await imp('examples/lead-riff.js');
+const { leadSoloF } = await imp('examples/lead-solo-f.js');
+const { defaultScore } = await imp('src/editor/model/defaultScore.js');
+const B10_START = () => [
+  ['default', defaultScore()], ['lead-riff', model(leadRiff)], ['lead-solo-f', model(leadSoloF)], ['example-score', model(exampleScore)],
+  ['rich', model({ tracks: [tab([{ beats: [nt('quarter'), grace(), tn('quarter', 2, 2, { tieStart: true }), rest('quarter', { hidden: true }), nt('quarter')] },
+    { voices: [{ beats: [grace(), tn('half', 2, 2, { tieEnd: true }), nt('half', 1, 0, { tempo: 80 })] }, { beats: [nt('whole', 4, 0)] }] }, { beats: [{ type: 'note', duration: 'whole', slash: true }] }, null]),
+  { name: 'Hidden', showStandardNotation: false, measures: [{ beats: [] }] }] })],
+  ['mixed', model({ timeSignature: { beats: 3, beatType: 4 }, tracks: [{ name: 'Notes', measures: [{ beats: [{ type: 'note', duration: 'half', notes: [{ pitch: 'C4' }, { pitch: 'E4' }] }] }] }, tab([{ beats: [] }], { tuning: ['E1', 'A1', 'D2', 'G2'], showStandardNotation: false })] })],
+];
+const NAVS = ['moveLeft', 'moveRight', 'moveRight', 'moveUp', 'moveDown', 'prevMeasure', 'nextMeasure', 'measureStart', 'measureEnd', 'scoreStart', 'scoreEnd', 'prevTrack', 'nextTrack'];
+const EDITS = ['digit', 'digit', 'digit', 'deleteNote', 'deleteBeat', 'deleteMeasure', 'toggleRest', 'toggleTie', 'shorter', 'longer', 'cycleDots', 'toggleTriplet', 'insertBeat', 'insertMeasureAfter', 'insertMeasureBefore', 'fill', 'fill', 'reflow', 'reflow', 'vibrato', 'palmMute'];
+const SELECTS = ['selectLeft', 'selectRight', 'selectRight', 'selectMeasureStart', 'selectMeasureEnd', 'selectPrevMeasure', 'selectNextMeasure', 'selectAll'];
+test('B10 (2.3): 6 start scores x 2000 random steps mixing commands, selection, fill, reflow, ranged deletes, cut and pastes keep sanitizeScore(model) === model and a valid cursor and selection; undo all restores the start, redo all the end', () => {
+  const rnd = mulberry32(20261123);
+  const pick = (xs) => xs[Math.floor(rnd() * xs.length)];
+  for (const [label, start] of B10_START()) {
+    let s = start;
+    let c = C.clampCursor(s, cur(0, 0, 0));
+    let state = st();
+    let sel = null;
+    let clipboard = null;
+    const history = [];
+    let pastes = 0;
+    let ranged = 0;
+    for (let i = 0; i < 2000; i++) {
+      const r0 = rnd();
+      const before = { s, c };
+      let next = null;
+      if (r0 < 0.25) {
+        const name = pick(SELECTS);
+        const anchor = CMD.COMMANDS[name].fromStart ? SEL.startOf(s, c) : sel?.anchor ?? { measure: c.measure, beat: c.beat };
+        const r = CMD.run(name, s, c, state, { allowAppend: false });
+        c = r.cursor; state = r.state;
+        sel = SEL.selectionRange(s, c.track, anchor, c);
+      } else if (r0 < 0.33) {
+        const range = sel ?? CL.cursorRange(s, c);
+        if (range) clipboard = CL.buildClip(s, range).text;
+      } else if (r0 < 0.40) {
+        if (clipboard) {
+          const r = PA.applyPaste(s, c, sel, CL.parseClip(clipboard).clip);
+          if (!r.refused && io.exportedLength(r.score) <= L.jsonChars) { next = r; pastes++; }
+          sel = null;
+        }
+      } else if (r0 < 0.43) {
+        const range = sel ?? CL.cursorRange(s, c);
+        if (range) { const r = RE.clearSlices(s, range); if (r.score !== s) next = { score: r.score, cursor: { ...c, ...r.cursor } }; }
+        sel = null;
+      } else {
+        const name = rnd() < 0.4 ? pick(NAVS) : pick(EDITS);
+        const r = CMD.run(name, s, c, state, { maxFret: 24, now: i * 1000, twoDigitDelayMs: 800, allowAppend: true, selection: sel }, Math.floor(rnd() * 10));
+        state = r.state;
+        if (r.changed) { next = r; if (sel && ['deleteNote', 'deleteBeat', 'deleteMeasure', 'fill'].includes(name)) ranged++; } else c = r.cursor;
+        if (r.changed || CMD.COMMANDS[name].kind === 'nav') sel = null;
+      }
+      if (next) {
+        s = next.score;
+        c = C.clampCursor(s, next.cursor ?? c);
+        state = C.syncDuration(s, c, state);
+        history.push({ before, after: { s, c } });
+      }
+      ok(sanitizeScore(s) === s, `${label} step ${i}: sanitize identity`);
+      eq(C.clampCursor(s, c), c, `${label} step ${i}: valid cursor`);
+      if (sel) eq(SEL.selectionRange(s, sel.track, sel.anchor, sel.focus)?.info, sel.info, `${label} step ${i}: valid selection`);
+    }
+    ok(pastes > 20 && ranged > 10 && history.length > 300, `${label}: ${pastes} pastes, ${ranged} ranged edits, ${history.length} steps`);
+    const end = s;
+    for (let k = history.length - 1; k >= 0; k--) { ok(history[k].after.s === s); s = history[k].before.s; }
+    ok(s === start, `${label}: undo all restores the start`);
+    for (const h of history) s = h.after.s;
+    ok(s === end, `${label}: redo all reaches the end`);
+  }
+});
+test('E12 (2.3): unknown fields at score, track, measure, voice, beat and note level survive range edits, fill, reflow and pastes that do not own them; pasted beats carry theirs', () => {
+  const x = { keep: [1, { deep: true }] };
+  const s0 = model({ x, tracks: [
+    { x, name: 'A', showTablature: true, measures: [
+      { x, beats: [{ x, type: 'note', duration: 'quarter', notes: [{ x, string: 1, fret: 2 }] }, { x, type: 'rest', duration: 'quarter' }, { x, type: 'note', duration: 'whole', notes: [{ x, string: 2, fret: 1 }] }] },
+      { x, voices: [{ x, beats: [{ x, type: 'note', duration: 'half', notes: [{ x, string: 2, fret: 1 }] }] }, { x, beats: [] }] },
+      { x, beats: [] },
+    ] },
+    { x, name: 'B', showTablature: true, measures: [{ x, beats: [] }, { x, beats: [] }, { x, beats: [] }] },
+  ] });
+  const count = (v) => (Array.isArray(v) ? v.reduce((a, y) => a + count(y), 0) : v && typeof v === 'object' ? (JSON.stringify(v.x) === JSON.stringify(x) ? 1 : 0) + Object.values(v).reduce((a, y) => a + count(y), 0) : 0);
+  const n0 = count(s0);
+  const sel = SEL.selectionRange(s0, 0, P(0, 0), P(0, 1));
+  eq(count(run('deleteNote', s0, cur(0, 0, 1), sel).score), n0 - 1, 'clear: only the removed note\'s own field goes');
+  eq(count(run('fill', s0, cur(0, 1, 1), null).score), n0);
+  eq(count(run('reflow', s0, cur(0, 0, 0), null).score), n0);
+  const clip = CL.parseClip(CL.buildClip(s0, sel).text).clip;
+  eq(count(PA.applyPaste(s0, cur(0, 2, 0), null, clip).score), n0 + 3, 'two pasted beats and a note bring theirs');
+  const mclip = CL.parseClip(CL.buildClip(s0, SEL.selectionRange(s0, 0, P(1, 0), P(1, 1))).text).clip;
+  eq(mclip.kind, 'measures');
+  eq(count(PA.applyPaste(s0, cur(0, 0, 0), null, mclip).score), n0 + 4, 'a measures clip keeps voice and beat fields, never the measure\'s');
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

@@ -35,6 +35,9 @@ const LETTERS = { r: 'toggleRest', l: 'toggleTie', i: 'insertBeat' };
 /** `map[k]` when it is an own key (event keys such as 'toString' must not find inherited properties), else undefined. */
 const own = (map, k) => (Object.hasOwn(map, k) ? map[k] : undefined);
 
+/** Whether keyboard event `e` is a paste shortcut (Ctrl / Cmd+V, Shift+Insert): the 2.3 paste fallback, never a command. */
+export const isPasteKey = (e) => !!e && !e.altKey && (((e.ctrlKey || e.metaKey) && typeof e.key === 'string' && e.key.toLowerCase() === 'v') || (!!e.shiftKey && e.key === 'Insert'));
+
 /** The command for keyboard event `e`, or null. */
 export function keyToCommand(e) {
   const key = e?.key;

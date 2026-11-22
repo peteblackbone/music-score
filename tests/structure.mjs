@@ -230,6 +230,8 @@ export function mutationProblems(files) {
       { 'src/pitch.js': imp('./font.js') + (files['src/pitch.js'] || '') }],
     ['DOM token in selection.js is caught', DOM_FREE_CHECK,
       { [`${EDITOR}/selection.js`]: 'export const d = () => document.activeElement;\n' }],
+    ['document in clipboard.js is caught', DOM_FREE_CHECK,
+      { [`${EDITOR}/clipboard.js`]: 'export const d = () => document.activeElement;\n' }],
     ['DOM token in settings.js is caught', DOM_FREE_CHECK,
       { [`${EDITOR}/settings.js`]: 'export const d = () => document.title;\n' }],
     ['overlay importing MusicScoreRenderer is caught', ALLOWLIST_CHECK,

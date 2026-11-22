@@ -70,6 +70,7 @@ export class ScoreEditor {
       onKey: (e) => this.handleKey(e),
       onClick: (hit) => this._moveTo({ track: hit.ti, measure: hit.measureIndex, beat: hit.beatIndex, string: hit.string ?? this._cursor.string }),
       onFocusChange: (f) => this._focusChanged(f),
+      onClipboard: (kind, e) => this._clipboardEvent(kind, e),
     }, { width: o.width, theme: o.theme, style: resolveStyle(o), clock: this._clock });
     this._syncRoot();
     this._view.flush();

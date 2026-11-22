@@ -13,7 +13,8 @@
  * `_extend`, also in read-only mode. Every model change, plain move,
  * click, undo / redo and load clears the selection (`_dropSelection`,
  * which fires `selection` with null first); a refused or no-op edit keeps
- * it. Esc clears it (`_escape`). DOM-free: the view draws it.
+ * it. Esc clears it (`_escape`). DOM-free: the view draws it. Copy, cut
+ * and paste come from clipboard.js (installed here).
  */
 import { COMMANDS, run } from './model/commands.js';
 import { selectionRange, selectionInfo, selectionWords, startOf } from './model/selection.js';
@@ -21,9 +22,10 @@ import { clampCursor, syncDuration } from './model/cursor.js';
 import { tracksOf } from './model/access.js';
 import { removeTrackImpact } from './model/settings/tracks.js';
 import { describe } from './announce.js';
+import { installClipboard } from './clipboard.js';
 
 /** The public names selection.js installs on ScoreEditor.prototype. */
-export const SELECTION_API = Object.freeze(['getSelection', 'setSelection', 'clearSelection', 'getRemoveTrackImpact']);
+export const SELECTION_API = Object.freeze(['getSelection', 'setSelection', 'clearSelection', 'getRemoveTrackImpact', 'copy', 'cut', 'paste']);
 
 const hidden = (value) => ({ value, enumerable: false, writable: true, configurable: true });
 const same = (a, b) => JSON.stringify(a?.info ?? null) === JSON.stringify(b?.info ?? null);
@@ -38,8 +40,9 @@ function point(p, what) {
   return { track: track === undefined ? undefined : Math.trunc(track), measure: Math.trunc(measure), beat: Math.trunc(beat) };
 }
 
-/** Install the selection API on `Editor` (ScoreEditor). */
+/** Install the selection API, and the clipboard (clipboard.js), on `Editor` (ScoreEditor). */
 export function installSelection(Editor) {
+  installClipboard(Editor);
   const def = (name, fn) => Object.defineProperty(Editor.prototype, name, hidden(fn));
 
   def('getSelection', function getSelection() { this._alive(); return selectionInfo(this._selection); });

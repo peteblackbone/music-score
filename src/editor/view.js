@@ -5,6 +5,7 @@
  * `host` (ScoreEditor) for what to draw:
  *   host.viewScore() · host.cursorInfo() · host.fills() · host.selection() · host.afterRender()
  *   host.onKey(e) → bool · host.onClick(hit) · host.onFocusChange(focused)
+ *   host.onClipboard(kind, e) → bool  (2.3: copy / cut / paste on document while the root has focus; 'pastekey'; 'destroy')
  *
  * DOM (ui.md §2), all inside the container:
  *   div.music-score-editor[tabindex=0][role=application]   (focus stays here)
@@ -20,6 +21,7 @@ import { MusicScoreRenderer } from '../MusicScoreRenderer.js';
 import { hitTestMap } from '../hitMap.js';
 import { indexHitMap, cursorShapes, fillShapes, selectionShapes } from './geometry.js';
 import { createOverlay, drawShapes } from './overlay.js';
+import { isPasteKey } from './keymap.js';
 
 const LIVE_STYLE = 'position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;'
   + 'clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0';
@@ -75,8 +77,19 @@ export class EditorView {
 
     this._listen(this.root, 'keydown', (e) => {
       if (e.target !== this.root || e.defaultPrevented) return;
+      if (isPasteKey(e)) this.host.onClipboard('pastekey', e); // never prevented: the native paste event must fire
       if (this.host.onKey(e)) e.preventDefault();
     });
+    // 2.3 clipboard: native events on document, acted on only while the root has focus
+    const doc = typeof document !== 'undefined' ? document : null;
+    if (typeof doc?.addEventListener === 'function') {
+      for (const kind of ['copy', 'cut', 'paste']) {
+        this._listen(doc, kind, (e) => {
+          if (doc.activeElement !== this.root || e.defaultPrevented) return;
+          if (this.host.onClipboard(kind, e)) e.preventDefault();
+        });
+      }
+    }
     this._listen(this.root, 'focus', () => this.host.onFocusChange(true));
     this._listen(this.root, 'blur', () => this.host.onFocusChange(false));
     this._listen(this.renderHost, 'mousedown', (e) => this._mouseDown(e));
@@ -239,6 +252,7 @@ export class EditorView {
     this._raf = null;
     this._fallback = null;
     this._liveTimer = null;
+    this.host.onClipboard('destroy');
     for (const [node, type, fn] of this._listeners) node.removeEventListener(type, fn);
     this._listeners = [];
     try { this.container.removeChild(this.root); } catch { /* already removed by the page */ }

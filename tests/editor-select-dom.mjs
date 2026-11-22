@@ -340,6 +340,246 @@ test('criterion 38: Shift+F moves the overflow, adds a measure on the last one, 
   eq([ro.press('f'), ro.spoken(), ro.press(key('F', SHIFT)), ro.spoken()], [[false], 'Read-only', [false], 'Read-only']);
 });
 
+// ---------- clipboard (criteria 15-26), the R6 fallback, destroy ----------
+const { makeClipboardData } = await import('./editor-shim.mjs');
+const { CLIP_MIME } = await imp('src/editor/model/clip.js');
+const { EDITOR_LIMITS } = await imp('src/editor/model/limits.js');
+const { clampCursor } = await imp('src/editor/model/cursor.js');
+const SEVEN = ['B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'];
+const clipText = (kind, content, extra = {}) => JSON.stringify({ type: 'music-score-clip', version: 1, kind, tracks: [{ tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'], [kind]: content, ...extra }] });
+/** Dispatch a native clipboard event on document; returns the event. */
+const fire = (kind, init = {}, opts) => { const clipboardData = makeClipboardData(init, opts); return { e: document.dispatch(kind, { clipboardData }), clipboardData }; };
+test('criterion 15: Ctrl+C with focus: keydown not prevented; the copy event sets the custom type and text/plain (same JSON), updates the internal clipboard and is prevented; "Copied N beats"', () => {
+  const { ed, rootEl, spoken } = mk(fixture());
+  ed.focus();
+  ed.setSelection({ anchor: { measure: 0, beat: 0 }, focus: { measure: 0, beat: 2 } });
+  const kd = rootEl.dispatch('keydown', { ...key('c', CTRL), target: rootEl });
+  eq(kd.defaultPrevented, false);
+  const { e, clipboardData } = fire('copy');
+  eq(e.defaultPrevented, true);
+  const text = clipboardData.data.get(CLIP_MIME);
+  eq(clipboardData.data.get('text/plain'), text);
+  eq(JSON.parse(text).tracks[0].beats.length, 3);
+  eq(spoken(), 'Copied 3 beats');
+  ed.clearSelection();
+  ed.setCursor({ measure: 3, beat: 1 });
+  eq(ed.paste(), true, 'the internal clipboard has it');
+  eq(ed.getScore().tracks[0].measures[3].beats.length, 4);
+  for (const k of ['x', 'v', 'Insert']) eq(rootEl.dispatch('keydown', { ...key(k, k === 'Insert' ? SHIFT : CTRL), target: rootEl }).defaultPrevented, false, k);
+  ed.destroy();
+});
+test('criterion 16 / R2: copy, cut and paste events are ignored without focus; copy without a selection takes the cursor beat; on the slot "Nothing to copy" and the event is left alone', () => {
+  const { ed, spoken } = mk(fixture());
+  document.activeElement = null;
+  for (const kind of ['copy', 'cut', 'paste']) {
+    const { e, clipboardData } = fire(kind, { [CLIP_MIME]: clipText('beats', [nt('quarter')]) });
+    eq([e.defaultPrevented, clipboardData.data.size], [false, 1], kind);
+  }
+  eq(ed.canUndo(), false);
+  ed.focus();
+  const one = fire('copy');
+  eq([one.e.defaultPrevented, JSON.parse(one.clipboardData.data.get('text/plain')).tracks[0].beats.length, spoken()], [true, 1, 'Copied 1 beat']);
+  ed.setCursor({ measure: 3, beat: 1 });
+  const slot = fire('copy');
+  eq([slot.e.defaultPrevented, slot.clipboardData.data.size, spoken()], [false, 0, 'Nothing to copy']);
+  eq([ed.copy(), ed.cut()], [null, null]);
+  const pre = { defaultPrevented: true, clipboardData: makeClipboardData() };
+  ed.setCursor({ measure: 0, beat: 0 });
+  document.dispatch('copy', pre);
+  eq(pre.clipboardData.data.size, 0, 'an event already handled by the page is left alone');
+  ed.destroy();
+});
+test('criteria 17 / 18 / 25: a beats clip pastes before the cursor beat (one undo removes it; overflow shows Over); a measures clip inserts before the cursor measure in every track; sanitize-stable', () => {
+  const { ed, spoken } = mk(fixture());
+  ed.focus();
+  ed.setCursor({ measure: 0, beat: 1 });
+  spoken();
+  const before = ed._model;
+  fire('paste', { [CLIP_MIME]: clipText('beats', [nt('half', 3, 3)]) });
+  eq(ed.getScore().tracks[0].measures[0].beats.map((b) => b.notes[0].fret), [1, 3, 2, 3, 4]);
+  eq([ed.getMeasureFill(0, 0), ed.getCursor().beat, spoken()], ['over', 2, 'Pasted 1 beat']);
+  ok(sanitizeScore(ed._model) === ed._model);
+  ed.undo();
+  ok(ed._model === before, 'one undo step');
+  ed.setCursor({ measure: 2, beat: 0 });
+  spoken();
+  fire('paste', { [CLIP_MIME]: clipText('measures', [{ beats: [nt('whole', 1, 7)] }, { beats: [] }]) });
+  eq(ed.getScore().tracks.map((t) => t.measures.length), [6, 4]);
+  eq(ed.getScore().tracks[0].measures[2].beats[0].notes[0].fret, 7);
+  eq(ed.getScore().tracks[1].measures, [{ beats: [nt('whole', 4, 3)] }, { beats: [] }, { beats: [] }, { beats: [] }]);
+  eq([ed.getCursor().measure, spoken()], [4, 'Pasted 2 measures at measure 3']);
+  ok(sanitizeScore(ed._model) === ed._model);
+  ed.destroy();
+});
+test('criterion 19: editor A copies, editor B pastes through the internal clipboard; across tabs the system clipboard\'s custom type wins over the internal one, then text/plain that is a clip, else the internal one', () => {
+  const a = mk(fixture());
+  const b = mk({ tracks: [{ name: 'Other', showTablature: true, measures: [{ beats: [] }] }] });
+  a.ed.setSelection({ anchor: { measure: 1, beat: 0 }, focus: { measure: 1, beat: 2 } });
+  a.ed.copy();
+  b.ed.focus();
+  eq(b.ed.paste(), true);
+  eq(b.ed.getScore().tracks[0].measures[0].beats.map((x) => x.type), ['note', 'grace', 'note']);
+  b.ed.undo();
+  fire('paste', { [CLIP_MIME]: clipText('beats', [nt('8th', 1, 9)]), 'text/plain': clipText('beats', [nt('8th', 1, 8)]) });
+  eq(b.ed.getScore().tracks[0].measures[0].beats.map((x) => x.notes[0].fret), [9], 'custom type first');
+  b.ed.undo();
+  fire('paste', { 'text/plain': clipText('beats', [nt('8th', 1, 8)]) });
+  eq(b.ed.getScore().tracks[0].measures[0].beats.map((x) => x.notes[0].fret), [8], 'then text/plain that is a clip');
+  b.ed.undo();
+  fire('paste', { 'text/plain': 'just some text' });
+  eq(b.ed.getScore().tracks[0].measures[0].beats.length, 3, 'else the internal clipboard');
+  b.ed.undo();
+  const denied = fire('paste', {}, { throws: true });
+  eq([denied.e.defaultPrevented, b.ed.getScore().tracks[0].measures[0].beats.length], [true, 3], 'unreadable clipboardData: internal');
+  b.ed.undo();
+  fire('paste', { [CLIP_MIME]: clipText('beats', []).replace('"version":1', '"version":9') });
+  eq([b.ed.lastMessage, b.ed.getScore().tracks[0].measures[0].beats.length], ['Unsupported clip version', 0], 'a bad custom clip is refused, no fallback');
+  const ro = fire('copy', {}, { throws: true });
+  eq(ro.e.defaultPrevented, false, 'setData refused: the event is left alone');
+  a.ed.destroy(); b.ed.destroy();
+});
+test('criteria 20-22: notes on string 7 into a 6-string track are dropped and counted; a stray tieEnd is removed; pasted beats never carry tempo, measures clips no column or settings fields', () => {
+  const { ed, spoken } = mk({ tracks: [{ name: 'G', showTablature: true, measures: [{ beats: [] }] }] });
+  eq(ed.paste(clipText('beats', [{ type: 'note', duration: 'quarter', notes: [{ string: 7, fret: 1 }, { string: 6, fret: 1, tieEnd: true }], tempo: 77 }, { type: 'note', duration: 'quarter', notes: [{ string: 7, fret: 3 }] }], { tuning: SEVEN })), true);
+  eq(ed.getScore().tracks[0].measures[0].beats, [{ type: 'note', duration: 'quarter', notes: [{ string: 6, fret: 1 }] }, { type: 'rest', duration: 'quarter' }]);
+  eq(spoken(), 'Pasted 2 beats, 2 notes on missing strings dropped');
+  ed.paste(clipText('measures', [{ beats: [nt('whole')], timeSignature: { beats: 3, beatType: 4 }, barline: 'final', segno: true, pickup: true, section: 'A' }]));
+  eq(ed.getScore().tracks[0].measures[0], { beats: [nt('whole')] });
+});
+test('criterion 23: hostile clips change nothing and are refused with an announcement (malformed, wrong type or version, an array, __proto__, over 5 MB, over the limits)', () => {
+  const { ed, spoken } = mk(fixture());
+  const before = ed._model;
+  for (const [input, said] of [
+    ['{', 'Not a music-score clip'], ['{"type":"x","version":1}', 'Not a music-score clip'], ['[]', 'Not a music-score clip'],
+    [clipText('beats', []).replace('"version":1', '"version":2'), 'Unsupported clip version'],
+    [clipText('beats', [nt('quarter')]).replace('"type":"note"', '"__proto__":{"p":1},"type":"note"'), 'Not a music-score clip'],
+    [' '.repeat(EDITOR_LIMITS.jsonChars + 1), 'Clip too large'],
+    [clipText('beats', Array.from({ length: 257 }, () => nt('64th'))), 'Clip too large'],
+  ]) {
+    eq(ed.paste(input), false);
+    eq([spoken(), ed.lastMessage], [said, said]);
+  }
+  ok(ed._model === before && !ed.canUndo() && ({}).p === undefined);
+  eq([ed.paste(null), spoken()], [false, 'Nothing to paste']);
+});
+test('criterion 24: a paste past jsonChars, 2000 measures or 256 beats per voice is refused ("The score would be too large")', () => {
+  const big = mk({ tracks: [{ showTablature: true, measures: [{ beats: Array.from({ length: 255 }, () => nt('64th')) }] }] });
+  eq([big.ed.paste(clipText('beats', [nt('64th'), nt('64th')])), big.spoken()], [false, 'The score would be too large']);
+  const many = mk({ tracks: [{ showTablature: true, measures: Array.from({ length: 1999 }, () => ({ beats: [] })) }] });
+  eq([many.ed.paste(clipText('measures', [{ beats: [] }, { beats: [] }])), many.spoken()], [false, 'The score would be too large']);
+  const wide = mk({ zz: 'x'.repeat(EDITOR_LIMITS.jsonChars - 20000), tracks: [{ showTablature: true, measures: [{ beats: [] }] }] });
+  const clip = clipText('beats', [{ ...nt('quarter'), pad: 'y'.repeat(30000) }]);
+  ok(clip.length < EDITOR_LIMITS.jsonChars);
+  eq([wide.ed.paste(clip), wide.ed.lastMessage, wide.ed.canUndo()], [false, 'The score would be too large', false]);
+  eq(wide.ed.paste(clipText('beats', [nt('quarter')])), true, 'a small paste still fits');
+});
+test('criterion 26: cut, paste and the delete keys in read-only mode announce "Read-only" and change nothing; copy works', () => {
+  const { ed, spoken } = mk(fixture(), { readOnly: true });
+  ed.focus();
+  ed.setSelection({ anchor: { measure: 0, beat: 0 }, focus: { measure: 0, beat: 1 } });
+  spoken();
+  const before = ed._model;
+  eq([ed.cut(), spoken()], [null, 'Read-only']);
+  eq([ed.paste(clipText('beats', [nt('quarter')])), spoken()], [false, 'Read-only']);
+  const cut = fire('cut');
+  eq([cut.e.defaultPrevented, cut.clipboardData.data.size], [false, 0]);
+  fire('paste', { [CLIP_MIME]: clipText('beats', [nt('quarter')]) });
+  eq(spoken(), 'Read-only');
+  eq(typeof ed.copy(), 'string');
+  ok(ed._model === before && ed.getSelection().beatCount === 2);
+  ed.destroy();
+});
+test('cut: copy, then the range becomes rests in one undo step ("Cut 3 beats, now rests"); cursor at the start; a measures cut; without a selection the cursor beat', () => {
+  const { ed, spoken } = mk(fixture());
+  ed.focus();
+  ed.setSelection({ anchor: { measure: 0, beat: 1 }, focus: { measure: 0, beat: 3 } });
+  spoken();
+  const before = ed._model;
+  const { e, clipboardData } = fire('cut');
+  eq(e.defaultPrevented, true);
+  eq(JSON.parse(clipboardData.data.get(CLIP_MIME)).tracks[0].beats.length, 3);
+  eq(ed.getScore().tracks[0].measures[0].beats.map((b) => b.type), ['note', 'rest', 'rest', 'rest']);
+  eq([ed.getCursor().beat, spoken(), ed.getSelection()], [1, 'Cut 3 beats, now rests', null]);
+  ed.undo();
+  ok(ed._model === before);
+  eq(spoken(), 'Undo: cut');
+  ed.setSelection({ anchor: { measure: 2, beat: 0 }, focus: { measure: 2, beat: 0 } });
+  spoken();
+  ed.cut();
+  eq(spoken(), 'Cut 1 measure, now rests');
+  ed.setCursor({ measure: 0, beat: 0 });
+  spoken();
+  ed.cut();
+  eq([ed.getScore().tracks[0].measures[0].beats[0].type, spoken()], ['rest', 'Cut 1 beat, now rests']);
+  ed.cut();
+  eq([ed.canUndo(), spoken()], [true, 'Cut 1 beat, now rests'], 'cutting a rest copies it and changes nothing');
+  ed.destroy();
+});
+test('R6: one Ctrl+V keystroke pastes once, with the native paste event (it cancels the fallback) and without it (the 0 ms fallback pastes from the internal clipboard); keydown is never prevented', () => {
+  const { ed, rootEl, clock } = mk({ tracks: [{ showTablature: true, measures: [{ beats: [] }] }] });
+  ed.focus();
+  ed.paste(clipText('beats', [nt('quarter', 1, 5)]));
+  ed.setCursor({ beat: 0 });
+  eq(JSON.parse(ed.copy()).tracks[0].beats.length, 1, 'the shared clipboard holds this beat');
+  const count = () => ed.getScore().tracks[0].measures[0].beats.length;
+  let kd = rootEl.dispatch('keydown', { ...key('v', CTRL), target: rootEl });
+  eq([kd.defaultPrevented, clock.pendingTimers() > 0], [false, true]);
+  fire('paste', { [CLIP_MIME]: clipText('beats', [nt('quarter', 1, 6)]) });
+  clock.advance(10);
+  eq(count(), 2, 'the native event pasted; the fallback was cancelled');
+  kd = rootEl.dispatch('keydown', { ...key('V', { metaKey: true }), target: rootEl });
+  eq(kd.defaultPrevented, false);
+  eq(count(), 2, 'nothing before the fallback runs');
+  clock.advance(0);
+  eq(count(), 3, 'Safari: the fallback pasted once');
+  clock.advance(100);
+  eq(count(), 3);
+  rootEl.dispatch('keydown', { ...key('Insert', SHIFT), target: rootEl });
+  ed.destroy();
+  eq(clock.pendingTimers(), 0, 'destroy cancels a pending fallback');
+});
+test('destroy removes the document listeners (listenerCount restored); two editors: only the focused one acts on a native event', () => {
+  const n0 = document.listenerCount();
+  const a = mk(fixture());
+  const b = mk(fixture());
+  eq(document.listenerCount(), n0 + 6);
+  b.ed.focus();
+  b.ed.setCursor({ measure: 0, beat: 0 });
+  const { clipboardData } = fire('copy');
+  eq(JSON.parse(clipboardData.data.get(CLIP_MIME)).tracks[0].beats.length, 1);
+  eq(a.ed.lastMessage, '', 'editor A did nothing');
+  a.ed.destroy(); b.ed.destroy();
+  eq(document.listenerCount(), n0);
+});
+test('B10 (controller, 300 steps): keys, selection, fill, reflow, ranged deletes and clipboard events keep sanitizeScore(model) === model and a valid cursor; undo all restores the start, redo all the end', () => {
+  function mulberry32(a) {
+    return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  const rnd = mulberry32(2303);
+  const pick = (xs) => xs[Math.floor(rnd() * xs.length)];
+  const KEYS = [key('ArrowRight'), key('ArrowLeft'), key('ArrowDown'), key('5'), key('7'), key('r'), key('f'), key('F', SHIFT), key('Delete'), key('Delete', CTRL), key('Delete', SHIFT),
+    key('ArrowRight', SHIFT), key('ArrowRight', SHIFT), key('ArrowLeft', SHIFT), key('End', SHIFT), key('ArrowRight', { ctrlKey: true, shiftKey: true }), key('a', CTRL), key('Escape'), key('m'), key('i'), key('v'), key('PageDown'), key('PageUp')];
+  const { ed, clock } = mk(fixture(), { historyLimit: 1000 });
+  ed.focus();
+  const start = ed._model;
+  for (let i = 0; i < 300; i++) {
+    const r = rnd();
+    if (r < 0.1) fire('copy');
+    else if (r < 0.15) fire('cut');
+    else if (r < 0.25) fire('paste');
+    else ed.handleKey(pick(KEYS));
+    clock.advance(1000);
+    ok(sanitizeScore(ed._model) === ed._model, `step ${i}`);
+    eq(clampCursor(ed._model, ed._cursor), ed._cursor, `step ${i}: valid cursor`);
+  }
+  const end = ed._model;
+  while (ed.undo());
+  ok(ed._model === start, 'undo all');
+  while (ed.redo());
+  ok(ed._model === end, 'redo all');
+  ed.destroy();
+});
+
 // ---------- report ----------
 export async function summary() {
   let fail = 0;

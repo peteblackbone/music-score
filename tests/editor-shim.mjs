@@ -56,6 +56,23 @@ def('getBoundingClientRect', function getBoundingClientRect() {
 });
 def('scrollIntoView', function scrollIntoView(opts) { scrollLog.push({ node: this, opts }); });
 if (!('activeElement' in document)) document.activeElement = null;
+// 2.3: the document gets the same listener functions (clipboard events are listened for on document).
+for (const name of ['addEventListener', 'removeEventListener', 'dispatch', 'listenerCount']) {
+  if (!(name in document)) Object.defineProperty(document, name, { value: proto[name], configurable: true, writable: true });
+}
+
+/**
+ * A DataTransfer-like clipboardData for synthetic copy / cut / paste events: `init` maps types to
+ * strings; `{ throws: true }` makes getData and setData throw (a browser that refuses access).
+ */
+export function makeClipboardData(init = {}, { throws = false } = {}) {
+  const data = new Map(Object.entries(init));
+  return {
+    data,
+    getData(type) { if (throws) throw new Error('denied'); return data.get(type) ?? ''; },
+    setData(type, v) { if (throws) throw new Error('denied'); data.set(type, String(v)); },
+  };
+}
 
 /** A manual clock: now(), timers and animation frames run only on advance(ms) / frame(). */
 export function makeClock(start = 1000) {

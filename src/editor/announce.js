@@ -100,6 +100,16 @@ export const MESSAGES = Object.freeze({
   reflowed: (d) => `${d.added ? `Measure ${d.to} added, moved ${plural(d.count, 'beat')} to it` : `Moved ${plural(d.count, 'beat')} to measure ${d.to}`}${d.crossing ? `, beat ${d.crossing} crosses the barline and stays` : ''}`,
   reflowCrossing: (d) => `Beat ${d.beat} crosses the barline and stays`,
   reflowNothing: () => 'Nothing to reflow',
+  // 2.3 clipboard
+  copied: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}`,
+  cut: (d) => `Cut ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}, now rests`,
+  pasted: (d) => `Pasted ${d.kind === 'measures' ? `${plural(d.count, 'measure')} at measure ${d.at}` : `${plural(d.count, 'beat')}${d.replaced != null ? `, replaced ${d.replaced}` : ''}`}${d.dropped ? `, ${plural(d.dropped, 'note')} on missing strings dropped` : ''}`,
+  nothingToCopy: () => 'Nothing to copy',
+  nothingToPaste: () => 'Nothing to paste',
+  notClip: () => 'Not a music-score clip',
+  clipInvalid: () => 'Not a music-score clip',
+  clipVersion: () => 'Unsupported clip version',
+  clipTooLarge: () => 'Clip too large',
 });
 
 /** '1 beat' / '3 measures' (n of `word`). */
