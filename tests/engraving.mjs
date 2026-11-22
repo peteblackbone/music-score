@@ -2647,16 +2647,15 @@ test('tab-rhythm', 'theme: tabFretColor on all band ink, background knock-outs, 
   ok(glyphs(svg, 0xE241).every((f) => f.getAttribute('font-size') === '20'), 'flags at 0.5 x 40');
 });
 
-test('tab-rhythm', "off with notation by default ('auto' / absent), off with tabRhythm: false or no TAB staff; unknown durations still throw; deterministic", () => {
+test('tab-rhythm', "off with notation by default ('auto' / absent), off with tabRhythm: false or no TAB staff; unknown durations draw as quarters; deterministic", () => {
   const nt = (on) => ({ tracks: [{ showTablature: true, ...(on === undefined ? {} : { tabRhythm: on }), measures: [{ beats: [tn('quarter', 1, 0), tn('half', 1, 2), tr('quarter')] }] }] });
   ok(bands(renderTree(nt(undefined))).length === 0, 'notation + TAB, absent');
   ok(bands(renderTree(nt('auto'))).length === 0, "notation + TAB, 'auto'");
   ok(bands(renderTree(nt(false))).length === 0, 'notation + TAB, false');
   ok(bands(renderTree(nt(true))).length === 1, 'notation + TAB, true');
   ok(bands(renderTree({ tracks: [{ showTablature: false, tabRhythm: true, measures: [{ beats: [q('E4')] }] }] })).length === 0, 'no TAB staff');
-  let threw = null;
-  try { renderTree(tabTrack([{ beats: [tn('bogus', 1, 0)] }])); } catch (e) { threw = e.message; }
-  ok(/Unknown duration/.test(threw || ''), `unknown duration throws (${threw})`);
+  // 1.12.1: an unknown duration no longer throws; it draws as a quarter (src/sanitize.js)
+  ok(serialize(renderTree(tabTrack([{ beats: [tn('bogus', 1, 0)] }]))) === serialize(renderTree(tabTrack([{ beats: [tn('quarter', 1, 0)] }]))), 'unknown duration draws as a quarter');
   const s = tabTrack([{ beats: [tn('8th', 1, 0), tn('8th', 1, 1), tr('quarter', { dots: 1 }), tn('8th', 1, 0, { dots: 1 }), tn('32nd', 1, 0), tr('32nd')] }]);
   ok(serialize(renderTree(s)) === serialize(renderTree(s)), 'deterministic');
 });
@@ -3376,7 +3375,7 @@ test('tab-rhythm', 'AC13: tabFretColor on every stroke / fill of the band (fixtu
   ok(n > 100, `${n} nodes checked`);
 });
 
-test('tab-rhythm', 'AC16: determinism over all SCORES (two renders equal, input untouched); unknown durations throw with tabRhythm on and off (note, rest, inside a beam group)', () => {
+test('tab-rhythm', 'AC16: determinism over all SCORES (two renders equal, input untouched); unknown durations draw as quarters with tabRhythm on and off (note, rest, inside a beam group)', () => {
   for (const [name, score, options] of SCORES) {
     const before = JSON.stringify(score);
     const a = serialize(renderTree(score, 700, options)); const b = serialize(renderTree(score, 700, options));
@@ -3384,12 +3383,13 @@ test('tab-rhythm', 'AC16: determinism over all SCORES (two renders equal, input 
     const box = makeContainer(); new MusicScoreRenderer(box, score, { width: 700, ...options }).render();
     ok(serialize(box.children[0]) === a && JSON.stringify(score) === before, `${name}: direct render differs or the input was mutated`);
   }
-  const thrown = (fn) => { try { fn(); } catch (e) { return e.message; } return ''; };
+  // 1.12.1: an unknown duration draws exactly as a quarter (src/sanitize.js), no longer throws
+  const same = (a, b) => serialize(renderTree(a)) === serialize(renderTree(b));
   for (const on of [true, false]) {
     const mk = (beats) => ({ tracks: [{ showStandardNotation: false, showTablature: true, tabRhythm: on, measures: [{ beats }] }] });
-    ok(/Unknown duration/.test(thrown(() => renderTree(mk([tn('bogus', 1, 0)])))), `note, tabRhythm ${on}`);
-    ok(/Unknown duration/.test(thrown(() => renderTree(mk([tn('quarter', 1, 0), tr('bogus')])))), `rest, tabRhythm ${on}`);
-    ok(/Unknown duration/.test(thrown(() => renderTree(mk([tn('8th', 1, 0), tn('8th', 1, 1), tn('sixty', 1, 2)])))), `in a beam group, tabRhythm ${on}`);
+    ok(same(mk([tn('bogus', 1, 0)]), mk([tn('quarter', 1, 0)])), `note, tabRhythm ${on}`);
+    ok(same(mk([tn('quarter', 1, 0), tr('bogus')]), mk([tn('quarter', 1, 0), tr('quarter')])), `rest, tabRhythm ${on}`);
+    ok(same(mk([tn('8th', 1, 0), tn('8th', 1, 1), tn('sixty', 1, 2)]), mk([tn('8th', 1, 0), tn('8th', 1, 1), tn('quarter', 1, 2)])), `in a beam group, tabRhythm ${on}`);
   }
 });
 }
