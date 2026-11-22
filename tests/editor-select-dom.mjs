@@ -651,6 +651,8 @@ test('demo helpers: Selection status text, clip text check, the Remove confirm w
   eq(DE.selectionText({ kind: 'measures', beatCount: 9, measures: [1, 3] }), '3 measures (2–4)');
   eq(DE.selectionText({ kind: 'measures', beatCount: 2, measures: [1, 1] }), '1 measure (2)');
   eq([DE.isClipText(clipText('beats', [])), DE.isClipText('{"type":"x"}'), DE.isClipText('music-score-clip'), DE.isClipText(undefined)], [true, false, false, false]);
+  eq(DE.isClipText(clipText('beats', []) + ' '.repeat(EDITOR_LIMITS.jsonChars)), false, 'the length cap applies');
+  ok(Object.isFrozen(ScoreEditor) || Object.getOwnPropertyDescriptor(ScoreEditor, 'looksLikeClip').writable === false, 'a read-only static');
   eq(DT.removeConfirm('Guitar', { notes: 24, tempoMarks: 1 }), 'Remove track "Guitar"? Its 24 notes and 1 tempo mark will be deleted.');
   eq(DT.removeConfirm('Guitar', { notes: 0, tempoMarks: 2 }), 'Remove track "Guitar"? Its 2 tempo marks will be deleted.');
   eq(DT.removeConfirm('Guitar', { notes: 1, tempoMarks: 0 }), 'Remove track "Guitar"? Its 1 note will be deleted.');

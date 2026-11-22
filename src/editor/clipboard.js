@@ -39,8 +39,9 @@ function writeClip(data, text) {
 }
 
 
-/** Install copy, cut, paste and the clipboard event handler on `Editor` (ScoreEditor). */
+/** Install copy, cut, paste and the clipboard event handler on `Editor` (ScoreEditor), and the static `looksLikeClip(text)`. */
 export function installClipboard(Editor) {
+  Object.defineProperty(Editor, 'looksLikeClip', { value: looksLikeClip, enumerable: true, writable: false, configurable: false });
   const def = (name, fn) => method(Editor, name, fn);
 
   /** The clip of the selection or the cursor beat → `{ text, kind, count, range }`, or null on the slot. */

@@ -62,7 +62,7 @@ export function buildClip(score, sel) {
   return { text: JSON.stringify({ type: CLIP_TYPE, version: CLIP_VERSION, kind, tracks: [entry] }), kind, count };
 }
 
-/** Whether `text` parses to an object with `type: CLIP_TYPE` (the paste event's text/plain check). */
+/** Whether `text` (at most LIMITS.jsonChars long) parses to an object with `type: CLIP_TYPE`: the paste event's text/plain check, public as ScoreEditor.looksLikeClip. */
 export function looksLikeClip(text) {
   if (typeof text !== 'string' || text.length > EDITOR_LIMITS.jsonChars || !text.includes(CLIP_TYPE)) return false;
   try { const v = JSON.parse(text); return plain(v) && v.type === CLIP_TYPE; } catch { return false; }

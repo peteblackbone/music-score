@@ -13,6 +13,7 @@
  *
  * Pure helpers (exported for the tests): selectionText, isClipText.
  */
+import { ScoreEditor } from '../index.js';
 
 /** The status bar's Selection text for getSelection() `sel`: '–', '6 beats, measures 2–3', '4 beats, measure 2', '3 measures (2–4)', '1 measure (2)'. */
 export function selectionText(sel) {
@@ -26,11 +27,8 @@ export function selectionText(sel) {
   return `${sel.beatCount} beat${sel.beatCount === 1 ? '' : 's'}, measure${a === b ? '' : 's'} ${span}`;
 }
 
-/** Whether clipboard text `t` is a music-score clip (a JSON object with type 'music-score-clip'). */
-export function isClipText(t) {
-  if (typeof t !== 'string' || !t.includes('music-score-clip')) return false;
-  try { const v = JSON.parse(t); return !!v && typeof v === 'object' && !Array.isArray(v) && v.type === 'music-score-clip'; } catch { return false; }
-}
+/** Whether clipboard text `t` is a music-score clip (the library's check, size cap included). */
+export const isClipText = (t) => ScoreEditor.looksLikeClip(t);
 
 /**
  * Wire the Edit and Measures groups. `refresh` re-reads the page after an
