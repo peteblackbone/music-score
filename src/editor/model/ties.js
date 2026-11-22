@@ -29,6 +29,19 @@ export function nextMainBeat(score, ti, mi, bi) {
   return null;
 }
 
+/** `{ mi, bi }` of the last main beat inside measure `mi` only, or null. */
+export function lastMainIn(score, ti, mi) {
+  const beats = beatsAt(score, ti, mi);
+  for (let k = beats.length - 1; k >= 0; k--) if (!isGrace(beats[k])) return { mi, bi: k };
+  return null;
+}
+
+/** `{ mi, bi }` of the first main beat inside measure `mi` only, or null. */
+export function firstMainIn(score, ti, mi) {
+  const k = beatsAt(score, ti, mi).findIndex((b) => !isGrace(b));
+  return k < 0 ? null : { mi, bi: k };
+}
+
 const beatAt = (score, ti, loc) => (loc ? beatsAt(score, ti, loc.mi)[loc.bi] ?? null : null);
 
 /** `score` with `flag` removed from the note on string `s` at `loc` (unchanged when it is not set). */

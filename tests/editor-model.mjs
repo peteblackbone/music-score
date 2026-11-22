@@ -455,6 +455,65 @@ test('insertBeat: a rest with the current duration before the beat and its leadi
   ok(sanitizeScore(a.score) === a.score && sanitizeScore(b.score) === b.score);
 });
 
+// ---------- measures (E9, E10, C4 auto-append) ----------
+const M = await imp('src/editor/model/measures.js');
+test('insertMeasure: {beats: []} at the index in every track, short tracks padded, voices carried, cursor to the new measure (E9, E10)', () => {
+  const v = { voices: [{ beats: [nt('whole')] }, { beats: [nt('whole', 3, 3)] }] };
+  const s = sc(tab([{ beats: [nt('whole')] }, v, { beats: [nt('whole')] }]), tab([{ beats: [nt('whole')] }]));
+  const a = M.insertMeasureAfter(s, cur(0, 1, 0));
+  eq(a.score.tracks[0].measures.map((m) => m.beats?.length ?? 'v'), [1, 'v', 0, 1]);
+  ok(a.score.tracks[0].measures[1] === v, 'two-voice measure kept by reference');
+  eq(a.score.tracks[1].measures, [{ beats: [nt('whole')] }, { beats: [] }, { beats: [] }], 'short track padded to the index');
+  eq([a.cursor, a.announce], [cur(0, 2, 0), { id: 'measureInserted', n: 3 }]);
+  const b = M.insertMeasureBefore(s, cur(1, 0, 0));
+  eq(b.score.tracks.map((t) => t.measures.length), [4, 2]);
+  eq([b.cursor.measure, b.announce.n], [0, 1]);
+  ok(sanitizeScore(a.score) === a.score && sanitizeScore(b.score) === b.score);
+});
+test('insertMeasure: ties across the new empty measure are broken', () => {
+  const s = sc(tab([{ beats: [tn('whole', 1, 3, { tieStart: true })] }, { beats: [tn('whole', 1, 3, { tieEnd: true })] }]));
+  const a = M.insertMeasureAfter(s, cur(0, 0, 0));
+  eq([beatsOf(a.score, 0, 0)[0].notes[0], beatsOf(a.score, 0, 2)[0].notes[0]], [{ string: 1, fret: 3 }, { string: 1, fret: 3 }]);
+});
+test('deleteMeasure: removes index m from every track that has it, carries time/key/clef forward, takes nav marks and voices (E9)', () => {
+  const s = sc(
+    tab([{ beats: [nt('whole')] }, { timeSignature: { beats: 3, beatType: 4 }, keySignature: 2, clef: 'bass', ending: 1, beats: [nt('half', 1, 0, { dots: 1 })] }, { keySignature: -1, beats: [nt('half', 1, 0, { dots: 1 })] }]),
+    tab([{ beats: [nt('whole')] }, { voices: [{ beats: [nt('whole')] }, { beats: [nt('whole')] }] }]),
+    tab([{ beats: [nt('whole')] }]),
+  );
+  const r = M.deleteMeasure(s, cur(0, 1, 0));
+  eq(r.score.tracks[0].measures[1], { keySignature: -1, beats: [nt('half', 1, 0, { dots: 1 })], timeSignature: { beats: 3, beatType: 4 }, clef: 'bass' });
+  eq(r.score.tracks[1].measures.length, 1);
+  ok(r.score.tracks[2] === s.tracks[2], 'track without measure 1 untouched');
+  eq([r.cursor, r.announce], [cur(0, 1, 0), { id: 'measureDeleted', n: 2 }]);
+  const last = M.deleteMeasure(s, cur(0, 2, 0));
+  eq([last.score.tracks[0].measures.length, last.cursor.measure], [2, 1]);
+  ok(sanitizeScore(r.score) === r.score);
+});
+test('deleteMeasure: the only measure is emptied, keeping time / key / clef; an already empty one is no change', () => {
+  const s = sc(tab([{ timeSignature: { beats: 6, beatType: 8 }, keySignature: 1, segno: true, beats: [nt('half')] }]), tab([null]));
+  const r = M.deleteMeasure(s, cur(0, 0, 0));
+  eq(r.score.tracks[0].measures, [{ timeSignature: { beats: 6, beatType: 8 }, keySignature: 1, beats: [] }]);
+  ok(r.score.tracks[1] === s.tracks[1]);
+  eq(r.announce.id, 'measureCleared');
+  eq(M.deleteMeasure(sc(tab([{ beats: [] }])), cur(0, 0, 0)), { announce: { id: 'measureCleared' } });
+});
+test('deleteMeasure: ties across the new barline are repaired (pairs kept, halves removed)', () => {
+  const s = sc(tab([{ beats: [tn('whole', 1, 3, { tieStart: true })] }, { beats: [tn('whole', 1, 3, { tieEnd: true })] }, { beats: [nt('whole', 1, 1)] }]));
+  const r = M.deleteMeasure(s, cur(0, 1, 0));
+  eq(beatsOf(r.score, 0, 0)[0].notes[0], { string: 1, fret: 3 });
+});
+test('Right from the last beat of a full last measure appends a measure (allowAppend); not from an underfull one or read-only (C4)', () => {
+  const s = sc(tab([{ beats: [nt('whole')] }]), tab([{ beats: [nt('half')] }]));
+  const r = C.moveRight(s, cur(0, 0, 0), ST, CTX);
+  eq([r.score.tracks.map((t) => t.measures.length), r.cursor, r.announce], [[2, 2], cur(0, 1, 0), { id: 'measureAdded', n: 2 }]);
+  eq(C.moveRight(s, cur(0, 0, 0), ST, { ...CTX, allowAppend: false }), { announce: { id: 'endOfScore' } });
+  eq(C.moveRight(s, cur(1, 0, 0), ST, CTX).cursor, cur(1, 0, 1), 'underfull: to the append slot');
+  eq(C.moveRight(s, cur(1, 0, 1), ST, CTX), { announce: { id: 'endOfScore' } }, 'from the slot: end of score');
+  const over = sc(tab([{ beats: [nt('whole'), nt('quarter')] }]));
+  eq(C.moveRight(over, cur(0, 0, 1), ST, CTX).announce.id, 'measureAdded');
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

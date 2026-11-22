@@ -15,6 +15,7 @@ import {
 } from './access.js';
 import { measureFill, onsetOf } from './fill.js';
 import { STANDARD_TUNING } from './defaultScore.js';
+import { appendMeasure } from './measures.js';
 
 const int = (v, d) => (Number.isFinite(v) ? Math.trunc(v) : d);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -73,11 +74,20 @@ export function moveLeft(score, cursor) {
   return { cursor: at(cursor, cursor.measure - 1, prev[prev.length - 1]) };
 }
 
-export function moveRight(score, cursor) {
+/**
+ * Right: the next position, else the next measure's first. On the last beat
+ * of a full (or overfull) last measure, with ctx.allowAppend, an empty
+ * measure is appended and the cursor moves into it (an edit, one undo step).
+ */
+export function moveRight(score, cursor, state, ctx) {
   const pos = positions(score, cursor.track, cursor.measure);
   const i = pos.indexOf(cursor.beat);
   if (i >= 0 && i < pos.length - 1) return { cursor: at(cursor, cursor.measure, pos[i + 1]) };
-  if (cursor.measure < measureCount(score) - 1) return { cursor: at(cursor, cursor.measure + 1, positions(score, cursor.track, cursor.measure + 1)[0]) };
+  const count = measureCount(score);
+  if (cursor.measure < count - 1) return { cursor: at(cursor, cursor.measure + 1, positions(score, cursor.track, cursor.measure + 1)[0]) };
+  if (cursor.beat < beatsAt(score, cursor.track, cursor.measure).length && ctx?.allowAppend) {
+    return { score: appendMeasure(score), cursor: at(cursor, count, 0), announce: { id: 'measureAdded', n: count + 1 } };
+  }
   return edge('endOfScore');
 }
 
