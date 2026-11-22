@@ -93,5 +93,15 @@ for (const c of cases) {
   const { summary } = await import('./editor-dom.mjs');
   fail += await summary();
 }
+// 2.0.0 editor edge cases against the acceptance criteria: pure model level (tests/editor-edge.mjs)
+{
+  const { summary } = await import('./editor-edge.mjs');
+  fail += summary();
+}
+// 2.0.0 editor edge cases against the acceptance criteria: controller level (tests/editor-edge-dom.mjs)
+{
+  const { summary } = await import('./editor-edge-dom.mjs');
+  fail += await summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);
