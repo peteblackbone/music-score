@@ -89,6 +89,7 @@ import { isTwoVoiceBeats } from './twoVoice.js';
 import { tiedFretsMode } from './textMetrics.js';
 import { withOttavaShifts } from './expression.js';
 import { withSlash } from './slash.js';
+import { sanitizeScore } from './sanitize.js';
 
 /** `beat` (normalized from raw `raw`) with its rhythm-slash flag resolved, when `raw` has a `slash` key. */
 const slashed = (raw, voice1, beat) => (raw.slash !== undefined ? withSlash(beat, voice1) : beat);
@@ -114,7 +115,8 @@ function resolveTabRhythm(raw, t) {
 }
 
 /** Fill in defaults and propagate "sticky" fields (time/key signature) forward. */
-export function normalizeScore(score) {
+export function normalizeScore(input) {
+  const score = sanitizeScore(input);
   const rawTracks = score.tracks || [];
   const measureCount = rawTracks.reduce((m, t) => Math.max(m, (t.measures || []).length), 0);
   const tracks = rawTracks.map((track) => {

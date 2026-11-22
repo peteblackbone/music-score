@@ -301,9 +301,14 @@ test('normalizeScore: track-level then score-level time/key fallback', () => {
   eq(s.tracks[1].measures[0].timeSignature, { beats: 2, beatType: 4 });
   eq(s.tracks[1].measures[0].keySignature, -2);
 });
-test('normalizeScore: string beyond tuning leaves pitch undefined', () => {
-  const s = normalizeScore({ tracks: [{ measures: [{ beats: [{ type: 'note', duration: 'quarter', notes: [{ string: 9, fret: 3 }] }] }] }] });
-  eq(s.tracks[0].measures[0].beats[0].notes[0].pitch, undefined);
+test('normalizeScore: a note on a string beyond the tuning is dropped; a beat left empty becomes a rest (1.12.1)', () => {
+  const s = normalizeScore({ tracks: [{ measures: [{ beats: [
+    { type: 'note', duration: 'quarter', notes: [{ string: 9, fret: 3 }] },
+    { type: 'note', duration: 'quarter', notes: [{ string: 9, fret: 3 }, { string: 1, fret: 0 }] },
+  ] }] }] });
+  const [b0, b1] = s.tracks[0].measures[0].beats;
+  eq([b0.type, b0.notes.length], ['rest', 0]);
+  eq([b1.type, b1.notes.map((n) => n.string)], ['note', [1]]);
 });
 {
   // s3 f3 = A#3/Bb3, s4 f1 = D#3/Eb3, s1 f4 = G#4/Ab4 (sounding); pitch is written an octave up.
@@ -533,11 +538,12 @@ test('normalize: harmonic canonicalized on every note branch; harmonicFret passe
   const sc = normalizeScore({ tracks: [
     { showTablature: true, measures: [{ beats: [{ type: 'note', duration: 'quarter', notes: [
       { string: 1, fret: 12, harmonic: true }, { string: 2, fret: 5, harmonic: ' Artificial ', harmonicFret: 17 },
-      { pitch: 'E4', harmonic: 'PINCH' }, { pitch: 'G4', harmonic: 'wobble' }, { string: 3, fret: 2 }, { string: 9, fret: 2, harmonic: 'semi' },
+      { pitch: 'E4', harmonic: 'PINCH' }, { pitch: 'G4', harmonic: 'wobble' }, { string: 3, fret: 2 }, { string: 5, fret: 2, harmonic: 'semi' },
       { string: 4, fret: 2, harmonic: false } ] }] }] },
     { writtenOctaveUp: true, measures: [{ beats: [{ type: 'note', duration: 'quarter', notes: [{ pitch: 'E3', harmonic: 'tapped' }] }] }] },
   ] });
   const ns = sc.tracks[0].measures[0].beats[0].notes;
+  // (the semi note was on string 9 before 1.12.1, which now drops a note with no string to sit on)
   eq(ns.map((n) => n.harmonic), ['natural', 'artificial', 'pinch', 'natural', undefined, 'semi', false]);
   eq(ns.map((n) => 'harmonic' in n), [true, true, true, true, false, true, true]);
   eq(ns[1].harmonicFret, 17);
@@ -7266,6 +7272,106 @@ test('browser parity: src never calls array methods directly on .children', () =
   walk(path.join(root0, 'src'));
   eq(bad, []);
 });
+
+// ---------- 1.12.1 hardening: malformed input never throws (src/sanitize.js) ----------
+{
+  const { sanitizeScore, isValidPitch } = await imp('src/sanitize.js');
+  const { exampleScore: ex } = await imp('examples/example-score.js');
+  const { cases: allCases } = await import('./cases.mjs');
+  const renders = (score, opts = {}) => {
+    const box = makeContainer(); new MusicScoreRenderer(box, score, { width: 900, ...opts }).render();
+    return serialize(box.children[0]);
+  };
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const ok = (c, m) => { if (!c) throw new Error(m); };
+  const q = (extra = {}) => ({ type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 0 }], ...extra });
+  const one = (beats, track = {}) => ({ tracks: [{ showTablature: true, ...track, measures: [{ beats }] }] });
+
+  test('hardening: every valid snapshot case comes back from sanitizeScore as the same object (copy-on-write)', () => {
+    eq(allCases.filter((c) => { const s = clone(c.score); return sanitizeScore(s) !== s; }).map((c) => c.id), []);
+  });
+  test('hardening: sanitizeScore never mutates its input', () => {
+    const bad = { tracks: [null, { tuning: 'zzz', measures: [5, { timeSignature: { beats: 0, beatType: 0 }, beats: [null, { type: 'note', duration: 'x', tuplet: NaN, dynamic: 3, notes: [null, { fret: 1e9, string: 1 }] }] }] }] };
+    const before = JSON.stringify(bad);
+    sanitizeScore(bad);
+    eq(JSON.stringify(bad), before);
+  });
+  test('hardening: isValidPitch accepts parsePitch spellings with octave -1..10 only', () => {
+    eq(['C4', ' bb3 ', 'F##5', 'Ax2', 'C-1', 'B10'].map(isValidPitch), [true, true, true, true, true, true]);
+    eq(['', 'H4', 'C', 'C11', 'C-2', 'C999999', 4, null, {}].map(isValidPitch), [false, false, false, false, false, false, false, false, false]);
+  });
+  test('hardening: the known crashes render (empty notes, tuplet 0 / NaN / Infinity, beatType 0, null entries)', () => {
+    const scores = [
+      one([{ type: 'note', duration: 'quarter', notes: [] }]),
+      one([{ type: 'note', duration: 'quarter' }]),
+      one([q({ tuplet: 0 }), q()]),
+      one([q({ tuplet: { count: 0, of: 2 } })]),
+      one([q({ tuplet: NaN }), q({ tuplet: 3 }), q({ tuplet: 3 })]),
+      one([q({ tuplet: Infinity })]),
+      one([q()], { timeSignature: { beats: 4, beatType: 0 } }),
+      { timeSignature: { beats: 0, beatType: 4 }, tracks: [{ measures: [{ beats: [q()] }] }] },
+      one([null, q(), undefined]),
+      one([q({ notes: [null, { string: 1, fret: 3 }] })]),
+      { tracks: [null, { measures: [null, 7, { beats: [q()] }] }] },
+      { tracks: 'zzz' }, null, 42,
+      one([q({ dynamic: 3 })]),
+      one([q({ notes: [{ pitch: '' }, { pitch: 4 }, { pitch: 'zzz' }] })]),
+      one([q({ notes: [{ string: 1, fret: 1.5 }, { string: 1, fret: -1 }, { string: 1, fret: null }] })]),
+      one([q()], { tuning: ['E2', {}, 'zzz'] }),
+      one([{ type: 'note', duration: '8th', slash: 'yes', notes: [] }]),
+      one([{ type: 'grace', notes: [] }, q()]),
+    ];
+    scores.forEach((s, i) => { try { renders(s); } catch (e) { throw new Error(`score ${i}: ${e.message}`); } });
+  });
+  test('hardening: a huge fret or octave no longer exhausts memory (the note is dropped; the beat draws as a rest)', () => {
+    const t = Date.now();
+    const a = renders(one([q({ notes: [{ string: 1, fret: 1e9 }] })]));
+    const b = renders(one([q({ notes: [{ pitch: 'C999999' }] })]));
+    const rest = renders(one([{ type: 'rest', duration: 'quarter' }]));
+    eq([a === rest, b === rest], [true, true]);
+    ok(Date.now() - t < 2000, `took ${Date.now() - t} ms`);
+  });
+  test('hardening: repairs draw like their documented fallbacks', () => {
+    eq(renders(one([q({ duration: 'bogus' })])), renders(one([q()])));
+    eq(renders(one([q({ tuplet: 0 }), q()])), renders(one([q(), q()])));
+    eq(renders(one([q({ dynamic: 7 })])), renders(one([q()])));
+    eq(renders(one([q()], { tuning: 'zzz' })), renders(one([q()])));
+    eq(renders(one([q()], { timeSignature: { beats: 3, beatType: 0 } })), renders(one([q()])));
+    eq(renders(one([null, q()])), renders(one([q()])));
+    eq(renders(one([q({ notes: [{ string: 1, fret: 0 }, null, { pitch: 'zzz' }] })])), renders(one([q()])));
+    eq(renders(one([{ type: 'note', duration: 'half', dynamic: 'p', notes: [] }])), renders(one([{ type: 'rest', duration: 'half', dynamic: 'p' }])));
+    eq(renders(one([{ type: 'grace', notes: [] }, q()])), renders(one([q()])));
+  });
+  test('hardening: a track showing neither staff draws technique labels nowhere instead of throwing', () => {
+    renders(one([q({ palmMute: true }), q({ letRing: true })], { showStandardNotation: false, showTablature: false }));
+    const s = clone(ex); s.tracks.forEach((t) => { t.showStandardNotation = false; t.showTablature = false; });
+    renders(s);
+  });
+  test('hardening: sweep — every field of the example score set to each bad value renders without throwing', () => {
+    const BAD = [null, undefined, 0, -1, 1.5, NaN, Infinity, '', 'zzz', [], {}, true, 1e9, [null], [{}]];
+    const fails = [];
+    const seen = new Set();
+    const walk = (o, p) => {
+      if (!o || typeof o !== 'object') return;
+      Object.keys(o).forEach((k) => {
+        const np = [...p, Array.isArray(o) ? Number(k) : k];
+        const sig = np.map((x) => (typeof x === 'number' ? '#' : x)).join('.');
+        if (!seen.has(sig)) {
+          seen.add(sig);
+          BAD.forEach((v) => {
+            const s = clone(ex); let t = s;
+            np.slice(0, -1).forEach((kk) => { t = t[kk]; });
+            t[np[np.length - 1]] = v;
+            try { renders(s); } catch (e) { fails.push(`${sig}=${String(v)}: ${e.message}`); }
+          });
+        }
+        walk(o[k], np);
+      });
+    };
+    walk(ex, []);
+    eq(fails.slice(0, 5), []);
+  });
+}
 
 // ---------- report ----------
 export function summary() {

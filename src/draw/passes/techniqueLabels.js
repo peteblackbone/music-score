@@ -96,6 +96,7 @@ export function renderTechniqueLabelRuns(score, trackRuns, theme, systems) {
     const flat = [];
     const outward = track.showTablature ? -1 : 1; // away from the staff the label belongs to
     flattenRuns(trackRuns, track, (layoutEl, run) => {
+      if (!run.tabG && !run.notationG) return; // a track showing neither staff has nowhere to draw labels
       const labelY = track.showTablature
         ? run.tabBaselineY - (track.tuning.length - 1) * theme.tabStaffLineSpacing - 0.6 * s
         : run.notationBaselineY + s * 3.3;
