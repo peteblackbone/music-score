@@ -655,6 +655,19 @@ test('S2: writeFields batches writes with writeField semantics (equal values and
   eq(one, r, 'same result as one write at a time');
 });
 
+test('Q1: re-applying an equal value stored with other key order is a no-op (time signature, ending, section, tempo); same() is field-wise', () => {
+  ok(V.same({ a: 1, b: [1, { c: 2, d: 3 }] }, { b: [1, { d: 3, c: 2 }], a: 1 }) && !V.same([1, 2], [2, 1]) && !V.same({ a: 1 }, { a: 1, b: undefined }) && !V.same({}, []) && !V.same(null, {}));
+  const s = model(sc(tab([
+    { beats: [nt('quarter', 1, 0, { tempo: { unit: 'half', bpm: 60 } })] },
+    { beats: [], timeSignature: { beatType: 8, beats: 6 }, ending: { text: 'Last', numbers: 2 }, section: { text: 'Verse', letter: 'A' } },
+  ])));
+  const c = cur(0, 0, 0);
+  ok(MS.updateMeasure(s, c, 1, { timeSignature: { beats: 6, beatType: 8 } }).score === s, 'time signature');
+  ok(MS.updateMeasure(s, c, 1, { ending: { numbers: [2], text: 'Last' } }).score === s, 'ending');
+  ok(MS.updateMeasure(s, c, 1, { section: { letter: 'A', text: 'Verse' } }).score === s, 'section');
+  ok(S.setTempo(s, c, { bpm: 60, unit: 'half' }).score === s, 'tempo');
+});
+
 // ---------- B10: commands and settings calls mixed ----------
 const { run } = await imp('src/editor/model/commands.js');
 const { createHistory } = await imp('src/editor/model/history.js');

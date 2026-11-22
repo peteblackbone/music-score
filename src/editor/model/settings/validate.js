@@ -79,8 +79,13 @@ export function bool(v, label) {
   return v;
 }
 
-/** Deep equality of two JSON values. */
-export const same = (a, b) => a === b || (a !== undefined && b !== undefined && JSON.stringify(a) === JSON.stringify(b));
+/** Deep equality of two JSON values, field by field (object key order doesn't matter; array order does). */
+export function same(a, b) {
+  if (a === b) return true;
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)) return false;
+  const ka = Object.keys(a);
+  return ka.length === Object.keys(b).length && ka.every((k) => Object.hasOwn(b, k) && same(a[k], b[k]));
+}
 
 /** `obj` with `key` set to `value` (undefined deletes); `obj` itself when nothing changes. */
 export function withField(obj, key, value) {
