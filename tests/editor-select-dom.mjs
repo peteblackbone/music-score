@@ -538,6 +538,42 @@ test('R6: one Ctrl+V keystroke pastes once, with the native paste event (it canc
   ed.destroy();
   eq(clock.pendingTimers(), 0, 'destroy cancels a pending fallback');
 });
+test('F1: a native paste the page already handled (a capture listener that prevents it) still cancels the fallback: one keystroke, nothing pasted; one without focus too', () => {
+  const block = (e) => e.preventDefault();
+  document.addEventListener('paste', block);
+  const { ed, rootEl, clock } = mk({ tracks: [{ showTablature: true, measures: [{ beats: [nt('quarter', 1, 5)] }] }] });
+  ed.focus();
+  ed.setCursor({ beat: 0 });
+  ed.copy();
+  const count = () => ed.getScore().tracks[0].measures[0].beats.length;
+  rootEl.dispatch('keydown', { ...key('v', CTRL), target: rootEl });
+  ok(clock.pendingTimers() > 0, 'fallback scheduled');
+  fire('paste', { [CLIP_MIME]: clipText('beats', [nt('quarter', 1, 6)]) });
+  clock.advance(10);
+  eq([count(), ed.canUndo()], [1, false], 'the page handled it: no paste at all');
+  document.removeEventListener('paste', block);
+  rootEl.dispatch('keydown', { ...key('v', CTRL), target: rootEl });
+  document.activeElement = null; // focus moved away before the native event
+  fire('paste', {});
+  clock.advance(10);
+  eq(count(), 1, 'a native paste elsewhere also ends the fallback');
+  ed.destroy();
+});
+test('F1: inside a shadow root the focus check reads the root node\'s activeElement (document.activeElement is the shadow host)', () => {
+  const { ed, rootEl } = mk(fixture());
+  ed.focus();
+  const host = makeContainer();
+  rootEl.getRootNode = () => ({ activeElement: rootEl });
+  document.activeElement = host;
+  ed.setCursor({ measure: 0, beat: 0 });
+  const { e, clipboardData } = fire('copy');
+  eq([e.defaultPrevented, JSON.parse(clipboardData.data.get(CLIP_MIME)).tracks[0].beats.length], [true, 1]);
+  const other = makeContainer();
+  rootEl.getRootNode = () => ({ activeElement: other });
+  eq(fire('copy').e.defaultPrevented, false, 'focus elsewhere in the shadow root: ignored');
+  delete rootEl.getRootNode;
+  ed.destroy();
+});
 test('destroy removes the document listeners (listenerCount restored); two editors: only the focused one acts on a native event', () => {
   const n0 = document.listenerCount();
   const a = mk(fixture());

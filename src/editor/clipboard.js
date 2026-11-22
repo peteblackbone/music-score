@@ -79,19 +79,27 @@ export function installClipboard(Editor) {
     return this._applyModel('paste', 'paste', r);
   });
 
+  /** Safari fallback: paste from the internal clipboard after 0 ms unless a native paste arrives first. */
+  def('_schedulePasteFallback', function schedulePasteFallback() {
+    this._cancelPasteFallback();
+    this._pasteTimer = this._clock.setTimeout(() => { this._pasteTimer = null; if (!this._destroyed) this._pasteFrom(internal); }, 0);
+  });
+  def('_cancelPasteFallback', function cancelPasteFallback() {
+    if (this._pasteTimer != null) this._clock.clearTimeout(this._pasteTimer);
+    this._pasteTimer = null;
+  });
+
   /**
-   * A native clipboard event `e` of `kind` ('copy' | 'cut' | 'paste') while
-   * the root has focus, or 'pastekey' (a Ctrl+V keydown: schedule the
-   * fallback) / 'destroy'. True when the event was handled (the view then
-   * cancels its default action).
+   * View notifications: 'pastekey' (a paste shortcut on the root: schedule
+   * the fallback), 'pasteseen' (any native paste: cancel it), 'destroy', or
+   * a native event `e` of `kind` ('copy' | 'cut' | 'paste') while the root
+   * has focus. True when the event was handled (the view then cancels its
+   * default action).
    */
   def('_clipboardEvent', function clipboardEvent(kind, e) {
-    if (this._pasteTimer != null && kind !== 'copy' && kind !== 'cut') { this._clock.clearTimeout(this._pasteTimer); this._pasteTimer = null; }
-    if (this._destroyed || kind === 'destroy') return false;
-    if (kind === 'pastekey') {
-      this._pasteTimer = this._clock.setTimeout(() => { this._pasteTimer = null; if (!this._destroyed) this._pasteFrom(internal); }, 0);
-      return false;
-    }
+    if (kind === 'pastekey') { if (!this._destroyed) this._schedulePasteFallback(); return false; }
+    if (kind === 'pasteseen' || kind === 'destroy' || kind === 'paste') this._cancelPasteFallback();
+    if (this._destroyed || kind === 'pasteseen' || kind === 'destroy') return false;
     const data = e?.clipboardData;
     const read = (type) => { try { return data?.getData(type) || null; } catch { return null; } };
     if (kind === 'paste') {

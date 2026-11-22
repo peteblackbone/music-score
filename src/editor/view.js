@@ -5,7 +5,8 @@
  * `host` (ScoreEditor) for what to draw:
  *   host.viewScore() · host.cursorInfo() · host.fills() · host.selection() · host.afterRender()
  *   host.onKey(e) → bool · host.onClick(hit) · host.onFocusChange(focused)
- *   host.onClipboard(kind, e) → bool  (2.3: copy / cut / paste on document while the root has focus; 'pastekey'; 'destroy')
+ *   host.onClipboard(kind, e) → bool  (2.3: copy / cut / paste on document while the root has focus;
+ *     'pastekey' on a paste shortcut; 'pasteseen' on any native paste, before the focus checks; 'destroy')
  *
  * DOM (ui.md §2), all inside the container:
  *   div.music-score-editor[tabindex=0][role=application]   (focus stays here)
@@ -80,12 +81,15 @@ export class EditorView {
       if (isPasteKey(e)) this.host.onClipboard('pastekey', e); // never prevented: the native paste event must fire
       if (this.host.onKey(e)) e.preventDefault();
     });
-    // 2.3 clipboard: native events on document, acted on only while the root has focus
+    // 2.3 clipboard: native events on document, acted on only while the root has focus (in its own
+    // document or shadow root). Any native paste ends the Safari fallback, even one the page handled.
     const doc = typeof document !== 'undefined' ? document : null;
     if (typeof doc?.addEventListener === 'function') {
       for (const kind of ['copy', 'cut', 'paste']) {
         this._listen(doc, kind, (e) => {
-          if (doc.activeElement !== this.root || e.defaultPrevented) return;
+          if (kind === 'paste') this.host.onClipboard('pasteseen', e);
+          const active = this.root.getRootNode?.()?.activeElement ?? doc.activeElement;
+          if (active !== this.root || e.defaultPrevented) return;
           if (this.host.onClipboard(kind, e)) e.preventDefault();
         });
       }
