@@ -32,6 +32,79 @@ test('LIMITS: 2.2 caps (textChars, longTextChars, timeSignatureBeats, frozen bea
   }
 });
 
+// ---------- validators ----------
+const V = await imp('src/editor/model/settings/validate.js');
+const throws = (fn, Type, msg) => {
+  try { fn(); } catch (e) {
+    if (Type && !(e instanceof Type)) throw new Error(`threw ${e.constructor.name} "${e.message}", wanted ${Type.name}`);
+    if (msg && !String(e.message).includes(msg)) throw new Error(`threw "${e.message}", wanted "${msg}"`);
+    return;
+  }
+  throw new Error(`did not throw${msg ? ` "${msg}"` : ''}`);
+};
+test('validate: plain, checkKeys (own keys only: __proto__, constructor rejected), index, intIn, text, flag, bool, same, withField', () => {
+  eq([{}, Object.create(null), JSON.parse('{"a":1}'), [], null, new Date(), 'x'].map(V.plain), [true, true, true, false, false, false, false]);
+  throws(() => V.object([], 'Patch'), TypeError, 'Patch must be an object');
+  V.checkKeys({ a: 1 }, ['a', 'b'], 'score');
+  throws(() => V.checkKeys({ c: 1 }, ['a'], 'score'), TypeError, 'Unknown score field: c');
+  throws(() => V.checkKeys(JSON.parse('{"__proto__":{"x":1}}'), ['a'], 'score'), TypeError, 'Unknown score field: __proto__');
+  throws(() => V.checkKeys({ constructor: 1 }, ['a'], 'track'), TypeError, 'constructor');
+  throws(() => V.checkKeys({ toString: 1 }, ['a'], 'track'), TypeError, 'toString');
+  eq(V.index(2, 3, 'Track'), 2);
+  throws(() => V.index(3, 3, 'Track'), RangeError, 'Track must be a whole number from 0 to 2');
+  throws(() => V.index(1.5, 3, 'Track'), RangeError);
+  throws(() => V.index('1', 3, 'Track'), TypeError);
+  throws(() => V.intIn(NaN, 1, 2, 'X'), RangeError);
+  eq([V.text('  a  ', { label: 'T' }), V.text('   ', { label: 'T' }), V.text(null, { label: 'T' }), V.text('a\nb', { label: 'T', multiline: true })], ['a', undefined, undefined, 'a\nb']);
+  throws(() => V.text('a\nb', { label: 'Title' }), RangeError, 'Title must be a single line');
+  throws(() => V.text('a\u2028b', { label: 'Title' }), RangeError);
+  throws(() => V.text(5, { label: 'Title' }), TypeError, 'Title must be a string');
+  eq(V.text(`  ${'x'.repeat(200)}  `, { label: 'T' }).length, 200, 'counted after trimming');
+  throws(() => V.text('x'.repeat(201), { label: 'T' }), RangeError, 'at most 200 characters');
+  eq(V.text('x'.repeat(2000), { label: 'T', multiline: true }).length, 2000);
+  throws(() => V.text('x'.repeat(2001), { label: 'T', multiline: true }), RangeError, 'at most 2000');
+  eq(V.text('😀'.repeat(100), { label: 'T' }).length, 200, 'UTF-16 code units');
+  throws(() => V.text('😀'.repeat(101), { label: 'T' }), RangeError);
+  eq([V.flag(true, 'F'), V.flag(false, 'F'), V.flag(null, 'F')], [true, undefined, undefined]);
+  throws(() => V.flag(1, 'F'), TypeError);
+  throws(() => V.flag(undefined, 'F'), TypeError);
+  throws(() => V.bool(null, 'B'), TypeError);
+  const o = { a: { x: 1 }, b: 2 };
+  ok(V.withField(o, 'a', { x: 1 }) === o && V.withField(o, 'c', undefined) === o, 'equal / absent: same object');
+  eq([V.withField(o, 'b', undefined), V.withField(o, 'b', 3), o], [{ a: { x: 1 } }, { a: { x: 1 }, b: 3 }, { a: { x: 1 }, b: 2 }]);
+  ok(V.same([1, 2], [1, 2]) && !V.same(undefined, null) && !V.same(1, '1'));
+});
+
+// ---------- INSTRUMENTS and TUNINGS ----------
+const { INSTRUMENTS, TUNINGS } = await imp('src/editor/model/settings/instruments.js');
+const { REFERENCE_TUNINGS } = await imp('src/scoreText.js');
+const { isValidPitch } = await imp('src/sanitize.js');
+const deepFrozen = (o) => Object.isFrozen(o) && Object.values(o).every((v) => !v || typeof v !== 'object' || deepFrozen(v));
+test('INSTRUMENTS / TUNINGS: deep-frozen, in picker order, canonical pitches, Standard first and equal to scoreText REFERENCE_TUNINGS', () => {
+  ok(deepFrozen(INSTRUMENTS) && deepFrozen(TUNINGS));
+  eq(Object.keys(INSTRUMENTS), ['guitar6', 'guitar7', 'guitar8', 'bass4', 'bass5', 'bass6', 'ukulele']);
+  eq(Object.keys(TUNINGS), Object.keys(INSTRUMENTS));
+  eq(Object.values(INSTRUMENTS).map((i) => [i.name, i.label, i.clef]), [
+    ['Guitar', '6-string guitar', 'treble'], ['7-string guitar', '7-string guitar', 'treble'], ['8-string guitar', '8-string guitar', 'treble'],
+    ['Bass', '4-string bass', 'bass'], ['5-string bass', '5-string bass', 'bass'], ['6-string bass', '6-string bass', 'bass'], ['Ukulele', 'Ukulele', 'treble']]);
+  for (const [id, i] of Object.entries(INSTRUMENTS)) {
+    eq(i.staves, { showStandardNotation: true, showTablature: true }, id);
+    eq(TUNINGS[id][0].name, 'Standard', id);
+    eq(TUNINGS[id][0].tuning, i.tuning, `${id}: the instrument tuning is its Standard preset`);
+    for (const pr of TUNINGS[id]) {
+      eq(pr.tuning.length, i.tuning.length, `${id} ${pr.name}: string count`);
+      ok(pr.tuning.every((x) => /^[A-G][#b]?\d$/.test(x) && isValidPitch(x)), `${id} ${pr.name}: canonical`);
+    }
+  }
+  const ref = { guitar6: 6, guitar7: 7, guitar8: 8, bass4: 4, bass5: 5, bass6: 'bass6' };
+  for (const [id, k] of Object.entries(ref)) eq(INSTRUMENTS[id].tuning, REFERENCE_TUNINGS[k], id);
+  eq(TUNINGS.guitar6.map((x) => x.name), ['Standard', 'Drop D', 'Half-step down', 'Whole-step down', 'Drop C', 'DADGAD', 'Open G', 'Open D', 'Open E']);
+  eq([TUNINGS.guitar7, TUNINGS.guitar8, TUNINGS.bass4, TUNINGS.bass5, TUNINGS.bass6, TUNINGS.ukulele].map((l) => l.map((x) => x.name)),
+    [['Standard', 'Drop A'], ['Standard'], ['Standard', 'Drop D'], ['Standard'], ['Standard'], ['Standard']]);
+  eq(TUNINGS.guitar6[7].tuning.join(' '), 'D2 A2 D3 F#3 A3 D4');
+  eq(TUNINGS.ukulele[0].tuning.join(' '), 'G4 C4 E4 A4');
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
