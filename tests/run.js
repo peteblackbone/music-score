@@ -163,5 +163,10 @@ for (const c of cases) {
   const { summary } = await import('./editor-select-edge.mjs');
   fail += await summary();
 }
+// 2.3.1 characterization pins: measures paste inserts, single-step reflow, effects clear the selection, zero-beat ranges, Ctrl+Shift+V, reserved keys (tests/editor-pins-2.3.1.mjs)
+{
+  const { summary } = await import('./editor-pins-2.3.1.mjs');
+  fail += summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);
