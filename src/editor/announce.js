@@ -4,14 +4,21 @@
  * and cursor moves, into text. Moves speak only what changed: the track
  * and measure parts when they change (or in full on focus), the string
  * alone for Up / Down, and the fill when entering a measure that is not
- * full.
+ * full. Effects are spoken after the duration (Up / Down: the note
+ * effects only).
  */
 
 import { DURATION_WORDS, FILL_WORDS, durationWords } from './model/durations.js';
+import { EFFECT_BY_NAME } from './model/effectTable.js';
 
 export { durationWords };
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 const fillWord = (f) => FILL_WORDS[f]?.word ?? f;
+const EFFECT_SUFFIX = { link: ', no next note on this string', tabArtic: ', not shown on TAB only', noNotation: ', not shown on TAB only' };
+/** The effect text of `def` for descriptor `d`: added, the step's words, or off; plus the suffix. */
+const effectText = (def, d) => `${d.added ? def.added : d.step >= 0 ? def.say[d.step] : def.off}${EFFECT_SUFFIX[d.suffix] ?? ''}`;
+/** ', hammer/pull, palm mute' (empty when there are none). */
+const effectsText = (list) => (list?.length ? `, ${list.join(', ')}` : '');
 
 export const MESSAGES = Object.freeze({
   fret: (d) => `Fret ${d.fret}`,
@@ -52,6 +59,8 @@ export const MESSAGES = Object.freeze({
   firstTrack: () => 'First track',
   lastTrack: () => 'Last track',
   noTrack: () => 'No visible track',
+  needsNote: () => 'Needs a note',
+  effect: (d) => (EFFECT_BY_NAME[d.name] ? effectText(EFFECT_BY_NAME[d.name], d) : ''),
 });
 
 /** The text of descriptor `d` (empty for unknown ids). */
@@ -68,16 +77,17 @@ export function positionText(info) {
   const dur = durationWords(info.duration, info.dots, info.triplet);
   if (info.appendSlot) return info.empty ? 'empty measure' : `end of measure, ${durationWords(info.duration, info.dots)}`;
   const beat = `beat ${info.beatNumber}`;
-  if (info.isRest) return `${beat}, rest, ${dur}`;
-  if (!info.hasTab) return `${beat}, ${info.noteCount > 1 ? `chord of ${info.noteCount}` : 'note'}, ${dur}`;
-  return `${beat}, ${stringText(info)}, ${dur}${info.tied ? ', tied' : ''}`;
+  const fx = effectsText(info.effects);
+  if (info.isRest) return `${beat}, rest, ${dur}${fx}`;
+  if (!info.hasTab) return `${beat}, ${info.noteCount > 1 ? `chord of ${info.noteCount}` : 'note'}, ${dur}${fx}`;
+  return `${beat}, ${stringText(info)}, ${dur}${fx}${info.tied ? ', tied' : ''}`;
 }
 
 /** The move announcement from `prev` to `info` (cursorInfo objects); `full` speaks every part. */
 export function describeCursor(info, prev = null, full = false) {
   const trackChanged = full || !prev || prev.track !== info.track;
   const measureChanged = trackChanged || prev.measure !== info.measure;
-  if (!measureChanged && prev.beat === info.beat && prev.string !== info.string && info.hasTab) return cap(stringText(info));
+  if (!measureChanged && prev.beat === info.beat && prev.string !== info.string && info.hasTab) return cap(stringText(info)) + effectsText(info.noteEffects);
   const parts = [];
   if (trackChanged) parts.push(`Track ${info.track + 1}${info.trackName ? ` ${info.trackName}` : ''}`);
   if (measureChanged) parts.push(`measure ${info.measure + 1}`);

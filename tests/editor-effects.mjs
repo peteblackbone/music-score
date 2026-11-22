@@ -17,6 +17,7 @@ const { run, COMMANDS, undoLabel } = await imp('src/editor/model/commands.js');
 const { EFFECTS, EFFECT_KEYS, EFFECT_BY_NAME, DYNAMIC_SCALE, bendStep } = await imp('src/editor/model/effectTable.js');
 const E = await imp('src/editor/model/effects.js');
 const { keyToCommand } = await imp('src/editor/keymap.js');
+const { describe, positionText, describeCursor } = await imp('src/editor/announce.js');
 
 const results = [];
 const test = (name, fn) => {
@@ -412,6 +413,25 @@ test('AC16: the 15 effect keys map to their commands (either case without Shift 
   eq([K('Tab'), K('Tab', { shiftKey: true }), K('F1'), K('F12', { shiftKey: true }), K('h', { isComposing: true })], [null, null, null, null, null]);
   eq([K('r'), K('l'), K('i'), K('m'), K('M', { shiftKey: true })].map((c) => c.name), ['toggleRest', 'toggleTie', 'insertBeat', 'insertMeasureAfter', 'insertMeasureBefore'], '2.0 letters unchanged');
   eq([K('R', { shiftKey: true }), K('I', { shiftKey: true }), K('H', { shiftKey: true }), K('N', { shiftKey: true })], [null, null, null, null]);
+});
+
+// ---------- announce ----------
+test('announce: effect descriptors in words (added / step / off, suffixes), needsNote, and effects in position text (missing lists speak nothing)', () => {
+  eq(describe({ id: 'effect', name: 'bend', step: 1, suffix: null }), 'Bend half');
+  eq(describe({ id: 'effect', name: 'bendBack', step: -1, suffix: null }), 'Bend off');
+  eq(describe({ id: 'effect', name: 'deadNote', added: true }), 'Dead note added');
+  eq(describe({ id: 'effect', name: 'slide', step: 0, suffix: 'link' }), 'Slide, no next note on this string');
+  eq([describe({ id: 'effect', name: 'accent', step: 0, suffix: 'tabArtic' }), describe({ id: 'effect', name: 'softer', step: 3, suffix: 'noNotation' })], ['Accent, not shown on TAB only', 'Dynamic mp, not shown on TAB only']);
+  eq([describe({ id: 'effect', name: 'nope', step: 0 }), describe({ id: 'needsNote' })], ['', 'Needs a note']);
+  for (const d of EFFECTS) d.say.forEach((w, i) => eq(describe({ id: 'effect', name: d.name, step: i, suffix: null }), w));
+  const info = { beatNumber: 2, string: 1, fret: 3, duration: 'quarter', dots: 0, triplet: false, isRest: false, appendSlot: false, hasTab: true, tied: true, noteCount: 1 };
+  eq(positionText(info), 'beat 2, string 1, fret 3, quarter, tied', 'a 2.0-shaped info');
+  eq(positionText({ ...info, effects: ['bend full', 'vibrato'] }), 'beat 2, string 1, fret 3, quarter, bend full, vibrato, tied');
+  eq(positionText({ ...info, isRest: true, effects: ['palm mute'] }), 'beat 2, rest, quarter, palm mute');
+  eq(positionText({ ...info, hasTab: false, effects: ['mf'] }), 'beat 2, note, quarter, mf');
+  eq(positionText({ ...info, appendSlot: true, empty: true, effects: [] }), 'empty measure');
+  const prev = { ...info, track: 0, measure: 0, beat: 1 };
+  eq(describeCursor({ ...prev, string: 2, effects: ['ghost', 'vibrato'], noteEffects: ['ghost'] }, prev), 'String 2, fret 3, ghost');
 });
 
 // ---------- report ----------

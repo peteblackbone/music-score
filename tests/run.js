@@ -108,5 +108,10 @@ for (const c of cases) {
   const { summary } = await import('./editor-effects.mjs');
   fail += summary();
 }
+// 2.1.0 editor effects under the DOM shim: ScoreEditor, announcements, render check, demo group (tests/editor-effects-dom.mjs)
+{
+  const { summary } = await import('./editor-effects-dom.mjs');
+  fail += await summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);
