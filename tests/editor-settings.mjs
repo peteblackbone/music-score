@@ -427,6 +427,7 @@ test('moveTrack: the track list reorders, the cursor stays on its track (every f
 
 // ---------- updateMeasure / getMeasureSettings ----------
 const MS = await imp('src/editor/model/settings/measureSettings.js');
+const COL = await imp('src/editor/model/settings/column.js');
 const { clefAt } = await imp('src/clef.js');
 const measureScore = () => model({ keySignature: 1, tracks: [
   tab([{ beats: [nt('whole')] }, { beats: [] }, { beats: [] }, { beats: [] }], { name: 'Gtr', timeSignature: { beats: 3, beatType: 4 } }),
@@ -624,6 +625,34 @@ test('S1: getter objects are read once: a getter that answers a checked value fi
     eq(read(r), want, name);
     ok(sanitizeScore(r.score) === r.score, `${name}: sanitize-stable`);
   }
+});
+
+test('S2: removeTrack of a track setting all 9 column fields on 2000 measures, beside 30 others, takes under 300 ms (Node) and gives every remaining track every field once', () => {
+  const full = (mi) => ({ beats: [], barline: 'repeatEnd', repeatCount: 3, ending: [1, 2], jump: 'Fine', section: { letter: 'A' }, segno: true, coda: true, timeSignature: { beats: 3, beatType: 4 }, keySignature: mi % 7 });
+  const s = model({ tracks: [
+    { name: 'Gone', showTablature: true, measures: Array.from({ length: 2000 }, (_, mi) => full(mi)) },
+    ...Array.from({ length: 30 }, (_, k) => ({ name: `T${k}`, showTablature: true, measures: Array.from({ length: k === 0 ? 1500 : 2000 }, () => ({ beats: [] })) })),
+  ] });
+  const t0 = performance.now();
+  const r = TS.removeTrack(s, cur(1, 0, 0), 0);
+  const ms = performance.now() - t0;
+  ok(ms < 300, `${ms.toFixed(0)} ms`);
+  eq(r.score.tracks.length, 30);
+  const want = { beats: [] };
+  for (const f of COL.COLUMN_FIELDS) want[f] = full(1999)[f];
+  for (const t of r.score.tracks) eq(t.measures[1999], want, `${t.name}: every field, in column order`);
+  eq(r.score.tracks[0].measures.length, 2000, 'a short track is padded');
+  ok(sanitizeScore(r.score) === r.score);
+});
+test('S2: writeFields batches writes with writeField semantics (equal values and absent deletes skipped, holes and short tracks padded, same track when nothing changes)', () => {
+  const t = { name: 'T', measures: [{ beats: [], segno: true }, null] };
+  ok(COL.writeFields(t, [[0, 'segno', true], [1, 'coda', undefined], [5, 'jump', undefined]]) === t);
+  const r = COL.writeFields(t, [[0, 'coda', true], [0, 'segno', undefined], [1, 'jump', 'Fine'], [3, 'ending', 1], [0, 'jump', 'D.C.']]);
+  eq(r.measures, [{ beats: [], coda: true, jump: 'D.C.' }, { beats: [], jump: 'Fine' }, { beats: [] }, { beats: [], ending: 1 }]);
+  eq(t.measures, [{ beats: [], segno: true }, null], 'copy-on-write');
+  let one = t;
+  for (const w of [[0, 'coda', true], [0, 'segno', undefined], [1, 'jump', 'Fine'], [3, 'ending', 1], [0, 'jump', 'D.C.']]) one = COL.writeField(one, ...w);
+  eq(one, r, 'same result as one write at a time');
 });
 
 // ---------- B10: commands and settings calls mixed ----------

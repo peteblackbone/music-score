@@ -44,20 +44,36 @@ export function columnValue(score, mi, f) {
   return undefined;
 }
 
+/**
+ * `track` with `writes` (`[[mi, f, value], …]`, in order; undefined
+ * deletes) applied: the measures array is copied once and each measure at
+ * most once; `track` itself when nothing changes.
+ */
+export function writeFields(track, writes) {
+  const old = measuresOf(track);
+  let measures = null;
+  const copied = new Set();
+  for (const [mi, f, value] of writes) {
+    const src = measures ?? old;
+    const m = isObj(src[mi]) ? src[mi] : null;
+    if (value === undefined ? !m || !Object.hasOwn(m, f) : m && Object.hasOwn(m, f) && same(m[f], value)) continue;
+    if (!measures) measures = old.slice();
+    while (measures.length < mi) measures.push({ beats: [] });
+    if (!copied.has(mi)) { measures[mi] = { ...(m ?? { beats: [] }) }; copied.add(mi); }
+    if (value === undefined) delete measures[mi][f];
+    else measures[mi][f] = value;
+  }
+  return measures ? { ...track, measures } : track;
+}
+
 /** `track` with field `f` of measure `mi` set to `value` (undefined deletes); `track` itself when nothing changes. */
-export function writeField(track, mi, f, value) {
-  const m = measureAt(track, mi);
-  if (value === undefined) {
-    if (!m || !Object.hasOwn(m, f)) return track;
-  } else if (m && Object.hasOwn(m, f) && same(m[f], value)) return track;
-  const measures = measuresOf(track).slice();
-  while (measures.length < mi) measures.push({ beats: [] });
-  const base = m ?? { beats: [] };
-  const next = { ...base };
-  if (value === undefined) delete next[f];
-  else next[f] = value;
-  measures[mi] = next;
-  return { ...track, measures };
+export const writeField = (track, mi, f, value) => writeFields(track, [[mi, f, value]]);
+
+/** `score` with every track replaced by fn(track, ti); `score` itself when no track changes. */
+function mapTracks(score, fn) {
+  const tracks = tracksOf(score);
+  const next = tracks.map(fn);
+  return next.every((t, i) => t === tracks[i]) ? score : { ...score, tracks: next };
 }
 
 /** `score` with track `ti` replaced by fn(track); `score` itself when fn returns the same track. */
@@ -74,11 +90,7 @@ function mapTrack(score, ti, fn) {
 export const setTrackField = (score, ti, mi, f, value) => mapTrack(score, ti, (t) => writeField(t, mi, f, value));
 
 /** `score` with field `f` of measure `mi` set on every track, hidden ones included (undefined deletes). */
-export function setColumn(score, mi, f, value) {
-  let out = score;
-  tracksOf(score).forEach((_, ti) => { out = setTrackField(out, ti, mi, f, value); });
-  return out;
-}
+export const setColumn = (score, mi, f, value) => mapTracks(score, (t) => writeField(t, mi, f, value));
 
 const COMMON = { beats: 4, beatType: 4 };
 const sameTime = (a, b) => a.beats === b.beats && a.beatType === b.beatType;
@@ -125,15 +137,13 @@ export function newTrackMeasures(score) {
  */
 export function migrateRemoved(score, ti) {
   const tracks = tracksOf(score);
-  const gone = tracks[ti];
-  let out = score;
-  measuresOf(gone).forEach((m, mi) => {
+  const writes = [];
+  measuresOf(tracks[ti]).forEach((m, mi) => {
     if (!isObj(m)) return;
     for (const f of COLUMN_FIELDS) {
-      if (!hasField(m, f)) continue;
-      if (tracks.some((t, k) => k !== ti && hasField(measureAt(t, mi), f))) continue;
-      tracks.forEach((_, k) => { if (k !== ti) out = setTrackField(out, k, mi, f, m[f]); });
+      if (hasField(m, f) && !tracks.some((t, k) => k !== ti && hasField(measureAt(t, mi), f))) writes.push([mi, f, m[f]]);
     }
   });
-  return out;
+  // every remaining track gets all the writes in one pass (one copy of its measures)
+  return writes.length ? mapTracks(score, (t, k) => (k === ti ? t : writeFields(t, writes))) : score;
 }
