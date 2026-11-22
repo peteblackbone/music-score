@@ -83,6 +83,11 @@ export const MESSAGES = Object.freeze({
   selectedAll: (d) => `Selected all of ${trackText(d)}, ${plural(d.measures, 'measure')}`,
   selectionCleared: () => 'Selection cleared',
   nothingToSelect: () => 'Nothing to select',
+  // 2.3 range edits
+  rangeCleared: (d) => `${plural(d.count, 'beat')} changed to rest${d.count === 1 ? '' : 's'}`,
+  rangeRemoved: (d) => `${plural(d.count, 'beat')} deleted${tempoRemoved(d.tempoRemoved)}`,
+  columnsDeleted: (d) => `${d.all ? 'All measures deleted, 1 empty measure left' : d.a === d.b ? `Measure ${d.a} deleted` : `Measures ${d.a} to ${d.b} deleted`}${tempoRemoved(d.tempoRemoved)}`,
+  needsMeasureSelection: () => 'Select whole measures first',
 });
 
 /** '1 beat' / '3 measures' (n of `word`). */

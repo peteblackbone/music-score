@@ -48,7 +48,7 @@ function mk(score, opts = {}, { raf = false, width = 900 } = {}) {
   for (const t of ['change', 'cursor', 'selection']) ed.on(t, (e) => events.push([t, e]));
   const rootEl = box.children[0];
   const live = rootEl.children[1];
-  const spoken = () => { clock.advance(150); return live.textContent.replace(/ $/, ''); };
+  const spoken = () => { clock.advance(150); return live.textContent.replace(/ $/, ''); };
   const press = (...ks) => ks.map((k) => ed.handleKey(typeof k === 'string' ? key(k) : k));
   const svg = () => ed._view.svg;
   return { ed, box, clock, events, live, rootEl, spoken, press, svg };
@@ -245,6 +245,63 @@ test('a two-digit entry: a select key ends it; Esc ends the entry before it clea
   press(key('ArrowRight', SHIFT));
   press('1');
   eq(ed.getSelection(), null, 'an edit cleared it');
+});
+
+// ---------- criteria 27, 28: delete keys with a selection ----------
+const selectMeasure2to3 = (ed) => ed.setSelection({ anchor: { measure: 1, beat: 0 }, focus: { measure: 2, beat: 0 } });
+test('criterion 27: Delete / Backspace -> rests, Ctrl+Delete -> beats removed, Shift+Delete -> columns deleted; each one undo step; cursor per ui-2.3 §1; announced', () => {
+  for (const [k, label, said, check] of [
+    [key('Delete'), 'clear beats', '3 beats changed to rests', (s) => s.tracks[0].measures[1].beats.every((b) => b.type === 'rest') && s.tracks[0].measures[1].beats.length === 2],
+    [key('Backspace'), 'clear beats', '3 beats changed to rests', (s) => s.tracks[0].measures[2].beats[0].type === 'rest'],
+    [key('Delete', CTRL), 'delete beats', '3 beats deleted, 1 tempo mark removed', (s) => s.tracks[0].measures[1].beats.length === 0 && s.tracks[0].measures[2].beats.length === 0],
+    [key('Delete', SHIFT), 'delete measures', 'Measures 2 to 3 deleted, 1 tempo mark removed', (s) => s.tracks[0].measures.length === 2],
+  ]) {
+    const { ed, press, spoken, events } = mk(fixture());
+    const before = ed._model;
+    selectMeasure2to3(ed);
+    events.length = 0;
+    eq(press(k), [true]);
+    ok(check(ed.getScore()), label);
+    ok(sanitizeScore(ed._model) === ed._model);
+    eq(ed.getSelection(), null);
+    eq(events[0], ['selection', null]);
+    eq(spoken().replace(/, measure \w+$/, ''), said, label);
+    eq(ed.getCursor().measure, 1, `${label}: cursor at the start of the range / the measure after it`);
+    ed.undo();
+    ok(ed._model === before, `${label}: one undo step`);
+    eq(spoken(), `Undo: ${label}`);
+  }
+});
+test('criterion 28 / D8: ties at both edges repaired; Shift+Delete on a beats selection is refused and the selection stays; read-only refuses every delete key and keeps it', () => {
+  const tied = { tracks: [{ showTablature: true, measures: [
+    { beats: [nt('half'), nt('half', 1, 0, { notes: [{ string: 1, fret: 0, tieStart: true }] })] },
+    { beats: [{ type: 'note', duration: 'half', notes: [{ string: 1, fret: 0, tieEnd: true, tieStart: true }] }, { type: 'note', duration: 'half', notes: [{ string: 1, fret: 0, tieEnd: true }] }] },
+  ] }] };
+  const { ed, press } = mk(tied);
+  ed.setSelection({ anchor: { measure: 1, beat: 0 }, focus: { measure: 1, beat: 0 } });
+  press(key('Delete'));
+  ok(!JSON.stringify(ed.getScore()).includes('tie'), 'both edges untied around the new rest');
+  const b = mk(fixture());
+  b.ed.setSelection({ anchor: { measure: 0, beat: 1 }, focus: { measure: 1, beat: 0 } });
+  eq(b.press(key('Delete', SHIFT)), [true]);
+  eq([b.spoken(), b.ed.getSelection().beatCount, b.ed.canUndo()], ['Select whole measures first', 4, false]);
+  const ro = mk(fixture(), { readOnly: true });
+  selectMeasure2to3(ro.ed);
+  for (const k of [key('Delete'), key('Backspace'), key('Delete', CTRL), key('Delete', SHIFT)]) {
+    eq(ro.press(k), [false]);
+    eq(ro.spoken(), 'Read-only');
+  }
+  eq(ro.ed.getSelection().beatCount, 3);
+});
+test('effect keys and other edits act on the cursor beat and clear the selection (D6); a no-op edit keeps it', () => {
+  const { ed, press } = mk(fixture());
+  selectMeasure2to3(ed);
+  press('v');
+  eq(ed.getSelection(), null);
+  eq(ed.getScore().tracks[0].measures[2].beats[0].vibrato, true, 'on the cursor beat (the focus)');
+  selectMeasure2to3(ed);
+  ed.setDuration('whole');
+  ok(ed.getSelection() !== null, 'the cursor beat is already a whole: no change keeps the selection');
 });
 
 // ---------- report ----------

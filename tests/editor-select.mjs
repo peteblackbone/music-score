@@ -189,6 +189,67 @@ test('selection words: across measures, in one measure, one beat, measures (one 
   eq(describe(SEL.selectionWords(anon, SEL.selectionRange(anon, 0, P(0, 0), P(0, 0)), true)), 'Selected all of Track 1, 1 measure');
 });
 
+// ---------- range edits ----------
+const RE = await imp('src/editor/model/rangeEdit.js');
+const rangeFixture = () => model({ tracks: [
+  tab([
+    { beats: [tn('quarter', 1, 1, { tieStart: true }), tn('quarter', 1, 1, { tieEnd: true }), grace(), nt('quarter', 2, 2, { tempo: 80, palmMute: true, zz: 1 }), rest('quarter')] },
+    { beats: [tn('half', 3, 3, { tieStart: true }), tn('half', 3, 3, { tieEnd: true })] },
+    { beats: [nt('whole', 1, 0, { tempo: 100 })] },
+  ]),
+  tab([{ beats: [nt('whole')] }, { beats: [nt('whole', 1, 0, { tempo: 60 })] }], { name: 'B' }),
+] });
+const run = (name, s, c, sel) => CMD.run(name, s, c, st(), { selection: sel, allowAppend: true });
+test('clearRange (Delete with a selection): graces removed, notes become rests keeping length, effects, unknown fields and tempo; rests untouched; edge ties repaired; cursor on the first beat; one result', () => {
+  const s = rangeFixture();
+  const sel = SEL.selectionRange(s, 0, P(0, 1), P(1, 0));
+  const r = run('deleteNote', s, cur(0, 1, 0), sel);
+  eq(v1(r.score, 0, 0), [tn('quarter', 1, 1), rest('quarter'), rest('quarter', { tempo: 80, palmMute: true, zz: 1 }), rest('quarter')]);
+  eq(v1(r.score, 0, 1), [rest('half'), tn('half', 3, 3)], 'the tie into the cleared beat lost both ends');
+  eq(r.cursor, cur(0, 0, 1));
+  eq(describe(r.announce), '4 beats changed to rests');
+  eq(CMD.undoLabel('deleteNote', r.announce), 'clear beats');
+  ok(sanitizeScore(r.score) === r.score);
+  const rests = model({ tracks: [tab([{ beats: [rest('half'), rest('half')] }])] });
+  ok(run('deleteNote', rests, cur(0, 0, 0), SEL.selectionRange(rests, 0, P(0, 0), P(0, 1))).changed === false, 'only rests: no change');
+  eq(describe(run('deleteNote', rests, cur(0, 0, 0), SEL.selectionRange(rests, 0, P(0, 0), P(0, 0))).announce), '1 beat changed to rest');
+});
+test('removeRange (Ctrl+Delete with a selection): beats and graces spliced out across measures, ties repaired, drawn tempo marks counted, cursor on what follows', () => {
+  const s = rangeFixture();
+  const sel = SEL.selectionRange(s, 0, P(0, 3), P(2, 0));
+  const r = run('deleteBeat', s, cur(0, 2, 0), sel);
+  eq(v1(r.score, 0, 0), [tn('quarter', 1, 1, { tieStart: true }), tn('quarter', 1, 1, { tieEnd: true })], 'grace before beat 3 went with it');
+  eq([v1(r.score, 0, 1), v1(r.score, 0, 2)], [[], []]);
+  eq(describe(r.announce), '5 beats deleted, 2 tempo marks removed');
+  eq(CMD.undoLabel('deleteBeat', r.announce), 'delete beats');
+  eq(r.cursor, cur(0, 0, 2), 'the slot after the remaining beats');
+  ok(sanitizeScore(r.score) === r.score);
+  const shadow = model({ tracks: [tab([{ beats: [nt('whole', 1, 0, { tempo: 50 })] }]), tab([{ beats: [nt('whole', 1, 0, { tempo: 70 })] }], { name: 'B' })] });
+  eq(describe(run('deleteBeat', shadow, cur(1, 0, 0), SEL.selectionRange(shadow, 1, P(0, 0), P(0, 0))).announce), '1 beat deleted', 'a shadowed (undrawn) mark is not counted');
+});
+test('deleteSelectedColumns (Shift+Delete): refused for a beats selection; deletes whole measures from every track with the carried fields; every measure leaves one; drawn tempo marks counted', () => {
+  const s = model({ tracks: [
+    tab([{ beats: [nt('whole')] }, { beats: [nt('whole', 1, 0, { tempo: 90 })], timeSignature: { beats: 3, beatType: 4 } }, { beats: [nt('half')] }, { beats: [nt('whole')] }]),
+    tab([{ beats: [nt('whole')] }, { beats: [nt('whole', 1, 0, { tempo: 91 })] }], { name: 'B' }),
+  ] });
+  const beats = SEL.selectionRange(s, 0, P(1, 0), P(2, 0));
+  eq(beats.info.kind, 'beats');
+  const no = run('deleteMeasure', s, cur(0, 2, 0), beats);
+  eq([no.changed, describe(no.announce)], [false, 'Select whole measures first']);
+  const sel = SEL.selectionRange(s, 0, P(1, 0), P(2, 1));
+  const r = run('deleteMeasure', s, cur(0, 2, 1), sel);
+  eq(r.score.tracks[0].measures, [{ beats: [nt('whole')] }, { beats: [nt('whole')], timeSignature: { beats: 3, beatType: 4 } }]);
+  eq(r.score.tracks[1].measures, [{ beats: [nt('whole')] }]);
+  eq(describe(r.announce), 'Measures 2 to 3 deleted, 1 tempo mark removed');
+  eq(CMD.undoLabel('deleteMeasure', r.announce), 'delete measures');
+  eq(r.cursor, cur(0, 1, 0), 'the measure after the range');
+  const all = run('deleteMeasure', s, cur(0, 3, 0), SEL.selectionRange(s, 0, P(0, 0), P(3, 0)));
+  eq(describe(all.announce), 'All measures deleted, 1 empty measure left, 1 tempo mark removed');
+  eq(all.score.tracks.map((t) => t.measures), [[{ timeSignature: { beats: 3, beatType: 4 }, beats: [] }], []]);
+  eq(describe(run('deleteMeasure', s, cur(0, 3, 0), SEL.selectionRange(s, 0, P(3, 0), P(3, 0))).announce), 'Measure 4 deleted');
+  eq(CMD.undoLabel('deleteMeasure'), 'delete measure', 'without a selection: the 2.0 label');
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

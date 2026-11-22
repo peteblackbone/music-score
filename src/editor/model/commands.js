@@ -5,7 +5,8 @@
  * Kinds: 'nav' (moves; Right may append a measure), 'edit' (refused in
  * read-only mode), 'history' (undo / redo, run by the controller),
  * 'buffer' (Escape, `cancelsBuffer`) and 2.3 'select' (moves that extend
- * the selection, run by the controller's _extend; `fromStart`: Select all). History commands name their `step`. Commands that can change the model carry their undo
+ * the selection, run by the controller's _extend; `fromStart`: Select all).
+ * With a selection (ctx.selection) the three delete keys act on the range (model/rangeEdit.js). History commands name their `step`. Commands that can change the model carry their undo
  * `label`: a string, or a function of the command's announce descriptor. run() clamps the resulting cursor, clears the digit
  * buffer after anything but a digit, and re-syncs the current duration
  * when the position or the model changed.
@@ -23,6 +24,7 @@ import { effectCommand } from './effects.js';
 import {
   selectLeft, selectRight, selectMeasureStart, selectMeasureEnd, selectPrevMeasure, selectNextMeasure, selectAll,
 } from './selection.js';
+import { ranged, clearRange, removeRange, deleteSelectedColumns } from './rangeEdit.js';
 
 const nav = (fn, label) => ({ fn, kind: 'nav', label });
 const edit = (fn, label) => ({ fn, kind: 'edit', label });
@@ -42,7 +44,7 @@ export const COMMANDS = Object.freeze({
   prevTrack: nav(prevTrack),
   nextTrack: nav(nextTrack),
   digit: edit(digit, (d) => `fret ${d?.fret}`),
-  deleteNote: edit(deleteNote, 'delete note'),
+  deleteNote: edit(ranged(deleteNote, clearRange), (d) => (d?.id === 'rangeCleared' ? 'clear beats' : 'delete note')),
   toggleTie: edit(toggleTie, 'tie'),
   shorter: edit(shorter, 'duration'),
   longer: edit(longer, 'duration'),
@@ -50,11 +52,11 @@ export const COMMANDS = Object.freeze({
   cycleDots: edit(cycleDots, 'dots'),
   toggleTriplet: edit(toggleTriplet, 'triplet'),
   toggleRest: edit(toggleRest, (d) => (d?.id === 'changedToNote' ? 'note' : 'rest')),
-  deleteBeat: edit(deleteBeat, 'delete beat'),
+  deleteBeat: edit(ranged(deleteBeat, removeRange), (d) => (d?.id === 'rangeRemoved' ? 'delete beats' : 'delete beat')),
   insertBeat: edit(insertBeat, 'insert rest'),
   insertMeasureAfter: edit(insertMeasureAfter, 'insert measure'),
   insertMeasureBefore: edit(insertMeasureBefore, 'insert measure'),
-  deleteMeasure: edit(deleteMeasure, 'delete measure'),
+  deleteMeasure: edit(ranged(deleteMeasure, deleteSelectedColumns), (d) => (d?.id === 'columnsDeleted' ? 'delete measures' : 'delete measure')),
   // 2.1 effects, one command per row of effectTable.js
   ...Object.fromEntries(EFFECTS.map((d) => [d.name, edit(effectCommand(d), d.label)])),
   // 2.3 selection
