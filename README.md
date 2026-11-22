@@ -997,7 +997,7 @@ It prints `ALL PASSED` and exits with code 0 on success.
 
 Lyrics, grace notes on the beat and nested tuplets. This completes the 1.x roadmap. Scores that use none of the inputs listed below draw as before, and no input that worked before 1.12.0 draws differently.
 
-The three beat fields below were ignored before 1.12.0, so a score that already sets `lyric`, `onBeat` or `tuplets` will now draw them. Check any score that uses them.
+The three beat fields below were ignored before 1.12.0, so a score that already sets `lyric`, `onBeat` or `tuplets` will now draw them. One side effect: with `multiMeasureRests: true`, a whole-rest measure that carries a `lyric` used to stay out of a multi-measure rest and now joins one, because lyrics on rests are ignored. Check any score that uses them.
 
 New:
 
