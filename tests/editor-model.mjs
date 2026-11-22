@@ -257,6 +257,129 @@ test('cursor: cursorInfo summarizes the cursor (fret, duration, slot, fill, name
   eq(C.cursorInfo(s, cur(3, 0, 0, 1), st).tuningNote, null);
 });
 
+// ---------- ties ----------
+const T = await imp('src/editor/model/ties.js');
+const N = await imp('src/editor/model/notes.js');
+const tn = (duration, string, fret, flags = {}) => ({ type: 'note', duration, notes: [{ string, fret, ...flags }] });
+const beatsOf = (s, ti = 0, mi = 0) => A.beatsAt(s, ti, mi);
+test('ties: prevMainBeat / nextMainBeat skip graces and cross into the adjacent measure only', () => {
+  const s = sc(tab([{ beats: [nt('half'), graceB(), nt('half')] }, { beats: [] }, { beats: [graceB(), nt('whole')] }]));
+  eq(T.prevMainBeat(s, 0, 0, 2), { mi: 0, bi: 0 });
+  eq(T.prevMainBeat(s, 0, 0, 0), null);
+  eq(T.nextMainBeat(s, 0, 0, 0), { mi: 0, bi: 2 });
+  eq(T.nextMainBeat(s, 0, 0, 2), null, 'next measure is empty');
+  eq(T.prevMainBeat(s, 0, 2, 1), null, 'previous measure is empty');
+  eq(T.prevMainBeat(s, 0, 1, 0), { mi: 0, bi: 2 });
+  eq(T.nextMainBeat(s, 0, 1, -1), { mi: 2, bi: 1 });
+});
+test('ties: fixSeam keeps a pair, strips half ties, and returns the score itself when nothing changes', () => {
+  const s = sc(tab([{ beats: [tn('half', 1, 5, { tieStart: true }), tn('half', 1, 5, { tieEnd: true })] }, { beats: [tn('whole', 2, 3, { tieEnd: true })] }]));
+  ok(T.fixSeam(s, 0, { mi: 0, bi: 0 }, { mi: 0, bi: 1 }) === s, 'pair kept');
+  const out = T.fixSeam(s, 0, { mi: 0, bi: 1 }, { mi: 1, bi: 0 });
+  eq(beatsOf(out, 0, 1)[0].notes[0], { string: 2, fret: 3 });
+  const broken = T.fixSeam(s, 0, { mi: 0, bi: 0 }, null);
+  eq(beatsOf(broken)[0].notes[0], { string: 1, fret: 5 });
+  ok(beatsOf(broken)[1] === beatsOf(s)[1], 'other beat untouched');
+});
+
+// ---------- notes (E1–E3, E5, E7, E11) ----------
+const ST = { duration: 'quarter', dots: 0, digit: null };
+const CTX = { maxFret: 24, now: 1000, twoDigitDelayMs: 800, allowAppend: true };
+const ctxAt = (now, extra = {}) => ({ ...CTX, now, ...extra });
+test('digit: on a note beat replaces the fret on that string (pitch deleted) or adds a chord note (E1, E3)', () => {
+  const s = sc(tab([{ beats: [{ type: 'note', duration: 'quarter', notes: [{ string: 2, fret: 1, pitch: 'C4' }] }] }]));
+  const r = N.digit(s, cur(0, 0, 0, 2), ST, CTX, 3);
+  eq(beatsOf(r.score)[0].notes, [{ string: 2, fret: 3 }]);
+  eq(r.announce, { id: 'fret', fret: 3 });
+  const r2 = N.digit(s, cur(0, 0, 0, 5), ST, CTX, 7);
+  eq(beatsOf(r2.score)[0].notes, [{ string: 2, fret: 1, pitch: 'C4' }, { string: 5, fret: 7 }]);
+  eq(r2.announce, { id: 'chordNote', fret: 7, count: 2 });
+  ok(sanitizeScore(r.score) === r.score && sanitizeScore(r2.score) === r2.score);
+});
+test('digit: on a rest the beat becomes a note keeping its other fields (hidden dropped); on the slot / empty measure a new beat with the current duration (E1)', () => {
+  const s = sc(tab([{ beats: [rest('half', { hidden: true, dynamic: 'p', dots: 1 })] }, { beats: [] }]));
+  eq(beatsOf(N.digit(s, cur(0, 0, 0, 3), ST, CTX, 5).score)[0], { type: 'note', duration: 'half', dynamic: 'p', dots: 1, notes: [{ string: 3, fret: 5 }] });
+  eq(beatsOf(N.digit(s, cur(0, 0, 1, 3), { ...ST, duration: '8th', dots: 1 }, CTX, 5).score)[1], { type: 'note', duration: '8th', dots: 1, notes: [{ string: 3, fret: 5 }] });
+  eq(beatsOf(N.digit(s, cur(0, 1, 0, 6), ST, CTX, 0).score, 0, 1), [{ type: 'note', duration: 'quarter', notes: [{ string: 6, fret: 0 }] }], 'no dots key at 0');
+  const hole = sc(tab([{ beats: [nt('whole')] }]), tab([{ beats: [nt('whole')] }, { beats: [nt('whole')] }]));
+  eq(N.digit(hole, cur(0, 1, 0, 1), ST, CTX, 2).score.tracks[0].measures[1], { beats: [{ type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 2 }] }] }, 'a short track is padded on write');
+});
+test('digit: appended after trailing graces; slash removed (E11); same fret is no change', () => {
+  const s = sc(tab([{ beats: [nt('half'), graceB()] }, { beats: [{ type: 'note', duration: 'whole', slash: true }] }]));
+  eq(beatsOf(N.digit(s, cur(0, 0, 2, 1), ST, CTX, 9).score).map((b) => b.type), ['note', 'grace', 'note']);
+  eq(beatsOf(N.digit(s, cur(0, 1, 0, 4), ST, CTX, 2).score, 0, 1)[0], { type: 'note', duration: 'whole', notes: [{ string: 4, fret: 2 }] });
+  ok(N.digit(s, cur(0, 0, 0, 1), ST, CTX, 0).score === s, 'same fret');
+});
+test('digit: refused without TAB (C6) and above maxFret; never writes pitch, soundingPitch or fromFret', () => {
+  const s = sc({ measures: [{ beats: [nt('quarter')] }] });
+  eq(N.digit(s, cur(0, 0, 0), ST, CTX, 1).announce, { id: 'refusedNoTab' });
+  eq(N.digit(s, cur(0, 0, 0), ST, CTX, 1).score, undefined);
+  const t = sc(tab([{ beats: [] }]));
+  eq(N.digit(t, cur(0, 0, 0), ST, ctxAt(0, { maxFret: 5 }), 7).announce, { id: 'refusedMaxFret', max: 5 });
+  const out = JSON.stringify(N.digit(t, cur(0, 0, 0), ST, CTX, 7).score);
+  ok(!/pitch|fromFret/i.test(out), out);
+});
+test('digit buffer: second digit within the delay at the same position combines (coalesce), else replaces (E2)', () => {
+  let s = sc(tab([{ beats: [nt('quarter', 1, 0)] }, { beats: [] }]));
+  const c = cur(0, 0, 0, 1);
+  const a = N.digit(s, c, ST, ctxAt(1000), 1);
+  eq([a.coalesce, a.state.digit.first], [false, 1]);
+  const b = N.digit(a.score, c, a.state, ctxAt(1700), 2);
+  eq([b.coalesce, b.state.digit, beatsOf(b.score)[0].notes[0].fret, b.announce], [true, null, 12, { id: 'fret', fret: 12 }]);
+  const late = N.digit(a.score, c, a.state, ctxAt(1801), 2);
+  eq([late.coalesce, beatsOf(late.score)[0].notes[0].fret], [false, 2]);
+  const big = N.digit(a.score, c, { ...a.state, digit: { ...a.state.digit, first: 3 } }, ctxAt(1100), 5);
+  eq([big.coalesce, beatsOf(big.score)[0].notes[0].fret, big.state.digit.first], [false, 5, 5], '35 > 24 replaces');
+  const moved = N.digit(a.score, cur(0, 0, 0, 2), a.state, ctxAt(1100), 2);
+  eq(moved.coalesce, false, 'other string');
+  // on the append slot the first digit creates a beat at the cursor index; the second combines on it
+  s = sc(tab([{ beats: [] }]));
+  const x = N.digit(s, cur(0, 0, 0, 3), ST, ctxAt(0), 1);
+  const y = N.digit(x.score, cur(0, 0, 0, 3), x.state, ctxAt(10), 5);
+  eq([y.coalesce, beatsOf(y.score).length, beatsOf(y.score)[0].notes[0].fret], [true, 1, 15]);
+});
+test('digit: re-fretting a tied note unties it and its partners; adding a note breaks a dangling tie into the beat', () => {
+  const s = sc(tab([{ beats: [tn('half', 1, 5, { tieStart: true }), tn('quarter', 1, 5, { tieEnd: true, tieStart: true })] }, { beats: [tn('whole', 1, 5, { tieEnd: true })] }]));
+  const r = N.digit(s, cur(0, 0, 1, 1), ST, CTX, 7);
+  eq([beatsOf(r.score)[0].notes[0], beatsOf(r.score)[1].notes[0], beatsOf(r.score, 0, 1)[0].notes[0]], [{ string: 1, fret: 5 }, { string: 1, fret: 7 }, { string: 1, fret: 5 }]);
+  const same = N.digit(s, cur(0, 0, 1, 1), ST, CTX, 5);
+  ok(same.score === s, 'same fret keeps the ties');
+  const d = sc(tab([{ beats: [tn('half', 2, 5, { tieStart: true }), nt('half', 1, 0)] }]));
+  eq(beatsOf(N.digit(d, cur(0, 0, 1, 2), ST, CTX, 5).score)[0].notes[0], { string: 2, fret: 5 });
+});
+test('deleteNote: removes the note on the string; the last note leaves a rest keeping other fields; partners untied (E5)', () => {
+  const s = sc(tab([{ beats: [
+    { type: 'note', duration: 'half', dynamic: 'f', slash: false, notes: [{ string: 1, fret: 3, tieStart: true }] },
+    { type: 'note', duration: 'half', notes: [{ string: 1, fret: 3, tieEnd: true }, { string: 2, fret: 1 }] },
+  ] }]));
+  const a = N.deleteNote(s, cur(0, 0, 1, 1));
+  eq(beatsOf(a.score)[1].notes, [{ string: 2, fret: 1 }]);
+  eq(beatsOf(a.score)[0].notes[0], { string: 1, fret: 3 });
+  eq(a.announce.id, 'noteDeleted');
+  const b = N.deleteNote(s, cur(0, 0, 0, 1));
+  eq(beatsOf(b.score)[0], { type: 'rest', duration: 'half', dynamic: 'f' });
+  eq(beatsOf(b.score)[1].notes[0], { string: 1, fret: 3 });
+  eq(b.announce.id, 'noteDeletedRest');
+  ok(sanitizeScore(b.score) === b.score);
+  eq(N.deleteNote(s, cur(0, 0, 0, 4)), { announce: { id: 'noNote' } });
+  eq(N.deleteNote(sc(tab([{ beats: [rest()] }])), cur(0, 0, 0, 1)), { announce: { id: 'noNote' } });
+  eq(N.deleteNote(sc(tab([{ beats: [rest()] }])), cur(0, 0, 1, 1)), { announce: { id: 'noNote' } }, 'append slot');
+});
+test('toggleTie: ties to the previous main beat (also across a barline), copies the fret, then removes both flags (E7)', () => {
+  const s = sc(tab([{ beats: [nt('half', 3, 7), graceB(3, 9), { type: 'note', duration: 'half', notes: [{ string: 3, fret: 2, pitch: 'A3' }] }] }, { beats: [nt('whole', 3, 4)] }]));
+  const a = N.toggleTie(s, cur(0, 0, 2, 3));
+  eq([beatsOf(a.score)[0].notes[0], beatsOf(a.score)[2].notes[0]], [{ string: 3, fret: 7, tieStart: true }, { string: 3, fret: 7, tieEnd: true }]);
+  eq(a.announce, { id: 'tiedTo', fret: 7 });
+  const b = N.toggleTie(a.score, cur(0, 0, 2, 3));
+  eq([beatsOf(b.score)[0].notes[0], beatsOf(b.score)[2].notes[0]], [{ string: 3, fret: 7 }, { string: 3, fret: 7 }]);
+  eq(b.announce.id, 'tieRemoved');
+  const x = N.toggleTie(s, cur(0, 1, 0, 3));
+  eq([beatsOf(x.score)[2].notes[0].tieStart, beatsOf(x.score, 0, 1)[0].notes[0]], [true, { string: 3, fret: 2, tieEnd: true }]);
+  eq(N.toggleTie(s, cur(0, 0, 0, 3)).announce.id, 'nothingToTie');
+  eq(N.toggleTie(s, cur(0, 0, 0, 1)).announce.id, 'noNoteHere');
+  eq(N.toggleTie(sc(tab([{ beats: [rest(), nt('half', 1, 1)] }])), cur(0, 0, 1, 1)).announce.id, 'nothingToTie');
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
