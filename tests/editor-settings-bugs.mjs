@@ -21,17 +21,6 @@ const small = () => ({ title: 'x', tracks: [{ name: 'G', showTablature: true, me
 const results = [];
 const test = (name, fn) => { try { fn(); results.push({ name, ok: true }); } catch (e) { results.push({ name, ok: false, msg: e.message }); } };
 
-test('BUG 1 (src/editor/settings.js:60): the size check measures the model JSON, but getScore() adds `"schemaVersion":1` (18 chars), so a score the editor accepts at the limit cannot be reloaded from its own getScore(); expected: a settings call that succeeds leaves a score that loadScore(getScore()) accepts', () => {
-  const L = ScoreEditor.LIMITS.jsonChars;
-  const len0 = JSON.stringify(mk({ ...small(), pad: '' }).ed._model).length;
-  const target = L - 49; // a title of 50 characters instead of 1 adds 49
-  const { ed } = mk({ ...small(), pad: 'p'.repeat(target - len0) });
-  if (JSON.stringify(ed._model).length !== target) throw new Error('fixture size is off');
-  if (ed.updateScore({ title: 'x'.repeat(50) }) !== true) throw new Error('the call was refused (fine: then the bug is fixed)');
-  if (JSON.stringify(ed._model).length !== L) throw new Error('fixture size is off');
-  ed.loadScore(ed.getScore()); // throws "Score too large: 5242898 characters of JSON (limit 5242880)"
-});
-
 test('BUG 2 (src/editor/settings.js:84-85, _applyModel): without requestAnimationFrame the render, and so the `change` handlers, run inside scheduleRender() before _sayKept() stores the message, so a `change` handler reads the previous call\'s lastMessage (with requestAnimationFrame it is current); expected: lastMessage equals detail.message inside the handler', () => {
   const { ed } = mk(small());
   let seen;

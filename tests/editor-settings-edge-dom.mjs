@@ -220,11 +220,12 @@ test('read-only to writable: calls work again and undo history only has the late
 });
 
 // ---------- 5 MB ----------
-test('the size limit: exactly LIMITS.jsonChars passes, one over is refused with "The score would be too large" and nothing changes; for updateScore, addTrack, updateMeasure and updateTrack', () => {
+test('the size limit: a result whose getScore() JSON is exactly LIMITS.jsonChars passes and reloads, one over is refused with "The score would be too large" and nothing changes; for updateScore, addTrack, updateMeasure and updateTrack', () => {
   const L = ScoreEditor.LIMITS.jsonChars;
-  /** A score whose editor model serializes to exactly `target` characters (the limit counts the model's JSON; getScore() adds schemaVersion on top: see tests/editor-settings-bugs.mjs). */
+  const size = (ed) => JSON.stringify(ed.getScore()).length;
+  /** A score whose getScore() JSON is exactly `target` characters (the size loadScore checks). */
   const padTo = (base, target) => {
-    const len = (n) => JSON.stringify(mk({ ...base, pad: 'p'.repeat(n) }).ed._model).length;
+    const len = (n) => size(mk({ ...base, pad: 'p'.repeat(n) }).ed);
     const n = target - len(0);
     ok(len(n) === target, 'padding is exact');
     return { ...base, pad: 'p'.repeat(n) };
@@ -242,9 +243,10 @@ test('the size limit: exactly LIMITS.jsonChars passes, one over is refused with 
     const d = delta(call);
     ok(d > 0, `${name} grows the score`);
     const exact = mk(padTo(small(), L - d));
-    eq(JSON.stringify(exact.ed._model).length, L - d, 'padded');
+    eq(size(exact.ed), L - d, 'padded');
     eq(call(exact.ed), true, `${name}: lands on exactly the limit`);
-    eq(JSON.stringify(exact.ed._model).length, L);
+    eq(size(exact.ed), L);
+    exact.ed.loadScore(exact.ed.getScore()); // the editor's own output always reloads (was a bug: the model JSON was measured without schemaVersion)
     const over = mk(padTo(small(), L - d + 1));
     const m = over.ed._model;
     const events = over.events;

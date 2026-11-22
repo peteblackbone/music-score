@@ -15,7 +15,8 @@
  * in read-only mode. Then the two-digit fret entry is cancelled, and the
  * call is refused (false, reason announced, no history, no event) in
  * read-only mode, for an editor-state refusal, a call that changes
- * nothing ("No change") or a result past LIMITS.jsonChars. Otherwise it
+ * nothing ("No change") or a result whose getScore() JSON is past
+ * LIMITS.jsonChars (so the editor's own output always reloads). Otherwise it
  * is one undo step: the cursor event first if the cursor moved, then one
  * `change` after the render with `{ source: 'edit', command, message }`;
  * returns true. Settings calls skip the hidden-track check commands make.
@@ -26,6 +27,7 @@ import { SETTINGS } from './model/settings/ops.js';
 import { getMeasureSettings } from './model/settings/measureSettings.js';
 import { INSTRUMENTS, TUNINGS } from './model/settings/instruments.js';
 import { EDITOR_LIMITS } from './model/limits.js';
+import { exportedLength } from './model/io.js';
 import { clampCursor, syncDuration, sameCursor } from './model/cursor.js';
 import { describe } from './announce.js';
 
@@ -57,7 +59,7 @@ export function installSettings(Editor) {
     if (this._readOnly) return this._settingsRefused({ id: 'readOnly' });
     if (r.refused) return this._settingsRefused(r.refused);
     if (r.score === this._model) return this._settingsRefused({ id: 'noChange' });
-    if (JSON.stringify(r.score).length > EDITOR_LIMITS.jsonChars) return this._settingsRefused({ id: 'tooLarge' });
+    if (exportedLength(r.score) > EDITOR_LIMITS.jsonChars) return this._settingsRefused({ id: 'tooLarge' });
     return this._applyModel(name, def.label, r);
   }));
   Object.defineProperty(proto, '_settingsRefused', hidden(function refused(d) {

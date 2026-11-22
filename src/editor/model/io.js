@@ -45,6 +45,15 @@ export function parseInput(input) {
   return sanitizeFixed(data);
 }
 
+/**
+ * Characters of the JSON text of exportScore(model) (what getScore() returns,
+ * `schemaVersion` included), without cloning: the size loadScore checks.
+ */
+export function exportedLength(model) {
+  const json = JSON.stringify(model);
+  return json.length + (json === '{}' ? 17 : 18); // '"schemaVersion":1' plus a comma when other keys follow
+}
+
 /** `{ schemaVersion: 1, ...a deep JSON clone of model }`. */
 export function exportScore(model) {
   return { schemaVersion: SCHEMA_VERSION, ...JSON.parse(JSON.stringify(model)) };

@@ -206,7 +206,7 @@ test('settings calls work with every track hidden (commands are refused there), 
 });
 test('the score would be too large: refused past LIMITS.jsonChars', () => {
   const base = { title: 'x', tracks: [{ showTablature: true, measures: [{ beats: [] }] }] };
-  const pad = ScoreEditor.LIMITS.jsonChars - JSON.stringify({ ...base, pad: '' }).length - 5;
+  const pad = ScoreEditor.LIMITS.jsonChars - JSON.stringify({ schemaVersion: 1, ...base, pad: '' }).length - 5; // getScore() JSON
   const { ed, events } = mk({ ...base, pad: 'p'.repeat(pad) });
   eq(ed.updateScore({ title: 'xxxxxxxxxx' }), false);
   eq([ed.lastMessage, events.length], ['The score would be too large', 0]);
