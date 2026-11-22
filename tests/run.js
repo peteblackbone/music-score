@@ -178,5 +178,15 @@ for (const c of cases) {
   const { summary } = await import('./editor-range-dom.mjs');
   fail += await summary();
 }
+// 2.3.1 edge cases against the criteria and decisions at model level: overwrite fields and other tracks, tempo rehome, blank selections, range effects, transpose ties and limits, the split for every meter, cascade limits and cursor (tests/editor-range-edge.mjs)
+{
+  const { summary } = await import('./editor-range-edge.mjs');
+  fail += summary();
+}
+// 2.3.1 edge cases at controller level: insert flag lifecycle, overwrite paste, undo / redo of range effects and transpose, the cascade ignoring the selection (tests/editor-range-edge-dom.mjs)
+{
+  const { summary } = await import('./editor-range-edge-dom.mjs');
+  fail += await summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);
