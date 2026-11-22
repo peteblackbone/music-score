@@ -31,11 +31,11 @@ function checkTime(raw) {
   return { beats, beatType };
 }
 
-/** Ending numbers: one integer 1–99 or an array of 1–32 unique ones → sorted array. */
+/** Ending numbers: one integer 1–LIMITS.endingNumber or an array of 1–LIMITS.endingNumbers unique ones → sorted array. */
 function endingNumbers(v) {
   const nums = Array.isArray(v) ? list(v) : [v];
-  if (Array.isArray(v) && (nums.length < 1 || nums.length > 32)) throw new RangeError('An ending has 1 to 32 numbers');
-  nums.forEach((n) => intIn(n, 1, 99, 'Ending number'));
+  if (Array.isArray(v) && (nums.length < 1 || nums.length > EDITOR_LIMITS.endingNumbers)) throw new RangeError(`An ending has 1 to ${EDITOR_LIMITS.endingNumbers} numbers`);
+  nums.forEach((n) => intIn(n, 1, EDITOR_LIMITS.endingNumber, 'Ending number'));
   if (new Set(nums).size !== nums.length) throw new RangeError('Each ending number can be used once');
   return nums.sort((a, b) => a - b);
 }
@@ -72,7 +72,7 @@ function checkSection(raw) {
   }
   if (typeof rawLetter !== 'string') throw new TypeError('Section letter must be a string');
   const letter = rawLetter.trim();
-  if (LINE_BREAK.test(letter) || [...letter].length < 1 || [...letter].length > 3) throw new RangeError('Section letter must be 1 to 3 characters');
+  if (LINE_BREAK.test(letter) || [...letter].length < 1 || [...letter].length > EDITOR_LIMITS.sectionLetter) throw new RangeError(`Section letter must be 1 to ${EDITOR_LIMITS.sectionLetter} characters`);
   return { letter, ...(words ? { text: words } : {}) };
 }
 
@@ -105,7 +105,7 @@ function checkPatch(score, mi, raw) {
   }
   if (has('repeatCount')) {
     const r = patch.repeatCount;
-    out.repeatCount = r === null ? undefined : intIn(r, 2, 99, 'Repeat count');
+    out.repeatCount = r === null ? undefined : intIn(r, 2, EDITOR_LIMITS.repeatCount, 'Repeat count');
     const barline = has('barline') ? out.barline : columnValue(score, mi, 'barline');
     if (r !== null && barline !== 'repeatEnd') throw new RangeError('A repeat count needs a repeat end barline');
   }

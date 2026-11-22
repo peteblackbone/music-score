@@ -12,6 +12,7 @@ import { FILL_WORDS, durationWords } from './model/durations.js';
 import { EFFECT_BY_NAME, SUFFIXES } from './model/effectTable.js';
 import { formatBpm } from '../expression.js';
 import { canonicalEnding, endingLabel } from '../navigation.js';
+import { EDITOR_LIMITS } from './model/limits.js';
 
 export { durationWords };
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
@@ -67,7 +68,7 @@ export const MESSAGES = Object.freeze({
   scoreUpdated: (d) => `${!d.key ? 'Score settings updated' : FLAG_KEYS.includes(d.key) ? `${d.label} ${d.on ? 'on' : 'off'}` : `${d.label} ${d.on ? 'set' : 'removed'}`}${d.mmrOn ? ', shown when rendered, not in the editor' : ''}`,
   tempoSet: (d) => (d.tempo ? `Tempo ${tempoText(d.tempo)} at measure ${d.measure}, beat ${d.beat}` : 'Tempo removed'),
   onlyTrack: () => 'A score needs at least one track',
-  tooManyTracks: () => 'A score has at most 32 tracks',
+  tooManyTracks: () => `A score has at most ${EDITOR_LIMITS.tracks} tracks`,
   lastVisible: () => 'At least one track must be visible',
   tooLarge: () => 'The score would be too large',
   trackUpdated: (d) => `${trackText(d)} updated${d.removed ? `, ${d.removed} note${d.removed === 1 ? '' : 's'} removed` : ''}`,

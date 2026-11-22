@@ -95,7 +95,7 @@ export function trackLabel(t, i) {
 
 /** The edit panel's values for track `t` with opening clef `clef` (getMeasureSettings(0, ti).clef.value). */
 export function trackValues(t, clef) {
-  const capo = Number.isInteger(t.capo) && t.capo >= 1 && t.capo <= 30 ? t.capo : 0;
+  const capo = Number.isInteger(t.capo) && t.capo >= 1 && t.capo <= ScoreEditor.LIMITS.capo ? t.capo : 0;
   return {
     name: t.name ?? '',
     label: t.label ?? '',
@@ -114,7 +114,7 @@ export function trackValues(t, clef) {
 export function trackErrors(v, { lastVisible = false } = {}) {
   const out = {};
   (v.tuning || []).forEach((p, i) => { if (!canonicalPitch(p)) out[`string${i}`] = 'Use a note and octave from 0 to 9, such as E2 or F#3.'; });
-  if (!/^\d+$/.test(String(v.capo).trim()) || Number(v.capo) > 30) out.capo = 'Capo must be a whole number from 0 to 30.';
+  if (!/^\d+$/.test(String(v.capo).trim()) || Number(v.capo) > ScoreEditor.LIMITS.capo) out.capo = `Capo must be a whole number from 0 to ${ScoreEditor.LIMITS.capo}.`;
   if (lastVisible && !v.notation && !v.tab) out.tab = 'At least one track must be visible.';
   return out;
 }

@@ -10,6 +10,7 @@
 import { tempoOf } from '../../../expression.js';
 import { trackAt, measureAt, beatsOf, beatAt, isGrace, updateBeat } from '../access.js';
 import { object, checkKeys, text, flag, withField } from './validate.js';
+import { EDITOR_LIMITS } from '../limits.js';
 
 const LONG = ['instructions', 'copyright'];
 const FLAGS = ['showTuningChart', 'multiMeasureRests'];
@@ -58,7 +59,7 @@ export function checkTempo(value) {
   checkKeys(obj, TEMPO_KEYS, 'tempo');
   const { bpm } = obj;
   if (typeof bpm !== 'number') throw new TypeError('Tempo bpm must be a number');
-  if (!(bpm > 0 && bpm <= 1000) || Math.round(bpm * 100) / 100 !== bpm) throw new RangeError('BPM must be above 0 and at most 1000, with up to 2 decimals');
+  if (!(bpm > 0 && bpm <= EDITOR_LIMITS.bpm) || Math.round(bpm * 100) / 100 !== bpm) throw new RangeError(`BPM must be above 0 and at most ${EDITOR_LIMITS.bpm}, with up to 2 decimals`);
   const unit = obj.unit ?? 'quarter';
   if (typeof unit !== 'string') throw new TypeError('Tempo unit must be a string');
   if (!UNITS.includes(unit)) throw new RangeError(`Tempo unit must be one of ${UNITS.join(', ')}`);

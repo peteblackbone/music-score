@@ -12,6 +12,7 @@
  */
 import { clefOf } from '../../../clef.js';
 import { tracksOf, isVisible, measureAt, measuresOf } from '../access.js';
+import { EDITOR_LIMITS } from '../limits.js';
 import { object, checkKeys, index, text, flag, bool, withField } from './validate.js';
 import { canonicalTuning, retuneTrack } from './tuning.js';
 
@@ -26,11 +27,11 @@ export function checkClef(v) {
   return c;
 }
 
-/** Capo `v`: 1–30, or undefined for 0 / null. */
+/** Capo `v`: 1–LIMITS.capo, or undefined for 0 / null. */
 export function checkCapo(v) {
   if (v === null || v === 0) return undefined;
   if (typeof v !== 'number') throw new TypeError('Capo must be a number');
-  if (!Number.isInteger(v) || v < 1 || v > 30) throw new RangeError('Capo must be a whole number from 0 to 30');
+  if (!Number.isInteger(v) || v < 1 || v > EDITOR_LIMITS.capo) throw new RangeError(`Capo must be a whole number from 0 to ${EDITOR_LIMITS.capo}`);
   return v;
 }
 

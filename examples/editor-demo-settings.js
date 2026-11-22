@@ -87,10 +87,10 @@ export function parseEnding(textValue) {
   const t = String(textValue ?? '').trim();
   if (!t) return { numbers: [] };
   const parts = t.split(',').map((p) => p.trim());
-  if (parts.some((p) => !/^\d+$/.test(p) || Number(p) < 1 || Number(p) > 99)) return { error: 'Use whole numbers from 1 to 99, separated by commas, such as 1, 2.' };
+  if (parts.some((p) => !/^\d+$/.test(p) || Number(p) < 1 || Number(p) > LIMITS.endingNumber)) return { error: `Use whole numbers from 1 to ${LIMITS.endingNumber}, separated by commas, such as 1, 2.` };
   const numbers = parts.map(Number);
   if (new Set(numbers).size !== numbers.length) return { error: 'Each number can be used once.' };
-  if (numbers.length > 32) return { error: 'At most 32 numbers.' };
+  if (numbers.length > LIMITS.endingNumbers) return { error: `At most ${LIMITS.endingNumbers} numbers.` };
   return { numbers: numbers.sort((a, b) => a - b) };
 }
 
@@ -132,12 +132,12 @@ const intText = (v, lo, hi) => /^\d+$/.test(String(v).trim()) && Number(v) >= lo
 export function measureErrors(v, { tempoOn = true } = {}) {
   const out = {};
   if (!intText(v.beats, 1, LIMITS.timeSignatureBeats)) out.beats = `Beats must be a whole number from 1 to ${LIMITS.timeSignatureBeats}.`;
-  if (v.barline === 'repeatEnd' && String(v.repeatCount).trim() && !intText(v.repeatCount, 2, 99)) out.repeatCount = 'Repeat count must be a whole number from 2 to 99.';
+  if (v.barline === 'repeatEnd' && String(v.repeatCount).trim() && !intText(v.repeatCount, 2, LIMITS.repeatCount)) out.repeatCount = `Repeat count must be a whole number from 2 to ${LIMITS.repeatCount}.`;
   const end = parseEnding(v.ending);
   if (end.error) out.ending = end.error;
   if (tempoOn && v.tempoMode === 'mark') {
     const bpm = Number(v.bpm);
-    if (!String(v.bpm).trim() || !(bpm > 0 && bpm <= 1000) || Math.round(bpm * 100) / 100 !== bpm) out.bpm = 'BPM must be above 0 and at most 1000, with up to 2 decimals.';
+    if (!String(v.bpm).trim() || !(bpm > 0 && bpm <= LIMITS.bpm) || Math.round(bpm * 100) / 100 !== bpm) out.bpm = `BPM must be above 0 and at most ${LIMITS.bpm}, with up to 2 decimals.`;
   }
   return out;
 }

@@ -10,6 +10,10 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const imp = (p) => import(pathToFileURL(path.join(root, p)).href);
 const { sanitizeScore } = await imp('src/sanitize.js');
 const { EDITOR_LIMITS } = await imp('src/editor/model/limits.js');
+const SCT = await imp('src/scoreText.js');
+const EXP = await imp('src/expression.js');
+const NAV = await imp('src/navigation.js');
+const AN = await imp('src/editor/announce.js');
 
 const results = [];
 const test = (name, fn) => {
@@ -30,6 +34,16 @@ test('LIMITS: 2.2 caps (textChars, longTextChars, timeSignatureBeats, frozen bea
     const s = { tracks: [{ timeSignature: { beats: L.timeSignatureBeats, beatType }, measures: [] }] };
     ok(sanitizeScore(s) === s, `${L.timeSignatureBeats}/${beatType} is kept by sanitize`);
   }
+});
+test('LIMITS maxima match the renderer: capo, bpm, ending numbers, repeat count, section letter; the tooManyTracks message uses LIMITS.tracks', () => {
+  const L = EDITOR_LIMITS;
+  eq([L.capo, L.bpm, L.endingNumber, L.endingNumbers, L.repeatCount, L.sectionLetter], [30, 1000, 99, 32, 99, 3]);
+  eq([SCT.canonicalCapo(L.capo), SCT.canonicalCapo(L.capo + 1)], [L.capo, null]);
+  eq([EXP.tempoOf(L.bpm)?.bpm, EXP.tempoOf(L.bpm + 0.01)], [L.bpm, null]);
+  eq([SCT.canonicalRepeatCount(L.repeatCount), SCT.canonicalRepeatCount(L.repeatCount + 1), SCT.canonicalRepeatCount(1)], [L.repeatCount, null, null]);
+  eq(NAV.MAX_ENDING_NUMBERS, L.endingNumbers);
+  eq([SCT.canonicalSection({ letter: 'x'.repeat(L.sectionLetter) })?.letter, SCT.canonicalSection({ letter: 'x'.repeat(L.sectionLetter + 1) })], ['x'.repeat(L.sectionLetter), null]);
+  eq(AN.describe({ id: 'tooManyTracks' }), `A score has at most ${L.tracks} tracks`);
 });
 
 // ---------- validators ----------

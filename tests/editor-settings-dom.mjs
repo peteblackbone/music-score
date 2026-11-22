@@ -531,6 +531,12 @@ test('editor.html: Settings group with 3 buttons; 3 dialogs (aria-labelledby, no
   const newOpts = [...html.slice(html.indexOf('<select id="new-preset">'), html.indexOf('</select>', html.indexOf('<select id="new-preset">'))).matchAll(/<option value="(\w+)">([^<]+)<\/option>/g)].map((m) => ({ value: m[1], label: m[2] }));
   eq(newOpts, DT.instrumentOptions(), 'New dialog instruments = INSTRUMENTS labels, in order');
   ok(!/tabindex="[1-9]/.test(html), 'no positive tabindex');
+  const L = ScoreEditor.LIMITS;
+  for (const [id, attr, want] of [['new-beats', 'max', L.timeSignatureBeats], ['ms-beats', 'max', L.timeSignatureBeats], ['ms-repeat', 'max', L.repeatCount], ['ms-bpm', 'max', L.bpm],
+    ['tr-capo', 'max', L.capo], ['ms-section-letter', 'maxlength', L.sectionLetter], ['sc-title', 'maxlength', L.textChars], ['sc-copyright', 'maxlength', L.longTextChars], ['tr-name', 'maxlength', L.textChars]]) {
+    const tag = new RegExp(`<(?:input|textarea)[^>]* id="${id}"[^>]*>`).exec(html)?.[0] ?? '';
+    eq(new RegExp(`${attr}="(\\d+)"`).exec(tag)?.[1], String(want), `${id} ${attr} = LIMITS`);
+  }
 });
 test('demo boundary: the demo modules use the public API only; from src/editor/model/ only durations.js (and the 2.1 effect table for the Effects group)', () => {
   const allowed = { 'examples/editor-demo-effects.js': ['../src/editor/model/effectTable.js'] };
