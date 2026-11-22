@@ -14,7 +14,8 @@ const { MusicScoreRenderer } = await imp('src/MusicScoreRenderer.js');
 const { ScoreEditor } = await imp('src/editor/ScoreEditor.js');
 const { sanitizeScore } = await imp('src/sanitize.js');
 const { keyToCommand } = await imp('src/editor/keymap.js');
-const { effectButtonState, wireEffects } = await imp('examples/editor-demo-effects.js');
+const { effectButtonState, wireEffects, BUTTONS } = await imp('examples/editor-demo-effects.js');
+const { EFFECT_BY_NAME } = await imp('src/editor/model/effectTable.js');
 const fs = await import('node:fs');
 
 const tests = [];
@@ -275,11 +276,13 @@ test('AC19: wireEffects drives the editor through handleKey, refreshes the butto
   eq([hp.getAttribute('aria-pressed'), bend.textContent, buttons.some((b) => b.disabled)], ['false', 'Bend: off', false], 'state follows the cursor');
   ed.destroy();
 });
-test('AC19: editor.html has the Effects group (role=group, 13 buttons whose data-key / data-shift run their data-effect command), the Effects status item and a <dt> for every key', () => {
+test('AC19: editor.html has the Effects group (role=group, a button per demo effect whose data-key / data-shift run its data-effect command), the Effects status item and a <dt> for every key', () => {
   const html = fs.readFileSync(path.join(root, 'editor.html'), 'utf8');
   ok(/<div class="group effects" role="group" aria-label="Effects">/.test(html), 'group');
   const buttons = [...html.matchAll(/<button type="button" data-effect="(\w+)" data-key="(\w)"( data-shift="true")?[^>]*>/g)];
-  eq(buttons.map((m) => m[1]), ['hammerPull', 'slide', 'bend', 'vibrato', 'palmMute', 'deadNote', 'ghostNote', 'harmonic', 'letRing', 'louder', 'softer', 'accent', 'staccato']);
+  eq(buttons.map((m) => m[1]), BUTTONS, 'one button per BUTTONS entry, in order');
+  ok(BUTTONS.length >= 13 && BUTTONS.every((n) => Object.hasOwn(EFFECT_BY_NAME, n)), 'every button is an effect row');
+  eq(Object.keys(effectButtonState(null)), BUTTONS, 'effectButtonState covers exactly the buttons');
   for (const [tag, name, k, shift] of buttons) {
     eq(keyToCommand({ key: k, shiftKey: !!shift })?.name, name, name);
     eq(/aria-pressed="false"/.test(tag), ['hammerPull', 'palmMute', 'deadNote', 'ghostNote', 'letRing'].includes(name), `${name}: aria-pressed only on toggles`);

@@ -184,6 +184,7 @@ test('hitTestMap: guards (null map, NaN coordinates)', () => {
 const { makeClock, scrollLog } = await import('./editor-shim.mjs');
 const barrel = await imp('index.js');
 const { ScoreEditor } = await imp('src/editor/ScoreEditor.js');
+const { EFFECTS } = await imp('src/editor/model/effectTable.js');
 const { sanitizeScore } = await imp('src/sanitize.js');
 const { leadRiff } = await imp('examples/lead-riff.js');
 const tn = (duration, string, fret, flags = {}) => ({ type: 'note', duration, notes: [{ string, fret, ...flags }] });
@@ -602,7 +603,7 @@ const KEYS = [
   key('+'), key('-'), key('.'), key('/'), key('r'), key('l'), key('Delete'), key('Delete', { ctrlKey: true }), key('i'), key('Insert'),
   key('m'), key('M', { shiftKey: true }), key('Delete', { shiftKey: true }), key('z', { ctrlKey: true }), key('y', { ctrlKey: true }), key('Escape'),
   // 2.1 effects
-  ...['h', 's', 'b', 'v', 'p', 'x', 'g', 'n', 'd', 'a'].map((k) => key(k)), ...['S', 'B', 'L', 'D', 'A'].map((k) => key(k, { shiftKey: true })),
+  ...EFFECTS.map((d) => key(d.shift ? d.key.toUpperCase() : d.key, { shiftKey: d.shift })),
 ];
 test('B10 (editor): 300 random keys, frames flushed every 25; the model stays sanitize-stable and the hit map voice-1 beats match the model (index, grace, rest)', () => {
   const rnd = mulberry32(7);

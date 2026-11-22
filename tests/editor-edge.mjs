@@ -17,6 +17,7 @@ const C = await imp('src/editor/model/cursor.js');
 const T = await imp('src/editor/model/ties.js');
 const { run, COMMANDS } = await imp('src/editor/model/commands.js');
 const { keyToCommand } = await imp('src/editor/keymap.js');
+const { EFFECTS } = await imp('src/editor/model/effectTable.js');
 const demo = await imp('examples/editor-demo.js');
 const { exampleScore } = await imp('examples/example-score.js');
 const { leadRiff } = await imp('examples/lead-riff.js');
@@ -703,7 +704,7 @@ const FUZZ = ['moveLeft', 'moveRight', 'moveRight', 'moveUp', 'moveDown', 'prevM
   ...Array(8).fill('digit'), 'deleteNote', 'toggleTie', 'toggleTie', 'toggleTie', 'shorter', 'longer', 'cycleDots', 'toggleTriplet', 'toggleRest', 'toggleRest', 'deleteBeat', 'insertBeat',
   'insertMeasureAfter', 'insertMeasureBefore', 'deleteMeasure', 'setDuration',
   // 2.1 effects
-  'hammerPull', 'slide', 'slideInOut', 'bend', 'bendBack', 'vibrato', 'palmMute', 'deadNote', 'ghostNote', 'harmonic', 'letRing', 'louder', 'softer', 'accent', 'staccato'];
+  ...EFFECTS.map((d) => d.name)];
 const fuzzStart = () => sc(
   tab([
     { beats: [tn('quarter', 1, 5, { tieStart: true }), tn('quarter', 1, 5, { tieEnd: true }), grace(), nt('half', 2, 3)] },
