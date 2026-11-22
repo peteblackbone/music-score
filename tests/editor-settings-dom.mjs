@@ -258,6 +258,65 @@ test('R3: settings messages within one 150 ms window are joined with ". "; a lat
   ok(/^Beat deleted\. Beat 1, .*\. Title set$/.test(live.textContent), live.textContent);
 });
 
+// ---------- G1 / G2: what the settings write renders ----------
+const { MusicScoreRenderer } = await imp('src/MusicScoreRenderer.js');
+const walk = (n, f, out = []) => { if (f(n)) out.push(n); n.children.forEach((c) => walk(c, f, out)); return out; };
+const classes = (n) => (n.getAttribute?.('class') || '').split(' ');
+const renderScore = (score) => { const box = makeContainer(); new MusicScoreRenderer(box, score, { width: 1400 }).render(); return box.children[0]; };
+const countClass = (svg, cls) => walk(svg, (n) => classes(n).includes(cls)).length;
+const texts = (svg) => walk(svg, (n) => n.tag === 'text').map((n) => n.textContent);
+test('G1: each value the settings write renders its class (volta, segno, coda, jump, section, repeat-count x2, clef-change, tempo-change, multi-rest, key and time changes, tuning chart, capo, TAB articulations, tied-fret parentheses)', () => {
+  const score = { title: 'G1', tracks: [
+    { name: 'Gtr', showTablature: true, measures: [
+      { beats: [{ type: 'note', duration: 'half', notes: [{ string: 1, fret: 5, tieStart: true }] }, { type: 'note', duration: 'half', notes: [{ string: 1, fret: 5, tieEnd: true }] }] },
+      ...Array.from({ length: 8 }, () => ({ beats: [] })),
+    ] },
+    { name: 'TabOnly', showStandardNotation: false, showTablature: true, measures: [{ beats: [nt('whole', 2, 3)] }] },
+  ] };
+  const { ed } = mk(score);
+  ed.setCursor({ track: 1, measure: 0, beat: 0 });
+  ed.handleKey(key('a'));
+  ed.setCursor({ track: 0, measure: 0, beat: 0 });
+  const steps = [
+    ['segno', () => ed.updateMeasure(0, { segno: true })],
+    ['volta', () => ed.updateMeasure(1, { ending: [1, 2] })],
+    ['section', () => ed.updateMeasure(1, { section: { letter: 'A', text: 'Verse' } })],
+    ['coda', () => ed.updateMeasure(2, { coda: true })],
+    ['repeat-count', () => ed.updateMeasure(2, { barline: 'repeatEnd', repeatCount: 2 })],
+    ['jump', () => ed.updateMeasure(3, { jump: 'D.S. al Coda' })],
+    ['clef-change', () => ed.updateMeasure(3, { clef: 'bass' }, { track: 0 })],
+    ['key-signature', () => ed.updateMeasure(2, { keySignature: 3 })],
+    ['time-signature', () => ed.updateMeasure(3, { timeSignature: { beats: 3, beatType: 4 } })],
+    ['tempo-change', () => ed.setTempo({ bpm: 90, unit: 'quarter', text: 'Allegro' })],
+    ['tuning-chart', () => ed.updateScore({ showTuningChart: true }) && ed.updateTrack(0, { tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'] })],
+    ['multi-rest', () => ed.updateScore({ multiMeasureRests: true })],
+    ['tab-articulations', () => ed.updateTrack(1, { tabArticulations: true })],
+  ];
+  for (const [cls, call] of steps) {
+    const before = countClass(renderScore(ed.getScore()), cls);
+    eq(call(), true, cls);
+    const svg = renderScore(ed.getScore());
+    ok(countClass(svg, cls) > before, `${cls}: ${before} -> ${countClass(svg, cls)}`);
+  }
+  const svg = renderScore(ed.getScore());
+  ok(texts(svg).includes('x2'), 'R9: a repeat count of 2 is drawn as x2');
+  ok(texts(svg).some((t) => t.includes('⑥ = D')), 'tuning chart entry');
+  ok(!texts(svg).some((t) => t.includes('Capo fret 2')));
+  ed.updateTrack(0, { capo: 2 });
+  ok(texts(renderScore(ed.getScore())).includes('Gtr: Capo fret 2'), 'capo');
+  ok(!texts(svg).includes('(5)'));
+  ed.updateTrack(0, { tiedFrets: 'parens' });
+  ok(texts(renderScore(ed.getScore())).includes('(5)'), 'tied fret in parentheses');
+});
+test('G2: the editor view keeps multiMeasureRests off while the score has it on; turning it on says so', () => {
+  const { ed, box, spoken } = mk({ tracks: [{ name: 'G', showTablature: true, measures: [{ beats: [nt('whole')] }, { beats: [] }, { beats: [] }, { beats: [] }] }] });
+  ed.updateScore({ multiMeasureRests: true });
+  eq(spoken(), 'Multi-measure rests on, shown when rendered, not in the editor');
+  eq(ed.getScore().multiMeasureRests, true);
+  eq(countClass(box.children[0].children[0].children[0], 'multi-rest'), 0, 'not in the editor view');
+  ok(countClass(renderScore(ed.getScore()), 'multi-rest') > 0, 'rendered elsewhere');
+});
+
 // ---------- B10 at editor level with API calls ----------
 function mulberry32(a) {
   return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
