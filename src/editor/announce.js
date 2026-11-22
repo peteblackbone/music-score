@@ -10,6 +10,7 @@
 
 import { FILL_WORDS, durationWords } from './model/durations.js';
 import { EFFECT_BY_NAME, SUFFIXES } from './model/effectTable.js';
+import { formatBpm } from '../expression.js';
 
 export { durationWords };
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
@@ -60,7 +61,15 @@ export const MESSAGES = Object.freeze({
   noTrack: () => 'No visible track',
   needsNote: () => 'Needs a note',
   effect: (d) => (Object.hasOwn(EFFECT_BY_NAME, d.name) ? effectText(EFFECT_BY_NAME[d.name], d) : ''),
+  // 2.2 settings
+  noChange: () => 'No change',
+  scoreUpdated: (d) => `${!d.key ? 'Score settings updated' : FLAG_KEYS.includes(d.key) ? `${d.label} ${d.on ? 'on' : 'off'}` : `${d.label} ${d.on ? 'set' : 'removed'}`}${d.mmrOn ? ', shown when rendered, not in the editor' : ''}`,
+  tempoSet: (d) => (d.tempo ? `Tempo ${tempoText(d.tempo)} at measure ${d.measure}, beat ${d.beat}` : 'Tempo removed'),
 });
+
+const FLAG_KEYS = ['showTuningChart', 'multiMeasureRests'];
+/** '120' for a quarter beat, else '80, dotted quarter'. */
+const tempoText = (t) => `${formatBpm(t.bpm)}${t.unit !== 'quarter' || t.dots ? `, ${durationWords(t.unit, t.dots)}` : ''}`;
 
 /** The text of descriptor `d` (empty for unknown ids). */
 export function describe(d) {

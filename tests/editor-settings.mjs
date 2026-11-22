@@ -105,6 +105,98 @@ test('INSTRUMENTS / TUNINGS: deep-frozen, in picker order, canonical pitches, St
   eq(TUNINGS.ukulele[0].tuning.join(' '), 'G4 C4 E4 A4');
 });
 
+// ---------- shared fixtures ----------
+const io = await imp('src/editor/model/io.js');
+const { describe } = await imp('src/editor/announce.js');
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const nt = (duration, string = 1, fret = 0, extra = {}) => ({ type: 'note', duration, notes: [{ string, fret }], ...extra });
+const rest = (duration = 'quarter', extra = {}) => ({ type: 'rest', duration, ...extra });
+const graceB = (string = 2, fret = 3) => ({ type: 'grace', duration: '16th', notes: [{ string, fret }] });
+const tab = (measures, extra = {}) => ({ name: 'Gtr', showTablature: true, ...extra, measures });
+const sc = (...tracks) => ({ tracks });
+const cur = (track, measure, beat, string = 1) => ({ track, measure, beat, string });
+const model = (s) => io.parseInput(s);
+/** Every throw leaves the model untouched (deep-equal and the same object graph). */
+const throwsClean = (s, fn, Type, msg) => { const before = JSON.stringify(s); throws(fn, Type, msg); eq(JSON.stringify(s), before, 'model unchanged after a throw'); };
+const say = (r) => describe(r.announce);
+
+// ---------- updateScore ----------
+const S = await imp('src/editor/model/settings/score.js');
+test('updateScore: text trimmed, empty / null deletes, flags write true or delete, unknown keys and bad types throw before any change; no change returns the same score', () => {
+  const s = model({ title: 'Old', subtitle: 'Sub', custom: { keep: 1 }, tracks: [tab([{ beats: [] }])] });
+  const c = cur(0, 0, 0);
+  const r = S.updateScore(s, c, { title: '  New  ', subtitle: '   ', artist: 'A', instructions: 'line 1\nline 2', showTuningChart: true });
+  eq(r.score, { title: 'New', custom: { keep: 1 }, tracks: s.tracks, artist: 'A', instructions: 'line 1\nline 2', showTuningChart: true });
+  ok(r.score.tracks === s.tracks && sanitizeScore(r.score) === r.score);
+  eq(say(r), 'Score settings updated');
+  eq(say(S.updateScore(s, c, { title: 'X' })), 'Title set');
+  eq(say(S.updateScore(s, c, { subtitle: null })), 'Subtitle removed');
+  eq(say(S.updateScore(s, c, { title: 'X', subtitle: 'Sub' })), 'Title set', 'one changed key: its own message');
+  eq(say(S.updateScore(s, c, { showTuningChart: true })), 'Tuning chart on');
+  eq(say(S.updateScore(r.score, c, { showTuningChart: false })), 'Tuning chart off');
+  eq(say(S.updateScore(s, c, { multiMeasureRests: true })), 'Multi-measure rests on, shown when rendered, not in the editor');
+  eq(say(S.updateScore(s, c, { multiMeasureRests: true, title: 'Y' })), 'Score settings updated, shown when rendered, not in the editor');
+  eq(say(S.updateScore(s, c, { words: 'W' })), 'Words set');
+  ok(!('showTuningChart' in S.updateScore(r.score, c, { showTuningChart: null }).score), 'null deletes a flag');
+  ok(S.updateScore(s, c, { title: ' Old ', artist: null, showTuningChart: false }).score === s, 'equal values: same object');
+  ok(S.updateScore(s, c, {}).score === s);
+  throwsClean(s, () => S.updateScore(s, c, { title: 'ok', bogus: 1 }), TypeError, 'Unknown score field: bogus');
+  throwsClean(s, () => S.updateScore(s, c, { title: 'ok', tracks: [] }), TypeError, 'tracks');
+  throwsClean(s, () => S.updateScore(s, c, JSON.parse('{"__proto__":{"polluted":1}}')), TypeError, '__proto__');
+  throwsClean(s, () => S.updateScore(s, c, { constructor: 'x' }), TypeError, 'constructor');
+  throwsClean(s, () => S.updateScore(s, c, { title: 5 }), TypeError, 'Title must be a string');
+  throwsClean(s, () => S.updateScore(s, c, { title: 'a\nb' }), RangeError, 'single line');
+  throwsClean(s, () => S.updateScore(s, c, { copyright: 'x'.repeat(2001) }), RangeError, '2000');
+  throwsClean(s, () => S.updateScore(s, c, { tuningLabel: 'x'.repeat(201) }), RangeError, '200');
+  throwsClean(s, () => S.updateScore(s, c, { showTuningChart: 'yes' }), TypeError);
+  throwsClean(s, () => S.updateScore(s, c, null), TypeError, 'must be an object');
+  throwsClean(s, () => S.updateScore(s, c, [['title', 'x']]), TypeError);
+  ok(({}).polluted === undefined);
+});
+
+// ---------- setTempo / tempoAt ----------
+test('setTempo: number for a quarter beat without dots / text, else the object; null removes; bad values throw; refused on the slot; written on voice-1 notes and rests', () => {
+  const s = model(sc(tab([{ beats: [nt('quarter'), rest('quarter', { custom: 1 }), nt('half')] }, { beats: [] }])));
+  const c = cur(0, 0, 0);
+  const r = S.setTempo(s, c, 120);
+  eq(r.score.tracks[0].measures[0].beats[0].tempo, 120);
+  eq(say(r), 'Tempo 120 at measure 1, beat 1');
+  const r2 = S.setTempo(s, cur(0, 0, 1), { bpm: 80.5, unit: 'quarter', dots: 1, text: '  Allegro ' });
+  eq(r2.score.tracks[0].measures[0].beats[1], { type: 'rest', duration: 'quarter', custom: 1, tempo: { bpm: 80.5, unit: 'quarter', dots: 1, text: 'Allegro' } });
+  eq(say(r2), 'Tempo 80.5, dotted quarter at measure 1, beat 2');
+  eq(S.setTempo(s, c, { bpm: 60, unit: 'half' }).score.tracks[0].measures[0].beats[0].tempo, { bpm: 60, unit: 'half' });
+  eq(S.setTempo(s, c, { bpm: 60, unit: 'quarter', dots: 0, text: '  ' }).score.tracks[0].measures[0].beats[0].tempo, 60, 'shortest form');
+  const removed = S.setTempo(r.score, c, null);
+  ok(!('tempo' in removed.score.tracks[0].measures[0].beats[0]));
+  eq(say(removed), 'Tempo removed');
+  ok(S.setTempo(s, c, null).score === s && S.setTempo(r.score, c, 120).score === r.score, 'no change: same object');
+  eq(S.setTempo(s, cur(0, 1, 0), 100), { refused: { id: 'noBeat' } });
+  for (const bad of [0, -1, 1000.01, 1.234, NaN, Infinity, { bpm: 120, unit: 'eighth' }, { bpm: 120, dots: 3 }, { bpm: 120, dots: 1.5 }, { bpm: 120, text: 'a\nb' }]) {
+    throwsClean(s, () => S.setTempo(s, c, bad), RangeError);
+  }
+  for (const bad of [undefined, '120', [120], { bpm: '120' }, { bpm: 120, unit: 4 }, { bpm: 120, dots: '1' }, { bpm: 120, extra: 1 }, { unit: 'half' }, true]) {
+    throwsClean(s, () => S.setTempo(s, c, bad), TypeError);
+  }
+  throws(() => S.setTempo(s, cur(0, 1, 0), 'x'), TypeError, 'Tempo must be an object', 'a bad value throws even where it would be refused');
+  for (const ok1 of [0.01, 1000, 92.55, 60.33]) eq(S.setTempo(s, c, ok1).score.tracks[0].measures[0].beats[0].tempo, ok1);
+  ok(sanitizeScore(r2.score) === r2.score);
+});
+test('tempoAt: nearest tempo the renderer reads, backwards on voice 1 into earlier measures; here only on the cursor beat; the slot reads the last beat; null without one', () => {
+  const s = model(sc(
+    tab([{ beats: [nt('quarter', 1, 0, { tempo: 90 }), nt('quarter'), nt('half', 1, 0, { tempo: 'x' })] },
+      { voices: [{ beats: [nt('half'), nt('quarter', 1, 0, { tempo: { bpm: 70, unit: 'half', text: 'Slow' } })] }, { beats: [nt('whole', 2, 0, { tempo: 200 })] }] },
+      { beats: [] }]),
+    tab([{ beats: [nt('whole')] }]),
+  ));
+  eq(S.tempoAt(s, cur(0, 0, 0)), { bpm: 90, unit: 'quarter', dots: 0, text: null, here: true });
+  eq(S.tempoAt(s, cur(0, 0, 2)), { bpm: 90, unit: 'quarter', dots: 0, text: null, here: false }, 'an invalid tempo is skipped');
+  eq(S.tempoAt(s, cur(0, 1, 0)).bpm, 90, 'voice 2 is not read');
+  eq(S.tempoAt(s, cur(0, 1, 1)), { bpm: 70, unit: 'half', dots: 0, text: 'Slow', here: true });
+  eq(S.tempoAt(s, cur(0, 1, 2)).here, false);
+  eq(S.tempoAt(s, cur(0, 2, 0)).bpm, 70, 'empty measure: carried from earlier measures');
+  eq(S.tempoAt(s, cur(1, 0, 0)), null, 'per track');
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
