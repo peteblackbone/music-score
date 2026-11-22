@@ -16,7 +16,8 @@
  *   empty measure (keeps the measures of every track aligned); a missing
  *   (null) one is left for normalize to pad.
  * - `timeSignature` (score, track, measure) without integer `beats` 1–64
- *   and `beatType` 1–64 → removed (the previous one carries on).
+ *   and `beatType` 1–64 → removed (the previous one carries on); likewise
+ *   a `keySignature` that is not an integer -7–7.
  * - `beats` (measure or voice) not an array → []; a beat that is not an
  *   object is dropped.
  * - `duration` not one of whole … 64th → 'quarter' (graces keep theirs).
@@ -25,8 +26,9 @@
  * - `dynamic` that is not a string → removed.
  * - `notes` not an array → []; a note that is not an object is dropped;
  *   `pitch` that is not a pitch string with octave -1–10 → removed;
- *   `fret` that is not an integer 0–99 → removed. A note left with neither
- *   a pitch nor a `string` (1 – string count) and `fret` is dropped.
+ *   `fret` that is not an integer 0–99 → removed; `string` that is not an
+ *   integer 1 – string count → removed (the note leaves the TAB). A note
+ *   left with neither a pitch nor a `string` and `fret` is dropped.
  * - a note beat (or a beat of no / another type) left with no notes,
  *   except a voice-1 `slash: true` note beat → a rest of the same
  *   duration; a grace left with no notes → dropped.
@@ -72,6 +74,9 @@ function mapArray(arr, fn) {
 
 const validTime = (ts) => isObj(ts) && intIn(ts.beats, 1, 64) && intIn(ts.beatType, 1, 64);
 const timeFix = (o) => ('timeSignature' in o && o.timeSignature != null && !validTime(o.timeSignature) ? { timeSignature: undefined } : {});
+const keyFix = (o) => (o.keySignature != null && !intIn(o.keySignature, -7, 7) ? { keySignature: undefined } : {});
+/** The time and key signature repairs shared by score, track and measure. */
+const sigFix = (o) => ({ ...timeFix(o), ...keyFix(o) });
 
 function validTuplet(t) {
   if (t == null) return true;
@@ -85,9 +90,10 @@ function sanitizeNote(n, stringCount) {
   const changes = {};
   if (n.pitch != null && !isValidPitch(n.pitch)) changes.pitch = undefined;
   if (n.fret != null && !intIn(n.fret, 0, 99)) changes.fret = undefined;
+  if (n.string != null && !intIn(n.string, 1, stringCount)) changes.string = undefined;
   const out = patch(n, changes);
   const hasPitch = out.pitch != null;
-  const hasTab = intIn(out.string, 1, stringCount) && out.fret != null;
+  const hasTab = out.string != null && out.fret != null;
   return hasPitch || hasTab ? out : DROP;
 }
 
@@ -118,7 +124,7 @@ const sanitizeBeats = (beats, stringCount, voice1) => (Array.isArray(beats)
 function sanitizeMeasure(m, stringCount) {
   if (m == null || m === false) return m; // a missing measure is padded by normalize
   if (!isObj(m)) return { beats: [] };
-  const changes = { ...timeFix(m) };
+  const changes = sigFix(m);
   if ('beats' in m && m.beats != null) changes.beats = sanitizeBeats(m.beats, stringCount, true);
   if (Array.isArray(m.voices)) {
     changes.voices = mapArray(m.voices, (v, i) => (isObj(v) && 'beats' in v ? patch(v, { beats: sanitizeBeats(v.beats, stringCount, i === 0) }) : v));
@@ -128,7 +134,7 @@ function sanitizeMeasure(m, stringCount) {
 
 function sanitizeTrack(t) {
   if (!isObj(t)) return DROP;
-  const changes = { ...timeFix(t) };
+  const changes = sigFix(t);
   const tuningOk = Array.isArray(t.tuning) && t.tuning.length > 0 && t.tuning.every(isValidPitch);
   if (t.tuning != null && !tuningOk) changes.tuning = undefined;
   const stringCount = tuningOk ? t.tuning.length : DEFAULT_STRINGS;
@@ -141,7 +147,7 @@ function sanitizeTrack(t) {
 /** The repaired score (see the module header); `score` itself when it is already valid. */
 export function sanitizeScore(score) {
   if (!isObj(score)) return { tracks: [] };
-  const changes = { ...timeFix(score) };
+  const changes = sigFix(score);
   if (score.tracks != null) changes.tracks = Array.isArray(score.tracks) ? mapArray(score.tracks, sanitizeTrack) : [];
   return patch(score, changes);
 }

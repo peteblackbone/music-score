@@ -549,12 +549,14 @@ Since 1.12.1, `render()` does not throw on a malformed score, such as a half-bui
 | `measures`, `beats` or `notes` that is not an array | Treated as empty. |
 | `tuning` that is not a non-empty array of pitches | The default guitar tuning. |
 | `timeSignature` without whole-number `beats` and `beatType` from 1 to 64 | Ignored: the previous time signature carries on. |
+| `keySignature` that is not a whole number from -7 to 7 | Ignored: the previous key carries on. |
 | `duration` that is not one of the listed names | A quarter. Grace notes keep their own default. |
 | `tuplet` that is a number, `count` or `of` outside the whole numbers 1 to 64 (for example `0` or `NaN`) | Ignored. |
 | `dynamic` that is not a string | Ignored. |
 | `pitch` that is not a valid pitch with an octave from -1 to 10 | Ignored; `string` and `fret` are used if present. |
 | `fret` that is not a whole number from 0 to 99 | Ignored. |
-| A note left with no valid `pitch`, and no valid `string` (1 to the number of strings) and `fret` | Dropped. |
+| `string` that is not a whole number from 1 to the number of strings | Ignored: a note with a `pitch` is drawn in notation only. |
+| A note left with no valid `pitch`, and no valid `string` and `fret` | Dropped. |
 | A note beat left with no notes (except a voice 1 rhythm slash) | Drawn as a rest of the same duration, keeping its other marks. |
 | A grace beat left with no notes | Dropped. |
 
@@ -1024,9 +1026,10 @@ Changes to existing inputs (each used to throw an error or exhaust memory, unles
 - An unknown `duration` draws as a quarter.
 - A note beat with no notes (`notes: []`, missing or all invalid) draws as a rest.
 - `tuplet: 0`, `NaN` or `Infinity`, and a time signature with `beatType: 0`, are ignored.
+- A `keySignature` outside the whole numbers -7 to 7 is ignored. Values such as `'D'` or `Infinity` used to put `NaN` coordinates in the SVG.
 - An invalid `pitch` or `fret` is ignored, and the note is dropped if nothing usable is left. A huge `fret` (for example `1e9`) or octave used to exhaust memory.
 - `null` entries in `tracks`, `beats` or `notes` are skipped.
-- A note on a string beyond the tuning, without a `pitch`, is dropped. It used to be kept with no pitch, and threw when the track showed notation.
+- A note on a string beyond the tuning, without a `pitch`, is dropped. It used to be kept with no pitch, and threw when the track showed notation. With a `pitch`, the note stays in notation and leaves the TAB, where it used to get `NaN` coordinates.
 - A negative `fret` is ignored. It used to draw below the open string.
 - A track showing neither notation nor TAB no longer throws when it has palm mute, let ring or other technique labels.
 
