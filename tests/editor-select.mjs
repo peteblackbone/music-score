@@ -250,6 +250,83 @@ test('deleteSelectedColumns (Shift+Delete): refused for a beats selection; delet
   eq(CMD.undoLabel('deleteMeasure'), 'delete measure', 'without a selection: the 2.0 label');
 });
 
+// ---------- fill and reflow ----------
+const RF = await imp('src/editor/model/reflow.js');
+const { EDITOR_LIMITS } = await imp('src/editor/model/limits.js');
+const one = (beats, extra = {}) => model({ ...extra, tracks: [tab([{ beats }, { beats: [nt('whole')] }])] });
+const loc0 = { track: 0, measure: 0 };
+test('fillPlan: largest plain duration that fits and divides the onset (4/4 dotted quarter -> eighth, half); empty, 3/4, 6/8; full, overfull, pickup, unfinished triplet refused', () => {
+  eq(RF.fillPlan(one([nt('quarter', 1, 0, { dots: 1 })]), loc0), { rests: ['8th', 'half'] });
+  eq(RF.fillPlan(one([]), loc0), { rests: ['whole'] });
+  eq(RF.fillPlan(one([], { timeSignature: { beats: 3, beatType: 4 } }), loc0), { rests: ['half', 'quarter'] });
+  eq(RF.fillPlan(one([nt('quarter')], { timeSignature: { beats: 6, beatType: 8 } }), loc0), { rests: ['quarter', 'quarter'] });
+  eq(RF.fillPlan(one([nt('16th'), nt('quarter')]), loc0), { rests: ['16th', '8th', 'half'] });
+  eq(RF.fillPlan(one([nt('whole')]), loc0), { refused: 'fillFull' });
+  eq(RF.fillPlan(one([nt('whole'), nt('8th')]), loc0), { refused: 'fillOver' });
+  eq(RF.fillPlan(one([nt('8th', 1, 0, { tuplet: 3 })]), loc0), { refused: 'fillTuplet' });
+  eq(RF.fillPlan(one([nt('8th', 1, 0, { tuplet: 3 }), nt('8th', 1, 0, { tuplet: 3 }), nt('8th', 1, 0, { tuplet: 3 })]), loc0), { rests: ['quarter', 'half'] }, 'a finished triplet is on the grid');
+  const p = model({ tracks: [tab([{ beats: [nt('quarter')], pickup: true }, { beats: [] }])] });
+  eq([RF.fillPlan(p, loc0), RF.fillPlan(p, { track: 0, measure: 1 })], [{ refused: 'fillPickup' }, { rests: ['whole'] }]);
+});
+test('fill: rests appended after trailing graces, the seam repaired (a tie into the next measure is broken), one result; the 256-beat cap refuses', () => {
+  const s = model({ tracks: [tab([{ beats: [tn('half', 1, 0, { tieStart: true }), grace()] }, { beats: [tn('whole', 1, 0, { tieEnd: true })] }])] });
+  const r = run('fill', s, cur(0, 0, 2), null);
+  eq(v1(r.score, 0, 0), [tn('half', 1, 0), grace(), rest('half')]);
+  eq(v1(r.score, 0, 1)[0].notes[0], { string: 1, fret: 0 });
+  eq(describe(r.announce), 'Added 1 rest: half');
+  eq(CMD.undoLabel('fill'), 'fill');
+  ok(sanitizeScore(r.score) === r.score);
+  const big = model({ timeSignature: { beats: 32, beatType: 4 }, tracks: [tab([{ beats: Array.from({ length: 255 }, () => nt('64th')) }])] });
+  eq(describe(run('fill', big, cur(0, 0, 0), null).announce), 'The score would be too large');
+  eq(describe(run('fill', one([nt('8th', 1, 0, { tuplet: 3 })]), cur(0, 0, 0), null).announce), 'Finish the tuplet first');
+});
+test('fill with a selection: each measure all or nothing, refused ones skipped and counted; nothing fillable is refused', () => {
+  const s = model({ tracks: [tab([{ beats: [nt('half')] }, { beats: [nt('whole')] }, { beats: [nt('8th', 1, 0, { tuplet: 3 })] }, { beats: [nt('quarter')] }])] });
+  const sel = SEL.selectionRange(s, 0, P(0, 0), P(3, 1));
+  const r = run('fill', s, cur(0, 3, 1), sel);
+  eq(describe(r.announce), 'Filled 2 of 4 measures, 3 rests added');
+  eq([v1(r.score, 0, 0).length, v1(r.score, 0, 1).length, v1(r.score, 0, 2).length, v1(r.score, 0, 3).length], [2, 1, 1, 3]);
+  const s2 = model({ tracks: [tab([{ beats: [] }, { beats: [nt('half')] }])] });
+  eq(describe(run('fill', s2, cur(0, 1, 0), SEL.selectionRange(s2, 0, P(0, 0), P(1, 1))).announce), 'Filled 2 measures, 2 rests added');
+  const full = model({ tracks: [tab([{ beats: [nt('whole')] }, { beats: [nt('whole')] }])] });
+  const no = run('fill', full, cur(0, 1, 0), SEL.selectionRange(full, 0, P(0, 0), P(1, 0)));
+  eq([no.changed, describe(no.announce)], [false, 'Nothing to fill']);
+  eq(describe(run('fill', full, cur(0, 0, 0), SEL.selectionRange(full, 0, P(0, 0), P(0, 0))).announce), 'Measure already full', 'one measure: the refusal');
+});
+test('reflow: beats at or past the barline (with their graces) move to the start of the next measure; the last measure adds one; a crossing beat stays; cursor follows its beat; ties repaired; tempo stays; nothing to move', () => {
+  const s = model({ tracks: [
+    tab([{ beats: [nt('half'), nt('half', 1, 0, { notes: [{ string: 1, fret: 0, tieStart: true }] }), grace(), nt('quarter', 1, 0, { tempo: 99, notes: [{ string: 1, fret: 0, tieEnd: true }] }), nt('8th')] }, { beats: [nt('half')] }]),
+    tab([{ beats: [nt('whole')] }], { name: 'B' }),
+  ] });
+  const r = run('reflow', s, cur(0, 0, 3), null);
+  eq(v1(r.score, 0, 0).length, 2);
+  eq(v1(r.score, 0, 1).map((b) => b.type + b.duration), ['grace16th', 'notequarter', 'note8th', 'notehalf']);
+  eq([v1(r.score, 0, 0)[1].notes[0].tieStart, v1(r.score, 0, 1)[1].notes[0].tieEnd], [true, true], 'the tie still pairs across the new barline (the grace is skipped)');
+  eq(v1(r.score, 0, 1)[1].tempo, 99);
+  eq(r.cursor, cur(0, 1, 1), 'the cursor follows its beat');
+  eq(describe(r.announce), 'Moved 2 beats to measure 2');
+  eq(CMD.undoLabel('reflow'), 'reflow');
+  ok(sanitizeScore(r.score) === r.score);
+  const last = model({ tracks: [tab([{ beats: [nt('whole'), nt('quarter')] }]), tab([{ beats: [] }], { name: 'B' })] });
+  const r2 = run('reflow', last, cur(0, 0, 0), null);
+  eq([r2.score.tracks[0].measures.length, r2.score.tracks[1].measures.length, describe(r2.announce)], [2, 2, 'Measure 2 added, moved 1 beat to it']);
+  eq(r2.cursor, cur(0, 0, 0));
+  const cross = model({ tracks: [tab([{ beats: [nt('half'), nt('half', 1, 0, { dots: 1 }), nt('quarter')] }])] });
+  eq(describe(run('reflow', cross, cur(0, 0, 0), null).announce), 'Measure 2 added, moved 1 beat to it, beat 2 crosses the barline and stays');
+  const only = model({ tracks: [tab([{ beats: [nt('half'), nt('half', 1, 0, { dots: 1 })] }, { beats: [] }])] });
+  eq(describe(run('reflow', only, cur(0, 0, 0), null).announce), 'Beat 2 crosses the barline and stays');
+  eq(describe(run('reflow', one([nt('half')]), cur(0, 0, 0), null).announce), 'Nothing to reflow');
+});
+test('reflow: two-voice measures move voice 1 only; the 2000-measure and 256-beat limits refuse', () => {
+  const s = model({ tracks: [tab([{ voices: [{ beats: [nt('whole'), nt('half')] }, { beats: [nt('whole', 3, 3)] }] }, { voices: [{ beats: [nt('half')] }, { beats: [nt('whole', 3, 4)] }] }])] });
+  const r = run('reflow', s, cur(0, 0, 0), null);
+  eq(r.score.tracks[0].measures.map((m) => [m.voices[0].beats.length, m.voices[1].beats.length]), [[1, 1], [2, 1]]);
+  const max = model({ tracks: [tab(Array.from({ length: EDITOR_LIMITS.measuresPerTrack }, (_, i) => ({ beats: i === EDITOR_LIMITS.measuresPerTrack - 1 ? [nt('whole'), nt('half')] : [] })))] });
+  eq(describe(run('reflow', max, cur(0, EDITOR_LIMITS.measuresPerTrack - 1, 0), null).announce), 'The score would be too large');
+  const full = model({ tracks: [tab([{ beats: [nt('whole'), nt('half')] }, { beats: Array.from({ length: 256 }, () => nt('64th')) }])] });
+  eq(describe(run('reflow', full, cur(0, 0, 0), null).announce), 'The score would be too large');
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

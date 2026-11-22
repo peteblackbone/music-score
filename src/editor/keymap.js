@@ -10,7 +10,7 @@
  * browser keeps Ctrl+W/T/N/L/P/S/I/M, Ctrl+1–9, Ctrl+PageUp/PageDown, and
  * Ctrl+C / X / V / Insert and Shift+Insert reach the native clipboard
  * events). 2.3 selection: Shift+Left / Right / Home / End, Ctrl+Shift+Left
- * / Right and Ctrl+A. Reserved for 2.3.1: Shift+Up / Down, Ctrl+Up / Down,
+ * / Right and Ctrl+A; F fills, Shift+F reflows. Reserved for 2.3.1: Shift+Up / Down, Ctrl+Up / Down,
  * Ctrl+Shift+Home / End, Shift+R / I (any other Ctrl+Shift key is unbound).
  * The effect letters come from EFFECT_KEYS (the rows of model/effectTable.js).
  */
@@ -59,6 +59,7 @@ export function keyToCommand(e) {
   if (key.length === 1) {
     const l = key.toLowerCase();
     if (l === 'm') return cmd(shift ? 'insertMeasureBefore' : 'insertMeasureAfter');
+    if (l === 'f') return cmd(shift ? 'reflow' : 'fill');
     if (own(LETTERS, l) && !shift) return cmd(LETTERS[l]);
     const fx = own(EFFECT_KEYS, (shift ? 'Shift+' : '') + l);
     if (fx) return cmd(fx);

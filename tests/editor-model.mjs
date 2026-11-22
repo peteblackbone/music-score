@@ -642,6 +642,7 @@ test('keymap: every row of the key table (D1)', () => {
     [['ArrowLeft', { shiftKey: true }], 'selectLeft'], [['ArrowRight', { shiftKey: true }], 'selectRight'],
     [['Home', { shiftKey: true }], 'selectMeasureStart'], [['End', { shiftKey: true }], 'selectMeasureEnd'],
     [['ArrowLeft', { ctrlKey: true, shiftKey: true }], 'selectPrevMeasure'], [['ArrowRight', { metaKey: true, shiftKey: true }], 'selectNextMeasure'],
+    [['f'], 'fill'], [['F'], 'fill'], [['F', { shiftKey: true }], 'reflow'],
     [['a', { ctrlKey: true }], 'selectAll'], [['A', { metaKey: true }], 'selectAll'], [['Z', { ctrlKey: true, shiftKey: true }], 'redo'],
   ];
   for (const [[key, mods], want] of rows) eq(K(key, mods)?.name, want, `${key} ${JSON.stringify(mods || {})}`);
@@ -650,10 +651,10 @@ test('keymap: every row of the key table (D1)', () => {
 });
 const LETTERS_AZ = 'abcdefghijklmnopqrstuvwxyz'.split('');
 const effectLetters = (shift) => Object.keys(EFFECT_KEYS).filter((k) => k.startsWith('Shift+') === shift).map((k) => k.slice(shift ? 6 : 0));
-const UNBOUND = LETTERS_AZ.filter((l) => !['r', 'l', 'i', 'm', ...effectLetters(false)].includes(l));
-const SHIFT_UNBOUND = LETTERS_AZ.filter((l) => !['m', ...effectLetters(true)].includes(l));
+const UNBOUND = LETTERS_AZ.filter((l) => !['r', 'l', 'i', 'm', 'f', ...effectLetters(false)].includes(l)); // 2.3: F fills
+const SHIFT_UNBOUND = LETTERS_AZ.filter((l) => !['m', 'f', ...effectLetters(true)].includes(l)); // 2.3: Shift+F reflows
 test('keymap: never consumes Tab, Alt, F-keys, IME, browser Ctrl combos (Ctrl+C / X / V stay native), keys reserved for 2.3.1 (Shift+Up / Down, Ctrl+Up, Ctrl+Shift+Up / Home, Shift+R / I) and unbound letters', () => {
-  ok(UNBOUND.length === 12 && SHIFT_UNBOUND.length === 20 && SHIFT_UNBOUND.includes('r') && SHIFT_UNBOUND.includes('i'), `unbound ${UNBOUND} / Shift+${SHIFT_UNBOUND}`);
+  ok(UNBOUND.length === 11 && SHIFT_UNBOUND.length === 19 && SHIFT_UNBOUND.includes('r') && SHIFT_UNBOUND.includes('i'), `unbound ${UNBOUND} / Shift+${SHIFT_UNBOUND}`);
   const none = [
     ['Tab'], ['Tab', { shiftKey: true }], ['ArrowLeft', { altKey: true }], ['ArrowRight', { altKey: true }], ['r', { altKey: true }],
     ['F1'], ['F5'], ['F12'], ['a', { isComposing: true }], ['Process'], ['Dead'],

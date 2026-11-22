@@ -8,7 +8,7 @@
  * effects only).
  */
 
-import { FILL_WORDS, durationWords } from './model/durations.js';
+import { FILL_WORDS, DURATION_WORDS, durationWords } from './model/durations.js';
 import { EFFECT_BY_NAME, SUFFIXES } from './model/effectTable.js';
 import { formatBpm } from '../expression.js';
 import { canonicalEnding, endingLabel } from '../navigation.js';
@@ -88,6 +88,18 @@ export const MESSAGES = Object.freeze({
   rangeRemoved: (d) => `${plural(d.count, 'beat')} deleted${tempoRemoved(d.tempoRemoved)}`,
   columnsDeleted: (d) => `${d.all ? 'All measures deleted, 1 empty measure left' : d.a === d.b ? `Measure ${d.a} deleted` : `Measures ${d.a} to ${d.b} deleted`}${tempoRemoved(d.tempoRemoved)}`,
   needsMeasureSelection: () => 'Select whole measures first',
+  // 2.3 fill and reflow
+  filled: (d) => `Added ${plural(d.rests.length, 'rest')}: ${d.rests.map((r) => DURATION_WORDS[r]).join(', ')}`,
+  filledMany: (d) => `Filled ${d.count === d.total ? plural(d.count, 'measure') : `${d.count} of ${d.total} measures`}, ${plural(d.rests, 'rest')} added`,
+  fillFull: () => 'Measure already full',
+  fillOver: () => 'Measure overfull, try Reflow',
+  fillTuplet: () => 'Finish the tuplet first',
+  fillPickup: () => 'Pickup measure, not filled',
+  fillCannot: () => "Plain rests can't fill this measure",
+  nothingToFill: () => 'Nothing to fill',
+  reflowed: (d) => `${d.added ? `Measure ${d.to} added, moved ${plural(d.count, 'beat')} to it` : `Moved ${plural(d.count, 'beat')} to measure ${d.to}`}${d.crossing ? `, beat ${d.crossing} crosses the barline and stays` : ''}`,
+  reflowCrossing: (d) => `Beat ${d.beat} crosses the barline and stays`,
+  reflowNothing: () => 'Nothing to reflow',
 });
 
 /** '1 beat' / '3 measures' (n of `word`). */

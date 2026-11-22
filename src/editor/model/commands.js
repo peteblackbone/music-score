@@ -25,6 +25,7 @@ import {
   selectLeft, selectRight, selectMeasureStart, selectMeasureEnd, selectPrevMeasure, selectNextMeasure, selectAll,
 } from './selection.js';
 import { ranged, clearRange, removeRange, deleteSelectedColumns } from './rangeEdit.js';
+import { fill, reflow } from './reflow.js';
 
 const nav = (fn, label) => ({ fn, kind: 'nav', label });
 const edit = (fn, label) => ({ fn, kind: 'edit', label });
@@ -57,6 +58,8 @@ export const COMMANDS = Object.freeze({
   insertMeasureAfter: edit(insertMeasureAfter, 'insert measure'),
   insertMeasureBefore: edit(insertMeasureBefore, 'insert measure'),
   deleteMeasure: edit(ranged(deleteMeasure, deleteSelectedColumns), (d) => (d?.id === 'columnsDeleted' ? 'delete measures' : 'delete measure')),
+  fill: edit(fill, 'fill'),
+  reflow: edit(reflow, 'reflow'),
   // 2.1 effects, one command per row of effectTable.js
   ...Object.fromEntries(EFFECTS.map((d) => [d.name, edit(effectCommand(d), d.label)])),
   // 2.3 selection

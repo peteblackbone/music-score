@@ -304,6 +304,42 @@ test('effect keys and other edits act on the cursor beat and clear the selection
   ok(ed.getSelection() !== null, 'the cursor beat is already a whole: no change keeps the selection');
 });
 
+// ---------- criteria 36-38: fill and reflow ----------
+test('criterion 36: F in 4/4 after a dotted quarter adds an eighth rest, then a half rest; the measure becomes full; one undo step', () => {
+  const { ed, press, spoken } = mk({ tracks: [{ name: 'G', showTablature: true, measures: [{ beats: [nt('quarter', 1, 0, { dots: 1 })] }, { beats: [] }] }] });
+  ed.setCursor({ measure: 0, beat: 1 });
+  const before = ed._model;
+  eq(press('f'), [true]);
+  eq(ed.getScore().tracks[0].measures[0].beats.slice(1), [rest('8th'), rest('half')]);
+  eq([ed.getMeasureFill(0, 0), spoken()], ['full', 'Added 2 rests: eighth, half, measure full']);
+  ed.undo();
+  ok(ed._model === before);
+  eq(spoken(), 'Undo: fill');
+});
+test('criterion 37: F is refused on an unfinished triplet gap and on a pickup measure, with the reason; nothing changes', () => {
+  const t = mk({ tracks: [{ showTablature: true, measures: [{ beats: [nt('8th', 1, 0, { tuplet: 3 })] }] }] });
+  eq(t.press('f'), [true]);
+  eq([t.spoken(), t.ed.canUndo()], ['Finish the tuplet first', false]);
+  const p = mk({ tracks: [{ showTablature: true, measures: [{ beats: [nt('quarter')], pickup: true }, { beats: [] }] }] });
+  p.press('f');
+  eq([p.spoken(), p.ed.canUndo()], ['Pickup measure, not filled', false]);
+  p.ed.setCursor({ measure: 1 });
+  p.press('f');
+  eq(p.ed.getMeasureFill(0, 1), 'full', 'measure 2 still fills');
+});
+test('criterion 38: Shift+F moves the overflow, adds a measure on the last one, leaves a crossing beat with an announcement; one undo step; read-only refuses', () => {
+  const { ed, press, spoken } = mk({ tracks: [{ name: 'G', showTablature: true, measures: [{ beats: [nt('half'), nt('half', 1, 0, { dots: 1 }), nt('quarter'), nt('8th')] }] }] });
+  const before = ed._model;
+  eq(press(key('F', SHIFT)), [true]);
+  eq(ed.getScore().tracks[0].measures.map((m) => m.beats.length), [2, 2]);
+  eq(spoken(), 'Measure 2 added, moved 2 beats to it, beat 2 crosses the barline and stays', 'still overfull: no fill suffix');
+  ed.undo();
+  ok(ed._model === before, 'one undo step, the added measure included');
+  eq(spoken(), 'Undo: reflow');
+  const ro = mk(fixture(), { readOnly: true });
+  eq([ro.press('f'), ro.spoken(), ro.press(key('F', SHIFT)), ro.spoken()], [[false], 'Read-only', [false], 'Read-only']);
+});
+
 // ---------- report ----------
 export async function summary() {
   let fail = 0;
