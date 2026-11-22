@@ -13,14 +13,13 @@ import { clefOf, clefAt, trackClef } from '../../../clef.js';
 import { canonicalJump, jumpKind, mergeNavigation, JUMP_TEXTS } from '../../../navigation.js';
 import { EDITOR_LIMITS } from '../limits.js';
 import { tracksOf, trackAt, measureAt, measureCount, hasTab, hasNotation } from '../access.js';
-import { timeSignatureAt, keySignatureAt } from '../fill.js';
+import { timeSignatureAt, keySignatureAt, sameTime, baseTimeSignature, baseKeySignature } from '../fill.js';
 import { object, list, checkKeys, index, intIn, text, flag, LINE_BREAK } from './validate.js';
 import { columnValue, setColumn, setTrackField } from './column.js';
 import { checkClef } from './track.js';
 
 export const PATCH_KEYS = Object.freeze(['timeSignature', 'keySignature', 'clef', 'barline', 'repeatCount', 'ending', 'segno', 'coda', 'jump', 'section']);
 export const BARLINES = Object.freeze(['single', 'double', 'final', 'repeatStart', 'repeatEnd']);
-const COMMON = { beats: 4, beatType: 4 };
 
 function checkTime(raw) {
   const v = object(raw, 'Time signature');
@@ -118,15 +117,14 @@ function checkPatch(score, mi, raw) {
   return out;
 }
 
-const sameTime = (a, b) => a.beats === b.beats && a.beatType === b.beatType;
 /** Time signature in force on track `ti` just before measure `mi` (the baseline at 0). */
 function timeBefore(score, ti, mi) {
   const t = trackAt(score, ti);
-  return mi === 0 ? (t?.timeSignature || score.timeSignature || COMMON) : timeSignatureAt(score, { track: ti, measure: mi - 1 });
+  return mi === 0 ? baseTimeSignature(score, t) : timeSignatureAt(score, { track: ti, measure: mi - 1 });
 }
 function keyBefore(score, ti, mi) {
   const t = trackAt(score, ti);
-  return mi === 0 ? (t?.keySignature ?? score.keySignature ?? 0) : keySignatureAt(score, { track: ti, measure: mi - 1 });
+  return mi === 0 ? baseKeySignature(score, t) : keySignatureAt(score, { track: ti, measure: mi - 1 });
 }
 
 /** updateMeasure(mi, patch, { track }?). */

@@ -13,7 +13,7 @@
 import { canonicalEnding, canonicalJump } from '../../../navigation.js';
 import { canonicalSection, canonicalRepeatCount } from '../../../scoreText.js';
 import { tracksOf, measuresOf, measureAt, measureCount, isObj } from '../access.js';
-import { timeSignatureAt, keySignatureAt } from '../fill.js';
+import { timeSignatureAt, keySignatureAt, sameTime, baseTimeSignature, baseKeySignature } from '../fill.js';
 import { same } from './validate.js';
 
 const VALID = {
@@ -92,9 +92,6 @@ export const setTrackField = (score, ti, mi, f, value) => mapTrack(score, ti, (t
 /** `score` with field `f` of measure `mi` set on every track, hidden ones included (undefined deletes). */
 export const setColumn = (score, mi, f, value) => mapTracks(score, (t) => writeField(t, mi, f, value));
 
-const COMMON = { beats: 4, beatType: 4 };
-const sameTime = (a, b) => a.beats === b.beats && a.beatType === b.beatType;
-
 /**
  * The measures of a track added to `score`: one `{ beats: [] }` per
  * column; time and key signatures follow track 0 with as few writes as
@@ -105,8 +102,8 @@ const sameTime = (a, b) => a.beats === b.beats && a.beatType === b.beatType;
 export function newTrackMeasures(score) {
   const count = measureCount(score);
   const has0 = tracksOf(score).length > 0;
-  const baseTime = score.timeSignature || COMMON;
-  const baseKey = score.keySignature ?? 0;
+  const baseTime = baseTimeSignature(score, null);
+  const baseKey = baseKeySignature(score, null);
   const out = [];
   let prevTime = baseTime;
   let prevKey = baseKey;

@@ -8,12 +8,19 @@ import { R, ZERO, add, cmp } from '../../rational.js';
 import { durationR } from '../../duration.js';
 import { trackAt, tracksOf, measureAt, beatsOf, beatsAt, isGrace, clampDots, measureCount } from './access.js';
 
-const COMMON = { beats: 4, beatType: 4 };
+/** The default time signature (4/4). */
+export const COMMON_TIME = Object.freeze({ beats: 4, beatType: 4 });
+/** Whether time signatures `a` and `b` are the same meter (other fields ignored). */
+export const sameTime = (a, b) => a.beats === b.beats && a.beatType === b.beatType;
+/** The time signature a track opens with: its own, else the score's, else 4/4 (`track` may be null: the score's baseline). */
+export const baseTimeSignature = (score, track) => track?.timeSignature || score.timeSignature || COMMON_TIME;
+/** The key signature a track opens with: its own, else the score's, else 0. */
+export const baseKeySignature = (score, track) => track?.keySignature ?? score.keySignature ?? 0;
 
 /** Time signature in force at the measure of `loc` (`{ track, measure }`). */
 export function timeSignatureAt(score, loc) {
   const track = trackAt(score, loc.track);
-  let cur = track?.timeSignature || score.timeSignature || COMMON;
+  let cur = baseTimeSignature(score, track);
   for (let k = 0; k <= loc.measure; k++) {
     const m = measureAt(track, k);
     if (m?.timeSignature) cur = m.timeSignature;
@@ -24,7 +31,7 @@ export function timeSignatureAt(score, loc) {
 /** Key signature in force at the measure of `loc`: the track's, else the score's, else 0, replaced by every measure up to it that sets one. */
 export function keySignatureAt(score, loc) {
   const track = trackAt(score, loc.track);
-  let cur = track?.keySignature ?? score.keySignature ?? 0;
+  let cur = baseKeySignature(score, track);
   for (let k = 0; k <= loc.measure; k++) {
     const m = measureAt(track, k);
     if (m?.keySignature != null) cur = m.keySignature;
@@ -68,7 +75,7 @@ export function checkedMeasureFill(score, ti, mi) {
 export function fillTable(score) {
   const count = measureCount(score);
   return tracksOf(score).map((track) => {
-    let ts = track?.timeSignature || score.timeSignature || COMMON;
+    let ts = baseTimeSignature(score, track);
     const out = [];
     for (let mi = 0; mi < count; mi++) {
       const m = measureAt(track, mi);
