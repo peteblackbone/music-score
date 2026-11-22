@@ -182,6 +182,53 @@ test('criterion 16 (controller): a refused range effect keeps the selection and 
   t.ed.destroy();
 });
 
+// ---------- criteria 22, 28: transpose keys, Ctrl+Shift+Home / End ----------
+test('criterion 22: Ctrl / Cmd+Up / Down and Ctrl+Shift+Up / Down transpose through the root\'s keydown (prevented), not from other targets; with a selection it is kept; one undo step "Undo: transpose"', () => {
+  const t = mk(four());
+  t.ed.focus();
+  const down = (k, target = t.rootEl) => t.rootEl.dispatch('keydown', { ...k, target });
+  eq(down(key('ArrowUp', CTRL)).defaultPrevented, true);
+  eq([frets(t.ed)[0], t.spoken()], [2, 'Fret 2, up 1 semitone']);
+  eq(down(key('ArrowUp', { metaKey: true, shiftKey: true })).defaultPrevented, true);
+  eq(frets(t.ed)[0], 14, 'Cmd+Shift+Up: an octave');
+  eq(down(key('ArrowDown', CTRL), { nodeName: 'INPUT' }).defaultPrevented, false, 'another target: not consumed');
+  eq(frets(t.ed)[0], 14);
+  t.ed.setSelection({ anchor: { measure: 0, beat: 0 }, focus: { measure: 0, beat: 3 } });
+  t.spoken();
+  t.events.length = 0;
+  down(key('ArrowDown', { ctrlKey: true, shiftKey: true }));
+  eq([frets(t.ed), t.spoken(), t.ed.getSelection().beatCount, t.ed.canUndo()], [[14, 2, 3, 4], "Can't transpose, measure 1 would go below fret 0", 4, true]);
+  down(key('ArrowUp', CTRL));
+  eq([frets(t.ed), t.ed.lastMessage, t.ed.getSelection().beatCount], [[15, 3, 4, 5], 'Transposed 4 notes up 1 semitone', 4]);
+  eq(t.events.map((e) => e[0]), ['change'], 'the selection stays, no selection event');
+  t.ed.undo();
+  eq([frets(t.ed), t.spoken(), t.ed.getSelection()], [[14, 2, 3, 4], 'Undo: transpose', null]);
+  for (const k of [key('PageUp', { ctrlKey: true, shiftKey: true }), key('F', { ctrlKey: true, shiftKey: true }), key('ArrowUp', SHIFT), key('ArrowUp', { ctrlKey: true, altKey: true })]) eq(down(k).defaultPrevented, false, k.key);
+  stable(t.ed);
+  t.ed.destroy();
+});
+test('criterion 28: Ctrl+Shift+End extends the selection to the last position of the score on the cursor track (the slot included), Ctrl+Shift+Home to the first; at the edge it says so', () => {
+  const t = mk({ tracks: [tab([{ beats: [nt('whole', 1, 1)] }, { beats: [nt('whole', 1, 2)] }, { beats: [nt('half', 1, 3)] }]), tab([{ beats: [nt('whole')] }], { name: 'B' })] });
+  t.ed.setCursor({ measure: 1, beat: 0 });
+  t.press(key('End', { ctrlKey: true, shiftKey: true }));
+  eq([t.ed.getSelection().measures, t.ed.getSelection().beatCount, t.ed.getCursor()], [[1, 2], 2, { track: 0, measure: 2, beat: 1, string: 1 }]);
+  eq(t.spoken(), 'Selected measures 2 to 3, 2 beats');
+  t.press(key('End', { ctrlKey: true, shiftKey: true }));
+  eq(t.spoken(), 'End of score');
+  t.press(key('Home', { ctrlKey: true, shiftKey: true }));
+  eq([t.ed.getSelection().measures, t.ed.getSelection().start, t.spoken()], [[0, 1], { measure: 0, beat: 0 }, 'Selected measures 1 to 2, 2 beats'], 'the anchor stays at measure 2');
+  t.press(key('Home', { ctrlKey: true, shiftKey: true }));
+  eq(t.spoken(), 'Start of score');
+  t.ed.setCursor({ track: 1, measure: 0, beat: 0 });
+  t.press(key('End', { ctrlKey: true, shiftKey: true }));
+  eq([t.ed.getSelection().track, t.ed.getSelection().measures, t.ed.getSelection().beatCount], [1, [0, 2], 1], 'on the cursor track; its missing measures are blank');
+  t.ed.setReadOnly(true);
+  t.ed.clearSelection();
+  t.press(key('Home', { ctrlKey: true, shiftKey: true }));
+  ok(t.ed.getSelection(), 'select commands work in read-only mode');
+  t.ed.destroy();
+});
+
 // ---------- report ----------
 export async function summary() {
   let fail = 0;

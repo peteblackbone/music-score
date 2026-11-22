@@ -24,7 +24,7 @@ import { trackAt, isVisible } from './access.js';
 import { EFFECTS } from './effectTable.js';
 import { effectCommand, effectRange } from './effects.js';
 import {
-  selectLeft, selectRight, selectMeasureStart, selectMeasureEnd, selectPrevMeasure, selectNextMeasure, selectAll,
+  selectLeft, selectRight, selectMeasureStart, selectMeasureEnd, selectPrevMeasure, selectNextMeasure, selectAll, selectScoreStart, selectScoreEnd,
 } from './selection.js';
 import { ranged, clearRange, removeRange, deleteSelectedColumns } from './rangeEdit.js';
 import { fill, reflow } from './reflow.js';
@@ -75,6 +75,8 @@ export const COMMANDS = Object.freeze({
   selectPrevMeasure: select(selectPrevMeasure),
   selectNextMeasure: select(selectNextMeasure),
   selectAll: select(selectAll, { fromStart: true }),
+  selectScoreStart: select(selectScoreStart),
+  selectScoreEnd: select(selectScoreEnd),
   undo: { fn: null, kind: 'history', step: 'undo' },
   redo: { fn: null, kind: 'history', step: 'redo' },
   clearBuffer: { fn: null, kind: 'buffer', cancelsBuffer: true },

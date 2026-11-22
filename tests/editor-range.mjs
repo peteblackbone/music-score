@@ -325,6 +325,17 @@ test('criterion 21 (transpose): pitch-only notes and voice 2 are unchanged and p
   ok(CMD.COMMANDS.transpose.keepsSelection && same(r.score) && same(nr.score));
 });
 
+// ---------- E. Ctrl+Shift+Home / End ----------
+test('criterion 28 (model): selectScoreStart goes to the first position of measure 1, selectScoreEnd to the last position of the last measure (the slot included); at the edge they announce it', () => {
+  const s = model({ tracks: [tab([{ beats: [grace(), nt('half')] }, { beats: [nt('whole')] }, { beats: [nt('half')] }])] });
+  const go = (name, c) => CMD.run(name, s, c, st(), { allowAppend: false });
+  eq(go('selectScoreStart', cur(0, 2, 0)).cursor, cur(0, 0, 1), 'past the grace');
+  eq(go('selectScoreStart', cur(0, 0, 1)).announce, { id: 'startOfScore' });
+  eq(go('selectScoreEnd', cur(0, 0, 1)).cursor, cur(0, 2, 1), 'the slot of the underfull last measure');
+  eq(go('selectScoreEnd', cur(0, 2, 1)).announce, { id: 'endOfScore' });
+  eq([CMD.COMMANDS.selectScoreStart.kind, CMD.COMMANDS.selectScoreEnd.kind], ['select', 'select']);
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

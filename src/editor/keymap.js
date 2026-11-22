@@ -10,8 +10,11 @@
  * browser keeps Ctrl+W/T/N/L/P/S/I/M, Ctrl+1–9, Ctrl+PageUp/PageDown, and
  * Ctrl+C / X / V / Insert and Shift+Insert reach the native clipboard
  * events). 2.3 selection: Shift+Left / Right / Home / End, Ctrl+Shift+Left
- * / Right and Ctrl+A; F fills, Shift+F reflows. Reserved for 2.3.1: Shift+Up / Down, Ctrl+Up / Down,
- * Ctrl+Shift+Home / End, Shift+R / I (any other Ctrl+Shift key is unbound).
+ * / Right and Ctrl+A; F fills, Shift+F reflows. 2.3.1: Ctrl+Up / Down
+ * transpose by a semitone, Ctrl+Shift+Up / Down by an octave, Ctrl+Shift+
+ * Home / End select to the start / end of the score; Ctrl+Shift+V is the
+ * Insert paste (a native paste, never a command). Reserved for later:
+ * Shift+Up / Down, Shift+R / I (any other Ctrl+Shift key is unbound).
  * The effect letters come from EFFECT_KEYS (the rows of model/effectTable.js).
  */
 import { EFFECT_KEYS } from './model/effectTable.js';
@@ -29,7 +32,7 @@ const CTRL = {
   Delete: 'deleteBeat', Backspace: 'deleteBeat',
 };
 const SHIFT = { ArrowLeft: 'selectLeft', ArrowRight: 'selectRight', Home: 'selectMeasureStart', End: 'selectMeasureEnd' };
-const CTRL_SHIFT = { ArrowLeft: 'selectPrevMeasure', ArrowRight: 'selectNextMeasure' };
+const CTRL_SHIFT = { ArrowLeft: 'selectPrevMeasure', ArrowRight: 'selectNextMeasure', Home: 'selectScoreStart', End: 'selectScoreEnd' };
 const NO_SHIFT = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown', 'Insert']);
 const LETTERS = { r: 'toggleRest', l: 'toggleTie', i: 'insertBeat' };
 /** `map[k]` when it is an own key (event keys such as 'toString' must not find inherited properties), else undefined. */
@@ -53,6 +56,7 @@ export function keyToCommand(e) {
     if (k === 'z') return cmd(shift ? 'redo' : 'undo');
     if (k === 'y') return cmd('redo');
     if (k === 'a' && !shift) return cmd('selectAll');
+    if (key === 'ArrowUp' || key === 'ArrowDown') return cmd('transpose', (key === 'ArrowUp' ? 1 : -1) * (shift ? 12 : 1));
     if (shift) return own(CTRL_SHIFT, key) ? cmd(CTRL_SHIFT[key]) : null;
     if (!own(CTRL, key)) return null;
     return cmd(CTRL[key]);

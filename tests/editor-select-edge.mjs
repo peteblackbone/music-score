@@ -1022,7 +1022,7 @@ test('two editors share the internal clipboard across loadScore and destroy of t
 // =====================================================================================================
 // Keymap, selection clearing by settings calls, API argument handling
 // =====================================================================================================
-test('keymap (D1, D7): of Ctrl / Cmd + letter only Z, Y and A are bound (Ctrl+C / X / V never, so the native events fire); Alt and Ctrl+Shift+other stay unbound; the 2.3.1 reservations stay free', async () => {
+test('keymap (D1, D7): of Ctrl / Cmd + letter only Z, Y and A are bound (Ctrl+C / X / V never, so the native events fire); Alt and Ctrl+Shift+other stay unbound; the keys still reserved after 2.3.1 stay free', async () => {
   const { keyToCommand } = await imp('src/editor/keymap.js');
   const bound = new Set();
   for (const m of [CTRL, { metaKey: true }, { ctrlKey: true, shiftKey: true }, { ctrlKey: true, altKey: true }, { altKey: true }, { altKey: true, shiftKey: true }]) {
@@ -1031,7 +1031,7 @@ test('keymap (D1, D7): of Ctrl / Cmd + letter only Z, Y and A are bound (Ctrl+C 
     }
   }
   eq([...bound].sort(), ['ctrl a selectAll', 'ctrl y redo', 'ctrl z undo', 'ctrl+shift y redo', 'ctrl+shift z redo', 'meta a selectAll', 'meta y redo', 'meta z undo']);
-  for (const [k, m] of [['Insert', CTRL], ['Insert', SHIFT], ['Home', { ctrlKey: true, shiftKey: true }], ['End', { ctrlKey: true, shiftKey: true }], ['ArrowUp', SHIFT], ['ArrowDown', SHIFT], ['ArrowUp', CTRL], ['ArrowDown', CTRL], ['Tab', {}], ['F5', {}], ['f', { altKey: true }], ['F', { ctrlKey: true, shiftKey: true }], ['ArrowLeft', { shiftKey: true, altKey: true }], ['R', SHIFT], ['I', SHIFT]]) {
+  for (const [k, m] of [['Insert', CTRL], ['Insert', SHIFT], ['ArrowUp', SHIFT], ['ArrowDown', SHIFT], ['Tab', {}], ['F5', {}], ['f', { altKey: true }], ['F', { ctrlKey: true, shiftKey: true }], ['ArrowLeft', { shiftKey: true, altKey: true }], ['R', SHIFT], ['I', SHIFT]]) {
     eq(keyToCommand(key(k, m)), null, `${k} ${JSON.stringify(m)}`);
   }
   eq(keyToCommand(key('f')).name, 'fill');

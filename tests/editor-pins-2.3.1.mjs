@@ -118,12 +118,14 @@ test('pin (e), inverted in 2.3.1: Ctrl+Shift+V over a beats selection inserts be
 });
 
 // (f) reserved keys. Inverted in 2.3.1: Ctrl+Up / Down and Ctrl+Shift+Up / Down transpose, Ctrl+Shift+Home / End select; the rest stay reserved.
-test('pin (f): reserved keys are unbound: Ctrl+Up / Down, Ctrl+Shift+Up / Down, Ctrl+Shift+Home / End, Shift+Up / Down, Shift+R / I, Ctrl+Shift+V', () => {
+test('pin (f), inverted in 2.3.1: Ctrl+Up / Down transpose by 1, Ctrl+Shift+Up / Down by 12, Ctrl+Shift+Home / End select to the score edges; Shift+Up / Down, Shift+R / I and Ctrl+Shift+V stay unbound', () => {
   const C = { ctrlKey: true };
   const CS = { ctrlKey: true, shiftKey: true };
   const S = { shiftKey: true };
-  for (const [k, m] of [['ArrowUp', C], ['ArrowDown', C], ['ArrowUp', CS], ['ArrowDown', CS], ['Home', CS], ['End', CS],
-    ['ArrowUp', S], ['ArrowDown', S], ['R', S], ['I', S], ['V', CS], ['v', CS]]) {
+  eq([['ArrowUp', C], ['ArrowDown', C], ['ArrowUp', CS], ['ArrowDown', CS], ['Home', CS], ['End', CS]].map(([k, m]) => keyToCommand(key(k, m))), [
+    { name: 'transpose', arg: 1 }, { name: 'transpose', arg: -1 }, { name: 'transpose', arg: 12 }, { name: 'transpose', arg: -12 }, { name: 'selectScoreStart' }, { name: 'selectScoreEnd' },
+  ]);
+  for (const [k, m] of [['ArrowUp', S], ['ArrowDown', S], ['R', S], ['I', S], ['V', CS], ['v', CS]]) {
     eq(keyToCommand(key(k, m)), null, `${k} ${JSON.stringify(m)}`);
   }
 });

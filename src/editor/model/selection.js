@@ -135,6 +135,19 @@ export function selectNextMeasure(score, cursor) {
   if (cursor.measure >= measureCount(score) - 1) return { announce: { id: 'endOfScore' } };
   return at(cursor, cursor.measure + 1, lastPos(score, cursor, cursor.measure + 1));
 }
+/** Ctrl+Shift+Home (2.3.1): the first position of measure 1; when already there, Start of score. */
+export function selectScoreStart(score, cursor) {
+  const first = positions(score, { ...cursor, measure: 0 })[0];
+  if (cursor.measure === 0 && cursor.beat === first) return { announce: { id: 'startOfScore' } };
+  return at(cursor, 0, first);
+}
+/** Ctrl+Shift+End (2.3.1): the last position of the last measure (the slot included); when already there, End of score. */
+export function selectScoreEnd(score, cursor) {
+  const mi = measureCount(score) - 1;
+  const last = lastPos(score, cursor, mi);
+  if (cursor.measure === mi && cursor.beat === last) return { announce: { id: 'endOfScore' } };
+  return at(cursor, mi, last);
+}
 /** Ctrl+A: the focus goes to the last position of the last measure (the anchor is startOf). */
 export function selectAll(score, cursor) {
   const mi = measureCount(score) - 1;
