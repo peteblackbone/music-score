@@ -17,6 +17,7 @@ const C = await imp('src/editor/model/cursor.js');
 const T = await imp('src/editor/model/ties.js');
 const { run, COMMANDS } = await imp('src/editor/model/commands.js');
 const { keyToCommand } = await imp('src/editor/keymap.js');
+const { EFFECTS } = await imp('src/editor/model/effectTable.js');
 const demo = await imp('examples/editor-demo.js');
 const { exampleScore } = await imp('examples/example-score.js');
 const { leadRiff } = await imp('examples/lead-riff.js');
@@ -701,7 +702,9 @@ function mulberry32(a) {
 }
 const FUZZ = ['moveLeft', 'moveRight', 'moveRight', 'moveUp', 'moveDown', 'prevMeasure', 'nextMeasure', 'measureStart', 'measureEnd', 'scoreStart', 'scoreEnd', 'prevTrack', 'nextTrack',
   ...Array(8).fill('digit'), 'deleteNote', 'toggleTie', 'toggleTie', 'toggleTie', 'shorter', 'longer', 'cycleDots', 'toggleTriplet', 'toggleRest', 'toggleRest', 'deleteBeat', 'insertBeat',
-  'insertMeasureAfter', 'insertMeasureBefore', 'deleteMeasure', 'setDuration'];
+  'insertMeasureAfter', 'insertMeasureBefore', 'deleteMeasure', 'setDuration',
+  // 2.1 effects
+  ...EFFECTS.map((d) => d.name)];
 const fuzzStart = () => sc(
   tab([
     { beats: [tn('quarter', 1, 5, { tieStart: true }), tn('quarter', 1, 5, { tieEnd: true }), grace(), nt('half', 2, 3)] },
@@ -789,6 +792,14 @@ test('E12: unknown fields at every level survive every command that does not own
   eq(re.beats()[0].notes[0], { string: 1, fret: 7, zzNote: 1 });
   const del = play(s).key('Delete');
   eq(del.beats()[0], { type: 'rest', duration: 'quarter', zzBeat: 'x' });
+  // 2.1: every effect key, pressed through its whole cycle, on the note and on the rest it leaves
+  const fx = play(s);
+  const EFFECT_KEYS = EFFECTS.map((d) => (d.shift ? SHIFT(d.key) : d.key));
+  for (let i = 0; i < 9; i++) fx.go(...EFFECT_KEYS);
+  fx.go('ArrowRight', 'Delete', ...EFFECT_KEYS, 'r', ...EFFECT_KEYS);
+  const fxOut = JSON.stringify(fx.score);
+  for (const k of ['zzScore', 'zzTrack', 'zzMeasure', 'zzBeat', 'zzNote']) ok(fxOut.includes(k), `effects: ${k} kept`);
+  ok(fx.beats()[1].zzBeat === 'y' && fx.beats()[0].notes[0].zzNote === 1, 'effects: beat and note fields kept');
 });
 
 // ---------- H: demo helpers ----------

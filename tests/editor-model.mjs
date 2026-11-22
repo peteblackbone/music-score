@@ -578,6 +578,7 @@ const CMD = await imp('src/editor/model/commands.js');
 const { run, COMMANDS } = CMD;
 const { createHistory, clampLimit } = await imp('src/editor/model/history.js');
 const { keyToCommand } = await imp('src/editor/keymap.js');
+const { EFFECTS, EFFECT_KEYS } = await imp('src/editor/model/effectTable.js');
 test('run: clamps the cursor, reports changed / moved, clears the buffer after other commands, re-syncs the duration', () => {
   const s = sc(tab([{ beats: [nt('half'), nt('8th', 1, 0, { dots: 1 })] }]));
   const st = { duration: 'quarter', dots: 0, digit: { track: 0, measure: 0, beat: 0, string: 1, first: 1, time: 0 } };
@@ -642,7 +643,12 @@ test('keymap: every row of the key table (D1)', () => {
   for (let d = 0; d <= 9; d++) eq(K(String(d)), { name: 'digit', arg: d });
   eq(K('7', { code: 'Numpad7' }), { name: 'digit', arg: 7 });
 });
-test('keymap: never consumes Tab, Alt, F-keys, IME, browser Ctrl combos, Shift+arrows, reserved Shift+R/L/I and 2.1 letters', () => {
+const LETTERS_AZ = 'abcdefghijklmnopqrstuvwxyz'.split('');
+const effectLetters = (shift) => Object.keys(EFFECT_KEYS).filter((k) => k.startsWith('Shift+') === shift).map((k) => k.slice(shift ? 6 : 0));
+const UNBOUND = LETTERS_AZ.filter((l) => !['r', 'l', 'i', 'm', ...effectLetters(false)].includes(l));
+const SHIFT_UNBOUND = LETTERS_AZ.filter((l) => !['m', ...effectLetters(true)].includes(l));
+test('keymap: never consumes Tab, Alt, F-keys, IME, browser Ctrl combos, Shift+arrows, reserved Shift+R/I and unbound letters', () => {
+  ok(UNBOUND.length === 12 && SHIFT_UNBOUND.length === 20 && SHIFT_UNBOUND.includes('r') && SHIFT_UNBOUND.includes('i'), `unbound ${UNBOUND} / Shift+${SHIFT_UNBOUND}`);
   const none = [
     ['Tab'], ['Tab', { shiftKey: true }], ['ArrowLeft', { altKey: true }], ['ArrowRight', { altKey: true }], ['r', { altKey: true }],
     ['F1'], ['F5'], ['F12'], ['a', { isComposing: true }], ['Process'], ['Dead'],
@@ -651,8 +657,9 @@ test('keymap: never consumes Tab, Alt, F-keys, IME, browser Ctrl combos, Shift+a
     ['PageUp', { ctrlKey: true }], ['PageDown', { ctrlKey: true }], ['ArrowUp', { ctrlKey: true }], ['ArrowLeft', { ctrlKey: true, shiftKey: true }],
     ['ArrowLeft', { shiftKey: true }], ['ArrowRight', { shiftKey: true }], ['ArrowUp', { shiftKey: true }], ['ArrowDown', { shiftKey: true }],
     ['Home', { shiftKey: true }], ['End', { shiftKey: true }],
-    ['R', { shiftKey: true }], ['L', { shiftKey: true }], ['I', { shiftKey: true }],
-    ['h'], ['s'], ['b'], ['v'], ['p'], ['x'], ['g'], ['H'], ['a'], [' '], ['Enter'], [''], [undefined],
+    // letters bound neither by 2.0 (R, L, I, M / Shift+M) nor by an effect row; Shift+R and Shift+I stay reserved
+    ...UNBOUND.map((k) => [k]), ...SHIFT_UNBOUND.map((k) => [k.toUpperCase(), { shiftKey: true }]),
+    [' '], ['Enter'], [''], [undefined],
   ];
   for (const [key, mods] of none) eq(K(key, mods), null, `${key} ${JSON.stringify(mods || {})}`);
   eq(keyToCommand(null), null);
@@ -670,6 +677,8 @@ const WEIGHTED = [
   'prevMeasure', 'nextMeasure', 'measureStart', 'measureEnd', 'scoreStart', 'scoreEnd', 'prevTrack', 'nextTrack',
   'deleteNote', 'deleteNote', 'toggleTie', 'toggleTie', 'shorter', 'longer', 'setDuration', 'cycleDots', 'toggleTriplet', 'toggleRest', 'toggleRest',
   'deleteBeat', 'insertBeat', 'insertMeasureAfter', 'insertMeasureBefore', 'deleteMeasure', 'jump',
+  // 2.1 effects
+  ...EFFECTS.map((d) => d.name),
 ];
 export const B10_SCORES = () => [
   ['default', defaultScore()],

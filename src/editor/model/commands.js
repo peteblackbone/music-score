@@ -17,6 +17,8 @@ import { digit, deleteNote, toggleTie } from './notes.js';
 import { shorter, longer, setDuration, cycleDots, toggleTriplet, toggleRest, deleteBeat, insertBeat } from './beats.js';
 import { insertMeasureAfter, insertMeasureBefore, deleteMeasure } from './measures.js';
 import { trackAt, isVisible } from './access.js';
+import { EFFECTS } from './effectTable.js';
+import { effectCommand } from './effects.js';
 
 const nav = (fn, label) => ({ fn, kind: 'nav', label });
 const edit = (fn, label) => ({ fn, kind: 'edit', label });
@@ -48,6 +50,8 @@ export const COMMANDS = Object.freeze({
   insertMeasureAfter: edit(insertMeasureAfter, 'insert measure'),
   insertMeasureBefore: edit(insertMeasureBefore, 'insert measure'),
   deleteMeasure: edit(deleteMeasure, 'delete measure'),
+  // 2.1 effects, one command per row of effectTable.js
+  ...Object.fromEntries(EFFECTS.map((d) => [d.name, edit(effectCommand(d), d.label)])),
   undo: { fn: null, kind: 'history', step: 'undo' },
   redo: { fn: null, kind: 'history', step: 'redo' },
   clearBuffer: { fn: null, kind: 'buffer', cancelsBuffer: true },

@@ -16,7 +16,8 @@ export const DOT_WORDS = Object.freeze(['', 'dotted ', 'double-dotted ', 'triple
 
 /** e.g. 'dotted eighth, triplet'. */
 export function durationWords(duration, dots = 0, triplet = false) {
-  return `${DOT_WORDS[dots] ?? ''}${DURATION_WORDS[duration] ?? String(duration)}${triplet ? ', triplet' : ''}`;
+  const words = Object.hasOwn(DURATION_WORDS, duration) ? DURATION_WORDS[duration] : String(duration);
+  return `${DOT_WORDS[dots] ?? ''}${words}${triplet ? ', triplet' : ''}`;
 }
 
 /** Measure fill: `word` as spoken ('underfull'), `label` as shown in a status bar ('Under'). */

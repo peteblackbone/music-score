@@ -4,7 +4,8 @@
  * notation-only tracks refuse them. The cursor is the location (access.js).
  *
  * Fret entry writes `string` and `fret`, deletes `pitch` on the note it
- * frets and `slash` on the beat, and never writes pitch, soundingPitch or
+ * frets and `slash` on the beat, clears `mute` (a dead note) on the note it
+ * frets, even at the same fret, and never writes pitch, soundingPitch or
  * fromFret. Every shape it produces is one sanitize keeps unchanged.
  */
 import {
@@ -33,14 +34,16 @@ export function fretIntoRest(score, loc, fret) {
   return { score: fixSeamsAround(out, loc, loc.string), announce: { id: 'fret', fret } };
 }
 
-/** A note beat: re-fret the note on the string (untying it when the fret changes) or add it to the chord; `slash` dropped. */
+/** A note beat: re-fret the note on the string (untying it when the fret changes; `mute` cleared) or add it to the chord; `slash` dropped. */
 export function fretIntoNote(score, loc, fret) {
   const old = cursorNote(score, loc);
   let out = score;
   let announce = { id: 'fret', fret };
   if (old && old.fret !== fret) {
-    out = updateNote(untiePartners(score, loc), loc, (x) => ({ ...without(x, 'pitch', 'tieStart', 'tieEnd'), fret }));
-  } else if (!old) {
+    out = updateNote(untiePartners(score, loc), loc, (x) => ({ ...without(x, 'pitch', 'tieStart', 'tieEnd', 'mute'), fret }));
+  } else if (old) {
+    out = updateNote(score, loc, (x) => without(x, 'mute'));
+  } else {
     const count = notesOf(beatAt(score, loc)).length + 1;
     out = updateBeat(score, loc, (b) => ({ ...b, notes: [...notesOf(b), { string: loc.string, fret }] }));
     out = fixSeamsAround(out, loc, loc.string);

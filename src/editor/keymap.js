@@ -8,9 +8,10 @@
  * bound: Tab, anything with Alt, F-keys, IME composition, Ctrl with keys
  * other than Z, Y, the arrows, Home, End, Delete and Backspace (so the
  * browser keeps Ctrl+W/T/N/L/P/S/I/M, Ctrl+1–9, Ctrl+PageUp/PageDown),
- * Shift+arrows, Shift+Home/End and Shift+R / L / I (reserved). H, S, B, V,
- * P, X and G are reserved for 2.1.
+ * Shift+arrows, Shift+Home/End and Shift+R / I (reserved). The effect
+ * letters come from EFFECT_KEYS (the rows of model/effectTable.js).
  */
+import { EFFECT_KEYS } from './model/effectTable.js';
 
 const cmd = (name, arg) => (arg === undefined ? { name } : { name, arg });
 
@@ -26,6 +27,8 @@ const CTRL = {
 };
 const NO_SHIFT = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown', 'Insert']);
 const LETTERS = { r: 'toggleRest', l: 'toggleTie', i: 'insertBeat' };
+/** `map[k]` when it is an own key (event keys such as 'toString' must not find inherited properties), else undefined. */
+const own = (map, k) => (Object.hasOwn(map, k) ? map[k] : undefined);
 
 /** The command for keyboard event `e`, or null. */
 export function keyToCommand(e) {
@@ -38,17 +41,19 @@ export function keyToCommand(e) {
     const k = key.length === 1 ? key.toLowerCase() : key;
     if (k === 'z') return cmd(shift ? 'redo' : 'undo');
     if (k === 'y') return cmd('redo');
-    if (shift || !CTRL[key]) return null;
+    if (shift || !own(CTRL, key)) return null;
     return cmd(CTRL[key]);
   }
   if (key === 'Delete' || key === 'Backspace') return cmd(shift ? 'deleteMeasure' : 'deleteNote');
   if (/^[0-9]$/.test(key)) return cmd('digit', Number(key));
   if (key === ',' && e.code === 'NumpadDecimal') return cmd('cycleDots');
-  if (PLAIN[key]) return shift && NO_SHIFT.has(key) ? null : cmd(PLAIN[key]);
+  if (own(PLAIN, key)) return shift && NO_SHIFT.has(key) ? null : cmd(PLAIN[key]);
   if (key.length === 1) {
     const l = key.toLowerCase();
     if (l === 'm') return cmd(shift ? 'insertMeasureBefore' : 'insertMeasureAfter');
-    if (LETTERS[l] && !shift) return cmd(LETTERS[l]);
+    if (own(LETTERS, l) && !shift) return cmd(LETTERS[l]);
+    const fx = own(EFFECT_KEYS, (shift ? 'Shift+' : '') + l);
+    if (fx) return cmd(fx);
   }
   return null;
 }
