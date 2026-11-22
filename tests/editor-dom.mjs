@@ -523,6 +523,58 @@ test('E12: editing a 1.x-rich score keeps every untouched field and object', () 
   ok(m.tracks[0].measures[0] === ed._history.top().before.score.tracks[0].measures[0], 'untouched measures shared by reference');
 });
 
+// ---------- B10 at editor level, J4 guard ----------
+/** Synthetic score: `measures` x `tracks`, 8th-note density (eight 8ths per 4/4 measure). */
+export function syntheticScore(measures, tracks = 2) {
+  return { title: `Synthetic ${measures}`, tracks: Array.from({ length: tracks }, (_, ti) => ({
+    name: `Guitar ${ti + 1}`, showStandardNotation: true, showTablature: true, timeSignature: { beats: 4, beatType: 4 },
+    measures: Array.from({ length: measures }, (_, mi) => ({ beats: Array.from({ length: 8 }, (_, k) => nt('8th', 1 + ((mi + k + ti) % 6), (mi * 3 + k) % 13)) })),
+  })) };
+}
+function mulberry32(a) {
+  return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const KEYS = [
+  ...'0123456789'.split('').map((k) => key(k)), ...Array(6).fill(key('ArrowRight')), ...Array(4).fill(key('ArrowLeft')),
+  key('ArrowUp'), key('ArrowDown'), key('ArrowRight', { ctrlKey: true }), key('ArrowLeft', { ctrlKey: true }), key('Home'), key('End'),
+  key('End', { ctrlKey: true }), key('Home', { ctrlKey: true }), key('PageUp'), key('PageDown'),
+  key('+'), key('-'), key('.'), key('/'), key('r'), key('l'), key('Delete'), key('Delete', { ctrlKey: true }), key('i'), key('Insert'),
+  key('m'), key('M', { shiftKey: true }), key('Delete', { shiftKey: true }), key('z', { ctrlKey: true }), key('y', { ctrlKey: true }), key('Escape'),
+];
+test('B10 (editor): 300 random keys, frames flushed every 25; the model stays sanitize-stable and the hit map voice-1 beats match the model (index, grace, rest)', () => {
+  const rnd = mulberry32(7);
+  for (const start of [twoBar(), clone(leadRiff), { tracks: [
+    { name: 'A', showTablature: true, measures: [{ beats: [nt('quarter'), graceB(), nt('quarter', 2, 2), hiddenRest(), nt('quarter')] }, { voices: [{ beats: [graceB(), nt('half'), nt('half')] }, { beats: [nt('whole', 4, 0)] }] }] },
+    { name: 'N', measures: [{ beats: [nt('whole')] }] },
+  ] }]) {
+    const { ed, clock } = mk(start, {}, { raf: true });
+    for (let i = 1; i <= 300; i++) {
+      ed.handleKey(KEYS[Math.floor(rnd() * KEYS.length)]);
+      clock.advance(rnd() < 0.5 ? 100 : 1000);
+      if (sanitizeScore(ed._model) !== ed._model) throw new Error(`step ${i}: sanitize changed the model`);
+      if (i % 25) continue;
+      clock.frame();
+      const map = ed._view.renderer.getHitMap();
+      const model = ed._model;
+      map.measures.forEach((m) => {
+        const raw = model.tracks[m.ti].measures?.[m.measureIndex];
+        const want = (raw ? (raw.voices?.length ? raw.voices[0]?.beats || [] : raw.beats || []) : []).map((b, k) => [k, b.type === 'grace', b.type === 'rest']);
+        const got = map.elements.filter((e) => e.ti === m.ti && e.measureIndex === m.measureIndex && e.voice === 1).map((e) => [e.beatIndex, e.isGrace, e.isRest]);
+        eq(got, want, `step ${i} t${m.ti} m${m.measureIndex}`);
+      });
+    }
+    ed.destroy();
+  }
+});
+test('J4 guard: constructing an editor for 200 measures x 2 tracks renders in under 3000 ms (Node)', () => {
+  const t0 = performance.now();
+  const { ed } = mk(syntheticScore(200, 2));
+  const ms = performance.now() - t0;
+  ok(ms < 3000, `${Math.round(ms)} ms`);
+  eq(ed.getScore().tracks[0].measures.length, 200);
+  ed.destroy();
+});
+
 export async function summary() {
   let fail = 0;
   for (const t of tests) {
