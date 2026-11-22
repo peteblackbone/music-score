@@ -16,6 +16,7 @@ const A = await imp('src/editor/model/access.js');
 const { run, COMMANDS, undoLabel } = await imp('src/editor/model/commands.js');
 const { EFFECTS, EFFECT_KEYS, EFFECT_BY_NAME, DYNAMIC_SCALE, SUFFIXES, bendStep } = await imp('src/editor/model/effectTable.js');
 const E = await imp('src/editor/model/effects.js');
+const cursorMod = await imp('src/editor/model/cursor.js');
 const { keyToCommand } = await imp('src/editor/keymap.js');
 const { describe, positionText, describeCursor } = await imp('src/editor/announce.js');
 
@@ -381,6 +382,26 @@ test('effectWords: note words (TAB, a note on the string) then beat words, in ta
   const words = (flags) => E.effectWords(sc(tab([{ beats: [tn('quarter', 1, 0, flags)] }])), cur(0, 0, 0)).note;
   eq([words({ hammerPull: true }), words({ bend: true }), words({ bend: '1/2' }), words({ bend: 'full release' }), words({ bend: 'release' }), words({ harmonic: true }), words({ slide: 'up' })],
     [['hammer/pull'], ['bend full'], ['bend half'], ['bend full and release'], ['bend release'], ['natural harmonic'], ['slide']]);
+});
+
+test('effectState / cursorInfo: steps per present effect (-1 = custom), backward rows covered by the forward row; beatEffects; effectWords unchanged', () => {
+  const C = cursorMod;
+  const s = sc(tab([{ beats: [
+    tn('quarter', 1, 5, { hammerPull: 'h', bend: 'half', harmonic: 'artificial' }, { vibrato: 'x', dynamic: 'sfz', articulations: ['accent', 'staccatissimo', 'tenuto'] }),
+    rest('quarter', { palmMute: true, dynamic: 'mp' }),
+  ] }]), notation([{ beats: [{ type: 'note', duration: 'whole', letRing: true, notes: [{ pitch: 'C4', mute: true }] }] }]));
+  const st = E.effectState(s, cur(0, 0, 0));
+  eq(st.steps, { hammerPull: 0, bend: -1, harmonic: -1, vibrato: 0, louder: -1, accent: 0, staccato: 1 });
+  eq([st.note, st.beat], [['hammer-on', 'bend', 'artificial harmonic'], ['vibrato', 'sfz', 'accent', 'staccatissimo', 'tenuto']]);
+  eq(E.effectWords(s, cur(0, 0, 0)), { note: st.note, beat: st.beat });
+  eq(E.effectState(s, cur(0, 0, 1)).steps, { palmMute: 0, louder: 3 }, 'rest: beat rows only');
+  eq(E.effectState(s, cur(0, 0, 2)), { note: [], beat: [], steps: {} }, 'slot');
+  eq(E.effectState(s, cur(1, 0, 0)).steps, { letRing: 0 }, 'notation-only: no note rows');
+  const info = C.cursorInfo(s, cur(0, 0, 0), ST);
+  eq([info.effects, info.noteEffects, info.beatEffects, info.effectSteps], [[...st.note, ...st.beat], st.note, st.beat, st.steps]);
+  const none = E.effectState(sc(tab([{ beats: [tn('quarter', 1, 5, {}, { articulations: ['tenuto'] })] }])), cur(0, 0, 0));
+  eq([none.steps, none.beat], [{}, ['tenuto']], 'other articulations: neither accent nor staccato is present');
+  eq(E.effectState(sc(tab([{ beats: [tn('quarter', 1, 5, { slide: 'up', slideIn: 'x' })] }])), cur(0, 0, 0)).steps, { slide: -1 }, 'custom slide present; an unreadable slideIn lists no words and is absent');
 });
 
 // ---------- sanitize identity over every key on every kind of start ----------

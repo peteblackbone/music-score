@@ -74,17 +74,32 @@ export function effectCommand(def) {
 }
 
 /**
- * The effect words at `loc`, in table order: `note` (TAB tracks with a note
- * on the cursor string) and `beat` (notes and rests); both empty on the slot.
+ * The effects at `loc`, in table order: `note` words (TAB tracks with a note
+ * on the cursor string), `beat` words (notes and rests) and `steps`,
+ * `{ [rowName]: step }` for every effect present: the row's step index, or
+ * -1 for a value the row doesn't write (custom). A row is present when its
+ * value is one it writes, or (rows with `custom`) when its `info` lists
+ * words; backward rows (`reverseOf`) are covered by their forward row. All empty
+ * on the slot.
  */
-export function effectWords(score, loc) {
-  const out = { note: [], beat: [] };
+export function effectState(score, loc) {
+  const out = { note: [], beat: [], steps: {} };
   const beat = beatAt(score, loc);
   if (!beat) return out;
   const note = hasTab(trackAt(score, loc.track)) ? cursorNote(score, loc) : null;
   for (const d of EFFECTS) {
     const target = d.level === 'note' ? note : beat;
-    if (d.info && target) out[d.level].push(...d.info(target));
+    if (!target || d.reverseOf) continue;
+    const words = d.info ? d.info(target) : [];
+    const step = d.classify(target);
+    out[d.level].push(...words);
+    if (step >= 0 || (d.custom && words.length)) out.steps[d.name] = step;
   }
   return out;
+}
+
+/** The effect words at `loc` (effectState without the steps): `{ note, beat }`. */
+export function effectWords(score, loc) {
+  const { note, beat } = effectState(score, loc);
+  return { note, beat };
 }

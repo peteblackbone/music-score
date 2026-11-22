@@ -17,7 +17,7 @@ import {
 import { measureFill, onsetOf } from './fill.js';
 import { appendMeasure } from './measures.js';
 import { lastMainIn } from './ties.js';
-import { effectWords } from './effects.js';
+import { effectState } from './effects.js';
 
 const int = (v, d) => (Number.isFinite(v) ? Math.trunc(v) : d);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -153,7 +153,7 @@ export function cursorInfo(score, cursor, state) {
   let beatNumber = 0;
   let beatTotal = 0;
   beats.forEach((x, i) => { if (!isGrace(x)) { beatTotal++; if (i <= cursor.beat) beatNumber++; } });
-  const words = effectWords(score, cursor);
+  const fx = effectState(score, cursor);
   return {
     track: cursor.track,
     measure: cursor.measure,
@@ -180,8 +180,10 @@ export function cursorInfo(score, cursor, state) {
     noteCount: notesOf(b).length,
     tied: !!note && !!(note.tieStart || note.tieEnd),
     frets: notesOf(b).filter((n) => n.fret != null).map((n) => n.fret),
-    // 2.1: effect words (model/effects.js), note words first; [] on the slot
-    effects: [...words.note, ...words.beat],
-    noteEffects: words.note,
+    // 2.1: effect words and steps (model/effects.js effectState), note words first; empty on the slot
+    effects: [...fx.note, ...fx.beat],
+    noteEffects: fx.note,
+    beatEffects: fx.beat,
+    effectSteps: fx.steps,
   };
 }

@@ -5,7 +5,7 @@
  *
  * Row: `{ name, key, shift, level: 'note' | 'beat', fields, steps, dir,
  * start?, classify, exclusive, onRest, creates, write?, suffix?, say, off,
- * added?, label, info?, reverseOf? }`.
+ * added?, label, info?, custom, reverseOf? }`.
  * - `fields`: the keys the row owns; `steps`: the patches it cycles
  *   through (dir 1 forward, -1 backward; `start` = the step written from
  *   none, else the first, or the last when dir is -1).
@@ -19,6 +19,9 @@
  * - `suffix`: a key of SUFFIXES, spoken after an "on" result when it applies.
  * - `say[step]` / `off` / `added`: spoken text; `label`: the undo label;
  *   `info(target)`: the words getCursorInfo().effects lists.
+ * - `custom`: whether a value the row doesn't write counts as present
+ *   (effectSteps -1); false for the articulation rows, whose words list
+ *   every articulation.
  * - `reverseOf`: set on a row that steps another row's values backwards
  *   (reverse()); it shares that row's classification and words.
  *
@@ -111,7 +114,7 @@ export const SUFFIXES = Object.freeze({
   noNotation: Object.freeze({ text: ', not shown on TAB only', applies: (score, loc, track) => !hasNotation(track) }),
 });
 
-const row = (r) => Object.freeze({ shift: false, dir: 1, exclusive: [], onRest: false, creates: false, ...r });
+const row = (r) => Object.freeze({ shift: false, dir: 1, exclusive: [], onRest: false, creates: false, custom: true, ...r });
 /**
  * Row `r` stepped backwards (Shift+B, Shift+D): the same keys, values,
  * classification and words with `dir: -1`, no `start` and no `info` (the
@@ -196,12 +199,12 @@ export const EFFECTS = Object.freeze([
   reverse(LOUDER, { name: 'softer', shift: true, start: DYNAMIC_SCALE.indexOf('mp') }),
   row({
     name: 'accent', key: 'a', level: 'beat', fields: ['articulations'], steps: ['accent', 'marcato'],
-    classify: articStep('accent', ['marcato', 'heavyAccent']), write: articWrite(ACCENTS), suffix: 'tabArtic',
+    classify: articStep('accent', ['marcato', 'heavyAccent']), write: articWrite(ACCENTS), suffix: 'tabArtic', custom: false,
     say: ['Accent', 'Marcato'], off: 'Accent off', label: 'accent', info: articInfo,
   }),
   row({
     name: 'staccato', key: 'a', shift: true, level: 'beat', fields: ['articulations'], steps: ['staccato', 'staccatissimo'],
-    classify: articStep('staccato', ['staccatissimo']), write: articWrite(STACCATOS), suffix: 'tabArtic',
+    classify: articStep('staccato', ['staccatissimo']), write: articWrite(STACCATOS), suffix: 'tabArtic', custom: false,
     say: ['Staccato', 'Staccatissimo'], off: 'Staccato off', label: 'staccato',
   }),
 ]);

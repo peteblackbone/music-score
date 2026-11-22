@@ -6,41 +6,44 @@
  * `data-shift`; a click runs that key through the editor's handleKey, so
  * the buttons follow exactly the keyboard rules (refusals included).
  * effectButtonState (pure, exported for the tests) derives each button's
- * state from getCursorInfo(): toggles get `aria-pressed`, cycles a label
- * naming their current value.
+ * state from getCursorInfo().effectSteps (the effect rows' step indices,
+ * not the spoken words): toggles get `aria-pressed`, cycles a label naming
+ * their current value.
  */
-import { DYNAMIC_SCALE } from '../src/editor/model/effectTable.js';
+import { EFFECT_BY_NAME } from '../src/editor/model/effectTable.js';
+
+/** The label word for each step of the cycle buttons' rows ('custom' for a value the row doesn't write). */
+const STATE_WORDS = {
+  slide: ['on', 'legato'],
+  bend: ['full', 'half', 'full and release', 'pre-bend full', 'release'],
+  vibrato: ['on', 'wide'],
+  harmonic: ['natural', 'pinch'],
+  accent: ['on', 'marcato'],
+  staccato: ['on', 'staccatissimo'],
+};
+const TITLES = { slide: 'Slide', bend: 'Bend', vibrato: 'Vibrato', harmonic: 'Harmonic', accent: 'Accent', staccato: 'Staccato' };
+const TOGGLES = ['hammerPull', 'palmMute', 'deadNote', 'ghostNote', 'letRing'];
+/** The commands with a button, in toolbar order. */
+export const BUTTONS = ['hammerPull', 'slide', 'bend', 'vibrato', 'palmMute', 'deadNote', 'ghostNote', 'harmonic', 'letRing', 'louder', 'softer', 'accent', 'staccato'];
 
 /**
  * `{ [commandName]: { pressed } | { label } }` for the cursor `info`
  * (getCursorInfo): pressed for H/P, P.M., Dead, Ghost and Let ring; a
  * label for Slide, Bend, Vibrato, Harmonic, Dynamic + / − (with the current
- * dynamic), Accent and Staccato.
+ * dynamic when it is on the scale), Accent and Staccato.
  */
 export function effectButtonState(info) {
-  const note = info?.noteEffects ?? [];
-  const beat = (info?.effects ?? []).slice(note.length);
-  const bend = note.find((w) => w === 'bend' || w.startsWith('bend '));
-  const harmonic = note.find((w) => w.endsWith(' harmonic'));
-  const dynamic = beat.find((w) => DYNAMIC_SCALE.includes(w));
-  const dyn = dynamic ? ` (${dynamic})` : '';
-  const slide = note.includes('legato slide') ? 'legato' : note.includes('slide') ? 'on' : 'off';
-  const articulation = (first, second) => (beat.includes(second) ? second : beat.includes(first) ? 'on' : 'off');
-  return {
-    hammerPull: { pressed: ['hammer/pull', 'hammer-on', 'pull-off'].some((w) => note.includes(w)) },
-    slide: { label: `Slide: ${slide}` },
-    bend: { label: `Bend: ${!bend ? 'off' : bend === 'bend' ? 'custom' : bend.slice(5)}` },
-    vibrato: { label: `Vibrato: ${beat.includes('wide vibrato') ? 'wide' : beat.includes('vibrato') ? 'on' : 'off'}` },
-    palmMute: { pressed: beat.includes('palm mute') },
-    deadNote: { pressed: note.includes('dead') },
-    ghostNote: { pressed: note.includes('ghost') },
-    harmonic: { label: `Harmonic: ${harmonic ? harmonic.slice(0, -' harmonic'.length) : 'off'}` },
-    letRing: { pressed: beat.includes('let ring') },
-    louder: { label: `Dynamic +${dyn}` },
-    softer: { label: `Dynamic −${dyn}` },
-    accent: { label: `Accent: ${articulation('accent', 'marcato')}` },
-    staccato: { label: `Staccato: ${articulation('staccato', 'staccatissimo')}` },
+  const steps = info?.effectSteps ?? {};
+  const has = (name) => Object.hasOwn(steps, name);
+  const dynamic = has('louder') && steps.louder >= 0 ? ` (${EFFECT_BY_NAME.louder.steps[steps.louder].dynamic})` : '';
+  const state = (name) => {
+    if (TOGGLES.includes(name)) return { pressed: has(name) };
+    if (name === 'louder' || name === 'softer') return { label: `Dynamic ${name === 'louder' ? '+' : '−'}${dynamic}` };
+    return { label: `${TITLES[name]}: ${!has(name) ? 'off' : steps[name] < 0 ? 'custom' : STATE_WORDS[name][steps[name]]}` };
   };
+  const out = {};
+  for (const name of BUTTONS) out[name] = state(name);
+  return out;
 }
 
 /**

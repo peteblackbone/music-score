@@ -222,21 +222,26 @@ const OFF = {
   palmMute: { pressed: false }, deadNote: { pressed: false }, ghostNote: { pressed: false }, harmonic: { label: 'Harmonic: off' },
   letRing: { pressed: false }, louder: { label: 'Dynamic +' }, softer: { label: 'Dynamic −' }, accent: { label: 'Accent: off' }, staccato: { label: 'Staccato: off' },
 };
-test('AC19: effectButtonState — toggles pressed, cycle labels name the state, beat words never read as note words; empty info is all off', () => {
-  eq(effectButtonState({ effects: [], noteEffects: [] }), OFF);
+test('AC19: effectButtonState reads getCursorInfo().effectSteps — toggles pressed, cycle labels name the state, custom values say custom; no steps is all off', () => {
+  eq(effectButtonState({ effects: [], noteEffects: [], effectSteps: {} }), OFF);
   eq(effectButtonState(null), OFF);
-  const st = effectButtonState({ noteEffects: ['pull-off', 'legato slide', 'bend pre-bend full', 'dead', 'ghost', 'pinch harmonic'],
-    effects: ['pull-off', 'legato slide', 'bend pre-bend full', 'dead', 'ghost', 'pinch harmonic', 'wide vibrato', 'palm mute', 'let ring', 'ff', 'tenuto', 'marcato', 'staccatissimo'] });
-  eq(st, {
+  eq(effectButtonState({ effects: ['bend full', 'palm mute'], noteEffects: ['bend full'] }), OFF, 'words alone are not parsed');
+  const at = (flags, beatFields = {}) => {
+    const { ed } = mk({ tracks: [{ showTablature: true, measures: [{ beats: [tn('quarter', 1, 5, flags, beatFields)] }] }] });
+    const st = effectButtonState(ed.getCursorInfo());
+    ed.destroy();
+    return st;
+  };
+  eq(at({ hammerPull: 'p', slide: 'legato', bend: 'pb full', mute: true, ghost: true, harmonic: 'pinch' },
+    { vibrato: 'WIDE', palmMute: true, letRing: true, dynamic: 'ff', articulations: ['tenuto', 'heavyAccent', 'staccatissimo'] }), {
     hammerPull: { pressed: true }, slide: { label: 'Slide: legato' }, bend: { label: 'Bend: pre-bend full' }, vibrato: { label: 'Vibrato: wide' },
     palmMute: { pressed: true }, deadNote: { pressed: true }, ghostNote: { pressed: true }, harmonic: { label: 'Harmonic: pinch' },
     letRing: { pressed: true }, louder: { label: 'Dynamic + (ff)' }, softer: { label: 'Dynamic − (ff)' }, accent: { label: 'Accent: marcato' }, staccato: { label: 'Staccato: staccatissimo' },
   });
-  const one = (note, beat = []) => effectButtonState({ noteEffects: note, effects: [...note, ...beat] });
-  eq([one(['slide']).slide, one(['bend']).bend, one(['bend half']).bend, one(['bend full and release']).bend, one(['natural harmonic']).harmonic, one(['hammer/pull']).hammerPull],
-    [{ label: 'Slide: on' }, { label: 'Bend: custom' }, { label: 'Bend: half' }, { label: 'Bend: full and release' }, { label: 'Harmonic: natural' }, { pressed: true }]);
-  eq([one([], ['vibrato']).vibrato, one([], ['accent', 'staccato']).accent, one([], ['accent', 'staccato']).staccato, one([], ['sfz']).louder],
-    [{ label: 'Vibrato: on' }, { label: 'Accent: on' }, { label: 'Staccato: on' }, { label: 'Dynamic +' }]);
+  eq([at({ slide: true }).slide, at({ slide: 'up' }).slide, at({ bend: 'half' }).bend, at({ bend: '1/2' }).bend, at({ bend: 'full release' }).bend, at({ harmonic: true }).harmonic, at({ harmonic: 'artificial' }).harmonic, at({ hammerPull: true }).hammerPull],
+    [{ label: 'Slide: on' }, { label: 'Slide: custom' }, { label: 'Bend: custom' }, { label: 'Bend: half' }, { label: 'Bend: full and release' }, { label: 'Harmonic: natural' }, { label: 'Harmonic: custom' }, { pressed: true }]);
+  eq([at({}, { vibrato: true }).vibrato, at({}, { articulations: ['accent', 'staccato'] }).accent, at({}, { articulations: ['accent', 'staccato'] }).staccato, at({}, { articulations: ['accent'] }).staccato, at({}, { dynamic: 'sfz' }).louder, at({}, { articulations: ['tenuto'] }).accent],
+    [{ label: 'Vibrato: on' }, { label: 'Accent: on' }, { label: 'Staccato: on' }, { label: 'Staccato: off' }, { label: 'Dynamic +' }, { label: 'Accent: off' }]);
 });
 /** A stub button: dataset, attributes, a click listener and the `disabled` / `textContent` properties the demo sets. */
 const stubButton = (effect, k, shift = false) => {
