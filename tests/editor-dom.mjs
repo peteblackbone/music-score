@@ -264,6 +264,18 @@ test('B3 (atomic): a load that throws leaves model, cursor, history, events and 
   eq(events, []);
   ok(ed.undo(), 'history still usable');
 });
+test('limits: ScoreEditor.LIMITS is public; the constructor and loadScore reject a score past them with nothing changed', () => {
+  eq(ScoreEditor.LIMITS.tracks, 32);
+  ok(Object.isFrozen(ScoreEditor.LIMITS));
+  const big = { tracks: Array.from({ length: 33 }, () => ({ showTablature: true, measures: [] })) };
+  const box = makeContainer();
+  let msg = ''; try { new ScoreEditor(box, big); } catch (e) { msg = e.message; }
+  eq([msg, box.children.length], ['Score too large: 33 tracks (limit 32)', 0]);
+  const { ed } = mk(twoBar());
+  const snap = JSON.stringify(ed.getScore());
+  msg = ''; try { ed.loadScore(big); } catch (e) { msg = e.message; }
+  eq([msg.startsWith('Score too large'), JSON.stringify(ed.getScore())], [true, snap]);
+});
 test('B4: getScore / toJSON give a deep clone with schemaVersion 1; loadScore(x); getScore() == {schemaVersion:1, ...sanitizeScore(x)} for every snapshot case', () => {
   const { ed } = mk(twoBar());
   const a = ed.getScore();

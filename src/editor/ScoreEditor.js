@@ -14,6 +14,7 @@
  */
 import { EditorView, defaultClock } from './view.js';
 import { parseInput, exportScore } from './model/io.js';
+import { EDITOR_LIMITS } from './model/limits.js';
 import { defaultScore } from './model/defaultScore.js';
 import { clampCursor, cursorInfo, syncDuration, sameCursor } from './model/cursor.js';
 import { measureFill, fillTable } from './model/fill.js';
@@ -31,6 +32,9 @@ const freshState = () => ({ duration: 'quarter', dots: 0, digit: null });
 const CURSOR_KEYS = ['track', 'measure', 'beat', 'string'];
 
 export class ScoreEditor {
+  /** Input size limits (model/limits.js); a larger score throws Error('Score too large: …'). */
+  static LIMITS = EDITOR_LIMITS;
+
   /**
    * @param {HTMLElement} container - the editor builds its own wrapper inside and never writes outside it.
    * @param {object|string} [score] - score object or JSON string (schemaVersion missing or 1); default: one empty guitar measure.
