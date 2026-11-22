@@ -4,7 +4,7 @@
  *
  * Kinds: 'nav' (moves; Right may append a measure), 'edit' (refused in
  * read-only mode), 'history' (undo / redo, run by the controller) and
- * 'buffer' (Escape). Commands that can change the model carry their undo
+ * 'buffer' (Escape, `cancelsBuffer`). History commands name their `step`. Commands that can change the model carry their undo
  * `label`: a string, or a function of the command's announce descriptor. run() clamps the resulting cursor, clears the digit
  * buffer after anything but a digit, and re-syncs the current duration
  * when the position or the model changed.
@@ -48,9 +48,9 @@ export const COMMANDS = Object.freeze({
   insertMeasureAfter: edit(insertMeasureAfter, 'insert measure'),
   insertMeasureBefore: edit(insertMeasureBefore, 'insert measure'),
   deleteMeasure: edit(deleteMeasure, 'delete measure'),
-  undo: { fn: null, kind: 'history' },
-  redo: { fn: null, kind: 'history' },
-  clearBuffer: { fn: null, kind: 'buffer' },
+  undo: { fn: null, kind: 'history', step: 'undo' },
+  redo: { fn: null, kind: 'history', step: 'redo' },
+  clearBuffer: { fn: null, kind: 'buffer', cancelsBuffer: true },
 });
 
 /** The undo label of command `name` that announced `descriptor` ('fret 5', 'rest', 'insert measure' …). */

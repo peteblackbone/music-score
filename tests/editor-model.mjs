@@ -703,6 +703,36 @@ test('B10: 6 start scores x 2000 random commands keep sanitizeScore(model) === m
   }
 });
 
+// ---------- emitter, registry flags ----------
+const { Emitter } = await imp('src/editor/emitter.js');
+test('emitter: on/off/unsubscribe, errors to console.error, queued events (lazy payloads) on drain, clear', () => {
+  const em = new Emitter();
+  const got = [];
+  const un = em.on('a', (p) => got.push(['a', p]));
+  em.on('a', () => { throw new Error('boom'); });
+  const orig = console.error; const errs = []; console.error = (e) => errs.push(e.message);
+  try { em.emit('a', 1); } finally { console.error = orig; }
+  eq([got, errs], [[['a', 1]], ['boom']]);
+  un();
+  let n = 0;
+  em.on('b', (p) => got.push(['b', p]));
+  em.queue('b', 'x'); em.queue('b', () => ++n);
+  eq(got.length, 1, 'queued, not sent');
+  em.drain();
+  eq(got.slice(1), [['b', 'x'], ['b', 1]]);
+  em.drain();
+  eq(got.length, 3, 'queue emptied');
+  em.queue('b', 'y'); em.clear(); em.drain(); em.emit('b', 'z');
+  eq(got.length, 3);
+  let threw = false; try { em.on('a', 5); } catch (e) { threw = e instanceof TypeError; }
+  ok(threw);
+});
+test('registry flags drive handleKey: Escape cancels the buffer, history commands name their step', () => {
+  eq([COMMANDS.clearBuffer.cancelsBuffer, COMMANDS.undo.step, COMMANDS.redo.step, COMMANDS.undo.kind], [true, 'undo', 'redo', 'history']);
+  ok(Object.values(COMMANDS).filter((d) => d.cancelsBuffer).length === 1, 'only Escape cancels without editing');
+  ok(!COMMANDS.deleteNote.cancelsBuffer, 'Delete is an edit, not a buffer cancel');
+});
+
 // ---------- options ----------
 const OPT = await imp('src/editor/options.js');
 test('options: DEFAULTS and resolveOptions (integers floored and clamped, non-numbers fall back)', () => {

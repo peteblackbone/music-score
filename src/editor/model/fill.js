@@ -46,6 +46,13 @@ export function measureFill(score, ti, mi) {
   return f === 'empty' ? 'under' : f;
 }
 
+/** measureFill with the indices checked: RangeError unless `ti` is a track and `mi` a measure column. */
+export function checkedMeasureFill(score, ti, mi) {
+  if (!Number.isInteger(ti) || ti < 0 || ti >= tracksOf(score).length) throw new RangeError('track out of range');
+  if (!Number.isInteger(mi) || mi < 0 || mi >= measureCount(score)) throw new RangeError('measure out of range');
+  return measureFill(score, ti, mi);
+}
+
 /** Per track, per measure column: 'empty' | 'under' | 'full' | 'over', in one forward pass. */
 export function fillTable(score) {
   const count = measureCount(score);

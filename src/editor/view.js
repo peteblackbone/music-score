@@ -91,8 +91,9 @@ export class EditorView {
     this._listeners.push([node, type, fn]);
   }
 
-  /** Root classes and labels: `--focused`, `--readonly`, aria-label from the title, aria-readonly. */
-  setRootState({ focused, readOnly, title }) {
+  /** Root classes and labels: `--focused`, `--readonly`, aria-label from the title ('Untitled score' without one), aria-readonly. */
+  setRootState({ focused, readOnly, title: raw }) {
+    const title = typeof raw === 'string' && raw.trim() ? raw.trim() : 'Untitled score';
     const cls = ['music-score-editor'];
     if (focused) cls.push('music-score-editor--focused');
     if (readOnly) cls.push('music-score-editor--readonly');

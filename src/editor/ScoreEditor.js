@@ -13,12 +13,12 @@
  * redraw the overlay only and emit `cursor` at once.
  */
 import { EditorView, defaultClock } from './view.js';
+import { Emitter } from './emitter.js';
 import { parseInput, exportScore } from './model/io.js';
 import { EDITOR_LIMITS } from './model/limits.js';
 import { defaultScore } from './model/defaultScore.js';
 import { clampCursor, cursorInfo, syncDuration, sameCursor } from './model/cursor.js';
-import { measureFill, fillTable } from './model/fill.js';
-import { tracksOf, measureCount } from './model/access.js';
+import { checkedMeasureFill, fillTable } from './model/fill.js';
 import { COMMANDS, run, undoLabel } from './model/commands.js';
 import { createHistory } from './model/history.js';
 import { bufferLive } from './model/notes.js';
@@ -46,16 +46,14 @@ export class ScoreEditor {
     const model = score == null ? defaultScore() : parseInput(score); // parse first: a bad score writes nothing
     const o = options || {};
     const opts = resolveOptions(o);
-    this._maxFret = opts.maxFret;
-    this._delay = opts.twoDigitDelayMs;
+    this._opts = opts;
     this._readOnly = opts.readOnly;
     this._model = model;
     this._cursor = clampCursor(model, START);
     this._state = syncDuration(model, this._cursor, freshState());
     this._history = createHistory(opts.historyLimit);
     this._digitEntry = null;
-    this._listeners = new Map();
-    this._queue = [];
+    this._events = new Emitter();
     this._focused = false;
     this._destroyed = false;
     this._clock = { ...defaultClock(), ...(o.clock || {}) }; // internal, test-only
@@ -63,7 +61,7 @@ export class ScoreEditor {
       viewScore: () => (this._model.multiMeasureRests ? { ...this._model, multiMeasureRests: false } : this._model),
       cursorInfo: () => this._info(),
       fills: () => fillTable(this._model),
-      afterRender: () => this._drain(),
+      afterRender: () => this._events.drain(),
       onKey: (e) => this.handleKey(e),
       onClick: (hit) => this._moveTo({ track: hit.ti, measure: hit.measureIndex, beat: hit.beatIndex, string: hit.string ?? this._cursor.string }),
       onFocusChange: (f) => this._focusChanged(f),
@@ -84,9 +82,10 @@ export class ScoreEditor {
     this._cursor = cursor;
     this._state = state;
     this._history.clear();
-    this._digitEntry = null;
+    this._cancelBuffer();
     this._syncRoot();
-    this._queue.push(['change', { source: 'load' }], ['cursor', null]);
+    this._events.queue('change', { source: 'load' });
+    this._events.queue('cursor', () => this._cursorPayload());
     this._view.scheduleRender();
   }
 
@@ -108,9 +107,7 @@ export class ScoreEditor {
   /** 'under' | 'full' | 'over' of track `track` measure `measure` (voice 1); RangeError when out of range. */
   getMeasureFill(track, measure) {
     this._alive();
-    if (!Number.isInteger(track) || track < 0 || track >= tracksOf(this._model).length) throw new RangeError('track out of range');
-    if (!Number.isInteger(measure) || measure < 0 || measure >= measureCount(this._model)) throw new RangeError('measure out of range');
-    return measureFill(this._model, track, measure);
+    return checkedMeasureFill(this._model, track, measure);
   }
 
   // ---- input ----
@@ -119,17 +116,12 @@ export class ScoreEditor {
     this._alive();
     const c = keyToCommand(e);
     if (!c) return false;
-    const kind = COMMANDS[c.name].kind;
-    if (kind === 'buffer') {
-      if (!this._bufferActive()) return false;
-      this._state = { ...this._state, digit: null };
-      this._digitEntry = null;
-      return true;
-    }
-    if (kind === 'history') {
+    const def = COMMANDS[c.name];
+    if (def.cancelsBuffer) return this._cancelBuffer();
+    if (def.kind === 'history') {
       if (this._readOnly) { this._say(describe({ id: 'readOnly' })); return false; }
-      if (c.name === 'undo') this.undo(); else this.redo();
-      return true;
+      this._step(def.step);
+      return true; // consumed even on an empty stack
     }
     return this._exec(c.name, c.arg);
   }
@@ -150,7 +142,7 @@ export class ScoreEditor {
   setReadOnly(flag) {
     this._alive();
     this._readOnly = !!flag;
-    this._state = { ...this._state, digit: null };
+    this._cancelBuffer();
     this._syncRoot();
   }
   isReadOnly() { this._alive(); return this._readOnly; }
@@ -164,52 +156,39 @@ export class ScoreEditor {
 
   // ---- events ----
   /** Listen to 'change' or 'cursor'; returns an unsubscribe function. */
-  on(type, fn) {
-    this._alive();
-    if (typeof fn !== 'function') throw new TypeError('listener must be a function');
-    if (!this._listeners.has(type)) this._listeners.set(type, new Set());
-    this._listeners.get(type).add(fn);
-    return () => this._listeners.get(type)?.delete(fn);
-  }
-  off(type, fn) { this._alive(); this._listeners.get(type)?.delete(fn); }
+  on(type, fn) { this._alive(); return this._events.on(type, fn); }
+  off(type, fn) { this._alive(); this._events.off(type, fn); }
 
   /** Remove listeners, DOM and timers. Idempotent; any other method throws afterwards. */
   destroy() {
     if (this._destroyed) return;
     this._view.destroy();
-    this._listeners.clear();
-    this._queue = [];
+    this._events.clear();
     this._destroyed = true;
   }
 
   // ---- internals ----
   _alive() { if (this._destroyed) throw new Error('ScoreEditor destroyed'); }
   _info() { return cursorInfo(this._model, this._cursor, this._state); }
-  _ctx() { return { maxFret: this._maxFret, now: this._clock.now(), twoDigitDelayMs: this._delay, allowAppend: !this._readOnly }; }
-  _bufferActive() { return bufferLive(this._state.digit, this._cursor, this._ctx()); }
+  _ctx() { return { maxFret: this._opts.maxFret, now: this._clock.now(), twoDigitDelayMs: this._opts.twoDigitDelayMs, allowAppend: !this._readOnly }; }
+  /** End any two-digit fret entry; true when one was live (Escape is consumed only then). */
+  _cancelBuffer() {
+    const live = bufferLive(this._state.digit, this._cursor, this._ctx());
+    if (this._state.digit) this._state = { ...this._state, digit: null };
+    this._digitEntry = null;
+    return live;
+  }
   _say(text) { if (text) this._view.announce(text); }
 
   _syncRoot() {
-    const t = typeof this._model.title === 'string' && this._model.title.trim() ? this._model.title.trim() : 'Untitled score';
-    this._view.setRootState({ focused: this._focused, readOnly: this._readOnly, title: t });
+    this._view.setRootState({ focused: this._focused, readOnly: this._readOnly, title: this._model.title });
   }
 
-  _emit(type, payload) {
-    for (const fn of [...(this._listeners.get(type) || [])]) {
-      try { fn(payload); } catch (err) { console.error(err); }
-    }
-  }
-  _emitCursor() { this._emit('cursor', { ...this._cursor, voice: 1 }); }
-  /** Queued events, after a render: one change per model change; a null cursor payload is the cursor at that time. */
-  _drain() {
-    const q = this._queue;
-    this._queue = [];
-    for (const [type, payload] of q) {
-      if (type === 'cursor' && !payload) this._emitCursor(); else this._emit(type, payload);
-    }
-  }
+  _cursorPayload() { return { ...this._cursor, voice: 1 }; }
+  _emitCursor() { this._events.emit('cursor', this._cursorPayload()); }
+  /** Queue the change event (sent after the render) and schedule that render. */
   _modelChanged(source, command) {
-    this._queue.push(['change', command ? { source, command } : { source }]);
+    this._events.queue('change', command ? { source, command } : { source });
     this._view.requestScroll();
     this._view.scheduleRender();
   }
@@ -228,27 +207,37 @@ export class ScoreEditor {
     this._cursor = r.cursor;
     this._state = r.state;
     if (r.changed) {
-      const after = { score: r.score, cursor: r.cursor };
-      const label = undoLabel(name, r.announce);
-      if (r.coalesce && this._digitEntry && this._history.top() === this._digitEntry) {
-        this._history.coalesce(after);
-        this._digitEntry.label = label;
-        this._digitEntry = null;
-      } else {
-        const entry = { before, after, label };
-        this._history.push(entry);
-        this._digitEntry = name === 'digit' && r.state.digit ? entry : null;
-      }
+      this._record(name, before, r);
       this._modelChanged('edit', name);
       if (r.moved) this._emitCursor();
     } else {
       this._digitEntry = null;
       if (r.moved) this._cursorMoved();
     }
+    this._announceResult(r, prev);
+    return true;
+  }
+
+  /** One undo step for run() result `r`; the second digit of a two-digit fret extends the first digit's step. */
+  _record(name, before, r) {
+    const after = { score: r.score, cursor: r.cursor };
+    const label = undoLabel(name, r.announce);
+    if (r.coalesce && this._digitEntry && this._history.top() === this._digitEntry) {
+      this._history.coalesce(after);
+      this._digitEntry.label = label;
+      this._digitEntry = null;
+      return;
+    }
+    const entry = { before, after, label };
+    this._history.push(entry);
+    this._digitEntry = r.state.digit ? entry : null; // a live buffer: the next digit may join this step
+  }
+
+  /** Speak the result of a command: its own message (with the fill after an edit), else the move. */
+  _announceResult(r, prev) {
     const info = this._info();
     if (r.announce) this._say(r.changed ? describeEdit(r.announce, info, prev) : describe(r.announce));
     else if (r.moved) this._say(describeCursor(info, prev));
-    return true;
   }
 
   _step(kind) {
@@ -260,8 +249,8 @@ export class ScoreEditor {
     const prevCursor = this._cursor;
     this._model = snap.score;
     this._cursor = clampCursor(snap.score, snap.cursor);
-    this._state = syncDuration(this._model, this._cursor, { ...this._state, digit: null });
-    this._digitEntry = null;
+    this._cancelBuffer();
+    this._state = syncDuration(this._model, this._cursor, this._state);
     this._modelChanged(kind);
     if (!sameCursor(prevCursor, this._cursor)) this._emitCursor();
     this._say(describe({ id: kind, label: e.label }));
@@ -271,8 +260,7 @@ export class ScoreEditor {
   _moveTo(want) {
     const prev = this._info();
     const next = clampCursor(this._model, want);
-    this._state = { ...this._state, digit: null };
-    this._digitEntry = null;
+    this._cancelBuffer();
     if (!sameCursor(next, this._cursor)) {
       this._cursor = next;
       this._state = syncDuration(this._model, next, this._state);
