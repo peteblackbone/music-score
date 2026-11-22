@@ -514,6 +514,155 @@ test('Right from the last beat of a full last measure appends a measure (allowAp
   eq(C.moveRight(over, cur(0, 0, 1), ST, CTX).announce.id, 'measureAdded');
 });
 
+// ---------- commands, history, keymap ----------
+const { run, COMMANDS } = await imp('src/editor/model/commands.js');
+const { createHistory, clampLimit } = await imp('src/editor/model/history.js');
+const { keyToCommand } = await imp('src/editor/keymap.js');
+test('run: clamps the cursor, reports changed / moved, clears the buffer after other commands, re-syncs the duration', () => {
+  const s = sc(tab([{ beats: [nt('half'), nt('8th', 1, 0, { dots: 1 })] }]));
+  const st = { duration: 'quarter', dots: 0, digit: { track: 0, measure: 0, beat: 0, string: 1, first: 1, time: 0 } };
+  const r = run('moveRight', s, cur(0, 0, 0), st, CTX);
+  eq([r.changed, r.moved, r.cursor, r.state], [false, true, cur(0, 0, 1), { duration: '8th', dots: 1, digit: null }]);
+  const d = run('digit', s, cur(0, 0, 0), ST, CTX, 4);
+  eq([d.changed, d.moved, d.state.digit.first, d.announce], [true, false, 4, { id: 'fret', fret: 4 }]);
+  const e = run('deleteBeat', s, cur(0, 0, 0), ST, CTX);
+  eq([e.changed, e.cursor, e.state.duration], [true, cur(0, 0, 0), '8th']);
+  const n = run('moveUp', s, cur(0, 0, 0), ST, CTX);
+  eq([n.changed, n.moved], [false, false]);
+  eq(run('moveRight', { tracks: [{ showStandardNotation: false, measures: [] }] }, cur(0, 0, 0), ST, CTX).announce, { id: 'noTrack' });
+  let threw = false; try { run('nope', s, cur(0, 0, 0), ST, CTX); } catch { threw = true; }
+  ok(threw, 'unknown command throws');
+  eq(Object.entries(COMMANDS).filter(([, v]) => v.kind === 'nav').length, 12);
+});
+test('history: push clears redo, limit drops the oldest, coalesce replaces the top after, undo/redo walk entries (F1-F4)', () => {
+  const h = createHistory(2);
+  const e = (i) => ({ before: i, after: i + 1 });
+  h.push(e(0)); h.push(e(1)); h.push(e(2));
+  eq(h.size(), 2);
+  eq(h.undo().before, 2); eq(h.undo().before, 1); eq(h.undo(), null);
+  eq([h.canUndo(), h.canRedo()], [false, true]);
+  eq(h.redo().before, 1);
+  h.push(e(9));
+  eq(h.canRedo(), false);
+  h.coalesce(42);
+  eq(h.top().after, 42);
+  h.clear();
+  eq([h.canUndo(), h.canRedo()], [false, false]);
+  const zero = createHistory(0); zero.push(e(0)); eq(zero.canUndo(), false);
+  eq([clampLimit(undefined), clampLimit(-5), clampLimit(1e9), clampLimit(3.7), clampLimit('x')], [200, 0, 10000, 3, 200]);
+});
+const K = (key, mods = {}) => keyToCommand({ key, ctrlKey: false, shiftKey: false, altKey: false, metaKey: false, ...mods });
+test('keymap: every row of the key table (D1)', () => {
+  const rows = [
+    [['ArrowLeft'], 'moveLeft'], [['ArrowRight'], 'moveRight'], [['ArrowUp'], 'moveUp'], [['ArrowDown'], 'moveDown'],
+    [['ArrowLeft', { ctrlKey: true }], 'prevMeasure'], [['ArrowRight', { ctrlKey: true }], 'nextMeasure'],
+    [['ArrowRight', { metaKey: true }], 'nextMeasure'],
+    [['Home'], 'measureStart'], [['End'], 'measureEnd'], [['Home', { ctrlKey: true }], 'scoreStart'], [['End', { ctrlKey: true }], 'scoreEnd'],
+    [['PageUp'], 'prevTrack'], [['PageDown'], 'nextTrack'],
+    [['+'], 'shorter'], [['+', { shiftKey: true }], 'shorter'], [['='], 'shorter'], [['+', { code: 'NumpadAdd' }], 'shorter'],
+    [['-'], 'longer'], [['-', { code: 'NumpadSubtract' }], 'longer'],
+    [['.'], 'cycleDots'], [['.', { code: 'NumpadDecimal' }], 'cycleDots'], [[',', { code: 'NumpadDecimal' }], 'cycleDots'],
+    [['/'], 'toggleTriplet'], [['/', { code: 'NumpadDivide' }], 'toggleTriplet'],
+    [['r'], 'toggleRest'], [['R'], 'toggleRest'], [['l'], 'toggleTie'], [['L'], 'toggleTie'],
+    [['Delete'], 'deleteNote'], [['Backspace'], 'deleteNote'],
+    [['Delete', { ctrlKey: true }], 'deleteBeat'], [['Backspace', { metaKey: true }], 'deleteBeat'],
+    [['Insert'], 'insertBeat'], [['i'], 'insertBeat'], [['I'], 'insertBeat'],
+    [['m'], 'insertMeasureAfter'], [['M', { shiftKey: true }], 'insertMeasureBefore'],
+    [['Delete', { shiftKey: true }], 'deleteMeasure'], [['Backspace', { shiftKey: true }], 'deleteMeasure'],
+    [['z', { ctrlKey: true }], 'undo'], [['Z', { ctrlKey: true, shiftKey: true }], 'redo'], [['y', { ctrlKey: true }], 'redo'], [['z', { metaKey: true }], 'undo'],
+    [['Escape'], 'clearBuffer'],
+  ];
+  for (const [[key, mods], want] of rows) eq(K(key, mods)?.name, want, `${key} ${JSON.stringify(mods || {})}`);
+  for (let d = 0; d <= 9; d++) eq(K(String(d)), { name: 'digit', arg: d });
+  eq(K('7', { code: 'Numpad7' }), { name: 'digit', arg: 7 });
+});
+test('keymap: never consumes Tab, Alt, F-keys, IME, browser Ctrl combos, Shift+arrows, reserved Shift+R/L/I and 2.1 letters', () => {
+  const none = [
+    ['Tab'], ['Tab', { shiftKey: true }], ['ArrowLeft', { altKey: true }], ['ArrowRight', { altKey: true }], ['r', { altKey: true }],
+    ['F1'], ['F5'], ['F12'], ['a', { isComposing: true }], ['Process'], ['Dead'],
+    ...['w', 't', 'n', 'l', 'p', 's', 'i', 'm', 'r', 'a', 'c', 'v', 'x', 'f'].map((k) => [k, { ctrlKey: true }]),
+    ...['1', '5', '9'].map((k) => [k, { ctrlKey: true }]),
+    ['PageUp', { ctrlKey: true }], ['PageDown', { ctrlKey: true }], ['ArrowUp', { ctrlKey: true }], ['ArrowLeft', { ctrlKey: true, shiftKey: true }],
+    ['ArrowLeft', { shiftKey: true }], ['ArrowRight', { shiftKey: true }], ['ArrowUp', { shiftKey: true }], ['ArrowDown', { shiftKey: true }],
+    ['Home', { shiftKey: true }], ['End', { shiftKey: true }],
+    ['R', { shiftKey: true }], ['L', { shiftKey: true }], ['I', { shiftKey: true }],
+    ['h'], ['s'], ['b'], ['v'], ['p'], ['x'], ['g'], ['H'], ['a'], [' '], ['Enter'], [''], [undefined],
+  ];
+  for (const [key, mods] of none) eq(K(key, mods), null, `${key} ${JSON.stringify(mods || {})}`);
+  eq(keyToCommand(null), null);
+});
+
+// ---------- B10 property test: sanitize identity and valid cursor after every command; undo / redo all ----------
+const { exampleScore } = await imp('examples/example-score.js');
+const { leadRiff } = await imp('examples/lead-riff.js');
+const { leadSoloF } = await imp('examples/lead-solo-f.js');
+function mulberry32(a) {
+  return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const WEIGHTED = [
+  ...Array(10).fill('digit'), ...Array(4).fill('moveRight'), ...Array(3).fill('moveLeft'), 'moveUp', 'moveDown', 'moveUp', 'moveDown',
+  'prevMeasure', 'nextMeasure', 'measureStart', 'measureEnd', 'scoreStart', 'scoreEnd', 'prevTrack', 'nextTrack',
+  'deleteNote', 'deleteNote', 'toggleTie', 'toggleTie', 'shorter', 'longer', 'setDuration', 'cycleDots', 'toggleTriplet', 'toggleRest', 'toggleRest',
+  'deleteBeat', 'insertBeat', 'insertMeasureAfter', 'insertMeasureBefore', 'deleteMeasure', 'jump',
+];
+export const B10_SCORES = () => [
+  ['default', defaultScore()],
+  ['lead-riff', io.parseInput(leadRiff)],
+  ['lead-solo-f', io.parseInput(leadSoloF)],
+  ['example-score', io.parseInput(exampleScore)],
+  ['rich', io.parseInput(sc(
+    tab([{ beats: [nt('quarter'), graceB(), tn('quarter', 2, 2, { tieStart: true }), rest('quarter', { hidden: true }), nt('quarter')] },
+      { voices: [{ beats: [graceB(), tn('half', 2, 2, { tieEnd: true }), nt('half')] }, { beats: [nt('whole', 4, 0)] }] },
+      { beats: [{ type: 'note', duration: 'whole', slash: true }] }, null]),
+    { name: 'Hidden', showStandardNotation: false, measures: [{ beats: [] }] },
+  ))],
+  ['mixed', io.parseInput({ timeSignature: { beats: 3, beatType: 4 }, tracks: [
+    { name: 'Notes', measures: [{ beats: [{ type: 'note', duration: 'half', notes: [{ pitch: 'C4' }, { pitch: 'E4' }] }] }] },
+    tab([{ beats: [] }], { tuning: ['E1', 'A1', 'D2', 'G2'], showStandardNotation: false }),
+  ] })],
+];
+test('B10: 6 start scores x 2000 random commands keep sanitizeScore(model) === model and a valid cursor; undo all restores the start, redo all the end', () => {
+  const rnd = mulberry32(20261122);
+  for (const [name, start] of B10_SCORES()) {
+    let s = start;
+    let c = C.clampCursor(s, cur(0, 0, 0, 1));
+    let st = { duration: 'quarter', dots: 0, digit: null };
+    const h = createHistory(10000);
+    let digitEntry = null;
+    let now = 0;
+    let edits = 0;
+    for (let i = 0; i < 2000; i++) {
+      const pick = WEIGHTED[Math.floor(rnd() * WEIGHTED.length)];
+      now += rnd() < 0.6 ? 200 : 1500;
+      const ctx = { maxFret: 24, now, twoDigitDelayMs: 800, allowAppend: true };
+      if (pick === 'jump') {
+        c = C.clampCursor(s, cur(Math.floor(rnd() * 4), Math.floor(rnd() * 30), Math.floor(rnd() * 12), 1 + Math.floor(rnd() * 7)));
+        st = C.syncDuration(s, c, { ...st, digit: null });
+        continue;
+      }
+      const arg = pick === 'digit' ? Math.floor(rnd() * 10) : pick === 'setDuration' ? ['whole', 'half', 'quarter', '8th', '16th', '32nd', '64th', 'bogus'][Math.floor(rnd() * 8)] : undefined;
+      const r = run(pick, s, c, st, ctx, arg);
+      if (r.changed) {
+        edits++;
+        const after = { score: r.score, cursor: r.cursor };
+        if (r.coalesce && digitEntry && h.top() === digitEntry) h.coalesce(after);
+        else { const entry = { before: { score: s, cursor: c }, after, label: pick }; h.push(entry); digitEntry = pick === 'digit' ? entry : null; }
+      } else if (pick !== 'digit') digitEntry = null;
+      s = r.score; c = r.cursor; st = r.state;
+      if (sanitizeScore(s) !== s) throw new Error(`${name} step ${i} (${pick}): sanitize changed the model`);
+      if (!C.sameCursor(C.clampCursor(s, c), c)) throw new Error(`${name} step ${i} (${pick}): invalid cursor ${JSON.stringify(c)}`);
+    }
+    ok(edits > 300, `${name}: only ${edits} edits`);
+    const end = s;
+    let e;
+    let steps = 0;
+    while ((e = h.undo())) { s = e.before.score; steps++; }
+    ok(s === start, `${name}: undo all returns the start object`);
+    for (let k = 0; k < steps; k++) s = h.redo().after.score;
+    ok(s === end, `${name}: redo all returns the end object`);
+  }
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
