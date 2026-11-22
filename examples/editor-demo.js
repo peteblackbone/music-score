@@ -216,6 +216,8 @@ export function startEditorDemo(doc) {
   const okToReplace = () => !dirty || win.confirm(`Replace "${title()}"? Your changes since the last download will be lost (the browser copy is overwritten).`);
   function replace(score) {
     editor.loadScore(score);
+    // a new score makes earlier notices (first visit, restore, a failed open) stale
+    Object.keys(shown).forEach((k) => { shown[k].remove(); delete shown[k]; });
     dirty = false;
     refreshUi();
   }
