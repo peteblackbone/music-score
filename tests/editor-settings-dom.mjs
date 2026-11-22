@@ -258,6 +258,42 @@ test('R3: settings messages within one 150 ms window are joined with ". "; a lat
   ok(/^Beat deleted\. Beat 1, .*\. Title set$/.test(live.textContent), live.textContent);
 });
 
+// ---------- B10 at editor level with API calls ----------
+function mulberry32(a) {
+  return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+test('B10 (editor): 300 random steps of keys and settings calls; every step sanitize-stable; undo all restores the start byte for byte, redo all the end', () => {
+  const rnd = mulberry32(22);
+  const pick = (l) => l[Math.floor(rnd() * l.length)];
+  const { ed, clock } = mk(fixture(), { historyLimit: 10000 });
+  const start = JSON.stringify(ed.getScore());
+  const keys = ['1', '2', '5', 'ArrowRight', 'ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', 'PageDown', 'PageUp', 'r', 'm', 'h', 's', 'Delete'];
+  const calls = [
+    () => ed.updateScore({ title: pick(['A', 'B', null]), showTuningChart: rnd() < 0.5 }),
+    () => ed.updateTrack(Math.floor(rnd() * ed.getCursorInfo().trackCount), pick([{ capo: pick([0, 2]) }, { tuning: pick(Object.values(TUNINGS).flat()).tuning }, { showStandardNotation: rnd() < 0.5 }, { clef: pick(['bass', 'treble']) }])),
+    () => ed.addTrack(pick(Object.keys(INSTRUMENTS))),
+    () => ed.removeTrack(Math.floor(rnd() * ed.getCursorInfo().trackCount)),
+    () => ed.moveTrack(0, ed.getCursorInfo().trackCount - 1),
+    () => ed.updateMeasure(ed.getCursor().measure, pick([{ timeSignature: { beats: pick([3, 4, 5]), beatType: 4 } }, { barline: 'repeatEnd', repeatCount: 3 }, { ending: [1, 2] }, { segno: true, jump: 'D.S.' }, { section: { letter: 'A' } }])),
+    () => ed.setTempo(pick([80, null, { bpm: 60, unit: 'half' }])),
+  ];
+  let steps = 0;
+  for (let i = 0; i < 300; i++) {
+    const before = ed._model;
+    if (rnd() < 0.4) pick(calls)();
+    else ed.handleKey(key(pick(keys)));
+    clock.advance(rnd() < 0.5 ? 100 : 1000);
+    if (ed._model !== before) steps++;
+    ok(sanitizeScore(ed._model) === ed._model, `step ${i}: sanitize-stable`);
+  }
+  ok(steps > 100, `${steps} model changes`);
+  const end = JSON.stringify(ed.getScore());
+  while (ed.canUndo()) ed.undo();
+  eq(JSON.stringify(ed.getScore()), start, 'undo all');
+  while (ed.canRedo()) ed.redo();
+  eq(JSON.stringify(ed.getScore()), end, 'redo all');
+});
+
 // ---------- report ----------
 export async function summary() {
   let fail = 0;

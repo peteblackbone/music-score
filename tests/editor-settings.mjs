@@ -572,6 +572,161 @@ test('getMeasureSettings: in force + here + inherited; navigation equals normali
   throws(() => MS.getMeasureSettings(s, '0', 0), TypeError);
 });
 
+// ---------- B10: commands and settings calls mixed ----------
+const { run } = await imp('src/editor/model/commands.js');
+const { createHistory } = await imp('src/editor/model/history.js');
+const { EFFECTS } = await imp('src/editor/model/effectTable.js');
+const { SETTINGS } = await imp('src/editor/model/settings/ops.js');
+const { defaultScore } = await imp('src/editor/model/defaultScore.js');
+const { CLEF_NAMES } = await imp('src/clef.js');
+const { exampleScore } = await imp('examples/example-score.js');
+const { leadRiff } = await imp('examples/lead-riff.js');
+const { leadSoloF } = await imp('examples/lead-solo-f.js');
+function mulberry32(a) {
+  return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const COMMAND_PICKS = ['digit', 'digit', 'digit', 'moveRight', 'moveRight', 'moveLeft', 'moveUp', 'moveDown', 'nextMeasure', 'prevMeasure', 'nextTrack', 'prevTrack',
+  'deleteNote', 'toggleTie', 'toggleRest', 'deleteBeat', 'insertBeat', 'insertMeasureAfter', 'insertMeasureBefore', 'deleteMeasure', 'shorter', 'longer', ...EFFECTS.map((d) => d.name)];
+/** Random (mostly valid, sometimes invalid) arguments for settings call `name` on `s`. */
+function settingsArgs(name, s, rnd) {
+  const pick = (list) => list[Math.floor(rnd() * list.length)];
+  const n = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1));
+  const tracks = s.tracks.length;
+  const mc = Math.max(1, ...s.tracks.map((t) => (t.measures || []).length));
+  const tunings = Object.values(TUNINGS).flat().map((p) => p.tuning);
+  switch (name) {
+    case 'updateScore': return [pick([{ title: pick(['A', ' B ', null, '']) }, { showTuningChart: rnd() < 0.5 }, { multiMeasureRests: pick([true, null]) }, { instructions: 'a\nb', copyright: null }, { bogus: 1 }])];
+    case 'updateTrack': return [n(0, tracks), pick([{ name: pick(['X', null]) }, { clef: pick([...CLEF_NAMES, null, 'soprano']) }, { showTablature: rnd() < 0.7 }, { showStandardNotation: rnd() < 0.5 },
+      { tuning: pick(tunings) }, { tuning: pick(tunings) }, { capo: n(0, 31) }, { tabRhythm: pick([true, false, 'auto', null]) }, { tiedFrets: pick(['parens', null]) }, { tabArticulations: rnd() < 0.5 }])];
+    case 'addTrack': return [pick([undefined, ...Object.keys(INSTRUMENTS), { preset: 'bass4', name: 'B' }]), pick([undefined, n(0, tracks + 1)])];
+    case 'removeTrack': return [n(0, tracks)];
+    case 'moveTrack': return [n(0, tracks - 1), n(0, tracks)];
+    case 'updateMeasure': {
+      const mi = n(0, mc);
+      const patch = pick([{ timeSignature: pick([{ beats: n(1, 7), beatType: pick([4, 8]) }, null]) }, { keySignature: pick([n(-7, 7), null]) }, { clef: pick(['bass', 'treble', 'alto', null]) },
+        { barline: pick(['repeatEnd', 'repeatStart', 'double', null]) }, { barline: 'repeatEnd', repeatCount: n(2, 5) }, { ending: pick([1, [1, 2], { numbers: [2], text: 'x' }, null]) },
+        { segno: rnd() < 0.5, coda: rnd() < 0.5 }, { jump: pick(['D.C.', 'Fine', 'To Coda', null]) }, { section: pick(['Verse', { letter: 'A' }, null]) }, { repeatCount: 3 }]);
+      return rnd() < 0.2 ? [mi, patch, { track: n(0, tracks - 1) }] : [mi, patch];
+    }
+    default: return [pick([120, 60.5, { bpm: 90, unit: 'half', dots: 1 }, null, 0])];
+  }
+}
+const B10_START = () => [
+  ['default', defaultScore()],
+  ['lead-riff', model(leadRiff)],
+  ['lead-solo-f', model(leadSoloF)],
+  ['example-score', model(exampleScore)],
+  ['rich', model(sc(
+    tab([{ beats: [nt('quarter'), graceB(), tn('quarter', 2, 2, { tieStart: true }), rest('quarter', { hidden: true })] },
+      { voices: [{ beats: [graceB(), tn('half', 2, 2, { tieEnd: true }), nt('half')] }, { beats: [nt('whole', 4, 0)] }] },
+      { beats: [{ type: 'note', duration: 'whole', slash: true, notes: [] }] }, null], { tuning: ['B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'] }),
+    { name: 'Hidden', showStandardNotation: false, measures: [{ beats: [] }] },
+  ))],
+];
+test('B10: 5 start scores x 1000 random steps mixing commands and settings calls keep sanitizeScore(model) === model and a valid cursor; throws change nothing; undo all / redo all', () => {
+  const rnd = mulberry32(20261122);
+  const names = Object.keys(SETTINGS);
+  for (const [label, start] of B10_START()) {
+    let s = start;
+    let c = C.clampCursor(s, cur(0, 0, 0, 1));
+    let st = { duration: 'quarter', dots: 0, digit: null };
+    const h = createHistory(10000);
+    let now = 0;
+    let settingsEdits = 0;
+    let throwsSeen = 0;
+    for (let i = 0; i < 1000; i++) {
+      now += rnd() < 0.6 ? 200 : 1500;
+      if (rnd() < 0.35) {
+        const name = names[Math.floor(rnd() * names.length)];
+        const args = settingsArgs(name, s, rnd);
+        const snap = JSON.stringify(s);
+        let r;
+        try { r = SETTINGS[name].fn(s, c, ...args); } catch (e) {
+          if (!(e instanceof TypeError || e instanceof RangeError)) throw e;
+          if (JSON.stringify(s) !== snap) throw new Error(`${label} step ${i}: ${name} threw after changing the model`);
+          throwsSeen++;
+          continue;
+        }
+        if (r.refused || r.score === s) continue;
+        const nc = C.clampCursor(r.score, r.cursor ?? c);
+        h.push({ before: { score: s, cursor: c }, after: { score: r.score, cursor: nc } });
+        s = r.score; c = nc; st = C.syncDuration(s, c, { ...st, digit: null });
+        settingsEdits++;
+      } else {
+        const pick = COMMAND_PICKS[Math.floor(rnd() * COMMAND_PICKS.length)];
+        const r = run(pick, s, c, st, { maxFret: 24, now, twoDigitDelayMs: 800, allowAppend: true }, pick === 'digit' ? Math.floor(rnd() * 10) : undefined);
+        if (r.changed) h.push({ before: { score: s, cursor: c }, after: { score: r.score, cursor: r.cursor } });
+        s = r.score; c = r.cursor; st = r.state;
+      }
+      if (sanitizeScore(s) !== s) throw new Error(`${label} step ${i}: sanitize changed the model`);
+      if (!C.sameCursor(C.clampCursor(s, c), c)) throw new Error(`${label} step ${i}: invalid cursor ${JSON.stringify(c)}`);
+    }
+    ok(settingsEdits > 80 && throwsSeen > 5, `${label}: ${settingsEdits} settings edits, ${throwsSeen} throws`);
+    const end = s;
+    let e;
+    let steps = 0;
+    while ((e = h.undo())) { s = e.before.score; steps++; }
+    ok(s === start, `${label}: undo all returns the start object`);
+    for (let k = 0; k < steps; k++) s = h.redo().after.score;
+    ok(s === end, `${label}: redo all returns the end object`);
+  }
+});
+
+// ---------- E12: unknown fields survive settings calls ----------
+test('E12: unknown fields at score, track, measure, voice, beat and note level survive every settings call that does not own them', () => {
+  const x = { keep: [1, { deep: true }] };
+  const s0 = model({ x, title: 'T', tracks: [
+    { x, name: 'A', showTablature: true, tuning: ['B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'], measures: [
+      { x, beats: [{ x, type: 'note', duration: 'half', notes: [{ x, string: 1, fret: 2 }, { x, string: 7, fret: 0 }] }, { x, type: 'rest', duration: 'half' }] },
+      { x, voices: [{ x, beats: [{ x, type: 'note', duration: 'whole', notes: [{ x, string: 2, fret: 1 }] }] }, { x, beats: [] }] },
+    ] },
+    { x, name: 'B', showTablature: true, measures: [{ x, beats: [] }, { x, beats: [] }] },
+  ] });
+  let s = s0;
+  const c = cur(0, 0, 0);
+  const steps = [
+    ['updateScore', [{ title: 'U', subtitle: 'S', showTuningChart: true }]],
+    ['updateTrack', [0, { name: 'A2', capo: 2, clef: 'bass', tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'] }]],
+    ['updateMeasure', [1, { timeSignature: { beats: 3, beatType: 4 }, keySignature: 2, clef: 'treble', barline: 'repeatEnd', repeatCount: 2, ending: [1], segno: true, coda: true, jump: 'Fine', section: 'V' }]],
+    ['setTempo', [80]],
+    ['addTrack', ['bass4']],
+    ['moveTrack', [0, 2]],
+    ['removeTrack', [0]],
+  ];
+  for (const [name, args] of steps) s = SETTINGS[name].fn(s, c, ...args).score;
+  const count = (v) => (Array.isArray(v) ? v.reduce((a, y) => a + count(y), 0) : v && typeof v === 'object' ? (JSON.stringify(v.x) === JSON.stringify(x) ? 1 : 0) + Object.values(v).reduce((a, y) => a + count(y), 0) : 0);
+  // track B (4 x: track, 2 measures) is removed; track A loses the note on its removed 7th string (1 x)
+  eq([count(s0), count(s)], [15, 15 - 3 - 1]);
+  const a = s.tracks.find((t) => t.name === 'A2');
+  eq([a.x, a.measures[0].x, a.measures[0].beats[0].x, a.measures[0].beats[0].notes[0].x, a.measures[1].voices[0].x, a.measures[1].voices[0].beats[0].notes[0].x, s.x], [x, x, x, x, x, x, x]);
+  ok(sanitizeScore(s) === s);
+});
+
+// ---------- F1 / F2: measure commands on 2.2 fields ----------
+test('F1/F2: M, Shift+M, Shift+Delete and Right-append keep 2.2-written fields as in 2.1: signatures and clef carry, navigation goes with its measure; an ending run splits; an explicit final barline stays', () => {
+  let s = model(sc(tab([{ beats: [nt('whole')] }, { beats: [nt('whole')] }, { beats: [nt('whole')] }]), tab([{ beats: [] }, { beats: [] }, { beats: [] }], { name: 'B' })));
+  const c = cur(0, 1, 0);
+  s = MS.updateMeasure(s, c, 1, { timeSignature: { beats: 3, beatType: 4 }, keySignature: -1, clef: 'bass', ending: [1], section: 'Verse', jump: 'D.C.', barline: 'final' }).score;
+  s = MS.updateMeasure(s, c, 2, { ending: [1] }).score;
+  s = S.setTempo(s, c, 100).score;
+  const st = { duration: 'quarter', dots: 0, digit: null };
+  const ctx = { maxFret: 24, now: 0, twoDigitDelayMs: 800, allowAppend: true };
+  const before = run('insertMeasureBefore', s, c, st, ctx);
+  eq(before.score.tracks[0].measures[2], s.tracks[0].measures[1], 'Shift+M: the measure moves on unchanged');
+  ok(sanitizeScore(before.score) === before.score);
+  const after = run('insertMeasureAfter', s, c, st, ctx);
+  eq(after.score.tracks[0].measures[2], { beats: [] });
+  const nav = normalizeScore(after.score).navigation;
+  eq([nav[1].ending?.numbers, nav[2].ending, nav[3].ending?.numbers], [[1], null, [1]], 'the ending run is split by the inserted measure');
+  const del = run('deleteMeasure', s, c, st, ctx);
+  const m1 = del.score.tracks[0].measures[1];
+  eq([m1.timeSignature, m1.keySignature, m1.clef, m1.ending, m1.section, m1.jump, m1.barline], [{ beats: 3, beatType: 4 }, -1, 'bass', 1, undefined, undefined, undefined], 'Shift+Delete: signatures and clef carry, navigation and tempo go');
+  eq(del.score.tracks[1].measures[1].keySignature, -1, 'on every track');
+  const end = run('moveRight', s, cur(0, 2, 0), st, ctx);
+  eq([end.score.tracks[0].measures.length, end.score.tracks[0].measures[1].barline], [4, 'final'], 'Right-append: the explicit final barline stays at measure 2');
+  [after, del, end].forEach((r) => ok(sanitizeScore(r.score) === r.score));
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
