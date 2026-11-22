@@ -2,7 +2,7 @@
  * model/fill.js — how full a measure is (voice 1 only; hidden rests count).
  * Time signatures carry forward as in normalize.js: the track's, else the
  * score's, else 4/4, replaced by every measure up to the one asked about
- * that sets its own.
+ * that sets its own. Key signatures carry forward the same way (keySignatureAt).
  */
 import { R, ZERO, add, cmp } from '../../rational.js';
 import { durationR } from '../../duration.js';
@@ -17,6 +17,17 @@ export function timeSignatureAt(score, loc) {
   for (let k = 0; k <= loc.measure; k++) {
     const m = measureAt(track, k);
     if (m?.timeSignature) cur = m.timeSignature;
+  }
+  return cur;
+}
+
+/** Key signature in force at the measure of `loc`: the track's, else the score's, else 0, replaced by every measure up to it that sets one. */
+export function keySignatureAt(score, loc) {
+  const track = trackAt(score, loc.track);
+  let cur = track?.keySignature ?? score.keySignature ?? 0;
+  for (let k = 0; k <= loc.measure; k++) {
+    const m = measureAt(track, k);
+    if (m?.keySignature != null) cur = m.keySignature;
   }
   return cur;
 }

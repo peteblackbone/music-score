@@ -197,6 +197,34 @@ test('tempoAt: nearest tempo the renderer reads, backwards on voice 1 into earli
   eq(S.tempoAt(s, cur(1, 0, 0)), null, 'per track');
 });
 
+// ---------- keySignatureAt / cursorInfo additions ----------
+const F = await imp('src/editor/model/fill.js');
+const C = await imp('src/editor/model/cursor.js');
+const { normalizeScore } = await imp('src/normalize.js');
+test('keySignatureAt: track, else score, else 0, replaced by measure keys; equals normalizeScore per track and measure', () => {
+  const s = model({ keySignature: -2, tracks: [
+    tab([{ beats: [] }, { keySignature: 3, beats: [] }, { beats: [] }, { keySignature: 0, beats: [] }]),
+    tab([{ beats: [] }, null, { keySignature: -7, beats: [] }], { keySignature: 1 }),
+    tab([]),
+  ] });
+  const n = normalizeScore(s);
+  for (let ti = 0; ti < 3; ti++) for (let mi = 0; mi < 4; mi++) eq(F.keySignatureAt(s, { track: ti, measure: mi }), n.tracks[ti].measures[mi].keySignature, `${ti}/${mi}`);
+  eq(F.keySignatureAt(model(sc(tab([]))), { track: 0, measure: 0 }), 0);
+});
+test('cursorInfo: timeSignature (a fresh object), keySignature and tempo in force at the cursor', () => {
+  const ts = { beats: 3, beatType: 4 };
+  const s = model({ timeSignature: ts, keySignature: 2, tracks: [tab([{ beats: [nt('half', 1, 0, { tempo: 100 }), nt('quarter')] }, { timeSignature: { beats: 6, beatType: 8 }, keySignature: -1, beats: [] }])] });
+  const st = { duration: 'quarter', dots: 0, digit: null };
+  const a = C.cursorInfo(s, cur(0, 0, 1), st);
+  eq([a.timeSignature, a.keySignature, a.tempo], [{ beats: 3, beatType: 4 }, 2, { bpm: 100, unit: 'quarter', dots: 0, text: null, here: false }]);
+  ok(a.timeSignature !== s.timeSignature, 'a fresh object');
+  a.timeSignature.beats = 99;
+  eq(s.timeSignature, ts, 'mutating the info does not reach the model');
+  const b = C.cursorInfo(s, cur(0, 1, 0), st);
+  eq([b.timeSignature, b.keySignature, b.tempo.bpm, b.tempo.here], [{ beats: 6, beatType: 8 }, -1, 100, false]);
+  eq(C.cursorInfo(model(sc(tab([{ beats: [] }]))), cur(0, 0, 0), st).tempo, null);
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
