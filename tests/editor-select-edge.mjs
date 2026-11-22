@@ -105,7 +105,7 @@ test('a beats selection across an empty measure and a hole counts only main beat
   eq(t.ed.getCursor().measure, 0);
   stable(t.ed);
 });
-test('selection on a slot-only empty measure: a lone slot is no selection and Shift+Right never appends a measure', () => {
+test('selection on a slot-only empty measure: 2.3.1: a lone slot selects its blank measure (no beats) and Shift+Right never appends a measure', () => {
   const t = mk({ tracks: [tab([{ beats: [] }, { beats: [nt('whole')] }])] });
   eq(t.press(key('ArrowRight', SHIFT)), [true]);
   t.ed.setCursor({ measure: 1, beat: 0 });
@@ -114,7 +114,7 @@ test('selection on a slot-only empty measure: a lone slot is no selection and Sh
   eq(t.ed.getSelection().beatCount, 1);
   const u = mk({ tracks: [tab([{ beats: [] }])] });
   u.press(key('ArrowRight', SHIFT));
-  eq(u.ed.getSelection(), null, 'the slot alone holds no main beat');
+  eq(u.ed.getSelection(), { kind: 'measures', track: 0, start: { measure: 0, beat: 0 }, end: { measure: 0, beat: 0 }, beatCount: 0, measures: [0, 0] }, '2.3.1: the slot alone is the whole blank measure');
 });
 const twoVoice = () => ({ tracks: [tab([
   { voices: [{ beats: f(4) }, { beats: [nt('whole', 3, 7)] }] },

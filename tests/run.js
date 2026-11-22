@@ -168,5 +168,15 @@ for (const c of cases) {
   const { summary } = await import('./editor-pins-2.3.1.mjs');
   fail += summary();
 }
+// 2.3.1 blank-measure selections, paste replace / insert, effects over a selection, transpose, reflow split and cascade at model level (tests/editor-range.mjs)
+{
+  const { summary } = await import('./editor-range.mjs');
+  fail += summary();
+}
+// 2.3.1 the same at controller level: insert paste keys and flag, wording, keepsSelection, transpose keys, demo (tests/editor-range-dom.mjs)
+{
+  const { summary } = await import('./editor-range-dom.mjs');
+  fail += await summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);

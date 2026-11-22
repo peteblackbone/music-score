@@ -75,8 +75,9 @@ export function clearRange(score, cursor, state, ctx) {
   return { score: r.score, cursor: { ...cursor, ...r.cursor }, announce: { id, count: r.count } };
 }
 
-/** Ctrl+Delete / Ctrl+Backspace with a selection. */
+/** Ctrl+Delete / Ctrl+Backspace with a selection; a zero-beat selection (blank measures) has no beats to delete. */
 export function removeRange(score, cursor, state, ctx) {
+  if (!ctx.selection.info.beatCount) return { announce: { id: 'rangeNoBeats' } };
   const r = removeSlices(score, ctx.selection);
   return { score: r.score, cursor: { ...cursor, ...r.cursor }, announce: { id: 'rangeRemoved', count: r.count, tempoRemoved: r.tempoRemoved } };
 }

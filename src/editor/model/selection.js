@@ -7,8 +7,10 @@
  * A selection is cut into slices, one per measure: `{ measure, from, to,
  * first, last }`, the beat indices [from, to) it covers and whether it
  * starts at the measure's first position / ends at its last. Kind
- * 'measures' when every slice is a whole measure, else 'beats'; a range
- * with no main beat is no selection (null).
+ * 'measures' when every slice is a whole measure, else 'beats'. A range
+ * with no main beat (2.3.1) is a selection of the whole measures in it:
+ * kind 'measures', beatCount 0, start / end `{ measure, beat: 0 }`; with no
+ * whole measure either it is no selection (null).
  *
  * Select commands are moves `(score, cursor, state, ctx) → { cursor,
  * announce? }`: they never return a score and run in read-only mode.
@@ -64,17 +66,28 @@ function mainSpan(score, ti, slices) {
   return { first, last, count };
 }
 
+/** The zero-beat selection of the whole slices in `slices` (blank measures), or null when there is none. */
+function blankRange(ti, anchor, focus, slices) {
+  const whole = slices.filter((s) => s.first && s.last);
+  if (!whole.length) return null;
+  const m0 = whole[0].measure;
+  const m1 = whole[whole.length - 1].measure;
+  const info = { kind: 'measures', track: ti, start: { measure: m0, beat: 0 }, end: { measure: m1, beat: 0 }, beatCount: 0, measures: [m0, m1] };
+  return { track: ti, anchor, focus, slices: whole, info };
+}
+
 /**
  * The selection of track `ti` from `anchor` to `focus`: `{ track, anchor,
- * focus, slices, info }`, or null when it covers no main beat. `info` is
- * the public shape `{ kind, track, start, end, beatCount, measures }`.
+ * focus, slices, info }`, or null when it covers no main beat and no whole
+ * measure. `info` is the public shape `{ kind, track, start, end,
+ * beatCount, measures }`.
  */
 export function selectionRange(score, ti, anchor, focus) {
   const a = { measure: anchor.measure, beat: anchor.beat };
   const f = { measure: focus.measure, beat: focus.beat };
   const slices = rangeSlices(score, ti, a, f);
   const span = mainSpan(score, ti, slices);
-  if (!span.count) return null;
+  if (!span.count) return blankRange(ti, a, f, slices);
   const kind = slices.every((s) => s.first && s.last) ? 'measures' : 'beats';
   const measures = kind === 'measures' ? [slices[0].measure, slices[slices.length - 1].measure] : [span.first.measure, span.last.measure];
   const info = { kind, track: ti, start: span.first, end: span.last, beatCount: span.count, measures };

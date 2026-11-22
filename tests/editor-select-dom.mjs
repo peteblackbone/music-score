@@ -94,7 +94,7 @@ test('criterion 9: Ctrl+Shift+Right extends to the next measure boundary, Shift+
   press(key('ArrowLeft', SHIFT));
   eq([ed.getSelection().beatCount, spoken()], [1, 'Selected measure 1 beat 3, 1 beat']);
 });
-test('criterion 10 / R3: Ctrl+A selects every measure of the cursor track (kind measures) and scrolls to the end; on a track with no beats it says "Nothing to select"', () => {
+test('criterion 10 / R3: Ctrl+A selects every measure of the cursor track (kind measures) and scrolls to the end; 2.3.1: on a track with no beats it selects every measure, no beats', () => {
   const { ed, press, spoken, events } = mk(fixture());
   ed.setCursor({ measure: 1, beat: 2 });
   events.length = 0;
@@ -105,8 +105,8 @@ test('criterion 10 / R3: Ctrl+A selects every measure of the cursor track (kind 
   eq(events.map((e) => e[0]), ['cursor', 'selection']);
   const empty = mk({ tracks: [{ name: 'E', showTablature: true, measures: [{ beats: [] }, { beats: [] }] }] });
   eq(empty.press(key('a', CTRL)), [true]);
-  eq([empty.ed.getSelection(), empty.spoken()], [null, 'Nothing to select']);
-  eq(empty.events.filter((e) => e[0] === 'selection').length, 0);
+  eq([empty.ed.getSelection(), empty.spoken()], [{ kind: 'measures', track: 0, start: { measure: 0, beat: 0 }, end: { measure: 1, beat: 0 }, beatCount: 0, measures: [0, 1] }, 'Selected all of Track 1 E, 2 measures']);
+  eq(empty.events.filter((e) => e[0] === 'selection').length, 1);
 });
 test('criterion 11: a plain move, Esc, a click, undo, redo, loadScore and any edit clear the selection with selection(null) first; Esc is consumed only while something is live; refused and no-op edits keep it', () => {
   const sel = (m) => { m.ed.setSelection({ anchor: { measure: 0, beat: 0 }, focus: { measure: 0, beat: 2 } }); m.events.length = 0; };

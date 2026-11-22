@@ -87,6 +87,7 @@ export const MESSAGES = Object.freeze({
   rangeCleared: (d) => `${plural(d.count, 'beat')} changed to rest${d.count === 1 ? '' : 's'}`,
   rangeAlreadyRests: () => 'Already rests',
   copiedRests: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}, already rests`,
+  rangeNoBeats: () => 'No beats to delete',
   rangeRemoved: (d) => `${plural(d.count, 'beat')} deleted${tempoRemoved(d.tempoRemoved)}`,
   columnsDeleted: (d) => `${d.all ? 'All measures deleted, 1 empty measure left' : d.a === d.b ? `Measure ${d.a} deleted` : `Measures ${d.a} to ${d.b} deleted`}${tempoRemoved(d.tempoRemoved)}`,
   needsMeasureSelection: () => 'Select whole measures first',

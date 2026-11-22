@@ -88,13 +88,13 @@ test('pin (c): controller: P with a 2-beat selection changes only the cursor bea
 });
 
 // (d) a range with no main beat is no selection. Inverted in 2.3.1 for whole blank measures; a zero-beat range inside a non-blank measure stays null.
-test('pin (d): a selection over empty measures is null and Ctrl+A on an empty track says "Nothing to select"; a zero-beat range inside a non-blank measure is null (not inverted)', () => {
+test('pin (d), inverted in 2.3.1: a selection over empty measures is a zero-beat measures selection and Ctrl+A on an empty track selects it; a zero-beat range inside a non-blank measure is null (not inverted)', () => {
   const s = model({ tracks: [tab([{ beats: [nt('half')] }, { beats: [] }, { beats: [] }])] });
-  eq(SEL.selectionRange(s, 0, P(1, 0), P(2, 0)), null, 'empty measures');
+  eq(SEL.selectionRange(s, 0, P(1, 0), P(2, 0)).info, { kind: 'measures', track: 0, start: { measure: 1, beat: 0 }, end: { measure: 2, beat: 0 }, beatCount: 0, measures: [1, 2] }, 'empty measures');
   eq(SEL.selectionRange(s, 0, P(0, 1), P(0, 1)), null, 'the slot of a non-blank measure');
   const { ed, spoken } = mk({ tracks: [tab([{ beats: [] }, { beats: [] }])] });
   ed.handleKey(key('a', { ctrlKey: true }));
-  eq([ed.getSelection(), spoken()], [null, 'Nothing to select']);
+  eq([ed.getSelection().measures, spoken()], [[0, 1], 'Selected all of Track 1 Gtr, 2 measures']);
   ed.destroy();
 });
 
