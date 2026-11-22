@@ -81,6 +81,122 @@ test('D-A9 / criterion 10: on a blank selection Delete says "Already rests", Ctr
   ok(same(cols.score) && same(f.score));
 });
 
+// ---------- A. paste replace and insert ----------
+const PA = await imp('src/editor/model/paste.js');
+const A = await imp('src/editor/model/access.js');
+const whole = (f) => ({ beats: [nt('whole', 1, f)] });
+const copyOf = (s, ti, a, b) => parse(CL.buildClip(s, SEL.selectionRange(s, ti, P(a, 0), P(b, 0))).text);
+test('criterion 1: Ctrl+V with no selection on blank measures overwrites them: the score keeps its 8 measures, the other track is unchanged (same object), one result', () => {
+  const s = model({ tracks: [tab([...[1, 2, 3, 4].map(whole), ...Array.from({ length: 4 }, () => ({ beats: [] }))]), tab(Array.from({ length: 8 }, (_, i) => whole(i)), { name: 'B' })] });
+  const clip = copyOf(s, 0, 0, 3);
+  eq(clip.measures.length, 4);
+  const r = PA.applyPaste(s, cur(0, 4, 0), null, clip);
+  eq(r.score.tracks[0].measures.map((m) => m.beats[0]?.notes[0].fret ?? null), [1, 2, 3, 4, 1, 2, 3, 4]);
+  eq([r.score.tracks[0].measures.length, r.score.tracks[1].measures.length], [8, 8]);
+  ok(r.score.tracks[1] === s.tracks[1], 'the other track keeps its identity');
+  eq([r.cursor, said(r)], [cur(0, 7, 1), 'Pasted 4 measures over measures 5 to 8'], 'no measure after: the end of the last written one');
+  ok(same(r.score));
+});
+test('criterion 2: the overwrite length follows the clip, not the selection', () => {
+  const s = model({ tracks: [tab(Array.from({ length: 8 }, (_, i) => whole(i)))] });
+  const two = parse(clipText('measures', [whole(20), whole(21)]));
+  const three = parse(clipText('measures', [whole(20), whole(21), whole(22)]));
+  const frets = (r) => r.score.tracks[0].measures.map((m) => m.beats[0].notes[0].fret);
+  const a = PA.applyPaste(s, cur(0, 3, 0), SEL.selectionRange(s, 0, P(2, 0), P(3, 0)), two);
+  eq([frets(a), said(a), a.cursor], [[0, 1, 20, 21, 4, 5, 6, 7], 'Pasted 2 measures over measures 3 to 4', cur(0, 4, 0)]);
+  const b = PA.applyPaste(s, cur(0, 5, 0), SEL.selectionRange(s, 0, P(2, 0), P(5, 0)), two);
+  eq(frets(b), [0, 1, 20, 21, 4, 5, 6, 7], 'the rest of the selection is left as it was');
+  ok(b.score.tracks[0].measures[4] === s.tracks[0].measures[4]);
+  const c = PA.applyPaste(s, cur(0, 2, 0), SEL.selectionRange(s, 0, P(2, 0), P(2, 0)), three);
+  eq([frets(c), said(c)], [[0, 1, 20, 21, 22, 5, 6, 7], 'Pasted 3 measures over measures 3 to 5']);
+});
+test('criteria 3 / 4: past the end the overwrite appends columns to every track with no trailing empty measure; from the slot of an underfull last measure it goes after it', () => {
+  const s = model({ tracks: [tab([whole(1), whole(2), whole(3), { beats: [] }]), tab([whole(9)], { name: 'B' })] });
+  const three = parse(clipText('measures', [whole(20), whole(21), whole(22)]));
+  const r = PA.applyPaste(s, cur(0, 3, 0), null, three);
+  eq([r.score.tracks[0].measures.length, r.score.tracks[1].measures.length], [6, 6]);
+  eq(r.score.tracks[0].measures.map((m) => m.beats[0].notes[0].fret), [1, 2, 3, 20, 21, 22]);
+  eq(r.score.tracks[1].measures.slice(1), Array.from({ length: 5 }, () => ({ beats: [] })), 'the short track is padded, then appended');
+  eq([said(r), r.cursor], ['Pasted 3 measures over measure 4, 2 measures added', cur(0, 5, 1)]);
+  const u = model({ tracks: [tab([whole(1), { beats: [nt('half', 1, 5)] }])] });
+  const two = parse(clipText('measures', [whole(20), { beats: [nt('half', 1, 21)] }]));
+  const end = PA.applyPaste(u, cur(0, 1, 1), null, two);
+  eq(end.score.tracks[0].measures.map((m) => m.beats.map((b) => b.notes[0].fret)), [[1], [5], [20], [21]], 'appended after the measure, nothing empty left');
+  eq([said(end), end.cursor], ['Pasted 2 measures at the end, measures 3 to 4', cur(0, 3, 1)]);
+  eq(said(PA.applyPaste(u, cur(0, 1, 1), null, parse(clipText('measures', [whole(20)])))), 'Pasted 1 measure at the end, measure 3');
+  ok(same(r.score) && same(end.score));
+});
+test('criterion 5: with no selection, a blank target but a non-blank next measure: the clip inserts and says so; a grace or a voice-2 note makes a measure non-blank, hidden rests do not', () => {
+  const s = model({ tracks: [tab([whole(1), { beats: [] }, whole(3)])] });
+  const two = parse(clipText('measures', [whole(20), whole(21)]));
+  const r = PA.applyPaste(s, cur(0, 1, 0), null, two);
+  eq(r.score.tracks[0].measures.map((m) => m.beats[0]?.notes[0].fret ?? null), [1, 20, 21, null, 3]);
+  eq([said(r), r.cursor], ['Inserted 2 measures at measure 2', cur(0, 3, 0)]);
+  ok(A.isBlankMeasure(model({ tracks: [tab([{ beats: [rest('half', { hidden: true }), rest('half')] }])] }), 0, 0), 'rests only');
+  ok(!A.isBlankMeasure(model({ tracks: [tab([{ beats: [grace()] }])] }), 0, 0), 'a grace counts as a note');
+  ok(!A.isBlankMeasure(model({ tracks: [tab([{ voices: [{ beats: [rest('whole')] }, { beats: [nt('whole')] }] }])] }), 0, 0), 'voice 2');
+  ok(A.isBlankMeasure(s, 0, 9) && A.isBlankMeasure(model({ tracks: [tab([null, whole(1)])] }), 0, 0), 'past the end, a hole');
+});
+test('criterion 6 (model): insert paste: a measures clip always inserts before the target (the selection\'s first measure); a beats clip inserts before the selection start and keeps the selected beats', () => {
+  const s = model({ tracks: [tab([{ beats: [nt('quarter', 1, 1), nt('quarter', 1, 2), grace(), nt('quarter', 1, 3), nt('quarter', 1, 4)] }, { beats: [] }])] });
+  const two = parse(clipText('measures', [whole(20), whole(21)]));
+  const ins = PA.applyPaste(s, cur(0, 1, 0), null, two, { insert: true });
+  eq([ins.score.tracks[0].measures.length, said(ins), ins.cursor], [4, 'Inserted 2 measures at measure 2', cur(0, 3, 0)]);
+  const sel = SEL.selectionRange(s, 0, P(0, 3), P(0, 4));
+  eq(PA.applyPaste(s, cur(0, 0, 4), sel, two, { insert: true }).announce.at, 1);
+  const beats = parse(clipText('beats', [nt('8th', 1, 9), nt('8th', 1, 8)]));
+  const b = PA.applyPaste(s, cur(0, 0, 4), sel, beats, { insert: true });
+  eq(v1(b.score, 0, 0).map((x) => x.notes[0].fret), [1, 2, 9, 8, 3, 3, 4], 'before the leading grace of the start beat; nothing removed');
+  eq([said(b), b.cursor], ['Pasted 2 beats', cur(0, 0, 5)]);
+  const blank = SEL.selectionRange(s, 0, P(1, 0), P(1, 0));
+  const z = PA.applyPaste(s, cur(0, 1, 0), blank, beats);
+  eq([v1(z.score, 0, 1).length, said(z)], [2, 'Pasted 2 beats'], 'a beats clip on a blank selection: no "replaced"');
+  ok(same(ins.score) && same(b.score) && same(z.score));
+});
+test('criteria 7 / 8: a measures clip on a beats selection is refused; an overwrite keeps the measure fields and replaces both voices', () => {
+  const s = model({ tracks: [tab([
+    { beats: [nt('half'), nt('half')], pickup: true, timeSignature: { beats: 3, beatType: 4 } },
+    { voices: [{ beats: [nt('half', 1, 1)] }, { beats: [nt('half', 4, 4)] }], barline: 'repeatEnd', repeatCount: 2, ending: [1], section: 'A' },
+  ])] });
+  const clip = parse(clipText('measures', [whole(20), { voices: [{ beats: [nt('quarter', 2, 2)] }, { beats: [nt('quarter', 5, 5)] }] }]));
+  eq(PA.applyPaste(s, cur(0, 0, 0), SEL.selectionRange(s, 0, P(0, 0), P(0, 0)), clip), { refused: { id: 'pasteNeedsMeasures' } });
+  eq(describe({ id: 'pasteNeedsMeasures' }), 'Select whole measures to paste measures');
+  const both = SEL.selectionRange(s, 0, P(0, 0), P(1, 1));
+  eq(both.info.kind, 'measures');
+  const r = PA.applyPaste(s, cur(0, 1, 1), both, parse(clipText('measures', [whole(20), whole(21)])));
+  eq(r.score.tracks[0].measures, [
+    { pickup: true, timeSignature: { beats: 3, beatType: 4 }, beats: [nt('whole', 1, 20)] },
+    { barline: 'repeatEnd', repeatCount: 2, ending: [1], section: 'A', beats: [nt('whole', 1, 21)] },
+  ], 'measure fields kept, voice 2 gone with the old content');
+  const v = PA.applyPaste(s, cur(0, 1, 1), both, clip);
+  eq(v.score.tracks[0].measures[1].voices, [{ beats: [nt('quarter', 2, 2)] }, { beats: [nt('quarter', 5, 5)] }]);
+  ok(same(r.score) && same(v.score));
+});
+test('criterion 9: tempo marks on overwritten beats move to the pasted beat at that onset, else to the lowest other track with a beat there (hidden included), else they are dropped and counted', () => {
+  const s = model({ tracks: [
+    tab([{ beats: [nt('quarter', 1, 0, { tempo: 90 }), nt('quarter', 1, 0, { tempo: 100 }), nt('quarter'), nt('8th', 1, 0, { tempo: 110 }), nt('8th', 1, 0, { tempo: 120 })] }, whole(1)]),
+    { name: 'Hidden', showStandardNotation: false, measures: [{ beats: [nt('half'), nt('quarter'), nt('quarter')] }] },
+    tab([{ beats: [nt('quarter'), nt('quarter'), nt('half')] }], { name: 'C' }),
+  ] });
+  const clip = parse(clipText('measures', [{ beats: [nt('half', 1, 7), nt('half', 1, 8)] }]));
+  const r = PA.applyPaste(s, cur(0, 0, 0), SEL.selectionRange(s, 0, P(0, 0), P(0, 4)), clip);
+  eq(v1(r.score, 0, 0).map((b) => b.tempo ?? null), [90, null], 'onset 0: the pasted beat');
+  eq(v1(r.score, 1, 0).map((b) => b.tempo ?? null), [null, null, 110], 'onset 3/4: the hidden track 2 first');
+  eq(v1(r.score, 2, 0).map((b) => b.tempo ?? null), [null, 100, null], 'onset 1/4: track 3');
+  eq(said(r), 'Pasted 1 measure over measure 1, 1 tempo mark removed', 'onset 7/8: no beat anywhere');
+  ok(same(r.score));
+});
+test('criterion 11 (model): the 2000-measure limit counts the appended columns; an empty measures clip pastes nothing; a slot after graces only stays in its measure', () => {
+  const big = model({ tracks: [tab(Array.from({ length: L.measuresPerTrack - 1 }, () => ({ beats: [] })))] });
+  const two = parse(clipText('measures', [{ beats: [] }, { beats: [] }]));
+  ok(PA.applyPaste(big, cur(0, L.measuresPerTrack - 3, 0), null, two).score, 'overwrites inside the score');
+  eq(PA.applyPaste(big, cur(0, L.measuresPerTrack - 2, 0), null, two).score.tracks[0].measures.length, L.measuresPerTrack, 'one appended: 2000');
+  const full = model({ tracks: [tab(Array.from({ length: L.measuresPerTrack }, () => ({ beats: [] })))] });
+  eq(PA.applyPaste(full, cur(0, L.measuresPerTrack - 1, 0), null, two), { refused: { id: 'tooLarge' } });
+  eq(PA.applyPaste(big, cur(0, 0, 0), null, { kind: 'measures', tuning: null, measures: [] }), { refused: { id: 'nothingToPaste' } });
+  eq(PA.targetMeasure(model({ tracks: [tab([{ beats: [grace()] }])] }), cur(0, 0, 1)), 0);
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

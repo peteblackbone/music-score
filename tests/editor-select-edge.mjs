@@ -381,12 +381,12 @@ test('repeated paste events with no data paste the internal clipboard each time'
   eq(v1(ms(t.ed)[1]).length, 2);
   t.ed.destroy();
 });
-test('a measures clip pasted with a selection inserts before the selection\'s first measure and leaves the selected beats; the cursor goes to the original measure; other tracks get empty measures', () => {
+test('a measures clip pasted with a selection and the insert option inserts before the selection\'s first measure and leaves the selected beats; the cursor goes to the original measure; other tracks get empty measures', () => {
   const t = mk({ tracks: [tab([{ beats: f(4) }, { beats: f(3) }]), tab([{ beats: [nt('whole')] }, { beats: [nt('whole')] }], { name: 'B' })] });
   sel(t.ed, P(0, 0), P(0, 3));
   const clipJson = t.ed.copy();
   sel(t.ed, P(1, 0), P(1, 2));
-  t.ed.paste(clipJson);
+  t.ed.paste(clipJson, { insert: true });
   eq(ms(t.ed).map((m) => v1(m).length), [4, 4, 3]);
   eq(ms(t.ed, 1).map((m) => v1(m).length), [1, 0, 1]);
   eq(t.ed.getCursor().measure, 2);
@@ -409,9 +409,9 @@ test('a measures clip pasted at measure 1 drops the pickup flag and leaves the c
 });
 test('the 2000-measure boundary for a measures clip: 1999 + 1 pastes, 2000 + 1 is refused and announced', () => {
   const a = mk({ tracks: [tab(Array.from({ length: 1999 }, () => ({ beats: [] })))] });
-  eq(a.ed.paste(clipText('measures', [{ beats: [nt('whole')] }])), true);
+  eq(a.ed.paste(clipText('measures', [{ beats: [nt('whole')] }]), { insert: true }), true);
   eq(ms(a.ed).length, 2000);
-  eq(a.ed.paste(clipText('measures', [{ beats: [] }])), false);
+  eq(a.ed.paste(clipText('measures', [{ beats: [] }]), { insert: true }), false);
   eq(ms(a.ed).length, 2000);
   ok(/too large/i.test(a.say()), a.say());
 });

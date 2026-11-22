@@ -407,7 +407,7 @@ test('criteria 17 / 18 / 25: a beats clip pastes before the cursor beat (one und
   eq(ed.getScore().tracks.map((t) => t.measures.length), [6, 4]);
   eq(ed.getScore().tracks[0].measures[2].beats[0].notes[0].fret, 7);
   eq(ed.getScore().tracks[1].measures, [{ beats: [nt('whole', 4, 3)] }, { beats: [] }, { beats: [] }, { beats: [] }]);
-  eq([ed.getCursor().measure, spoken()], [4, 'Pasted 2 measures at measure 3']);
+  eq([ed.getCursor().measure, spoken()], [4, 'Inserted 2 measures at measure 3']);
   ok(sanitizeScore(ed._model) === ed._model);
   ed.destroy();
 });
@@ -444,7 +444,7 @@ test('criteria 20-22: notes on string 7 into a 6-string track are dropped and co
   eq(ed.getScore().tracks[0].measures[0].beats, [{ type: 'note', duration: 'quarter', notes: [{ string: 6, fret: 1 }] }, { type: 'rest', duration: 'quarter' }]);
   eq(spoken(), 'Pasted 2 beats, 2 notes on missing strings dropped');
   ed.paste(clipText('measures', [{ beats: [nt('whole')], timeSignature: { beats: 3, beatType: 4 }, barline: 'final', segno: true, pickup: true, section: 'A' }]));
-  eq(ed.getScore().tracks[0].measures[0], { beats: [nt('whole')] });
+  eq(ed.getScore().tracks[0].measures[1], { beats: [nt('whole')] }, '2.3.1: from the slot the paste goes after the measure');
 });
 test('criterion 23: hostile clips change nothing and are refused with an announcement (malformed, wrong type or version, an array, __proto__, over 5 MB, over the limits)', () => {
   const { ed, spoken } = mk(fixture());
@@ -466,7 +466,7 @@ test('criterion 24: a paste past jsonChars, 2000 measures or 256 beats per voice
   const big = mk({ tracks: [{ showTablature: true, measures: [{ beats: Array.from({ length: 255 }, () => nt('64th')) }] }] });
   eq([big.ed.paste(clipText('beats', [nt('64th'), nt('64th')])), big.spoken()], [false, 'The score would be too large']);
   const many = mk({ tracks: [{ showTablature: true, measures: Array.from({ length: 1999 }, () => ({ beats: [] })) }] });
-  eq([many.ed.paste(clipText('measures', [{ beats: [] }, { beats: [] }])), many.spoken()], [false, 'The score would be too large']);
+  eq([many.ed.paste(clipText('measures', [{ beats: [] }, { beats: [] }]), { insert: true }), many.spoken()], [false, 'The score would be too large']);
   const wide = mk({ zz: 'x'.repeat(EDITOR_LIMITS.jsonChars - 20000), tracks: [{ showTablature: true, measures: [{ beats: [] }] }] });
   const clip = clipText('beats', [{ ...nt('quarter'), pad: 'y'.repeat(30000) }]);
   ok(clip.length < EDITOR_LIMITS.jsonChars);

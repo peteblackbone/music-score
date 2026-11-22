@@ -450,23 +450,24 @@ test('applyPaste fits the clip to the track: 7 strings into 6 drops (counted, an
   eq(v1(PA.applyPaste(s, cur(0, 0, 0), null, parse(drop)).score, 0, 0)[0].notes, [{ string: 1, fret: 0 }, { string: 2, fret: 1, pitch: 'C4' }], 'only the retuned string loses pitch');
   ok(!JSON.stringify(r.score).includes('tempo'));
 });
-test('applyPaste measures: inserted before the cursor measure (the selection\'s first) in every track, other tracks get empty measures, no measure fields, carried fields at measure 1 kept; cursor on the original measure', () => {
+test('applyPaste measures: inserted before the cursor measure (the selection\'s first with the insert option) in every track, other tracks get empty measures, no measure fields, carried fields at measure 1 kept; cursor on the original measure', () => {
   const s = model({ tracks: [tab([{ beats: [nt('whole')], timeSignature: { beats: 3, beatType: 4 } }, { beats: [nt('half')] }]), tab([{ beats: [nt('whole')] }], { name: 'B' })] });
   const clip = parse(clipText('measures', [{ beats: [nt('half', 2, 2)] }, { voices: [{ beats: [nt('whole', 3, 3)] }, { beats: [nt('whole', 4, 4)] }] }]));
   const r = PA.applyPaste(s, cur(0, 0, 0), null, clip);
   eq(r.score.tracks[0].measures, [{ timeSignature: { beats: 3, beatType: 4 }, beats: [nt('half', 2, 2)] }, { voices: [{ beats: [nt('whole', 3, 3)] }, { beats: [nt('whole', 4, 4)] }] }, { beats: [nt('whole')] }, { beats: [nt('half')] }]);
   eq(r.score.tracks[1].measures, [{ beats: [] }, { beats: [] }, { beats: [nt('whole')] }]);
-  eq([r.cursor.measure, describe(r.announce)], [2, 'Pasted 2 measures at measure 1']);
+  eq([r.cursor, describe(r.announce)], [cur(0, 2, 0), 'Inserted 2 measures at measure 1'], '2.3.1: the insert wording; the cursor on the first position after the pasted measures');
   ok(sanitizeScore(r.score) === r.score);
   const sel = SEL.selectionRange(s, 0, P(1, 0), P(0, 0));
-  eq(PA.applyPaste(s, cur(0, 0, 0), sel, clip).announce.at, 1, 'before the selection\'s first measure');
+  const ins = PA.applyPaste(s, cur(0, 0, 0), sel, clip, { insert: true });
+  eq([ins.announce.id, ins.announce.at, ins.cursor], ['pasted', 1, cur(0, 2, 0)], 'before the selection\'s first measure');
 });
 test('applyPaste limits: 256 beats in a measure and 2000 measures are refused; an empty clip pastes nothing', () => {
   const s = six([{ beats: Array.from({ length: 255 }, () => nt('64th')) }]);
   eq(PA.applyPaste(s, cur(0, 0, 0), null, parse(clipText('beats', [nt('quarter'), nt('quarter')]))), { refused: { id: 'tooLarge' } });
   ok(PA.applyPaste(s, cur(0, 0, 0), null, parse(clipText('beats', [nt('quarter')]))).score, '256 is fine');
   const big = model({ tracks: [tab(Array.from({ length: L.measuresPerTrack - 1 }, () => ({ beats: [] })))] });
-  eq(PA.applyPaste(big, cur(0, 0, 0), null, parse(clipText('measures', [{ beats: [] }, { beats: [] }]))), { refused: { id: 'tooLarge' } });
+  eq(PA.applyPaste(big, cur(0, 0, 0), null, parse(clipText('measures', [{ beats: [] }, { beats: [] }])), { insert: true }), { refused: { id: 'tooLarge' } });
   eq(PA.applyPaste(s, cur(0, 0, 0), null, parse(clipText('beats', []))), { refused: { id: 'nothingToPaste' } });
 });
 

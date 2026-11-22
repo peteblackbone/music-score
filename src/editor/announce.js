@@ -106,7 +106,14 @@ export const MESSAGES = Object.freeze({
   // 2.3 clipboard
   copied: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}`,
   cut: (d) => `Cut ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}, now rests`,
-  pasted: (d) => `Pasted ${d.kind === 'measures' ? `${plural(d.count, 'measure')} at measure ${d.at}` : `${plural(d.count, 'beat')}${d.replaced != null ? `, replaced ${d.replaced}` : ''}`}${d.dropped ? `, ${plural(d.dropped, 'note')} on missing strings dropped` : ''}${d.tempoRemoved ? `, ${plural(d.tempoRemoved, 'tempo mark')} removed` : ''}`,
+  pasted: (d) => `${d.kind === 'measures' ? `Inserted ${plural(d.count, 'measure')} at measure ${d.at}` : `Pasted ${plural(d.count, 'beat')}${d.replaced ? `, replaced ${d.replaced}` : ''}`}${droppedText(d.dropped)}${tempoRemoved(d.tempoRemoved)}`,
+  pastedOver: (d) => {
+    const r = d.count - d.added;
+    const span = (n) => (n === 1 ? `measure ${d.at}` : `measures ${d.at} to ${d.at + n - 1}`);
+    const where = r > 0 ? `over ${span(r)}${d.added ? `, ${plural(d.added, 'measure')} added` : ''}` : `at the end, ${span(d.count)}`;
+    return `Pasted ${plural(d.count, 'measure')} ${where}${droppedText(d.dropped)}${tempoRemoved(d.tempoRemoved)}`;
+  },
+  pasteNeedsMeasures: () => 'Select whole measures to paste measures',
   cutUnwritten: (d) => `Clipboard unavailable, nothing cut. ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')} copied in the editor`,
   nothingToCopy: () => 'Nothing to copy',
   nothingToPaste: () => 'Nothing to paste',
@@ -139,6 +146,8 @@ const MEASURE_TEXT = {
   pickup: (v) => (v ? 'Pickup' : 'Pickup removed'),
 };
 
+/** ', 2 notes on missing strings dropped' (empty for none). */
+const droppedText = (n) => (n ? `, ${plural(n, 'note')} on missing strings dropped` : '');
 /** ', 1 tempo mark removed' / ', 2 tempo marks removed' (empty for none). */
 export const tempoRemoved = (n) => (n ? `, ${n} tempo mark${n === 1 ? '' : 's'} removed` : '');
 /** 'Track 2 Bass' / 'Track 2'. */

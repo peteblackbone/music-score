@@ -38,6 +38,9 @@ const own = (map, k) => (Object.hasOwn(map, k) ? map[k] : undefined);
 /** Whether keyboard event `e` is a paste shortcut (Ctrl / Cmd+V, Shift+Insert): the 2.3 paste fallback, never a command. */
 export const isPasteKey = (e) => !!e && !e.altKey && (((e.ctrlKey || e.metaKey) && typeof e.key === 'string' && e.key.toLowerCase() === 'v') || (!!e.shiftKey && e.key === 'Insert'));
 
+/** Whether keyboard event `e` is the Insert paste shortcut (Ctrl / Cmd+Shift+V; never Shift+Insert): 2.3.1, a one-shot flag for the next paste. */
+export const isInsertPasteKey = (e) => !!e && !e.altKey && !!(e.ctrlKey || e.metaKey) && !!e.shiftKey && typeof e.key === 'string' && e.key.toLowerCase() === 'v';
+
 /** The command for keyboard event `e`, or null. */
 export function keyToCommand(e) {
   const key = e?.key;

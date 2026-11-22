@@ -56,14 +56,14 @@ function mk(score) {
 }
 
 // (a) a measures clip with no selection inserts. Inverted in 2.3.1: blank target measures are overwritten, and on the slot the target is the next measure.
-test('pin (a): a measures clip with no selection inserts new measures even on a blank measure; on the slot it inserts before the cursor measure', () => {
+test('pin (a), inverted in 2.3.1: a measures clip with no selection overwrites a blank measure; on the slot of a measure with notes the target is the next measure', () => {
   const s = model({ tracks: [tab([{ beats: [nt('half')] }, { beats: [] }])] });
   const clip = parse(clipText('measures', [{ beats: [nt('whole', 2, 5)] }]));
   const blank = PA.applyPaste(s, cur(0, 1, 0), null, clip);
-  eq([blank.score.tracks[0].measures.length, describe(blank.announce)], [3, 'Pasted 1 measure at measure 2']);
+  eq([blank.score.tracks[0].measures.length, v1(blank.score, 0, 1), describe(blank.announce)], [2, [nt('whole', 2, 5)], 'Pasted 1 measure over measure 2']);
   const slot = PA.applyPaste(s, cur(0, 0, 1), null, clip);
-  eq(v1(slot.score, 0, 0), [nt('whole', 2, 5)], 'before the cursor measure');
-  eq([slot.score.tracks[0].measures.length, describe(slot.announce)], [3, 'Pasted 1 measure at measure 1']);
+  eq([v1(slot.score, 0, 0), v1(slot.score, 0, 1)], [[nt('half')], [nt('whole', 2, 5)]], 'the measure after the slot');
+  eq([slot.score.tracks[0].measures.length, describe(slot.announce)], [2, 'Pasted 1 measure over measure 2']);
 });
 
 // (b) Shift+F reflows one measure. Inverted in 2.3.1: the crossing beat is split and the cascade carries on.
@@ -99,7 +99,7 @@ test('pin (d), inverted in 2.3.1: a selection over empty measures is a zero-beat
 });
 
 // (e) Ctrl+Shift+V pastes like Ctrl+V. Inverted in 2.3.1: it inserts and keeps the selected beats.
-test('pin (e): Ctrl+Shift+V over a beats selection replaces it like Ctrl+V, with the native paste event and through the fallback', () => {
+test('pin (e), inverted in 2.3.1: Ctrl+Shift+V over a beats selection inserts before it and keeps the selected beats, with the native paste event and through the fallback', () => {
   const score = { tracks: [tab([{ beats: [nt('quarter', 1, 1), nt('quarter', 1, 2), nt('quarter', 1, 3), nt('quarter', 1, 4)] }])] };
   const clip = clipText('beats', [nt('quarter', 1, 9)]);
   for (const native of [true, false]) {
@@ -111,8 +111,8 @@ test('pin (e): Ctrl+Shift+V over a beats selection replaces it like Ctrl+V, with
     eq(kd.defaultPrevented, false, 'keydown never prevented');
     if (native) document.dispatch('paste', { clipboardData: makeClipboardData({ [CL.CLIP_MIME]: clip }) });
     clock.advance(0);
-    eq(ed.getScore().tracks[0].measures[0].beats.map((b) => b.notes[0].fret), [9, 3, 4], native ? 'native' : 'fallback');
-    eq(ed.lastMessage, 'Pasted 1 beat, replaced 2');
+    eq(ed.getScore().tracks[0].measures[0].beats.map((b) => b.notes[0].fret), [9, 1, 2, 3, 4], native ? 'native' : 'fallback');
+    eq([ed.lastMessage, ed.getCursor().beat, ed.getSelection()], ['Pasted 1 beat', 1, null]);
     ed.destroy();
   }
 });
