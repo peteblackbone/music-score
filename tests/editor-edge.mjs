@@ -794,7 +794,7 @@ test('E12: unknown fields at every level survive every command that does not own
   eq(del.beats()[0], { type: 'rest', duration: 'quarter', zzBeat: 'x' });
   // 2.1: every effect key, pressed through its whole cycle, on the note and on the rest it leaves
   const fx = play(s);
-  const EFFECT_KEYS = ['h', 's', SHIFT('s'), 'b', SHIFT('b'), 'v', 'p', 'x', 'g', 'n', SHIFT('l'), 'd', SHIFT('d'), 'a', SHIFT('a')];
+  const EFFECT_KEYS = EFFECTS.map((d) => (d.shift ? SHIFT(d.key) : d.key));
   for (let i = 0; i < 9; i++) fx.go(...EFFECT_KEYS);
   fx.go('ArrowRight', 'Delete', ...EFFECT_KEYS, 'r', ...EFFECT_KEYS);
   const fxOut = JSON.stringify(fx.score);

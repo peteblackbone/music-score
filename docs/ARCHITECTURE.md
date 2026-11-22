@@ -614,9 +614,10 @@ demo file, not in the table.
 A new effect on the existing note and beat targets takes:
 
 - one row in `EFFECTS`, which gives the command, the key and the undo label;
-- the key lists in the tests (the random-key fuzzers and the reserved-key test),
-  so the invariant `sanitizeScore(model) === model` is still checked for the new
-  writes;
+- the unbound-letter counts in `tests/editor-model.mjs` (the random-key fuzzers,
+  the E12 effect walk and the demo-button check are built from `EFFECTS`, so the
+  invariant `sanitizeScore(model) === model` is checked for the new writes
+  automatically);
 - the README Keyboard table and Effects table, the demo's Effects buttons
   (`editor.html`, `examples/editor-demo-effects.js`) and the shortcuts panel.
   These are not generated from the table. The header of `effectTable.js` says so.

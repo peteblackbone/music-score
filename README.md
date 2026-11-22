@@ -185,7 +185,7 @@ Start the demo server as in [Running the demo](#running-the-demo), then open htt
 - **Example** loads `lead-riff`, `lead-solo-f` or `example-score`.
 - **Open JSON…** and **Download JSON** read and write a score file. Files over 5 MB are refused. A downloaded file is named after the title. Only letters, digits, spaces, hyphens and underscores are kept, and the name falls back to `score.json`.
 - **Undo** and **Redo**, a duration palette (whole to 64th, dots and triplet), and a **Read-only** checkbox.
-- An **Effects** group of buttons, one for each effect key (see [Effects](#effects)). Each button presses its key, so the same refusals apply. A button shows the cursor's current state, such as "Slide: legato" or "Dynamic + (mf)", and the group is disabled in read-only mode.
+- An **Effects** group of buttons, one for each effect key except Shift+S and Shift+B (see [Effects](#effects)). Each button presses its key, so the same refusals apply. A button shows the cursor's current state, such as "Slide: legato" or "Dynamic + (mf)", and the group is disabled in read-only mode.
 - A status bar that shows the track, measure, beat, string, fret, duration, fill and effects of the cursor.
 - **Autosave.** After each edit, undo or redo, the score is saved in this browser (localStorage key `music-score-editor:autosave`), 500 ms after the last change. Loading an example or a file is not saved until you edit. The next visit restores the saved score. If the saved data can't be read, the lead-riff example loads with a notice. If a restore never finishes drawing, the next visit in the same tab skips it.
 - **First visit.** With nothing saved, the lead-riff example loads.

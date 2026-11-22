@@ -1,5 +1,5 @@
 /**
- * editor-demo.js — page logic of editor.html (the 2.0.0 ScoreEditor demo).
+ * editor-demo.js — page logic of editor.html (the ScoreEditor demo).
  * Not part of the package. The pure helpers are exported for the tests:
  * sanitizeFilename, newScore, readAutosave, checkUpload. The Effects
  * group is wired by editor-demo-effects.js.
