@@ -155,8 +155,7 @@ export class ScoreEditor {
   setWidth(px) {
     this._alive();
     if (!Number.isFinite(px) || px <= 0) throw new RangeError('width must be a positive number');
-    this._view.renderer.width = px;
-    this._view.scheduleRender();
+    this._view.setWidth(px);
   }
   /** Schedule a full re-render (e.g. after the page's fonts load). */
   refresh() { this._alive(); this._view.scheduleRender(); }

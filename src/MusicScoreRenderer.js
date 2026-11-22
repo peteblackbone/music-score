@@ -173,6 +173,11 @@ export class MusicScoreRenderer {
     return this;
   }
 
+  /** The svg element of the last render(), or null before the first one. */
+  getSvg() {
+    return this._svg ?? null;
+  }
+
   /**
    * Plain-data addressing of the last render (see hitMap.js): staves,
    * measures and elements in SVG user units. A fresh object on every call;

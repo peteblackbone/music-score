@@ -122,12 +122,18 @@ export class EditorView {
     this.pending = false;
     this.renderer.setScore(this.host.viewScore()).render();
     this.renders++;
-    this.svg = this.renderer._svg;
+    this.svg = this.renderer.getSvg();
     this.index = indexHitMap(this.renderer.getHitMap());
     this.overlay = createOverlay(this.svg);
     drawShapes(this.overlay.fill, fillShapes(this.index, this.host.fills(), this.style, this.renderer.theme));
     this.drawCursor();
     this.host.afterRender();
+  }
+
+  /** Render width in px from the next render on (scheduled). */
+  setWidth(px) {
+    this.renderer.width = px;
+    this.scheduleRender();
   }
 
   flushPending() {

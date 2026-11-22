@@ -57,6 +57,15 @@ const cls = (n) => n.getAttribute('class') || '';
 const staffGroups = (svg) => walk(svg, (n) => n.tag === 'g' && /(^| )staff( |$)/.test(cls(n)));
 const translateY = (g) => Number(/translate\(0,(-?[\d.]+)\)/.exec(g.getAttribute('transform'))[1]);
 
+test('getSvg: null before the first render, then the mounted svg of the latest render', () => {
+  const box = makeContainer();
+  const r = new MusicScoreRenderer(box, richScore(), { width: 700 });
+  eq(r.getSvg(), null);
+  r.render();
+  ok(r.getSvg() === box.children[0]);
+  r.render();
+  ok(r.getSvg() === box.children[0]);
+});
 test('hit map: null before the first render; getHitMap and hitTest return null', () => {
   const r = new MusicScoreRenderer(makeContainer(), richScore(), { width: 700 });
   eq(r.getHitMap(), null);
