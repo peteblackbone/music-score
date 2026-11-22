@@ -165,12 +165,24 @@ export class EditorView {
     }
   }
 
-  /** Speak `text` in the live region after 150 ms of quiet (only the latest text is spoken). */
-  announce(text) {
+  /**
+   * Speak `text` in the live region after 150 ms of quiet. Within one
+   * window a later text replaces an earlier one, except a `keep` text (a
+   * settings result): it stays, and the texts after it are joined to it
+   * with ". " (the latest non-kept one only; a repeat is spoken once).
+   */
+  announce(text, keep = false) {
     if (this._destroyed) return;
     if (this._liveTimer != null) this.clock.clearTimeout(this._liveTimer);
+    else this._parts = [];
+    const last = this._parts[this._parts.length - 1];
+    if (last && last.text === text) last.keep ||= keep; // the same text twice in a row is spoken once
+    else if (last && !last.keep && !keep) last.text = text;
+    else this._parts.push({ text, keep });
     this._liveTimer = this.clock.setTimeout(() => {
       this._liveTimer = null;
+      const text = this._parts.map((p, i) => (i < this._parts.length - 1 ? p.text.replace(/\.$/, '') : p.text)).join('. ');
+      this._parts = [];
       // a repeated message gets a trailing no-break space so screen readers speak it again
       this.live.textContent = text === this.live.textContent ? text + NBSP : text;
     }, LIVE_DELAY_MS);

@@ -10,7 +10,7 @@
  * the event listeners; the DOM lives in view.js. Every command goes through
  * model/commands.js run(); edits re-render once per animation frame and
  * emit one `change` per model change after that render, cursor moves
- * redraw the overlay only and emit `cursor` at once.
+ * redraw the overlay only and emit `cursor` at once. The 2.2 settings API is installed from settings.js.
  */
 import { EditorView, defaultClock } from './view.js';
 import { Emitter } from './emitter.js';
@@ -28,6 +28,7 @@ import { keyToCommand } from './keymap.js';
 import { resolveStyle } from './style.js';
 import { resolveOptions } from './options.js';
 import { describe, describeCursor, describeEdit } from './announce.js';
+import { installSettings } from './settings.js';
 
 const START = { track: 0, measure: 0, beat: 0, string: 1 };
 const freshState = () => ({ duration: 'quarter', dots: 0, digit: null });
@@ -179,7 +180,7 @@ export class ScoreEditor {
     this._digitEntry = null;
     return live;
   }
-  _say(text) { if (text) this._view.announce(text); }
+  _say(text) { if (text) { this._lastMessage = text; this._view.announce(text); } }
 
   _syncRoot() {
     this._view.setRootState({ focused: this._focused, readOnly: this._readOnly, title: this._model.title });
@@ -252,6 +253,7 @@ export class ScoreEditor {
     this._cursor = clampCursor(snap.score, snap.cursor);
     this._cancelBuffer();
     this._state = syncDuration(this._model, this._cursor, this._state);
+    this._syncRoot();
     this._modelChanged(kind);
     if (!sameCursor(prevCursor, this._cursor)) this._emitCursor();
     this._say(describe({ id: kind, label: e.label }));
@@ -279,3 +281,5 @@ export class ScoreEditor {
     if (focused) this._say(describeCursor(this._info(), null, true));
   }
 }
+
+installSettings(ScoreEditor);

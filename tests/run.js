@@ -123,5 +123,10 @@ for (const c of cases) {
   const { summary } = await import('./editor-settings.mjs');
   fail += summary();
 }
+// 2.2.0 editor settings under the DOM shim: public surface, controller path, lastMessage, aria-label, joined announcements (tests/editor-settings-dom.mjs)
+{
+  const { summary } = await import('./editor-settings-dom.mjs');
+  fail += await summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);
