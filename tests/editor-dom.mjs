@@ -454,6 +454,15 @@ test('G3 / G6: focus toggles the --focused class and the cursor opacity; re-rend
   root.blur();
   eq(byClass(svg(), 'editor-slot')[0].getAttribute('stroke-opacity'), '0.35');
 });
+test('G7: cursorColor, overfullColor and underfullColor options colour the overlay', () => {
+  const sc = { tracks: [{ showTablature: true, measures: [{ beats: [nt('whole'), nt('whole')] }, { beats: [nt('half')] }] }] };
+  const { svg } = mk(sc, { cursorColor: '#123456', overfullColor: 'orange', underfullColor: 'rgb(1,2,3)' });
+  eq(byClass(svg(), 'editor-col-tab')[0].getAttribute('stroke'), '#123456');
+  eq(byClass(svg(), 'editor-band-over').map((n) => n.getAttribute('fill')), ['orange', 'orange']);
+  eq(byClass(svg(), 'editor-band-under')[0].getAttribute('stroke'), 'rgb(1,2,3)');
+  const dflt = mk(sc).svg();
+  eq([byClass(dflt, 'editor-col-tab')[0].getAttribute('stroke'), byClass(dflt, 'editor-band-over')[0].getAttribute('fill')], ['#3b5bdb', '#d92d20']);
+});
 test('G5: the cursor scrolls into view (nearest, instant) after moves and edits, not on focus', () => {
   const { ed, root } = mk(twoBar());
   scrollLog.length = 0;
