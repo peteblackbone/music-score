@@ -113,5 +113,10 @@ for (const c of cases) {
   const { summary } = await import('./editor-effects-dom.mjs');
   fail += await summary();
 }
+// 2.1.0 editor effects, edge cases against the criteria: ties, X slots, link suffix vs renderer, bends, tracks, undo, two voices (tests/editor-effects-edge.mjs)
+{
+  const { summary } = await import('./editor-effects-edge.mjs');
+  fail += await summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);
