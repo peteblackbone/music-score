@@ -24,6 +24,8 @@ import { createOverlay, drawShapes } from './overlay.js';
 const LIVE_STYLE = 'position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;'
   + 'clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0';
 export const LIVE_DELAY_MS = 150;
+/** Render anyway after this long when animation frames are paused (hidden tab). */
+export const RENDER_FALLBACK_MS = 250;
 const NBSP = ' ';
 
 /** The real clock: performance.now, timers and requestAnimationFrame (null when missing, e.g. Node). */
@@ -113,6 +115,12 @@ export class EditorView {
         this._raf = null;
         if (this.pending) this.flush();
       });
+      // Hidden or background tabs pause animation frames: render (and emit `change`) after a
+      // short timeout anyway, so hosts still see edits and can save them.
+      this._fallback = this.clock.setTimeout(() => {
+        this._fallback = null;
+        if (this.pending) this.flush();
+      }, RENDER_FALLBACK_MS);
     }
   }
 
@@ -120,6 +128,7 @@ export class EditorView {
   flush() {
     if (this._destroyed) return;
     if (this._raf != null) { this.clock.cancelAnimationFrame?.(this._raf); this._raf = null; }
+    if (this._fallback != null) { this.clock.clearTimeout(this._fallback); this._fallback = null; }
     this.pending = false;
     this.renderer.setScore(this.host.viewScore()).render();
     this.renders++;
@@ -200,7 +209,9 @@ export class EditorView {
     this._destroyed = true;
     if (this._raf != null) this.clock.cancelAnimationFrame?.(this._raf);
     if (this._liveTimer != null) this.clock.clearTimeout(this._liveTimer);
+    if (this._fallback != null) this.clock.clearTimeout(this._fallback);
     this._raf = null;
+    this._fallback = null;
     this._liveTimer = null;
     for (const [node, type, fn] of this._listeners) node.removeEventListener(type, fn);
     this._listeners = [];

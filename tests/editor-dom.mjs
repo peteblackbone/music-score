@@ -344,10 +344,25 @@ test('B7: handleKey returns true for consumed keys only; the keydown listener pr
   eq(ed.handleKey(key('Escape')), true, 'Escape consumed while the buffer is active');
   eq(ed.handleKey(key('Escape')), false);
 });
+test('G2: with animation frames paused (hidden tab) a pending render still runs after 250 ms and emits change', () => {
+  const { ed, clock, events } = mk(twoBar(), {}, { raf: true });
+  const v = ed._view;
+  const r0 = v.renders;
+  press(ed, '5');
+  clock.advance(249);
+  eq([v.renders, events.filter((e) => e[0] === 'change').length], [r0, 0], 'not yet');
+  clock.advance(1);
+  eq([v.renders, events.filter((e) => e[0] === 'change').length, clock.pendingFrames()], [r0 + 1, 1, 0], 'rendered once by the fallback; the frame is cancelled');
+  press(ed, '7');
+  clock.frame();
+  eq([v.renders, clock.pendingTimers() >= 0], [r0 + 2, true]);
+  clock.advance(300);
+  eq(v.renders, r0 + 2, 'a frame that ran cancels its fallback');
+});
 test('B8: destroy removes DOM, listeners and timers; idempotent; other methods throw "ScoreEditor destroyed"', () => {
   const { ed, box, root, host, clock } = mk(twoBar(), {}, { raf: true });
   press(ed, '7');
-  ok(clock.pendingFrames() === 1 && clock.pendingTimers() === 1, 'a frame and the live timer are pending');
+  ok(clock.pendingFrames() === 1 && clock.pendingTimers() === 2, 'a frame, its fallback timer and the live timer are pending');
   ed.destroy();
   ed.destroy();
   eq([box.children.length, clock.pendingFrames(), clock.pendingTimers(), root.listenerCount(), host.listenerCount()], [0, 0, 0, 0, 0]);

@@ -242,7 +242,7 @@ test('B8: destroy with a pending frame, a pending announcement and a live digit 
   const { ed, clock, box, root, host } = mk(fixture(), {}, { raf: true });
   press(ed, '1');
   ed.setCursor({ beat: 1 });
-  ok(clock.pendingFrames() === 1 && clock.pendingTimers() === 1);
+  ok(clock.pendingFrames() === 1 && clock.pendingTimers() === 2, "a frame, its render fallback timer and the live timer");
   ed.destroy();
   eq([clock.pendingFrames(), clock.pendingTimers(), box.children.length], [0, 0, 0]);
   clock.advance(5000); clock.frame();
