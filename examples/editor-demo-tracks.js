@@ -15,7 +15,7 @@
  * lowerFourth, trackLabel, trackValues, trackPatch, trackErrors.
  */
 import { ScoreEditor } from '../index.js';
-import { wireDialog, showErrors, setFieldError, clearFieldError, callApi, withFocus } from './editor-demo-settings.js';
+import { wireDialog, showErrors, setFieldError, clearFieldError, callApi, withFocus } from './editor-demo-forms.js';
 
 const MIN_STRINGS = 4;
 const PITCH = /^\s*([A-Ga-g])([#b]?)([0-9])\s*$/;

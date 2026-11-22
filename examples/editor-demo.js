@@ -2,9 +2,10 @@
  * editor-demo.js — page logic of editor.html (the ScoreEditor demo).
  * Not part of the package. The pure helpers are exported for the tests:
  * sanitizeFilename, newScore, readAutosave, checkUpload. The Effects
- * group is wired by editor-demo-effects.js, the Score… and Measure…
- * dialogs and the Time / Key / Tempo status items by
- * editor-demo-settings.js, the Tracks… dialog by editor-demo-tracks.js.
+ * group is wired by editor-demo-effects.js, the Score… dialog and the
+ * Time / Key / Tempo status items by editor-demo-settings.js, the Measure…
+ * dialog by editor-demo-measure.js, the Tracks… dialog by
+ * editor-demo-tracks.js (form helpers: editor-demo-forms.js).
  *
  * Flows (ui.md §1, §6): first visit loads lead-riff with a notice; later
  * visits restore the browser autosave (debounced 500 ms after each edit,

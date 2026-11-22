@@ -355,6 +355,7 @@ test('B10 (editor): 300 random steps of keys and settings calls; every step sani
 
 // ---------- demo helpers ----------
 const DS = await imp('examples/editor-demo-settings.js');
+const DM = await imp('examples/editor-demo-measure.js');
 const DT = await imp('examples/editor-demo-tracks.js');
 const fs = await import('node:fs');
 const readText = (p) => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');
@@ -377,32 +378,32 @@ test('demo status bar and key labels: statusText time / key / tempo; keyLabel ma
   eq(DS.statusText({ ...info, keySignature: -3, tempo: { bpm: 80, unit: 'quarter', dots: 1, text: null } }), { time: '3/4', key: '3 flats', tempo: 'dotted quarter = 80' });
   eq(DS.statusText({ ...info, keySignature: 0, tempo: { bpm: 92.5, unit: 'quarter', dots: 0, text: 'Allegro' } }).tempo, 'Allegro, 92.5 bpm');
   eq([DS.statusText({ ...info, keySignature: 0 }).key, DS.statusText({ ...info, keySignature: -1, tempo: null }).key, DS.statusText({ ...info, tempo: null }).tempo], ['none', '1 flat', '–']);
-  eq([DS.keyLabel(0), DS.keyLabel(2), DS.keyLabel(-3), DS.keyLabel(7), DS.keyLabel(-7)],
+  eq([DM.keyLabel(0), DM.keyLabel(2), DM.keyLabel(-3), DM.keyLabel(7), DM.keyLabel(-7)],
     ['No sharps or flats (C major / A minor)', '2 sharps (D major / B minor)', '3 flats (E flat major / C minor)', '7 sharps (C sharp major / A sharp minor)', '7 flats (C flat major / A flat minor)']);
   const html = readText('editor.html');
   const keySelect = html.slice(html.indexOf('<select id="ms-key">'), html.indexOf('</select>', html.indexOf('<select id="ms-key">')));
   const opts = [...keySelect.matchAll(/<option value="(-?\d)">([^<]+)<\/option>/g)].map((m) => [Number(m[1]), m[2]]);
   eq(opts.length, 15);
-  opts.forEach(([n, label]) => eq(label, DS.keyLabel(n), `key ${n}`));
+  opts.forEach(([n, label]) => eq(label, DM.keyLabel(n), `key ${n}`));
   const { ed } = mk({ keySignature: -2, tracks: [{ showTablature: true, timeSignature: { beats: 6, beatType: 8 }, measures: [{ beats: [nt('half', 1, 0, { tempo: { bpm: 60, unit: 'half' } })] }] }] });
   eq(DS.statusText(ed.getCursorInfo()), { time: '6/8', key: '2 flats', tempo: 'half = 60' });
 });
 test('demo Measure dialog: parseEnding / measureErrors messages; unchanged values give no calls; each field change gives its patch and the patch applies', () => {
-  eq([DS.parseEnding(''), DS.parseEnding(' 2, 1 '), DS.parseEnding('1, x'), DS.parseEnding('0'), DS.parseEnding('100'), DS.parseEnding('1, 1'), DS.parseEnding(Array.from({ length: 33 }, (_, i) => i + 1).join(','))],
+  eq([DM.parseEnding(''), DM.parseEnding(' 2, 1 '), DM.parseEnding('1, x'), DM.parseEnding('0'), DM.parseEnding('100'), DM.parseEnding('1, 1'), DM.parseEnding(Array.from({ length: 33 }, (_, i) => i + 1).join(','))],
     [{ numbers: [] }, { numbers: [1, 2] }, { error: 'Use whole numbers from 1 to 99, separated by commas, such as 1, 2.' }, { error: 'Use whole numbers from 1 to 99, separated by commas, such as 1, 2.' },
       { error: 'Use whole numbers from 1 to 99, separated by commas, such as 1, 2.' }, { error: 'Each number can be used once.' }, { error: 'At most 32 numbers.' }]);
   const base = { beats: '4', barline: '', repeatCount: '', ending: '', tempoMode: 'none', bpm: '120' };
-  eq(DS.measureErrors(base), {});
-  eq(DS.measureErrors({ ...base, beats: '33', barline: 'repeatEnd', repeatCount: '1', ending: '1,1', tempoMode: 'mark', bpm: '1000.001' }), {
+  eq(DM.measureErrors(base), {});
+  eq(DM.measureErrors({ ...base, beats: '33', barline: 'repeatEnd', repeatCount: '1', ending: '1,1', tempoMode: 'mark', bpm: '1000.001' }), {
     beats: 'Beats must be a whole number from 1 to 32.', repeatCount: 'Repeat count must be a whole number from 2 to 99.', ending: 'Each number can be used once.', bpm: 'BPM must be above 0 and at most 1000, with up to 2 decimals.' });
-  eq(DS.measureErrors({ ...base, tempoMode: 'mark', bpm: '' }, { tempoOn: false }), {});
+  eq(DM.measureErrors({ ...base, tempoMode: 'mark', bpm: '' }, { tempoOn: false }), {});
   const score = { tracks: [
     { name: 'Gtr', showTablature: true, measures: [{ beats: [nt('whole')] }, { beats: [nt('whole', 1, 0, { tempo: 90 })], ending: { numbers: [1], text: 'One' }, jump: 'Custom', section: { letter: 'A' } }, { beats: [nt('whole')] }] },
     { name: 'Tab', showStandardNotation: false, showTablature: true, measures: [{ beats: [] }, { beats: [] }, { beats: [] }] },
   ] };
   const { ed } = mk(score);
-  const at = (mi, ti = 0) => { ed.setCursor({ track: ti, measure: mi, beat: 0 }); const info = ed.getCursorInfo(); const m = ed.getMeasureSettings(mi, ti); return { info, m, v: DS.measureValues(m, info) }; };
-  for (const [mi, ti] of [[0, 0], [1, 0], [2, 0], [1, 1]]) { const { m, v, info } = at(mi, ti); eq(DS.measurePatch(m, v, mi, info), { patch: {}, tempo: undefined }, `${mi}/${ti} unchanged`); }
+  const at = (mi, ti = 0) => { ed.setCursor({ track: ti, measure: mi, beat: 0 }); const info = ed.getCursorInfo(); const m = ed.getMeasureSettings(mi, ti); return { info, m, v: DM.measureValues(m, info) }; };
+  for (const [mi, ti] of [[0, 0], [1, 0], [2, 0], [1, 1]]) { const { m, v, info } = at(mi, ti); eq(DM.measurePatch(m, v, mi, info), { patch: {}, tempo: undefined }, `${mi}/${ti} unchanged`); }
   let { m, v, info } = at(1);
   eq([v.jump, v.ending, v.endingText, v.sectionLetter, v.tempoMode, v.bpm], ['custom', '1', 'One', 'A', 'mark', '90']);
   const cases = [
@@ -424,21 +425,21 @@ test('demo Measure dialog: parseEnding / measureErrors messages; unchanged value
     [{ sectionLetter: '' }, { section: null }],
   ];
   for (const [change, patch] of cases) {
-    const r = DS.measurePatch(m, { ...v, ...change }, 1, info);
+    const r = DM.measurePatch(m, { ...v, ...change }, 1, info);
     eq(r, { patch, tempo: undefined }, JSON.stringify(change));
     if (Object.keys(patch).length) { eq(ed.updateMeasure(1, patch, { track: 0 }), true, JSON.stringify(patch)); ed.undo(); }
   }
-  eq(DS.measurePatch(m, { ...v, tempoMode: 'none' }, 1, info).tempo, null);
-  eq(DS.measurePatch(m, { ...v, bpm: '100', dots: '1', tempoText: ' Slow ' }, 1, info).tempo, { bpm: 100, unit: 'quarter', dots: 1, text: 'Slow' });
+  eq(DM.measurePatch(m, { ...v, tempoMode: 'none' }, 1, info).tempo, null);
+  eq(DM.measurePatch(m, { ...v, bpm: '100', dots: '1', tempoText: ' Slow ' }, 1, info).tempo, { bpm: 100, unit: 'quarter', dots: 1, text: 'Slow' });
   ({ m, v, info } = at(2));
   eq(v.tempoMode, 'none');
-  eq(DS.measurePatch(m, { ...v, tempoMode: 'mark' }, 2, info).tempo, { bpm: 90, unit: 'quarter', dots: 0 }, 'a new mark starts from the tempo in force');
+  eq(DM.measurePatch(m, { ...v, tempoMode: 'mark' }, 2, info).tempo, { bpm: 90, unit: 'quarter', dots: 0 }, 'a new mark starts from the tempo in force');
   ed.updateMeasure(2, { timeSignature: { beats: 5, beatType: 4 } });
   ({ m, v, info } = at(2));
-  eq(DS.measurePatch(m, { ...v, timeMode: 'same' }, 2, info).patch, { timeSignature: null });
+  eq(DM.measurePatch(m, { ...v, timeMode: 'same' }, 2, info).patch, { timeSignature: null });
   ({ m, v, info } = at(0));
-  eq(DS.measurePatch(m, { ...v, beats: '2', key: '1' }, 0, info).patch, { timeSignature: { beats: 2, beatType: 4 }, keySignature: 1 }, 'measure 1: plain inputs');
-  eq(DS.measurePatch(m, { ...v, clefMode: 'change', clef: 'bass' }, 0, info).patch, {}, 'no clef at measure 1');
+  eq(DM.measurePatch(m, { ...v, beats: '2', key: '1' }, 0, info).patch, { timeSignature: { beats: 2, beatType: 4 }, keySignature: 1 }, 'measure 1: plain inputs');
+  eq(DM.measurePatch(m, { ...v, clefMode: 'change', clef: 'bass' }, 0, info).patch, {}, 'no clef at measure 1');
 });
 test('demo Tracks dialog: instrumentOptions, tuningRows, canonicalPitch, matchPreset, presetGroups, lowerFourth, trackLabel', () => {
   eq(DT.instrumentOptions().map((o) => o.value), Object.keys(INSTRUMENTS));
@@ -547,7 +548,7 @@ test('demo boundary: the demo modules use the public API only; from src/editor/m
       ok(s === '../src/editor/model/durations.js' || (allowed[f] || []).includes(s), `${f} imports ${s}`);
     }
   }
-  ok(['examples/editor-demo-settings.js', 'examples/editor-demo-tracks.js'].every((f) => fs.existsSync(path.join(root, f))));
+  ok(['examples/editor-demo-settings.js', 'examples/editor-demo-measure.js', 'examples/editor-demo-forms.js', 'examples/editor-demo-tracks.js'].every((f) => fs.existsSync(path.join(root, f))));
 });
 
 // ---------- report ----------

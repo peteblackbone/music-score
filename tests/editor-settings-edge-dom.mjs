@@ -17,6 +17,7 @@ const { ScoreEditor } = await imp('src/editor/ScoreEditor.js');
 const { INSTRUMENTS, TUNINGS } = await imp('src/editor/model/settings/instruments.js');
 const { sanitizeScore } = await imp('src/sanitize.js');
 const DS = await imp('examples/editor-demo-settings.js');
+const DM = await imp('examples/editor-demo-measure.js');
 const DT = await imp('examples/editor-demo-tracks.js');
 
 const tests = [];
@@ -518,7 +519,7 @@ test('demo scorePatch / measurePatch / statusText / keyLabel: edge values', () =
   eq(ed.updateScore(DS.scorePatch(v1, { ...v1 })), false, 'an empty patch is a no-op');
   eq(ed.lastMessage, 'No change');
   for (let k = -7; k <= 7; k++) {
-    const label = DS.keyLabel(k);
+    const label = DM.keyLabel(k);
     ok(label.includes(k === 0 ? 'No sharps or flats' : `${Math.abs(k)} ${k > 0 ? 'sharp' : 'flat'}`), label);
     eq(DS.statusText({ timeSignature: { beats: 4, beatType: 4 }, keySignature: k, tempo: null }).key, k === 0 ? 'none' : `${Math.abs(k)} ${k > 0 ? 'sharp' : 'flat'}${Math.abs(k) === 1 ? '' : 's'}`);
   }
@@ -539,16 +540,16 @@ test('demo measurePatch: a patch built from untouched dialog values is empty at 
     ed.setCursor({ track: ti, measure: mi, beat: 0 });
     const info = ed.getCursorInfo();
     const m = ed.getMeasureSettings(mi, ti);
-    const v = DS.measureValues(m, info);
-    eq(DS.measurePatch(m, v, mi, info), { patch: {}, tempo: undefined }, `${ti}/${mi}`);
-    eq(DS.measureErrors(v, { tempoOn: true }), {}, `${ti}/${mi}: untouched values have no errors`);
+    const v = DM.measureValues(m, info);
+    eq(DM.measurePatch(m, v, mi, info), { patch: {}, tempo: undefined }, `${ti}/${mi}`);
+    eq(DM.measureErrors(v, { tempoOn: true }), {}, `${ti}/${mi}: untouched values have no errors`);
   }
   ed.setCursor({ track: 0, measure: 1, beat: 0 });
   const info = ed.getCursorInfo();
   const m = ed.getMeasureSettings(1, 0);
-  const v = DS.measureValues(m, info);
+  const v = DM.measureValues(m, info);
   eq([v.barline, v.repeatCount, v.ending, v.endingText, v.endingOpen, v.segno, v.coda, v.jump, v.sectionLetter, v.sectionText], ['repeatEnd', '4', '1, 2', 'x', true, true, true, 'D.S. al Coda', 'B', 'Bridge']);
-  const clear = DS.measurePatch(m, { ...v, barline: '', ending: '', segno: false, coda: false, jump: '', sectionLetter: '', sectionText: '' }, 1, info).patch;
+  const clear = DM.measurePatch(m, { ...v, barline: '', ending: '', segno: false, coda: false, jump: '', sectionLetter: '', sectionText: '' }, 1, info).patch;
   eq(clear, { barline: null, ending: null, segno: null, coda: null, jump: null, section: null });
   eq(ed.updateMeasure(1, clear, { track: 0 }), true);
   const g = ed.getMeasureSettings(1, 0);
