@@ -1,12 +1,12 @@
 # music-score
 
-Version 1.12.1 · MIT licence
+Version 2.0.0 · MIT licence
 
-A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL).
+A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL). From 2.0.0 it also includes a keyboard editor for tablature (`ScoreEditor`). See [Editing scores](#editing-scores-scoreeditor).
 
 - No build step and no dependencies. Plain ES modules.
 - Standard notation staves, tab staves, or both, stacked per track.
-- Browser rendering only. There is no playback, editor, or import/export.
+- Browser only. There is no playback, and no import or export of other file formats. The editor reads and writes its own JSON, and your page decides where it is stored.
 
 ## Install
 
@@ -50,6 +50,8 @@ Any static file server works in place of Python.
 
 For a tour of every feature with live rendered examples and their score JSON, open http://127.0.0.1:8765/docs/features.html (`docs/features.html`).
 
+Open http://127.0.0.1:8765/editor.html for the keyboard editor demo. See [Try the editor](#try-the-editor).
+
 ## Using the library
 
 ```js
@@ -72,6 +74,41 @@ renderer.render();
 
 - `render()`: draws the score. Rebuilds the whole SVG each time. Returns the renderer.
 - `setScore(score)`: replaces the score. It does not redraw, so call `render()` afterwards.
+- `getSvg()`: the SVG element drawn by the last `render()`, or `null` before the first one.
+- `getHitMap()`: where each staff, measure and beat was drawn, as plain data. `null` before the first `render()`. See [Hit map](#hit-map-and-svg-access).
+- `hitTest(x, y)`: the beat at an SVG point, or `null` when the point is outside the staves. See [Hit map](#hit-map-and-svg-access).
+
+### Hit map and SVG access
+
+`getHitMap()` and `hitTest()` let a page find what is under a point, for example after a mouse click. Both use the last `render()`. They do not change the SVG, so the drawn output is the same with or without them.
+
+`getHitMap()` returns this shape. All positions are in SVG units, the same units as the SVG's `viewBox`:
+
+```
+{ width, height,
+  staves:   [{ sysIdx, ti, kind: 'notation' | 'tab', y, lineBottom, x1, x2, stringSpacing?, stringCount? }],
+  measures: [{ sysIdx, ti, measureIndex, x, contentX, endX, lastMeasureIndex? }],
+  elements: [{ sysIdx, ti, measureIndex, voice: 1 | 2, beatIndex, x, width, isGrace, isRest }] }
+```
+
+- `sysIdx` is the system (the line of music) and `ti` the track index. Both count from 0.
+- A staff's `y` is its top line. On a notation staff the bottom line is at `y + lineBottom`. On a tab staff, string `n` (1 is the top string) is at `y + (n − 1) × stringSpacing`, and `stringCount` gives the number of strings.
+- A measure runs from `x` to `endX`. `contentX` is where its first beat can start, after the clef and signatures. `lastMeasureIndex` is set on the first measure of a multi-measure rest, and gives the last measure it covers.
+- An element's `x` is the centre of the note or rest, and `width` is its width. `beatIndex` is the beat's index in `beats`, or in `voices[0].beats` or `voices[1].beats` for a two-voice measure. Grace notes and hidden rests keep their own index.
+- `hitTest(x, y)` returns `{ ti, measureIndex, beatIndex }`, plus `string` on a tab staff (1 is the top string). It returns the nearest voice 1 note or rest by `x`, and the nearest string by `y`. It returns `null` outside the staves.
+
+To turn a mouse event into SVG units:
+
+```js
+const svg = renderer.getSvg();
+const pt = svg.createSVGPoint();
+pt.x = event.clientX;
+pt.y = event.clientY;
+const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+const hit = renderer.hitTest(p.x, p.y); // { ti, measureIndex, beatIndex, string? } or null
+```
+
+The map describes the last `render()`. After you change the score, call `render()` again before you use it.
 
 ### Theme
 
@@ -133,6 +170,265 @@ These pixel-based keys are also accepted in `options.theme`. Each one is convert
 | `graceNoteWidth` | `graceNoteWidthSp` |
 
 The pixel keys are not in `defaultTheme`. Reading or changing `renderer.theme.systemGap` (or any other pixel key) after construction has no effect. Pass the `Sp` key in `options.theme` instead. The pixel keys may be removed in a future release.
+
+## Editing scores (ScoreEditor)
+
+From 2.0.0, `ScoreEditor` lets a person type and edit tablature from the keyboard. It draws the score with the same renderer as above. Users can type frets, change rhythms, and add or delete measures, with undo and redo. The editor keeps the score in memory and gives you the score as JSON. It stores nothing itself, so saving is up to your page.
+
+Editing is keyboard-only. A mouse click places the cursor, but there is no mouse pitch entry, no range selection and no copy and paste yet. See [Limitations in 2.0](#limitations-in-20).
+
+### Try the editor
+
+Start the demo server as in [Running the demo](#running-the-demo), then open http://127.0.0.1:8765/editor.html.
+
+- **New…** starts an empty score. Choose a title, a time signature (1 to 16 beats over 2, 4, 8 or 16), an instrument (6-string guitar, 4-string bass or 7-string guitar), and the staves (notation and TAB, or TAB only).
+- **Example** loads `lead-riff`, `lead-solo-f` or `example-score`.
+- **Open JSON…** and **Download JSON** read and write a score file. Files over 5 MB are refused. A downloaded file is named after the title. Only letters, digits, spaces, hyphens and underscores are kept, and the name falls back to `score.json`.
+- **Undo** and **Redo**, a duration palette (whole to 64th, dots and triplet), and a **Read-only** checkbox.
+- A status bar that shows the track, measure, beat, string, fret, duration and fill of the cursor.
+- **Autosave.** After each edit, undo or redo, the score is saved in this browser (localStorage key `music-score-editor:autosave`), 500 ms after the last change. Loading an example or a file is not saved until you edit. The next visit restores the saved score. If the saved data can't be read, the lead-riff example loads with a notice. If a restore never finishes drawing, the next visit in the same tab skips it.
+- **First visit.** With nothing saved, the lead-riff example loads.
+- **Unsaved changes.** New, Example and Open JSON ask first when the score has changed since the last load, New or Download. The autosave doesn't count as a save.
+
+The demo's Keyboard shortcuts panel lists the same keys as the table below.
+
+### Quick start
+
+```js
+import { ScoreEditor } from './music-score/index.js';
+
+const editor = new ScoreEditor(document.getElementById('editor'), savedScore, { width: 900 });
+
+editor.on('change', () => {
+  localStorage.setItem('my-score', JSON.stringify(editor.getScore()));
+});
+
+// when you no longer need the editor:
+editor.destroy();
+```
+
+- `new ScoreEditor(container, score, options)`: `score` is optional. Pass a score object or a JSON string. Without one, the editor starts with a new empty guitar score.
+- The editor adds its own elements inside `container` and never writes outside it.
+- Users start typing after they click the score or press Tab to reach it.
+
+### Options
+
+| Option | Default | Meaning |
+|---|---|---|
+| `width` | The container's width, or 900 px when that is 0 | Render width in px. Change it later with `setWidth()`. |
+| `theme` | `defaultTheme` | Same as the renderer's `theme` option. See [Theme](#theme). |
+| `readOnly` | `false` | Start in read-only mode. See [Editing rules](#editing-rules). |
+| `maxFret` | `24` | The highest fret that can be entered. A whole number from 0 to 99. |
+| `historyLimit` | `200` | The number of undo steps kept. A whole number from 0 to 10000. `0` turns undo off. |
+| `twoDigitDelayMs` | `800` | How long after the first digit a second digit still makes a two-digit fret, in milliseconds. |
+| `cursorColor` | `#3b5bdb` | Colour of the cursor. |
+| `overfullColor` | `#d92d20` | Colour of the band on an overfull measure. |
+| `underfullColor` | `#62636a` | Colour of the line on an underfull measure. |
+
+A value that isn't a number falls back to the default. `maxFret` and `historyLimit` are rounded down to whole numbers and kept within their ranges. A negative `twoDigitDelayMs` falls back to the default.
+
+### Methods
+
+| Method | Returns | Notes |
+|---|---|---|
+| `loadScore(scoreOrJson)` | nothing | Replaces the score, clears undo and redo, and puts the cursor on the first beat, string 1. Throws on bad input and changes nothing. See [Saving and loading](#saving-and-loading). |
+| `getScore()` / `toJSON()` | object | A copy of the score with `schemaVersion: 1`. Changing the copy does not change the editor. |
+| `getCursor()` | `{ track, measure, beat, string }` | Positions count from 0. |
+| `setCursor({ track?, measure?, beat?, string? })` | the cursor | Missing fields keep their values. The result is moved to the nearest valid position. |
+| `getCursorInfo()` | object | What a status bar needs: fret, duration, dots, triplet, rest, fill, track name, string count, tuning note and more. |
+| `getMeasureFill(track, measure)` | `'under'`, `'full'` or `'over'` | An empty measure is `'under'`. Throws `RangeError` for an index out of range. |
+| `handleKey(event)` | `true` if the key was used | Runs the command for a keyboard event (`key`, `code`, `ctrlKey`, `shiftKey`, `altKey`, `metaKey`). The editor calls this for you. Use it to drive the editor from your own buttons, for example `handleKey({ key: '.' })` for the dots button. |
+| `setDuration(name)` | `true` or `false` | Sets the cursor beat's duration, or the duration of the next note on the end-of-measure position. Names: `whole`, `half`, `quarter`, `8th`, `16th`, `32nd`, `64th`. Returns `false` for an unknown name or in read-only mode. |
+| `undo()` / `redo()` | `true` or `false` | `false` when there is nothing to undo or redo. |
+| `canUndo()` / `canRedo()` | boolean | Always `false` in read-only mode. |
+| `setReadOnly(flag)` / `isReadOnly()` | nothing / boolean | Read-only mode is described under [Editing rules](#editing-rules). |
+| `setWidth(px)` | nothing | Redraws at the new width. Throws `RangeError` for zero or a negative number. |
+| `refresh()` | nothing | Schedules a redraw. Call it if your page loads a font after the editor starts. |
+| `focus()` | nothing | Moves keyboard focus to the editor. |
+| `on(type, fn)` / `off(type, fn)` | `on` returns an unsubscribe function | Listen for `change` and `cursor`. See [Events](#events). |
+| `destroy()` | nothing | Removes the editor's elements and listeners. Safe to call twice. Other methods then throw `Error('ScoreEditor destroyed')`. |
+
+`ScoreEditor.LIMITS` is a static property with the input size limits. See [Saving and loading](#saving-and-loading).
+
+### Events
+
+| Event | When it fires | Payload |
+|---|---|---|
+| `change` | After each change to the score, once the editor has redrawn. Cursor moves don't fire it. | `{ source, command? }`. `source` is `'edit'`, `'undo'`, `'redo'` or `'load'`. For an edit, `command` names it, for example `'digit'`, `'deleteNote'` or `'moveRight'` (when Right added a measure). |
+| `cursor` | Straight away, on every cursor move. | `{ track, measure, beat, string, voice: 1 }`, counting from 0. |
+
+For a key that edits the score and moves the cursor, `cursor` fires first, and `change` fires after the redraw. Read the score inside a `change` listener to get the new score.
+
+### Keyboard
+
+The editor acts only while it has focus. Tab and Shift+Tab are never taken, so keyboard users can always leave the editor.
+
+| Key | Action |
+|---|---|
+| ← / → | Previous / next beat. Moves into the next measure. |
+| ↑ / ↓ | Previous / next string. Stops at the top and bottom strings. |
+| Ctrl+← / Ctrl+→ | First beat of the previous / next measure. |
+| Home / End | First / last beat of the measure. End can reach the end-of-measure position. |
+| Ctrl+Home / Ctrl+End | First beat of the score / last beat of the last measure. |
+| PageUp / PageDown | Previous / next visible track. |
+| 0 to 9 (also on the keypad) | Fret on the cursor string. Two quick digits make a two-digit fret, such as 12. |
+| + or = | Shorter duration: halved, down to 64th. |
+| - | Longer duration: doubled, up to whole. |
+| . | Dots: 0, then 1, then 2, then 0. |
+| / | Triplet on or off. |
+| R | Note to rest, or rest to note. |
+| L | Tie to the previous note on this string. On a tied note, removes the tie. |
+| Delete or Backspace | Delete the note on the cursor string. |
+| Ctrl+Delete or Ctrl+Backspace | Delete the beat, with the grace notes just before it. |
+| Insert or I | Insert a rest with the current duration before the beat. |
+| M | Insert an empty measure after the current one, in every track. |
+| Shift+M | Insert an empty measure before the current one, in every track. |
+| Shift+Delete or Shift+Backspace | Delete the current measure, in every track. |
+| Ctrl+Z | Undo. |
+| Ctrl+Y or Ctrl+Shift+Z | Redo. |
+| Esc | Cancel a two-digit fret in progress. Otherwise not used. |
+
+Notes:
+
+- On a Mac, Cmd works in place of Ctrl.
+- Keys are matched by the character they type, so they follow your keyboard layout.
+- Browser shortcuts are not taken: Ctrl+W, Ctrl+T, Ctrl+N, Ctrl+1 to 9 and the others. Alt combinations and the F-keys are not taken either.
+- H, S, B, V, P, X and G are reserved for later releases and do nothing yet. Shift with R, L, I or an arrow key does nothing.
+
+### Editing rules
+
+**Cursor.** The cursor is one beat on one string, in one track and one measure. The cursor skips grace notes. Rests can be reached. When a measure is not full, its end is a position of its own, drawn as a dashed slot after the last beat. Hidden rests can be reached with the keys. A mouse click on a hidden rest usually selects the note beside it instead.
+
+**Frets.**
+- A digit sets the fret on the cursor string. On a note, it changes that string's fret. On a string with no note, it adds a note, which makes a chord. A string holds at most one note.
+- On a rest, the rest becomes a note. At the end of a measure, or in an empty measure, a new note is added with the current duration.
+- A fret above `maxFret` is refused, with the message "Frets go up to 24" (or your own limit).
+- **Two-digit frets.** Type the second digit within `twoDigitDelayMs` (800 ms by default) of the first, on the same beat and string. Each digit shows at once. The first digit `1` followed by `2` gives fret 12, when 12 is at most `maxFret`. Otherwise the second digit replaces the first. The two digits make one undo step. Moving the cursor, or pressing any other key, ends the entry. Esc also ends it.
+- Typing a fret on a slashed beat removes the slash.
+- Fret entry needs a TAB staff. On a track with notation only, a digit is refused with "Fret entry needs a TAB staff".
+
+**Pitch.** The editor writes `string` and `fret` only. It never writes `pitch`. When it changes the fret of a note that has a `pitch`, it removes that `pitch`, so the note is then drawn from its string, fret and tuning. Notes given by string and fret are written an octave above their sounding pitch, and their staff gets an 8vb clef. That means a treble staff with notes entered in the editor shows an 8vb clef. See [Pitch and octaves](#pitch-and-octaves).
+
+**Rests.** R turns a note into a rest with the same duration. On a rest, R makes a note with fret 0 on the cursor string (TAB tracks only). On the end-of-measure position, R adds a rest with the current duration and keeps the cursor on it.
+
+**Deleting.**
+- Delete removes the note on the cursor string. If it was the last note, the beat becomes a rest of the same duration.
+- On a rest, or on a string with no note, Delete does nothing and says "No note to delete".
+- Ctrl+Delete removes the whole beat, with the grace notes just before it. The cursor moves to where the beat was. A measure can end up with no beats.
+- Insert adds a rest before the beat, and before its grace notes, and moves the cursor onto it.
+
+**Ties.** L ties the cursor note to the note on the same string in the previous beat. That beat can be the last beat of the previous measure. The tied note takes that note's fret. Press L on the tied note again to remove the tie. With no note to tie to, the editor says "Nothing to tie to". Changing the fret of a tied note, or deleting it, removes its tie.
+
+**Durations, dots and triplets.** These change the beat under the cursor only. Nothing else in the measure moves, so a measure can end up too full or too empty. The status bar shows the fill of the measure as Under, Full or Over. The score draws an underfull measure with a dashed line below the staff, and an overfull measure with a red band. An empty measure has no mark. Moving onto a beat picks up its duration and dots, so the next note you type uses them. On the end-of-measure position, the duration and dots change the next note instead. Triplet does nothing on the end-of-measure position, and nothing on a beat with nested tuplets.
+
+**Measures.**
+- M and Shift+M add an empty measure in every track. Short tracks are padded with empty measures when needed.
+- Shift+Delete deletes the measure in every track. Its voice 2, endings, jumps, sections, segno and coda go with it.
+- If the deleted measure sets a time signature, key signature or clef, and the next measure sets none, the next measure takes them. Deleting the only measure empties it, and keeps those settings.
+- When the last measure is full or overfull, Right on its last beat adds an empty measure and moves into it. When it is underfull, Right first moves to the end-of-measure position, and Right again ends at the end of the score. Adding a measure this way is one undo step.
+
+**Tracks.**
+- A track with notation only shows the cursor as a column on the notation staff. Durations, dots, triplets, rests, insert, delete and measure commands work. Frets, Delete for a note, and ties are refused with a message. Up and Down do nothing.
+- A track with TAB only works fully.
+- Tracks that show neither staff are skipped by PageUp and PageDown. If no track is visible, commands do nothing and the editor says "No visible track".
+
+**Voices.** In a measure with two voices, the editor edits voice 1 only. Voice 2 stays exactly as it was.
+
+**Grace notes.** The cursor skips them. They stay in front of the beat they lead into, so Insert puts a new rest before them, and Ctrl+Delete removes them with their beat. They can't be typed or edited in 2.0.
+
+**Multi-measure rests.** The editor shows every rest measure on its own. A score with `multiMeasureRests: true` therefore looks different in the editor from how the renderer draws it. The setting stays in the JSON.
+
+**Undo and redo.** Each command is one step. Ctrl+Z undoes the last step, and Ctrl+Y or Ctrl+Shift+Z redoes it. Undo and redo also put the cursor back where it was. Up to 200 steps are kept by default (`historyLimit`). Loading a score clears the history.
+
+**Read-only mode.** Read-only mode lets people move the cursor and read the score, and refuses every edit with the message "Read-only". Undo and redo are off. `loadScore()` still replaces the score.
+
+### Saving and loading
+
+The editor's JSON is the score format described in [Score format](#score-format), with one addition: `"schemaVersion": 1`. `getScore()` always writes it. `loadScore()` and the constructor accept scores with or without it. Any other `schemaVersion` is refused.
+
+| Problem | Result |
+|---|---|
+| Text that isn't valid JSON | `SyntaxError` from `JSON.parse` |
+| JSON that isn't an object, such as an array | `Error('Score must be a JSON object')` |
+| `schemaVersion` other than 1 | `Error('Unsupported schemaVersion')` |
+| A score past a limit (see below) | `Error('Score too large: …')` |
+
+A failed `loadScore()` changes nothing: the score, the cursor, the undo history and the display stay as they were. A failed constructor leaves the container unchanged.
+
+On load, the editor repairs the score the same way the renderer does (see [Malformed input](#malformed-input)). So the JSON from `getScore()` can differ from the file you loaded.
+
+Input limits are checked before the score is repaired or drawn. They keep a hostile or broken file from freezing the page.
+
+| Limit | `ScoreEditor.LIMITS` key | Value |
+|---|---|---|
+| JSON text | `jsonChars` | 5 MB (5,242,880 characters) |
+| Tracks | `tracks` | 32 |
+| Measures per track | `measuresPerTrack` | 2,000 |
+| Voices per measure | `voicesPerMeasure` | 4 |
+| Beats per voice in a measure | `beatsPerVoice` | 256 |
+| Notes per beat | `notesPerBeat` | 16 |
+| Tuning strings | `tuningStrings` | 12 |
+
+The editor stores nothing. To keep a score, save the result of `getScore()` yourself. See [Host responsibilities](#host-responsibilities).
+
+### Styling
+
+The editor adds these classes. The renderer never uses them.
+
+| Class | Element |
+|---|---|
+| `music-score-editor` | The root. It is the focusable element. |
+| `music-score-editor--focused` | Added to the root while the editor has focus. |
+| `music-score-editor--readonly` | Added to the root in read-only mode. |
+| `music-score-editor-host` | The wrapper around the drawn SVG. |
+| `music-score-editor-live` | The hidden live region for announcements. |
+| `editor-overlay` | Group added as the SVG's last child. Its `pointer-events` is `none`. |
+| `editor-fill` | Group with the fill bands. |
+| `editor-band-over`, `editor-band-under` | The band of an overfull measure, or the line of an underfull one. |
+| `editor-cursor` | Group with the cursor. |
+| `editor-col`, with `editor-col-notation` or `editor-col-tab` | The cursor column on a staff. |
+| `editor-string` | The box around the cursor string on a TAB staff. |
+| `editor-slot` | The dashed end-of-measure position, or an empty measure. |
+
+The overlay is rebuilt on each redraw, so style it with class selectors. Colours and opacities are set as SVG attributes. The options above are the simplest way to change the colours.
+
+The editor never removes the browser's focus outline, and it draws no focus ring of its own. Add this CSS to keep a visible focus ring:
+
+```css
+.music-score-editor:focus { outline: 2px solid #3b5bdb; outline-offset: 2px; }
+```
+
+When the editor loses focus, the cursor is drawn dimmer.
+
+### Accessibility
+
+- The root has `role="application"`, `aria-roledescription="tablature editor"`, and an `aria-label` made from the title (or "Untitled score"). In read-only mode the label ends in ", read-only" and the root has `aria-readonly="true"`.
+- A polite live region speaks each move and each result. A move is spoken like this: "Track 1 Guitar, measure 3, beat 2, string 1, fret 5, quarter". Messages are debounced: when keys come quickly, only the last message is spoken, 150 ms after the last one.
+- Everything works from the keyboard. Tab leaves the editor, and the editor never traps focus.
+- Escape is taken only while a two-digit fret is in progress.
+
+### Host responsibilities
+
+- **Resizing.** The editor does not watch its container. Call `setWidth(px)` when the width changes. The demo uses a `ResizeObserver` for this.
+- **Saving.** Listen for `change`, and save `getScore()`. To reopen a saved score, pass it to `loadScore()` or to the constructor.
+- **Errors.** Catch the errors from `loadScore()` and the constructor, and show them. A failed load leaves the editor as it was.
+- **Clean up.** Call `destroy()` when the editor is removed. It removes its own elements from the container.
+- **Fonts.** The editor redraws once the page's fonts are ready. If your page loads a font later, call `refresh()`.
+- **Focus ring.** Keep a visible focus ring, as shown under [Styling](#styling).
+- **Touch.** The editor needs a hardware keyboard. Tapping can place the cursor, but there is no on-screen keypad. The demo's hint says so on touch devices.
+
+### Limitations in 2.0
+
+- **No effects.** Hammer-ons, pull-offs, slides, bends and other effects can't be entered from the keyboard yet. The keys for them are reserved for 2.1.0.
+- **No mouse pitch entry or dragging.** Clicks only place the cursor.
+- **No selection, copy or paste.** Each edit works on one beat, one string or one measure.
+- **Score settings are not editable.** Tracks, tuning, capo, header text, time and key signatures, and navigation marks can't be changed in the editor. The time signature is set only in New. Change these in the JSON.
+- **No voice 2 or grace note editing.** These stay as they are in the file.
+- **No tuplets other than the triplet toggle.**
+- **No playback and no import.** Guitar Pro and other formats are not read.
+- **Measures are not reflowed.** Underfull and overfull measures are shown, not fixed.
+- **Speed.** Each edit redraws the whole score. A score with 100 measures on two tracks took about 30 ms per keystroke in Node, and about 90 ms in headless Chrome. Very long scores may feel slow.
+- **Touch input.** Editing needs a hardware keyboard.
 
 ## Score format
 
@@ -923,7 +1219,7 @@ Each of these eighths lasts 1/18 of a whole note, so nine of them fill a half no
 - **Ottava: one-beat bracket at a system end.** A bracket that covers only the last beat of a system can put its hook about 1.3 staff spaces past the barline.
 - **Ottava: the stored pitch.** Inside a bracket the note is drawn at a different place from its `pitch` (see [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo)). Notes outside a bracket are drawn as written.
 - **Tempo changes.** A tempo change shows its tempo but plays nothing. Long text is not wrapped.
-- **No validation, no `schemaVersion`.** A malformed score does not throw, but may render oddly.
+- **No validation.** A malformed score does not throw, but may render oddly. The renderer ignores `schemaVersion`. The editor checks it (see [Saving and loading](#saving-and-loading)).
 - **Harmonics: sounding pitch.** A natural harmonic is drawn at the fretted (touch) pitch, written an octave above sounding pitch. Sounding-pitch notation and 8va markings for harmonics are not supported.
 - **Harmonics: heads.** An A.H. or other artificial harmonic has a single notehead. Double noteheads (touch and sounding) are not drawn.
 - **Harmonics: frets.** `harmonicFret` must be a whole number. Fractional frets are not supported.
@@ -990,7 +1286,7 @@ Each of these eighths lasts 1/18 of a whole note, so nine of them fill a half no
 - **On-beat grace notes: no time.** An `onBeat` grace takes no time, and its `duration` is still ignored (see [Grace notes on the beat](#grace-notes-on-the-beat)).
 - **Nested tuplets: two levels.** A third level is not supported. A `tuplets` array with three entries is ignored.
 - **Nested tuplets: beams.** Beams are grouped as they were before 1.12.0. The brackets follow the nested structure, but beams are not regrouped to match it.
-- **Not included:** playback, an editor, and import/export of other file formats.
+- **Not included:** playback, and import or export of formats other than the editor's JSON. For what the editor can't edit yet, see [Limitations in 2.0](#limitations-in-20).
 
 ## Running tests
 
@@ -1009,6 +1305,9 @@ This runs every test:
 - Articulation and fermata assertions (`tests/articulations.mjs`).
 - Structural guards for the score-wide passes (`tests/structure.mjs`).
 - A determinism check: the same score renders the same SVG twice.
+- Editor checks (2.0.0): `tests/editor-model.mjs` covers the editing commands, keys, undo and the JSON format, and `tests/editor-dom.mjs` covers the `ScoreEditor` API, the hit map and the overlay.
+
+A speed check for the editor, `node tests/bench-editor.mjs`, runs outside the test run. It times renders and keystrokes on synthetic scores of 32, 100 and 200 measures.
 
 It prints `ALL PASSED` and exits with code 0 on success.
 
@@ -1016,6 +1315,25 @@ It prints `ALL PASSED` and exits with code 0 on success.
 - To run one group on its own: `node tests/units.mjs`, `node tests/engraving.mjs`, or `node tests/articulations.mjs`.
 
 ## Changelog
+
+### 2.0.0 — 2026-11-22
+
+Edit mode. The new `ScoreEditor` class lets people type and edit guitar and bass tablature from the keyboard, with undo and redo. It reads and writes the score as JSON. See [Editing scores](#editing-scores-scoreeditor).
+
+Rendering is unchanged. `MusicScoreRenderer` draws the same SVG as 1.12.1, and every existing snapshot is byte-identical. Existing scores need no changes.
+
+New:
+
+- `ScoreEditor`, exported from `index.js`: keyboard editing with fret entry (including two-digit frets), chords, rests, notes and beats deleted, ties, durations, dots and triplets, measures, and undo and redo. Scores are read and written as JSON with `"schemaVersion": 1`.
+- `ScoreEditor.LIMITS`: the size limits for scores the editor accepts.
+- Renderer methods `getSvg()`, `getHitMap()` and `hitTest(x, y)`, for finding the staff, measure and beat under a point. See [Hit map](#hit-map-and-svg-access).
+- A demo page, `editor.html`, with the editor, examples, New, Open and Download JSON, autosave in the browser, and a keyboard shortcuts panel.
+
+Behaviour notes:
+
+- The editor draws each multi-measure rest as separate measures, and keeps the setting in the JSON.
+- The editor's JSON loads only with `schemaVersion` missing or 1. Other values are refused with `Unsupported schemaVersion`. The renderer still accepts them, because it ignores the key.
+- Not in 2.0: effects, mouse pitch entry, selection and clipboard, editing of voice 2 and grace notes, track and score settings, playback and import. See [Limitations in 2.0](#limitations-in-20).
 
 ### 1.12.1 — 2026-11-22
 
@@ -1249,12 +1567,14 @@ Initial public release.
 
 ## Project layout
 
-- `index.js`: public exports (`MusicScoreRenderer`, `defaultTheme`).
+- `index.js`: public exports (`MusicScoreRenderer`, `ScoreEditor`, `defaultTheme`).
 - `package.json`: package metadata and the `npm test` and `npm run demo` scripts.
 - `LICENSE`: the MIT licence for the code.
 - `.gitignore`: keeps local tooling folders and logs out of the repository.
 - `src/`: the renderer. Rendering runs normalize, then layout, then draw.
   - `MusicScoreRenderer.js`: the entry point (the `MusicScoreRenderer` class). It runs the pipeline and mounts the SVG.
+  - `hitMap.js`: the hit map behind `getHitMap()` and `hitTest()`. It builds plain data from the last render.
+  - `editor/`: the `ScoreEditor` keyboard editor (2.0.0). Its files and their roles are listed in `docs/ARCHITECTURE.md`, under "Editor (2.0.0)".
   - `normalize.js`: fills in score defaults (sticky time and key signatures, barlines, measure count, pitch from string and fret, written and sounding pitch, `tabRhythm`, padded measures).
   - `harmonics.js`: guitar harmonic kinds and the helpers that layout, drawing and labels share.
   - `directions.js`: the playing direction fields (let ring, pick strokes, strum, arpeggio, tap, slap, pop, whammy, rake, trill, slide in and out, the bend grammar) and their canonical values.
@@ -1322,12 +1642,12 @@ Initial public release.
   - `theme.js`: theme defaults and the pixel-key conversion.
   - `glyphs.js`: Bravura glyph names. `glyphMetrics.js`: approximate glyph bounding boxes. `textMetrics.js`: estimated text widths.
   - `font.js`: font loading. `pitch.js`, `duration.js`: pitch and duration helpers, including a beat's tuplet chain. `rational.js`: exact fractions for note timing.
-- `examples/`: sample scores.
+- `examples/`: sample scores, and `editor-demo.js`, the logic of the editor demo page.
 - `fonts/`: the Bravura font (SIL Open Font License; see `fonts/BRAVURA-LICENSE.txt`).
 - `tests/`: snapshot tests, unit checks, engraving checks, assertions and structural guards (`run.js`, `units.mjs`, `engraving.mjs`, `articulations.mjs`, `structure.mjs`), the test hooks and DOM shim the runner uses (`hooks.mjs`, `dom-shim.mjs`), the characterization fixtures (`fixtures/characterization.js`), and the saved snapshots (`snapshots/`).
-- `index.html`: the demo page. `lead-riff.html` and `lead-solo-f.html`: demo pages for the lead-riff and lead-solo examples.
+- `index.html`: the demo page. `lead-riff.html` and `lead-solo-f.html`: demo pages for the lead-riff and lead-solo examples. `editor.html`: the keyboard editor demo.
 - `docs/features.html`: feature summary page with live examples (serve over http, like the demo).
-- `docs/ARCHITECTURE.md`: design notes for a future editor, import and export layer (not built yet).
+- `docs/ARCHITECTURE.md`: design notes for the module boundaries. The editor (2.0.0) is described there. Import, playback and the other proposed layers are not built yet.
 
 ## License
 
