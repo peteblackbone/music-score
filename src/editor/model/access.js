@@ -50,6 +50,9 @@ export function measureCount(score) {
   return n;
 }
 
+/** Whether measure 1 is a pickup (2.3): any track has `measures[0].pickup === true`. */
+export const isPickup = (score) => tracksOf(score).some((t) => measureAt(t, 0)?.pickup === true);
+
 /** Track `track`'s measure `mi` when it is an object, else null (a hole). */
 export function measureAt(track, mi) {
   const m = measuresOf(track)[mi];
@@ -74,6 +77,12 @@ export const beatsAt = (score, loc) => beatsOf(measureAt(trackAt(score, loc.trac
 export const beatAt = (score, loc) => beatsAt(score, loc)[loc.beat] ?? null;
 export const isGrace = (b) => b.type === 'grace';
 export const isRest = (b) => b.type === 'rest';
+/** Main-beat number (from 1) of beat index `k` in `beats`: the non-grace beats up to and including it. */
+export function mainBeatNumber(beats, k) {
+  let n = 0;
+  for (let i = 0; i <= k && i < beats.length; i++) if (!isGrace(beats[i])) n++;
+  return n;
+}
 export const notesOf = (b) => (Array.isArray(b?.notes) ? b.notes : []);
 /** Index of the note on string `s` in beat `b`, or -1. */
 export const noteIndexOn = (b, s) => notesOf(b).findIndex((n) => n.string === s);

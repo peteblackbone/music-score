@@ -9,7 +9,7 @@
  * edit never leaves a half tie behind. Beats are addressed by locations
  * (access.js); a neighbour is returned as a location, or null.
  */
-import { beatsAt, beatAt, isGrace, notesOf, noteOn, updateNote, without, locAt } from './access.js';
+import { beatsAt, beatAt, isGrace, notesOf, noteOn, updateNote, without, locAt, measureCount } from './access.js';
 
 /** The main beat before `loc` in its measure, else the previous measure's last; or null. */
 export function prevMainBeat(score, loc) {
@@ -84,3 +84,26 @@ export function untiePartners(score, loc) {
 export function untieNote(score, loc) {
   return updateNote(untiePartners(score, loc), loc, (n) => without(n, 'tieStart', 'tieEnd'));
 }
+
+/**
+ * Every seam of track `track` in measures m0 − 1 … m1 + 1 repaired (2.3
+ * range edits): each main beat with its next main beat, and the first main
+ * beat of a measure whose previous measure has none. Voice 1 only.
+ */
+export function fixTiesIn(score, track, m0, m1) {
+  let out = score;
+  const hi = Math.min(m1 + 1, measureCount(score) - 1);
+  for (let mi = Math.max(0, m0 - 1); mi <= hi; mi++) {
+    const loc = { track, measure: mi, beat: 0 };
+    const first = firstMainIn(out, loc);
+    if (first && !prevMainBeat(out, first)) out = fixSeam(out, null, first);
+    const beats = beatsAt(out, loc);
+    for (let k = 0; k < beats.length; k++) {
+      if (isGrace(beats[k])) continue;
+      const A = locAt(loc, { beat: k });
+      out = fixSeam(out, A, nextMainBeat(out, A));
+    }
+  }
+  return out;
+}
+

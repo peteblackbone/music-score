@@ -26,9 +26,10 @@ const VALID = {
   coda: (v) => v === true,
   timeSignature: (v) => v != null,
   keySignature: (v) => v != null,
+  pickup: (v) => v === true,
 };
-/** The column-wide navigation fields copied to a new track. */
-export const NAV_FIELDS = Object.freeze(['barline', 'ending', 'jump', 'section', 'repeatCount', 'segno', 'coda']);
+/** The column-wide navigation fields copied to a new track (2.3: and the pickup flag). */
+export const NAV_FIELDS = Object.freeze(['barline', 'ending', 'jump', 'section', 'repeatCount', 'segno', 'coda', 'pickup']);
 /** Every field a removed track hands to the remaining tracks. */
 export const COLUMN_FIELDS = Object.freeze([...NAV_FIELDS, 'timeSignature', 'keySignature']);
 

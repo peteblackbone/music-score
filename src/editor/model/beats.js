@@ -83,7 +83,7 @@ export function toggleRest(score, cursor, state) {
 }
 
 /** First index of the run of graces just before index `k`. */
-function leadingGraces(beats, k) {
+export function leadingGraces(beats, k) {
   let i = k;
   while (i > 0 && isGrace(beats[i - 1])) i--;
   return i;

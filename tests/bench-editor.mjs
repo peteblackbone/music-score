@@ -49,3 +49,31 @@ for (const r of rows) console.log(`${String(r.measures).padStart(11)} |${f(r.ren
 const r100 = rows.find((r) => r.measures === 100);
 console.log(`\nJ2 (Node): 100-measure render ${r100.render.toFixed(1)} ms (target <= 150): ${r100.render <= 150 ? 'OK' : 'OVER'}`);
 console.log(`J2: cursor-only move max median ${Math.max(...rows.map((r) => r.move)).toFixed(2)} ms (target <= 16): ${rows.every((r) => r.move <= 16) ? 'OK' : 'OVER'}`);
+
+// 2.3: Select all, copy and paste on 200 measures x 2 tracks, and the score-wide tempoAt after an edit
+// (tempoMarks is memoized per model, so the first lookup after an edit rescans the score).
+{
+  const { tempoAt } = await imp('src/editor/model/settings/tempo.js');
+  const score = synthetic(200);
+  score.tracks[1].measures.forEach((m, mi) => { if (mi % 16 === 0) m.beats[0].tempo = 80 + mi; });
+  const clock = makeClock();
+  clock.requestAnimationFrame = null;
+  clock.cancelAnimationFrame = null;
+  const ed = new ScoreEditor(makeContainer(), score, { width: 1200, clock, historyLimit: 1000 });
+  const selAll = []; const copy = []; const paste = []; const tempo = []; const tempoMemo = [];
+  for (let i = 0; i < RUNS; i++) {
+    ed.setCursor({ track: 0, measure: 100, beat: 2 });
+    selAll.push(time(() => ed.handleKey({ ...key('a'), ctrlKey: true })));
+    copy.push(time(() => ed.copy()));
+    ed.setCursor({ track: 0, measure: 100, beat: 2 }); // clears the selection: a measures clip pasted before measure 101
+    paste.push(time(() => ed.paste()));
+    ed.undo();
+    ed.handleKey(key(String(i % 10)));
+    clock.advance(1000);
+    const fresh = { ...ed._model }; // a model object not seen yet: the full rescan an edit costs
+    tempo.push(time(() => tempoAt(fresh, ed._cursor)));
+    tempoMemo.push(time(() => tempoAt(ed._model, ed._cursor)));
+  }
+  ed.destroy();
+  console.log(`\n2.3 (200 measures x 2 tracks): Ctrl+A ${median(selAll).toFixed(1)} ms | copy ${median(copy).toFixed(1)} ms | paste 200 measures (with render) ${median(paste).toFixed(1)} ms | tempoAt after an edit (rescan) ${median(tempo).toFixed(2)} ms, memoized ${median(tempoMemo).toFixed(3)} ms`);
+}

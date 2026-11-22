@@ -10,7 +10,7 @@
  * the event listeners; the DOM lives in view.js. Every command goes through
  * model/commands.js run(); edits re-render once per animation frame and
  * emit one `change` per model change after that render, cursor moves
- * redraw the overlay only and emit `cursor` at once. The 2.2 settings API is installed from settings.js.
+ * redraw the overlay only and emit `cursor` at once. The 2.2 settings API is installed from settings.js, the 2.3 selection and clipboard from selection.js.
  */
 import { EditorView, defaultClock } from './view.js';
 import { Emitter } from './emitter.js';
@@ -18,7 +18,7 @@ import { parseInput, exportScore } from './model/io.js';
 import { EDITOR_LIMITS } from './model/limits.js';
 import { defaultScore } from './model/defaultScore.js';
 import { clampCursor, cursorInfo, syncDuration, sameCursor } from './model/cursor.js';
-import { checkedMeasureFill, fillTable } from './model/fill.js';
+import { checkedMeasureFill, overlayFills } from './model/fill.js';
 import { voiceOf } from './model/access.js';
 import { COMMANDS, run, undoLabel } from './model/commands.js';
 import { createHistory } from './model/history.js';
@@ -29,6 +29,7 @@ import { resolveStyle } from './style.js';
 import { resolveOptions } from './options.js';
 import { describe, describeCursor, describeEdit } from './announce.js';
 import { installSettings } from './settings.js';
+import { installSelection } from './selection.js';
 
 const START = { track: 0, measure: 0, beat: 0, string: 1 };
 const freshState = () => ({ duration: 'quarter', dots: 0, digit: null });
@@ -41,7 +42,7 @@ export class ScoreEditor {
   /**
    * @param {HTMLElement} container - the editor builds its own wrapper inside and never writes outside it.
    * @param {object|string} [score] - score object or JSON string (schemaVersion missing or 1); default: one empty guitar measure.
-   * @param {object} [options] - `{ width, theme, readOnly, maxFret, historyLimit, twoDigitDelayMs, cursorColor, overfullColor, underfullColor }`.
+   * @param {object} [options] - `{ width, theme, readOnly, maxFret, historyLimit, twoDigitDelayMs, cursorColor, overfullColor, underfullColor, selectionColor }`.
    */
   constructor(container, score, options = {}) {
     if (!container || typeof container.appendChild !== 'function') throw new TypeError('ScoreEditor needs a container element');
@@ -55,6 +56,7 @@ export class ScoreEditor {
     this._state = syncDuration(model, this._cursor, freshState());
     this._history = createHistory(opts.historyLimit);
     this._digitEntry = null;
+    this._selection = null;
     this._events = new Emitter();
     this._focused = false;
     this._destroyed = false;
@@ -62,11 +64,13 @@ export class ScoreEditor {
     this._view = new EditorView(container, {
       viewScore: () => (this._model.multiMeasureRests ? { ...this._model, multiMeasureRests: false } : this._model),
       cursorInfo: () => this._info(),
-      fills: () => fillTable(this._model),
+      fills: () => overlayFills(this._model),
+      selection: () => this._selectionView(),
       afterRender: () => this._events.drain(),
       onKey: (e) => this.handleKey(e),
       onClick: (hit) => this._moveTo({ track: hit.ti, measure: hit.measureIndex, beat: hit.beatIndex, string: hit.string ?? this._cursor.string }),
       onFocusChange: (f) => this._focusChanged(f),
+      onClipboard: (kind, e) => this._clipboardEvent(kind, e),
     }, { width: o.width, theme: o.theme, style: resolveStyle(o), clock: this._clock });
     this._syncRoot();
     this._view.flush();
@@ -84,6 +88,7 @@ export class ScoreEditor {
     this._cursor = cursor;
     this._state = state;
     this._history.clear();
+    this._dropSelection();
     this._cancelBuffer();
     this._syncRoot();
     this._events.queue('change', { source: 'load' });
@@ -119,7 +124,8 @@ export class ScoreEditor {
     const c = keyToCommand(e);
     if (!c) return false;
     const def = COMMANDS[c.name];
-    if (def.cancelsBuffer) return this._cancelBuffer();
+    if (def.kind === 'select') return this._extend(c.name);
+    if (def.cancelsBuffer) return this._escape();
     if (def.kind === 'history') {
       if (this._readOnly) { this._say(describe({ id: 'readOnly' })); return false; }
       this._step(def.step);
@@ -171,8 +177,8 @@ export class ScoreEditor {
 
   // ---- internals ----
   _alive() { if (this._destroyed) throw new Error('ScoreEditor destroyed'); }
-  _info() { return cursorInfo(this._model, this._cursor, this._state); }
-  _ctx() { return { maxFret: this._opts.maxFret, now: this._clock.now(), twoDigitDelayMs: this._opts.twoDigitDelayMs, allowAppend: !this._readOnly }; }
+  _info() { return { ...cursorInfo(this._model, this._cursor, this._state), selection: this._selectionInfo() }; }
+  _ctx() { return { maxFret: this._opts.maxFret, now: this._clock.now(), twoDigitDelayMs: this._opts.twoDigitDelayMs, allowAppend: !this._readOnly, selection: this._selection }; }
   /** End any two-digit fret entry; true when one was live (Escape is consumed only then). */
   _cancelBuffer() {
     const live = bufferLive(this._state.digit, this._cursor, this._ctx());
@@ -208,6 +214,7 @@ export class ScoreEditor {
     this._model = r.score;
     this._cursor = r.cursor;
     this._state = r.state;
+    if (r.changed || COMMANDS[name].kind === 'nav') this._dropSelection(COMMANDS[name].kind === 'nav');
     if (r.changed) {
       this._record(name, before, r);
       this._modelChanged('edit', name);
@@ -245,6 +252,7 @@ export class ScoreEditor {
   _step(kind) {
     this._alive();
     if (this._readOnly) return false;
+    this._dropSelection();
     const e = kind === 'undo' ? this._history.undo() : this._history.redo();
     if (!e) { this._say(describe({ id: kind === 'undo' ? 'nothingToUndo' : 'nothingToRedo' })); return false; }
     const snap = kind === 'undo' ? e.before : e.after;
@@ -264,6 +272,7 @@ export class ScoreEditor {
     const prev = this._info();
     const next = clampCursor(this._model, want);
     this._cancelBuffer();
+    this._dropSelection(true);
     if (!sameCursor(next, this._cursor)) {
       this._cursor = next;
       this._state = syncDuration(this._model, next, this._state);
@@ -277,9 +286,10 @@ export class ScoreEditor {
     this._focused = focused;
     this._view.focused = focused;
     this._syncRoot();
-    this._view.drawCursor();
+    this._view.drawOverlay();
     if (focused) this._say(describeCursor(this._info(), null, true));
   }
 }
 
 installSettings(ScoreEditor);
+installSelection(ScoreEditor); // after settings: it uses _applyModel and _sayKept

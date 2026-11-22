@@ -466,8 +466,8 @@ test('A6: the editor renders multiMeasureRests off while the JSON keeps the auth
 test('G1: overlay is the svg last child with fill and cursor groups; column + string box on TAB, notation column too', () => {
   const { svg, ed } = mk(twoBar());
   const ov = lastChild(svg());
-  eq([ov.getAttribute('class'), ov.getAttribute('pointer-events'), ov.children.map((c) => c.getAttribute('class'))], ['editor-overlay', 'none', ['editor-fill', 'editor-cursor']]);
-  eq(ov.children[1].children.map((c) => c.getAttribute('class')), ['editor-col editor-col-notation', 'editor-col editor-col-tab', 'editor-string']);
+  eq([ov.getAttribute('class'), ov.getAttribute('pointer-events'), ov.children.map((c) => c.getAttribute('class'))], ['editor-overlay', 'none', ['editor-fill', 'editor-selection', 'editor-cursor']]); // 2.3 adds the selection group
+  eq(ov.children[2].children.map((c) => c.getAttribute('class')), ['editor-col editor-col-notation', 'editor-col editor-col-tab', 'editor-string']);
   ed.setCursor({ measure: 1, beat: 2 });
   eq(byClass(svg(), 'editor-slot').length, 2, 'append slot on both staves');
   eq(byClass(svg(), 'editor-band-under').length, 1, 'underfull band on measure 2');
@@ -489,7 +489,7 @@ test('G2: three edits in one frame render once and emit three change events; cur
   const s = svg();
   press(ed, 'ArrowRight', 'ArrowDown', 'Home');
   eq([v.renders, clock.pendingFrames(), svg() === s], [r0 + 1, 0, true]);
-  eq(lastChild(svg()).children[1].children.length, 3, 'cursor redrawn in place');
+  eq(lastChild(svg()).children[2].children.length, 3, 'cursor redrawn in place'); // 2.3: the cursor group is third
 });
 test('G3 / G6: focus toggles the --focused class and the cursor opacity; re-renders keep focus on the root', () => {
   const { ed, root, svg } = mk(twoBar());

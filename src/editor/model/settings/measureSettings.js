@@ -4,6 +4,7 @@
  *
  * Column-wide (written on every track, hidden ones included): time and
  * key signature, barline, repeatCount, ending, segno, coda, jump, section.
+ * 2.3: pickup (measure 1 only, true or null), written on every track.
  * Per track: clef. A time or key signature equal to the one in force just
  * before the measure (per track; at measure 0 the track's, the score's or
  * the default) is deleted instead of written. Fields are validated first,
@@ -12,13 +13,13 @@
 import { clefOf, clefAt, trackClef } from '../../../clef.js';
 import { canonicalJump, jumpKind, mergeNavigation, JUMP_TEXTS } from '../../../navigation.js';
 import { EDITOR_LIMITS } from '../limits.js';
-import { tracksOf, trackAt, measureAt, measureCount, hasTab, hasNotation } from '../access.js';
+import { tracksOf, trackAt, measureAt, measureCount, hasTab, hasNotation, isPickup } from '../access.js';
 import { timeSignatureAt, keySignatureAt, sameTime, baseTimeSignature, baseKeySignature } from '../fill.js';
 import { object, list, checkKeys, index, intIn, text, flag, LINE_BREAK } from './validate.js';
 import { columnValue, setColumn, setTrackField } from './column.js';
 import { checkClef } from './track.js';
 
-export const PATCH_KEYS = Object.freeze(['timeSignature', 'keySignature', 'clef', 'barline', 'repeatCount', 'ending', 'segno', 'coda', 'jump', 'section']);
+export const PATCH_KEYS = Object.freeze(['timeSignature', 'keySignature', 'clef', 'barline', 'repeatCount', 'ending', 'segno', 'coda', 'jump', 'section', 'pickup']);
 export const BARLINES = Object.freeze(['single', 'double', 'final', 'repeatStart', 'repeatEnd']);
 
 function checkTime(raw) {
@@ -114,6 +115,11 @@ function checkPatch(score, mi, raw) {
   if (has('coda')) out.coda = flag(patch.coda, 'Coda');
   if (has('jump')) out.jump = checkJump(patch.jump);
   if (has('section')) out.section = checkSection(patch.section);
+  if (has('pickup')) {
+    if (patch.pickup !== true && patch.pickup !== null) throw new TypeError('Pickup must be true or null');
+    if (mi !== 0) throw new RangeError('Only measure 1 can be a pickup');
+    out.pickup = patch.pickup ?? undefined;
+  }
   return out;
 }
 
@@ -160,12 +166,12 @@ export function updateMeasure(score, cursor, mi, patch, opts) {
     out = setColumn(out, mi, 'barline', v.barline);
     if (v.barline !== 'repeatEnd') out = setColumn(out, mi, 'repeatCount', undefined);
   }
-  for (const k of ['repeatCount', 'ending', 'segno', 'coda', 'jump', 'section']) if (has(k)) out = setColumn(out, mi, k, v[k]);
+  for (const k of ['repeatCount', 'ending', 'segno', 'coda', 'jump', 'section', 'pickup']) if (has(k)) out = setColumn(out, mi, k, v[k]);
   const keys = Object.keys(v);
   const announce = keys.length === 1
     ? { id: 'measureSet', key: keys[0], value: v[keys[0]] ?? null, n: mi + 1, tabOnly }
     : { id: 'measureUpdated', n: mi + 1, tabOnly };
-  return { score: out, announce };
+  return { score: out, announce, ...(keys.length === 1 && keys[0] === 'pickup' ? { label: 'pickup' } : {}) };
 }
 
 /**
@@ -197,5 +203,6 @@ export function getMeasureSettings(score, mi, ti) {
     jump: nav.jump,
     jumpCustom: nav.jump != null && jumpKind(nav.jump) === 'text',
     section: nav.section ?? null,
+    pickup: mi === 0 && isPickup(score),
   };
 }

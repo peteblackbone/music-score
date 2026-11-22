@@ -5,7 +5,8 @@
  * group is wired by editor-demo-effects.js, the Score… dialog and the
  * Time / Key / Tempo status items by editor-demo-settings.js, the Measure…
  * dialog by editor-demo-measure.js, the Tracks… dialog by
- * editor-demo-tracks.js (form helpers: editor-demo-forms.js).
+ * editor-demo-tracks.js (form helpers: editor-demo-forms.js), the 2.3 Edit and
+ * Measures groups and the Selection status item by editor-demo-edit.js.
  *
  * Flows (ui.md §1, §6): first visit loads lead-riff with a notice; later
  * visits restore the browser autosave (debounced 500 ms after each edit,
@@ -23,6 +24,7 @@ import { durationWords, FILL_WORDS } from '../src/editor/model/durations.js';
 import { wireEffects } from './editor-demo-effects.js';
 import { wireSettings } from './editor-demo-settings.js';
 import { wireTracksDialog } from './editor-demo-tracks.js';
+import { wireEdit } from './editor-demo-edit.js';
 
 export const AUTOSAVE_KEY = 'music-score-editor:autosave';
 /** sessionStorage flag set while a restore renders; still set on the next load = that restore never finished. */
@@ -184,6 +186,7 @@ export function startEditorDemo(doc) {
   // Settings dialogs (they manage focus themselves) and the Time / Key / Tempo status items
   const refreshSettings = wireSettings(doc, editor, { refresh: () => refreshUi() });
   wireTracksDialog(doc, editor, { refresh: () => refreshUi() });
+  const refreshEdit = wireEdit(doc, editor, { refresh: () => refreshUi(), back: (e) => back(e) });
   function refreshUi() {
     const i = editor.getCursorInfo();
     const ro = editor.isReadOnly();
@@ -193,7 +196,7 @@ export function startEditorDemo(doc) {
     $('st-string').textContent = i.hasTab ? `${i.string} (${noteLetter(i.tuningNote)})` : '–';
     $('st-fret').textContent = i.hasTab && i.fret != null ? String(i.fret) : '–';
     $('st-duration').textContent = durationWords(i.duration, i.dots, i.triplet);
-    $('st-fill').textContent = FILL_WORDS[i.fill]?.label ?? i.fill;
+    $('st-fill').textContent = i.pickup && i.fill === 'under' ? 'Pickup' : FILL_WORDS[i.fill]?.label ?? i.fill;
     $('st-effects').textContent = i.effects.length ? i.effects.join(', ') : '–';
     $('st-readonly').hidden = !ro;
     durationButtons.forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.duration === i.duration)); b.disabled = ro; });
@@ -205,8 +208,10 @@ export function startEditorDemo(doc) {
     redoBtn.disabled = !editor.canRedo();
     refreshEffects(i, ro);
     refreshSettings(i, ro);
+    refreshEdit(i, ro);
   }
   editor.on('cursor', refreshUi);
+  editor.on('selection', refreshUi);
   editor.on('change', (e) => {
     // only real edits (edit / undo / redo) are unsaved work and autosaved; a load is not
     if (e.source !== 'load') {

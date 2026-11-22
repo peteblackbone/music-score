@@ -3,8 +3,10 @@
  * the renderer it owns, event listeners, render scheduling, the overlay,
  * scrolling and the live region. It holds no model state; it asks its
  * `host` (ScoreEditor) for what to draw:
- *   host.viewScore() · host.cursorInfo() · host.fills() · host.afterRender()
+ *   host.viewScore() · host.cursorInfo() · host.fills() · host.selection() · host.afterRender()
  *   host.onKey(e) → bool · host.onClick(hit) · host.onFocusChange(focused)
+ *   host.onClipboard(kind, e) → bool  (2.3: copy / cut / paste on document while the root has focus;
+ *     'pastekey' on a paste shortcut; 'pasteseen' on any native paste, before the focus checks; 'destroy')
  *
  * DOM (ui.md §2), all inside the container:
  *   div.music-score-editor[tabindex=0][role=application]   (focus stays here)
@@ -18,8 +20,9 @@
  */
 import { MusicScoreRenderer } from '../MusicScoreRenderer.js';
 import { hitTestMap } from '../hitMap.js';
-import { indexHitMap, cursorShapes, fillShapes } from './geometry.js';
+import { indexHitMap, cursorShapes, fillShapes, selectionShapes } from './geometry.js';
 import { createOverlay, drawShapes } from './overlay.js';
+import { isPasteKey } from './keymap.js';
 
 const LIVE_STYLE = 'position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;'
   + 'clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0';
@@ -75,8 +78,22 @@ export class EditorView {
 
     this._listen(this.root, 'keydown', (e) => {
       if (e.target !== this.root || e.defaultPrevented) return;
+      if (isPasteKey(e)) this.host.onClipboard('pastekey', e); // never prevented: the native paste event must fire
       if (this.host.onKey(e)) e.preventDefault();
     });
+    // 2.3 clipboard: native events on document, acted on only while the root has focus (in its own
+    // document or shadow root). Any native paste ends the Safari fallback, even one the page handled.
+    const doc = typeof document !== 'undefined' ? document : null;
+    if (typeof doc?.addEventListener === 'function') {
+      for (const kind of ['copy', 'cut', 'paste']) {
+        this._listen(doc, kind, (e) => {
+          if (kind === 'paste') this.host.onClipboard('pasteseen', e);
+          const active = this.root.getRootNode?.()?.activeElement ?? doc.activeElement;
+          if (active !== this.root || e.defaultPrevented) return;
+          if (this.host.onClipboard(kind, e)) e.preventDefault();
+        });
+      }
+    }
     this._listen(this.root, 'focus', () => this.host.onFocusChange(true));
     this._listen(this.root, 'blur', () => this.host.onFocusChange(false));
     this._listen(this.renderHost, 'mousedown', (e) => this._mouseDown(e));
@@ -124,7 +141,7 @@ export class EditorView {
     }
   }
 
-  /** Render now: score, hit map, overlay (bands + cursor), scroll if asked, then host.afterRender(). */
+  /** Render now: score, hit map, overlay (bands, selection, cursor), scroll if asked, then host.afterRender(). */
   flush() {
     if (this._destroyed) return;
     if (this._raf != null) { this.clock.cancelAnimationFrame?.(this._raf); this._raf = null; }
@@ -136,7 +153,7 @@ export class EditorView {
     this.index = indexHitMap(this.renderer.getHitMap());
     this.overlay = createOverlay(this.svg);
     drawShapes(this.overlay.fill, fillShapes(this.index, this.host.fills(), this.style, this.renderer.theme));
-    this.drawCursor();
+    this.drawOverlay();
     this.host.afterRender();
   }
 
@@ -155,6 +172,18 @@ export class EditorView {
     this._scroll = true;
   }
 
+  /** Redraw the selection group (2.3; dimmed when unfocused). */
+  drawSelection() {
+    if (!this.overlay) return;
+    drawShapes(this.overlay.selection, selectionShapes(this.index, this.host.selection(), this.style, this.renderer.theme, this.focused));
+  }
+
+  /** Redraw the selection and cursor groups (after a selection change or a focus change). */
+  drawOverlay() {
+    this.drawSelection();
+    this.drawCursor();
+  }
+
   /** Redraw only the cursor group (dimmed when unfocused). */
   drawCursor() {
     if (!this.overlay) return;
@@ -167,14 +196,17 @@ export class EditorView {
 
   /**
    * Speak `text` in the live region after 150 ms of quiet. Within one
-   * window a later text replaces an earlier one, except a `keep` text (a
-   * settings result): it stays, and the texts after it are joined to it
-   * with ". " (the latest non-kept one only; a repeat is spoken once).
+   * window a later text replaces an earlier one, except a kept text
+   * (`{ keep: true }`, a settings result): it stays, and the texts after it
+   * are joined to it with ". " (the latest non-kept one only; a repeat is
+   * spoken once). `{ lead: true }` (2.3 "Selection cleared") starts the
+   * window afresh with a kept text.
    */
-  announce(text, keep = false) {
+  announce(text, { keep = false, lead = false } = {}) {
     if (this._destroyed) return;
     if (this._liveTimer != null) this.clock.clearTimeout(this._liveTimer);
-    else this._parts = [];
+    if (this._liveTimer == null || lead) this._parts = [];
+    keep = keep || lead;
     const last = this._parts[this._parts.length - 1];
     if (last && last.text === text) last.keep ||= keep; // the same text twice in a row is spoken once
     else if (last && !last.keep && !keep) last.text = text;
@@ -225,6 +257,7 @@ export class EditorView {
     this._raf = null;
     this._fallback = null;
     this._liveTimer = null;
+    this.host.onClipboard('destroy');
     for (const [node, type, fn] of this._listeners) node.removeEventListener(type, fn);
     this._listeners = [];
     try { this.container.removeChild(this.root); } catch { /* already removed by the page */ }

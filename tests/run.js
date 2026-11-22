@@ -138,5 +138,30 @@ for (const c of cases) {
   const { summary } = await import('./editor-settings-edge-dom.mjs');
   fail += await summary();
 }
+// 2.3.0 characterization pins: per-track tempoAt, removeTrack tempo loss, insertMeasureAt(0), renderer tempo changes (tests/editor-pins-2.3.mjs)
+{
+  const { summary } = await import('./editor-pins-2.3.mjs');
+  fail += summary();
+}
+// 2.3.0 score-wide tempo and pickup measure: criteria, render parity (tests/editor-tempo.mjs)
+{
+  const { summary } = await import('./editor-tempo.mjs');
+  fail += await summary();
+}
+// 2.3.0 selection, range edits, fill / reflow, clips and paste at model level (tests/editor-select.mjs)
+{
+  const { summary } = await import('./editor-select.mjs');
+  fail += summary();
+}
+// 2.3.0 selection, range edits, fill / reflow and clipboard at controller level (tests/editor-select-dom.mjs)
+{
+  const { summary } = await import('./editor-select-dom.mjs');
+  fail += await summary();
+}
+// 2.3.0 edge cases against the criteria and decisions: holes, two voices, graces, ties, odd meters, limits, pickup, tempo parity, native clipboard events, hostile clips (tests/editor-select-edge.mjs)
+{
+  const { summary } = await import('./editor-select-edge.mjs');
+  fail += await summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);

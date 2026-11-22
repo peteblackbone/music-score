@@ -8,7 +8,7 @@
  * effects only).
  */
 
-import { FILL_WORDS, durationWords } from './model/durations.js';
+import { FILL_WORDS, DURATION_WORDS, durationWords } from './model/durations.js';
 import { EFFECT_BY_NAME, SUFFIXES } from './model/effectTable.js';
 import { formatBpm } from '../expression.js';
 import { canonicalEnding, endingLabel } from '../navigation.js';
@@ -73,11 +73,52 @@ export const MESSAGES = Object.freeze({
   tooLarge: () => 'The score would be too large',
   trackUpdated: (d) => `${trackText(d)} updated${d.removed ? `, ${d.removed} note${d.removed === 1 ? '' : 's'} removed` : ''}`,
   trackAdded: (d) => `${trackText(d)} added`,
-  trackRemoved: (d) => `${trackText(d)} removed`,
+  trackRemoved: (d) => `${trackText(d)} removed${tempoRemoved(d.tempoDropped)}`,
   trackMoved: (d) => `Track${d.name ? ` ${d.name}` : ''} moved to position ${d.n}`,
   measureSet: (d) => (Object.hasOwn(MEASURE_TEXT, d.key) ? `${MEASURE_TEXT[d.key](d.value)}${d.key === 'clef' || d.key === 'timeSignature' || d.key === 'keySignature' ? (d.value == null ? ' at' : ' from') : ' at'} measure ${d.n}${d.tabOnly && d.value != null ? ', not shown on TAB only' : ''}` : ''),
   measureUpdated: (d) => `Measure ${d.n} settings updated${d.tabOnly ? ', clef not shown on TAB only' : ''}`,
+  // 2.3 selection
+  selectedBeats: (d) => `Selected measure ${d.m1} beat ${d.b1}${d.m1 !== d.m2 ? ` to measure ${d.m2} beat ${d.b2}` : d.b1 !== d.b2 ? ` to beat ${d.b2}` : ''}, ${beatsText(d.count)}`,
+  selectedMeasures: (d) => `Selected measure${d.a !== d.b ? `s ${d.a} to ${d.b}` : ` ${d.a}`}, ${beatsText(d.count)}`,
+  selectedAll: (d) => `Selected all of ${trackText(d)}, ${plural(d.measures, 'measure')}`,
+  selectionCleared: () => 'Selection cleared',
+  nothingToSelect: () => 'Nothing to select',
+  // 2.3 range edits
+  rangeCleared: (d) => `${plural(d.count, 'beat')} changed to rest${d.count === 1 ? '' : 's'}`,
+  rangeAlreadyRests: () => 'Already rests',
+  copiedRests: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}, already rests`,
+  rangeRemoved: (d) => `${plural(d.count, 'beat')} deleted${tempoRemoved(d.tempoRemoved)}`,
+  columnsDeleted: (d) => `${d.all ? 'All measures deleted, 1 empty measure left' : d.a === d.b ? `Measure ${d.a} deleted` : `Measures ${d.a} to ${d.b} deleted`}${tempoRemoved(d.tempoRemoved)}`,
+  needsMeasureSelection: () => 'Select whole measures first',
+  // 2.3 fill and reflow
+  filled: (d) => `Added ${plural(d.rests.length, 'rest')}: ${d.rests.map((r) => DURATION_WORDS[r]).join(', ')}`,
+  filledMany: (d) => `Filled ${d.count === d.total ? plural(d.count, 'measure') : `${d.count} of ${d.total} measures`}, ${plural(d.rests, 'rest')} added`,
+  fillFull: () => 'Measure already full',
+  fillOver: () => 'Measure overfull, try Reflow',
+  fillTuplet: () => 'Finish the tuplet first',
+  fillPickup: () => 'Pickup measure, not filled',
+  fillCannot: () => "Plain rests can't fill this measure",
+  nothingToFill: () => 'Nothing to fill',
+  reflowed: (d) => `${d.added ? `Measure ${d.to} added, moved ${plural(d.count, 'beat')} to it` : `Moved ${plural(d.count, 'beat')} to measure ${d.to}`}${d.crossing ? `, beat ${d.crossing} crosses the barline and stays` : ''}`,
+  reflowCrossing: (d) => `Beat ${d.beat} crosses the barline and stays`,
+  reflowNothing: () => 'Nothing to reflow',
+  // 2.3 clipboard
+  copied: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}`,
+  cut: (d) => `Cut ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}, now rests`,
+  pasted: (d) => `Pasted ${d.kind === 'measures' ? `${plural(d.count, 'measure')} at measure ${d.at}` : `${plural(d.count, 'beat')}${d.replaced != null ? `, replaced ${d.replaced}` : ''}`}${d.dropped ? `, ${plural(d.dropped, 'note')} on missing strings dropped` : ''}${d.tempoRemoved ? `, ${plural(d.tempoRemoved, 'tempo mark')} removed` : ''}`,
+  cutUnwritten: (d) => `Clipboard unavailable, nothing cut. ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')} copied in the editor`,
+  nothingToCopy: () => 'Nothing to copy',
+  nothingToPaste: () => 'Nothing to paste',
+  notClip: () => 'Not a music-score clip',
+  clipInvalid: () => 'Not a music-score clip',
+  clipVersion: () => 'Unsupported clip version',
+  clipTooLarge: () => 'Clip too large',
 });
+
+/** '1 beat' / '3 measures' (n of `word`). */
+export const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+/** 'no beats' / '1 beat' / '6 beats'. */
+export const beatsText = (n) => (n ? plural(n, 'beat') : 'no beats');
 
 /** 'no sharps or flats' / '1 sharp' / '3 flats'. */
 export const keyWords = (k) => (!k ? 'no sharps or flats' : `${Math.abs(k)} ${k > 0 ? 'sharp' : 'flat'}${Math.abs(k) === 1 ? '' : 's'}`);
@@ -94,8 +135,11 @@ const MEASURE_TEXT = {
   coda: (v) => (v ? 'Coda' : 'Coda removed'),
   jump: (v) => v ?? 'Jump removed',
   section: (v) => (v != null ? `Section ${typeof v === 'string' ? v : [v.letter, v.text].filter(Boolean).join(' ')}` : 'Section removed'),
+  pickup: (v) => (v ? 'Pickup' : 'Pickup removed'),
 };
 
+/** ', 1 tempo mark removed' / ', 2 tempo marks removed' (empty for none). */
+export const tempoRemoved = (n) => (n ? `, ${n} tempo mark${n === 1 ? '' : 's'} removed` : '');
 /** 'Track 2 Bass' / 'Track 2'. */
 const trackText = (d) => `Track ${d.n}${d.name ? ` ${d.name}` : ''}`;
 
@@ -132,7 +176,7 @@ export function describeCursor(info, prev = null, full = false) {
   if (trackChanged) parts.push(`Track ${info.track + 1}${info.trackName ? ` ${info.trackName}` : ''}`);
   if (measureChanged) parts.push(`measure ${info.measure + 1}`);
   parts.push(positionText(info));
-  const fill = measureChanged && !info.empty && info.fill !== 'full' ? `, ${fillWord(info.fill)}` : '';
+  const fill = measureChanged && !info.empty && info.fill !== 'full' ? `, ${info.pickup && info.fill === 'under' ? 'pickup' : fillWord(info.fill)}` : '';
   return cap(parts.join(', ') + fill);
 }
 
