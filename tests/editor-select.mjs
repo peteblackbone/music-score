@@ -212,7 +212,7 @@ test('clearRange (Delete with a selection): graces removed, notes become rests k
   ok(sanitizeScore(r.score) === r.score);
   const rests = model({ tracks: [tab([{ beats: [rest('half'), rest('half')] }])] });
   ok(run('deleteNote', rests, cur(0, 0, 0), SEL.selectionRange(rests, 0, P(0, 0), P(0, 1))).changed === false, 'only rests: no change');
-  eq(describe(run('deleteNote', rests, cur(0, 0, 0), SEL.selectionRange(rests, 0, P(0, 0), P(0, 0))).announce), '1 beat changed to rest');
+  eq(describe(run('deleteNote', rests, cur(0, 0, 0), SEL.selectionRange(rests, 0, P(0, 0), P(0, 0))).announce), 'Already rests');
 });
 test('eachSlice (exported for 2.3.1): maps each slice\'s beats on one track, repairs ties, keeps the score when no slice has beats', () => {
   const s = rangeFixture();

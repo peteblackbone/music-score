@@ -512,7 +512,7 @@ test('cut: copy, then the range becomes rests in one undo step ("Cut 3 beats, no
   ed.cut();
   eq([ed.getScore().tracks[0].measures[0].beats[0].type, spoken()], ['rest', 'Cut 1 beat, now rests']);
   ed.cut();
-  eq([ed.canUndo(), spoken()], [true, 'Cut 1 beat, now rests'], 'cutting a rest copies it and changes nothing');
+  eq([ed.canUndo(), spoken()], [true, 'Copied 1 beat, already rests'], 'cutting a rest copies it and changes nothing');
   ed.destroy();
 });
 test('R6: one Ctrl+V keystroke pastes once, with the native paste event (it cancels the fallback) and without it (the 0 ms fallback pastes from the internal clipboard); keydown is never prevented', () => {

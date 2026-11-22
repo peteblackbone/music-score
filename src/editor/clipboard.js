@@ -79,7 +79,7 @@ export function installClipboard(Editor) {
     if (event && !writeClip(data, c.text)) { this._sayKept(describe({ id: 'cutUnwritten', kind: c.kind, count: c.count })); return null; }
     const r = clearSlices(this._model, c.range);
     const announce = { id: 'cut', kind: c.kind, count: c.count };
-    if (r.score === this._model) this._say(describe(announce)); // only rests: copied, nothing to clear
+    if (r.score === this._model) this._say(describe({ ...announce, id: 'copiedRests' })); // only rests: copied, nothing to clear
     else this._applyModel('cut', 'cut', { score: r.score, cursor: { ...this._cursor, ...r.cursor }, announce });
     return c.text;
   });

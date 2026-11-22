@@ -71,7 +71,8 @@ export function removeSlices(score, sel) {
 /** Delete / Backspace with a selection. */
 export function clearRange(score, cursor, state, ctx) {
   const r = clearSlices(score, ctx.selection);
-  return { score: r.score, cursor: { ...cursor, ...r.cursor }, announce: { id: 'rangeCleared', count: r.count } };
+  const id = r.score === score ? 'rangeAlreadyRests' : 'rangeCleared'; // nothing to change: say so
+  return { score: r.score, cursor: { ...cursor, ...r.cursor }, announce: { id, count: r.count } };
 }
 
 /** Ctrl+Delete / Ctrl+Backspace with a selection. */
