@@ -7375,6 +7375,395 @@ test('browser parity: src never calls array methods directly on .children', () =
   });
 }
 
+// ---------- 2.0 characterization: renderer behaviour the ScoreEditor (src/editor/) relies on ----------
+// Pins CURRENT 1.12.1 behaviour only; none of this may change when 2.0 adds the editor and getHitMap()/hitTest().
+{
+  const { sanitizeScore } = await imp('src/sanitize.js');
+  const { computeLayout } = await imp('src/layout/index.js');
+  const { cases: allCases } = await import('./cases.mjs');
+  const barrel = await imp('index.js');
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const theme = resolveTheme();
+  const nt = (duration, string = 1, fret = 0, extra = {}) => ({ type: 'note', duration, notes: [{ string, fret }], ...extra });
+  const hiddenRest = (duration = 'quarter') => ({ type: 'rest', duration, hidden: true });
+  const graceB = (string = 2, fret = 3) => ({ type: 'grace', duration: '16th', notes: [{ string, fret }] });
+  const wholeRest = () => ({ type: 'rest', duration: 'whole' });
+  const deepFreeze = (o) => { if (o && typeof o === 'object' && !Object.isFrozen(o)) { Object.freeze(o); Object.values(o).forEach(deepFreeze); } return o; };
+  const svgOf = (score, width = 700, opts = {}) => { const b = makeContainer(); new MusicScoreRenderer(b, score, { width, ...opts }).render(); return serialize(b.children[0]); };
+
+  // One 4/4 track with graces, a hidden rest, a triplet and a two-voice measure; a second, shorter track.
+  const richScore = () => ({
+    title: 'rich',
+    tracks: [
+      { name: 'Guitar', showTablature: true, measures: [
+        { beats: [nt('quarter'), graceB(), nt('quarter', 2, 2), hiddenRest(), nt('quarter')] },
+        { beats: [nt('8th', 1, 1, { tuplet: 3 }), nt('8th', 1, 2, { tuplet: 3 }), nt('8th', 1, 3, { tuplet: 3 }), nt('quarter'), nt('half')] },
+        { voices: [
+          { beats: [graceB(), nt('half'), hiddenRest(), nt('quarter')] },
+          { beats: [hiddenRest(), nt('quarter', 3, 0), nt('half', 4, 0)] },
+        ] },
+      ] },
+      { name: 'Short', showTablature: true, measures: [{ beats: [nt('whole')] }] },
+    ],
+  });
+
+  // ---- 1. render() / setScore() container contract ----
+  test('2.0 pin: render() leaves exactly one svg child, also after a second render on the same container', () => {
+    const box = makeContainer();
+    const r = new MusicScoreRenderer(box, richScore(), { width: 700 });
+    eq(box.children.length, 0, 'before render');
+    r.render();
+    eq(box.children.length, 1, 'first render');
+    eq(box.children[0].tag, 'svg');
+    const first = box.children[0];
+    r.render();
+    eq(box.children.length, 1, 'second render');
+    if (box.children[0] === first) throw new Error('second render should replace the svg node');
+    if (r._svg !== box.children[0]) throw new Error('_svg is the mounted svg');
+  });
+  test('2.0 pin: render() clears foreign children of the container first', () => {
+    const box = makeContainer();
+    box.appendChild(document.createElement('div')); box.appendChild(document.createElement('p'));
+    new MusicScoreRenderer(box, richScore(), { width: 700 }).render();
+    eq(box.children.map((c) => c.tag), ['svg']);
+  });
+  test('2.0 pin: render() and setScore() both return the renderer itself (chainable); setScore alone does not touch the container', () => {
+    const box = makeContainer();
+    const r = new MusicScoreRenderer(box, richScore(), { width: 700 });
+    if (r.render() !== r) throw new Error('render() returns this');
+    if (r.setScore(richScore()) !== r) throw new Error('setScore() returns this');
+    eq(box.children.length, 1, 'setScore alone does not render or clear');
+    if (r.setScore(richScore()).render() !== r) throw new Error('chain returns this');
+  });
+  test('2.0 pin: setScore() stores the object by reference and re-render equals a fresh renderer on that score', () => {
+    const box = makeContainer();
+    const r = new MusicScoreRenderer(box, richScore(), { width: 700 });
+    r.render();
+    const next = { tracks: [{ showTablature: true, measures: [{ beats: [nt('quarter', 2, 5)] }, { beats: [wholeRest()] }] }] };
+    r.setScore(next);
+    if (r.score !== next) throw new Error('setScore keeps the reference');
+    r.render();
+    eq(box.children.length, 1);
+    eq(serialize(box.children[0]), svgOf(clone(next)), 're-render after setScore == fresh renderer');
+    r.setScore(richScore()).render();
+    eq(serialize(box.children[0]), svgOf(richScore()), 'and back again');
+  });
+  test('2.0 pin: constructor keeps an explicit width; theme is resolved from options.theme', () => {
+    const r = new MusicScoreRenderer(makeContainer(), richScore(), { width: 512, theme: { tabStaffLineSpacing: 18 } });
+    eq([r.width, r.theme.tabStaffLineSpacing], [512, 18]);
+  });
+
+  // ---- 2. the renderer never mutates its input ----
+  test('2.0 pin: a deep-frozen score renders without throwing and is unchanged (rich fixture; modules are strict, so a write would throw)', () => {
+    const s = deepFreeze(richScore());
+    const before = JSON.stringify(s);
+    svgOf(s);
+    eq(JSON.stringify(s), before);
+  });
+  test('2.0 pin: deep-frozen snapshot fixtures (two voices, graces, tuplets, lyrics, multi-rests, slashes, example) render identically and stay unchanged', () => {
+    const wanted = ['char-voices-w900', 'char-voices-tab-rhythm-w900', 'char-grace-ghost-mute-w900', 'char-graces-onbeat-w900', 'char-tuplets-nested-w900',
+      'char-lyrics-w900', 'char-multirest-w900', 'char-slashes-w900', 'example-score-w900'];
+    const found = allCases.filter((c) => wanted.includes(c.id));
+    eq(found.map((c) => c.id).sort(), [...wanted].sort(), 'fixtures exist');
+    for (const c of found) {
+      const frozen = deepFreeze(clone(c.score));
+      const before = JSON.stringify(frozen);
+      const out = svgOf(frozen, c.width, c.options);
+      eq(JSON.stringify(frozen), before, c.id);
+      if (out !== svgOf(clone(c.score), c.width, c.options)) throw new Error(`${c.id}: frozen render differs from the plain render`);
+    }
+  });
+  test('2.0 pin: normalizeScore and computeLayout accept a deep-frozen score', () => {
+    const s = deepFreeze(richScore());
+    const n = normalizeScore(s);
+    computeLayout(n, theme, 700);
+    eq(JSON.stringify(s), JSON.stringify(richScore()));
+  });
+
+  // ---- 3. sanitizeScore identity for valid input (the editor's B10 invariant builds on this) ----
+  test('2.0 pin: sanitizeScore(valid) === valid, with nested objects untouched, for two-voice, grace, hidden-rest, tuplet, lyric and multiMeasureRests scores', () => {
+    const lyric = nt('quarter', 1, 0, { lyric: 'la' });
+    const scores = [
+      richScore(),
+      { multiMeasureRests: true, tracks: [{ showTablature: true, measures: [{ beats: [wholeRest()] }, { beats: [wholeRest()] }, { beats: [] }] }] },
+      { tracks: [{ showTablature: true, measures: [{ beats: [lyric, nt('quarter')] }, { voices: [{ beats: [nt('whole')] }, { beats: [nt('whole', 3, 2)] }] }] }] },
+      { tracks: [{ showTablature: true, measures: [{ beats: [] }] }] },
+    ];
+    scores.forEach((s, i) => { if (sanitizeScore(s) !== s) throw new Error(`score ${i} was copied`); });
+    const r = richScore();
+    const out = sanitizeScore(r);
+    if (out.tracks[0].measures[2].voices[1] !== r.tracks[0].measures[2].voices[1]) throw new Error('nested voice object replaced');
+  });
+  test('2.0 pin: normalizeScore does not alter its input and drops the raw `voices` key from the normalized measure', () => {
+    const s = richScore(); const before = JSON.stringify(s);
+    const n = normalizeScore(s);
+    eq(JSON.stringify(s), before);
+    eq('voices' in n.tracks[0].measures[2], false);
+    eq('voices' in s.tracks[0].measures[2], true);
+  });
+
+  // ---- 4. layout element -> raw beat index ----
+  // Current fields: LayoutMeasure.elements[k] / .elements2[k] are `{ index, el, x, width, t, chord, accidentals,
+  // wholeMeasureRest }` (+ `voice` 1|2, `dx`, `tabEl`, rest fields on two-voice measures). `index` is the position
+  // in the NORMALIZED measure's `beats` (voice 1) or `voice2Beats` (voice 2), which equals the position in the raw
+  // `beats` / `voices[0].beats` / `voices[1].beats` because normalize maps beats 1:1. `el` is that very normalized beat
+  // object. elements[k].index === k (graces and hidden rests keep their slot). Graces: `t: null`, width = grace width;
+  // hidden rests: `width: 0`. LayoutMeasure.measureIndex is the raw measure index (first of the run for a multi-rest).
+  const layoutOf = (raw, width = 700) => { const n = normalizeScore(raw); return { n, L: computeLayout(n, theme, width) }; };
+  const layoutMeasures = (L, ti) => L.systems.flatMap((sys) => sys.tracks[ti].measures);
+  const rawBeatsOf = (m, voice) => (m.voices ? m.voices[voice - 1]?.beats : (voice === 1 ? m.beats : undefined));
+  test('2.0 pin: every layout element maps back to its raw beat index (element.index; el is the normalized beat at that index)', () => {
+    const raw = richScore();
+    const { n, L } = layoutOf(raw);
+    let checked = 0;
+    layoutMeasures(L, 0).forEach((lm) => {
+      const rawM = raw.tracks[0].measures[lm.measureIndex];
+      const normM = n.tracks[0].measures[lm.measureIndex];
+      [[1, lm.elements, normM.beats], [2, lm.elements2, normM.voice2Beats]].forEach(([voice, els, normBeats]) => {
+        if (!els) return;
+        const rawBeats = rawBeatsOf(rawM, voice);
+        eq(els.length, rawBeats.length, `m${lm.measureIndex} v${voice} count`);
+        els.forEach((le, k) => {
+          eq(le.index, k, `m${lm.measureIndex} v${voice} index`);
+          if (le.el !== normBeats[le.index]) throw new Error(`m${lm.measureIndex} v${voice} k${k}: el is not the normalized beat`);
+          eq(le.el.type, rawBeats[le.index].type, 'type');
+          eq(le.el.duration, rawBeats[le.index].duration, 'duration');
+          eq(le.el.notes.map((x) => [x.string, x.fret]), (rawBeats[le.index].notes || []).map((x) => [x.string, x.fret]), 'notes');
+          checked++;
+        });
+      });
+    });
+    eq(checked, 5 + 5 + 4 + 3);
+  });
+  test('2.0 pin: graces and hidden rests keep their slot; grace t is null, hidden width 0, a hidden rest sits at the previous onset x', () => {
+    const { L } = layoutOf(richScore());
+    const [m0, , m2] = layoutMeasures(L, 0);
+    eq(m0.elements.map((e) => e.el.type), ['note', 'grace', 'note', 'rest', 'note']);
+    eq(m0.elements[1].t, null); eq(m0.elements[1].width, theme.graceNoteWidthSp * theme.staffLineSpacing);
+    if (!(m0.elements[1].x < m0.elements[2].x)) throw new Error('grace left of its main note');
+    eq([m0.elements[3].el.hidden, m0.elements[3].width], [true, 0]);
+    eq(m0.elements[3].x, m0.elements[2].x);
+    eq(m2.elements.map((e) => e.index), [0, 1, 2, 3]);
+    eq(m2.elements2.map((e) => e.index), [0, 1, 2]);
+    eq(m2.elements.map((e) => e.voice), [1, 1, 1, 1]);
+    eq(m2.elements2.map((e) => e.voice), [2, 2, 2]);
+    eq(m2.wholeRest, null);
+  });
+  test('2.0 pin: single-voice measures carry no elements2 and no per-element voice tag', () => {
+    const { L } = layoutOf(richScore());
+    const [m0, m1] = layoutMeasures(L, 0);
+    eq([('elements2' in m0), ('elements2' in m1)], [false, false]);
+    eq(m0.elements.some((e) => 'voice' in e), false);
+  });
+  test('2.0 pin: normalized two-voice measure keeps voice 1 in `beats`, voice 2 in `voice2Beats`; hidden-only voice 2 leaves the measure single-voice', () => {
+    const m = normalizeScore(richScore()).tracks[0].measures[2];
+    eq(m.beats.map((b) => b.type), ['grace', 'note', 'rest', 'note']);
+    eq(m.voice2Beats.map((b) => b.type), ['rest', 'note', 'note']);
+    const single = { tracks: [{ showTablature: true, measures: [{ voices: [{ beats: [nt('whole')] }, { beats: [hiddenRest('whole')] }] }] }] };
+    const sm = normalizeScore(single).tracks[0].measures[0];
+    eq('voice2Beats' in sm, false);
+    eq(computeLayout(normalizeScore(single), theme, 700).systems[0].tracks[0].measures[0].elements.length, 1);
+  });
+  test('2.0 pin: an empty measure has no elements and a wholeRest centre marker; a whole-bar rest beat is one element with wholeMeasureRest', () => {
+    const sc = { tracks: [{ showTablature: true, measures: [{ beats: [] }, { beats: [wholeRest()] }] }] };
+    const [e, w] = layoutMeasures(layoutOf(sc).L, 0);
+    eq(e.elements.length, 0);
+    eq(typeof e.wholeRest.x, 'number');
+    eq(w.wholeRest, null);
+    eq([w.elements.length, w.elements[0].index, w.elements[0].wholeMeasureRest], [1, 0, true]);
+  });
+  test('2.0 pin: layout measure geometry: x <= contentX < endX, elements inside [contentX, endX] (graces excepted), measures tile left to right, same columns in every track', () => {
+    const { L } = layoutOf(richScore());
+    layoutMeasures(L, 0).forEach((lm) => {
+      if (!(lm.x <= lm.contentX && lm.contentX < lm.endX)) throw new Error(`m${lm.measureIndex} x/contentX/endX`);
+      eq(lm.width, lm.endX - lm.x);
+      [...lm.elements, ...(lm.elements2 || [])].filter((e) => e.el.type !== 'grace').forEach((e) => {
+        if (e.x < lm.contentX || e.x > lm.endX) throw new Error(`m${lm.measureIndex} el ${e.index} x outside`);
+      });
+    });
+    const ms = L.systems[0].tracks[0].measures;
+    ms.slice(1).forEach((m, i) => eq(m.x, ms[i].endX));
+    eq(L.systems[0].tracks[1].measures.map((m) => [m.x, m.endX]), ms.map((m) => [m.x, m.endX]));
+  });
+
+  // ---- 5. multiMeasureRests ----
+  // A run of >= 2 rest measures is ONE LayoutMeasure in every track: `measureIndex` = the run's first measure,
+  // `multiRest: { count, lastMi, x1, x2 }`, `elements: []`, `beamGroups: []`, `tupletGroups: []`, `wholeRest: null`.
+  // The collapsed measures (first+1..lastMi) do not appear in system.measureIndices or in any track's measures.
+  test('2.0 pin: multiMeasureRests collapses a run of rest measures into one LayoutMeasure (measureIndex = first, multiRest.count / lastMi)', () => {
+    const sc = { multiMeasureRests: true, tracks: [
+      { showTablature: true, measures: [{ beats: [nt('whole')] }, { beats: [wholeRest()] }, { beats: [wholeRest()] }, { beats: [] }, { beats: [nt('whole')] }] },
+      { showTablature: true, measures: [{ beats: [nt('whole')] }, { beats: [wholeRest()] }] }] };
+    const { L } = layoutOf(sc);
+    eq(L.systems.length, 1);
+    eq(L.systems[0].measureIndices, [0, 1, 4]);
+    const m = layoutMeasures(L, 0);
+    eq(m.map((x) => x.measureIndex), [0, 1, 4]);
+    eq(m.map((x) => 'multiRest' in x), [false, true, false]);
+    const run = m[1];
+    eq([run.multiRest.count, run.multiRest.lastMi], [3, 3]);
+    eq(typeof run.multiRest.x1, 'number'); eq(typeof run.multiRest.x2, 'number');
+    if (!(run.contentX < run.multiRest.x1 && run.multiRest.x1 < run.multiRest.x2 && run.multiRest.x2 < run.endX)) throw new Error('H-bar inside the measure');
+    eq([run.elements, run.beamGroups, run.tupletGroups, run.wholeRest], [[], [], [], null]);
+    eq(Object.keys(run.multiRest), ['count', 'lastMi', 'x1', 'x2']);
+    // the shorter track pads measures 2..4 and shares the same run
+    const t1 = layoutMeasures(L, 1);
+    eq(t1.map((x) => x.measureIndex), [0, 1, 4]);
+    eq([t1[1].multiRest.count, t1[1].multiRest.lastMi], [3, 3]);
+    eq(t1[2].padded, true);
+  });
+  test('2.0 pin: multiMeasureRests off (absent, false) keeps every measure its own LayoutMeasure with no multiRest field', () => {
+    for (const v of [undefined, false]) {
+      const sc = { ...(v === undefined ? {} : { multiMeasureRests: v }), tracks: [{ showTablature: true, measures: [{ beats: [wholeRest()] }, { beats: [wholeRest()] }, { beats: [wholeRest()] }] }] };
+      const m = layoutMeasures(layoutOf(sc).L, 0);
+      eq(m.map((x) => x.measureIndex), [0, 1, 2]);
+      eq(m.some((x) => 'multiRest' in x), false);
+    }
+  });
+  test('2.0 pin: multiMeasureRests does not change the normalized model (collapse happens in layout only)', () => {
+    const on = normalizeScore({ multiMeasureRests: true, tracks: [{ showTablature: true, measures: [{ beats: [wholeRest()] }, { beats: [wholeRest()] }] }] });
+    eq(on.measureCount, 2);
+    eq(on.tracks[0].measures.length, 2);
+  });
+
+  // ---- 6. normalize: padding, fret-derived notes ----
+  test('2.0 pin: normalize pads a shorter track with `padded: true` empty measures inheriting time/key; authored empties are padded: false', () => {
+    const sc = { tracks: [
+      { showTablature: true, measures: [{ timeSignature: { beats: 3, beatType: 4 }, keySignature: 2, beats: [nt('quarter')] }, { beats: [] }, { beats: [nt('quarter')] }] },
+      { showTablature: true, measures: [{ beats: [nt('quarter')] }] }] };
+    const n = normalizeScore(sc);
+    eq(n.measureCount, 3);
+    eq(n.tracks[0].measures.map((m) => m.padded), [false, false, false]);
+    eq(n.tracks[1].measures.map((m) => m.padded), [false, true, true]);
+    eq(n.tracks[1].measures.length, 3);
+    const p = n.tracks[1].measures[1];
+    eq([p.beats, p.timeSignature, p.keySignature], [[], { beats: 4, beatType: 4 }, 0]);
+    eq(layoutMeasures(computeLayout(n, theme, 700), 1).map((m) => m.padded), [false, true, true]);
+    eq(sc.tracks[1].measures.length, 1, 'input untouched');
+  });
+  test('2.0 pin: normalize pads null / missing entries (holes) of a track with padded: true', () => {
+    const n = normalizeScore({ tracks: [{ showTablature: true, measures: [{ beats: [nt('whole')] }, { beats: [nt('whole')] }] }, { showTablature: true, measures: [{ beats: [nt('whole')] }, null] }] });
+    eq(n.tracks[1].measures.map((m) => m.padded), [false, true]);
+  });
+  test('2.0 pin: string+fret notes get pitch (written, octave up) + soundingPitch + fromFret: true, and the track gets octaveClef: true', () => {
+    const raw = { tracks: [{ showTablature: true, measures: [{ beats: [nt('quarter', 1, 0), nt('quarter', 6, 3)] }] }] };
+    const t = normalizeScore(raw).tracks[0];
+    eq(t.octaveClef, true);
+    eq(t.writtenOctaveUp, false);
+    eq(t.measures[0].beats[0].notes[0], { string: 1, fret: 0, pitch: 'E5', soundingPitch: 'E4', fromFret: true });
+    eq(t.measures[0].beats[1].notes[0], { string: 6, fret: 3, pitch: 'G3', soundingPitch: 'G2', fromFret: true });
+    eq(raw.tracks[0].measures[0].beats[0].notes[0], { string: 1, fret: 0 }, 'input untouched');
+  });
+  test('2.0 pin: a note with explicit pitch keeps it (soundingPitch added, no fromFret); octaveClef false unless writtenOctaveUp', () => {
+    const pn = (extra) => ({ tracks: [{ showTablature: true, ...extra, measures: [{ beats: [{ type: 'note', duration: 'quarter', notes: [{ pitch: 'E4', string: 1, fret: 0 }] }] }] }] });
+    const a = normalizeScore(pn({})).tracks[0];
+    eq(a.octaveClef, false);
+    eq(a.measures[0].beats[0].notes[0], { pitch: 'E4', string: 1, fret: 0, soundingPitch: 'E4' });
+    const b = normalizeScore(pn({ writtenOctaveUp: true })).tracks[0];
+    eq(b.octaveClef, true);
+    eq(b.measures[0].beats[0].notes[0], { pitch: 'E5', string: 1, fret: 0, soundingPitch: 'E4' });
+  });
+  test('2.0 pin: normalized track defaults the editor relies on (clef, showStandardNotation, showTablature, tuning, tabRhythm, showChordDiagrams)', () => {
+    const t = normalizeScore({ tracks: [{ showTablature: true, measures: [{ beats: [] }] }] }).tracks[0];
+    eq([t.clef, t.showStandardNotation, t.showTablature], ['treble', true, true]);
+    eq(t.tuning, ['E2', 'A2', 'D3', 'G3', 'B3', 'E4']);
+    eq([t.tabRhythm, t.showChordDiagrams], [false, true]);
+    const only = normalizeScore({ tracks: [{ showTablature: true, showStandardNotation: false, measures: [{ beats: [] }] }] }).tracks[0];
+    eq(only.tabRhythm, true);
+  });
+
+  // ---- 7. public barrel ----
+  test('2.0 pin: index.js exports exactly MusicScoreRenderer, ScoreEditor and defaultTheme', () => {
+    // Updated deliberately in 2.0.0, which added ScoreEditor (src/editor/ScoreEditor.js).
+    eq(Object.keys(barrel).sort(), ['MusicScoreRenderer', 'ScoreEditor', 'defaultTheme']);
+    if (barrel.MusicScoreRenderer !== MusicScoreRenderer) throw new Error('barrel exports the same class');
+  });
+
+  // ---- 8. staff placement (oracle for getHitMap) ----
+  // Each staff is `<g class="staff staff-notation|staff-tab" data-track="ti" transform="translate(0,Y)">` directly
+  // inside `<g class="system system-N">` (a child of the svg). Inside a group the top line is y = 0 and there are no
+  // nested transforms. A TAB staff's first child is `<g class="tab-lines">` whose lines are written bottom first:
+  // line i (0-based) has y1 = lineBottom - i * tabStaffLineSpacing, lineBottom = (strings - 1) * tabStaffLineSpacing.
+  // String 1 (highest) is the TOP line: absolute y(string n) = Y + (n - 1) * tabStaffLineSpacing, and a fret's
+  // <text> baseline is 5 units below its string line (12 px fret font).
+  const walk = (n, f, out = []) => { if (f(n)) out.push(n); n.children.forEach((c) => walk(c, f, out)); return out; };
+  const cls = (n) => n.getAttribute('class') || '';
+  const isStaff = (n) => n.tag === 'g' && /(^| )staff( |$)/.test(cls(n));
+  const staffGroups = (svg) => walk(svg, isStaff);
+  const translateY = (g) => { const m = /^translate\(0,(-?[\d.]+)\)$/.exec(g.getAttribute('transform') || ''); if (!m) throw new Error(`transform ${g.getAttribute('transform')}`); return Number(m[1]); };
+  const renderSvg = (score, width, opts) => { const b = makeContainer(); new MusicScoreRenderer(b, score, { width, ...opts }).render(); return b.children[0]; };
+  const placementScore = () => ({ tracks: [
+    { name: 'Gtr', showStandardNotation: true, showTablature: true, measures: [{ beats: [nt('quarter', 1, 3), { type: 'note', duration: 'quarter', notes: [{ string: 6, fret: 7 }, { string: 3, fret: 5 }] }] }] },
+    { name: 'Bass', showStandardNotation: false, showTablature: true, tuning: ['E1', 'A1', 'D2', 'G2'], measures: [{ beats: [nt('quarter', 4, 1)] }] },
+  ] });
+  test('2.0 pin: staff groups are class "staff staff-notation|staff-tab" with data-track and translate(0,Y), one per visible staff, top to bottom, direct children of system-N', () => {
+    const svg = renderSvg(placementScore(), 700);
+    const gs = staffGroups(svg);
+    eq(gs.map((g) => [cls(g), g.getAttribute('data-track')]), [['staff staff-notation', '0'], ['staff staff-tab', '0'], ['staff staff-tab', '1']]);
+    const ys = gs.map(translateY);
+    if (!(ys[0] < ys[1] && ys[1] < ys[2])) throw new Error(`staff y not increasing: ${ys}`);
+    gs.forEach((g) => { if (walk(g, (n) => n !== g && isStaff(n)).length) throw new Error('nested staff'); });
+    const sys = svg.children.filter((c) => cls(c) === 'system system-0');
+    eq(sys.length, 1);
+    eq(sys[0].children.filter(isStaff).length, 3);
+  });
+  test('2.0 pin: TAB line of string n is drawn at staffY + (n-1) * tabStaffLineSpacing (string 1 on top), lines written bottom first', () => {
+    const sp = theme.tabStaffLineSpacing;
+    eq(sp, 15);
+    const svg = renderSvg(placementScore(), 700);
+    const tabs = staffGroups(svg).filter((g) => /staff-tab/.test(cls(g)));
+    [[tabs[0], 6], [tabs[1], 4]].forEach(([g, strings]) => {
+      const Y = translateY(g);
+      const linesG = g.children[0];
+      eq(cls(linesG), 'tab-lines');
+      const ly = linesG.children.map((l) => Number(l.getAttribute('y1')));
+      eq(linesG.children.map((l) => Number(l.getAttribute('y2'))), ly, 'horizontal');
+      eq(ly, Array.from({ length: strings }, (_, i) => (strings - 1 - i) * sp), 'local y, bottom line first');
+      for (let n = 1; n <= strings; n++) eq(Y + ly[strings - n], Y + (n - 1) * sp, `string ${n}`);
+    });
+    // a custom spacing flows through the same formula
+    const svg2 = renderSvg(placementScore(), 700, { theme: { tabStaffLineSpacing: 18 } });
+    const g2 = staffGroups(svg2).find((g) => /staff-tab/.test(cls(g)));
+    eq(g2.children[0].children.map((l) => Number(l.getAttribute('y1'))), [5, 4, 3, 2, 1, 0].map((i) => i * 18));
+  });
+  test('2.0 pin: drawn fret numbers sit 5 units below their string line (text y = (string-1)*spacing + 5 in the staff group), x = layout element x', () => {
+    const sp = theme.tabStaffLineSpacing;
+    const svg = renderSvg(placementScore(), 700);
+    const [tab0, tab1] = staffGroups(svg).filter((g) => /staff-tab/.test(cls(g)));
+    const frets = (g) => g.children.filter((c) => c.tag === 'text' && /^\d+$/.test(c.textContent));
+    const byFret = Object.fromEntries(frets(tab0).map((t) => [t.textContent, Number(t.getAttribute('y'))]));
+    eq([byFret['3'], byFret['7'], byFret['5']], [0 * sp + 5, 5 * sp + 5, 2 * sp + 5]);
+    eq(frets(tab1).map((t) => [t.textContent, Number(t.getAttribute('y'))]), [['1', 3 * sp + 5]]);
+    const L = layoutOf(placementScore()).L;
+    const lx = L.systems[0].tracks[0].measures[0].elements[0].x;
+    eq(frets(tab0).filter((t) => t.textContent === '3').map((t) => Number(t.getAttribute('x'))), [Math.round(lx * 100) / 100]);
+  });
+  test('2.0 pin: a notation+TAB track puts its TAB staff below its notation staff (notation lines 10 apart from y 0 to 40)', () => {
+    const svg = renderSvg(placementScore(), 700);
+    const [nota, tab] = staffGroups(svg);
+    const lines = nota.children[0];
+    eq(cls(lines), 'staff-lines');
+    eq(lines.children.map((l) => Number(l.getAttribute('y1'))), [40, 30, 20, 10, 0]);
+    const gap = translateY(tab) - (translateY(nota) + 4 * theme.staffLineSpacing);
+    if (!(gap >= theme.notationTabGapSp * theme.staffLineSpacing)) throw new Error(`gap ${gap}`);
+  });
+  test('2.0 pin: with several systems each has its own staff groups, translate y strictly increases, and every TAB staff keeps the same line formula', () => {
+    const sp = theme.tabStaffLineSpacing;
+    const many = { tracks: [{ showTablature: true, measures: Array.from({ length: 8 }, (_, i) => ({ beats: [nt('quarter', 1 + (i % 6), i), nt('quarter'), nt('quarter'), nt('quarter')] })) }] };
+    const svg = renderSvg(many, 300);
+    const systems = svg.children.filter((c) => /^system system-\d+$/.test(cls(c)));
+    if (systems.length < 2) throw new Error('expected >= 2 systems');
+    let prev = -Infinity;
+    systems.forEach((sg, si) => {
+      eq(cls(sg), `system system-${si}`);
+      const g = sg.children.filter(isStaff);
+      eq(g.map((x) => cls(x)), ['staff staff-notation', 'staff staff-tab']);
+      g.forEach((x) => { const y = translateY(x); if (!(y > prev)) throw new Error('y not increasing'); prev = y; });
+      eq(g[1].children[0].children.map((l) => Number(l.getAttribute('y1'))), [5, 4, 3, 2, 1, 0].map((i) => i * sp));
+    });
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

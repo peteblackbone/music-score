@@ -17,6 +17,7 @@ import { computeLayout } from './layout/index.js';
 import { placeStaves, BOTTOM_MARGIN_SP } from './layout/vertical.js';
 import { inkBounds } from './layout/ink.js';
 import { el as svgEl, svgD, r2 } from './draw/svgUtil.js';
+import { buildHitMap, hitTestMap } from './hitMap.js';
 import { drawScoreHeader, drawScoreFooter } from './draw/header.js';
 import { drawSystem } from './draw/system.js';
 import { drawTempo, drawSystemDecor, tempoTextWidth, tempoBaseline } from './draw/decor.js';
@@ -160,10 +161,35 @@ export class MusicScoreRenderer {
     svg.setAttribute('height', totalHeight);
     svg.setAttribute('viewBox', `0 0 ${r2(width)} ${totalHeight}`);
 
+    // Plain summary for getHitMap() / hitTest() (2.0.0): references and numbers only, nothing written back.
+    this._hitSource = {
+      layout, width, height: totalHeight,
+      staves: drawn.map((d) => d.staves.map((st) => ({ ti: st.ti, kind: st.kind, lineBottom: st.lineBottom, y: st.y, stringCount: st.track.tuning.length }))),
+    };
+
     this.container.innerHTML = '';
     this.container.appendChild(svg);
     this._svg = svg;
     return this;
+  }
+
+  /** The svg element of the last render(), or null before the first one. */
+  getSvg() {
+    return this._svg ?? null;
+  }
+
+  /**
+   * Plain-data addressing of the last render (see hitMap.js): staves,
+   * measures and elements in SVG user units. A fresh object on every call;
+   * null before the first render().
+   */
+  getHitMap() {
+    return this._hitSource ? buildHitMap(this._hitSource, this.theme) : null;
+  }
+
+  /** The beat at SVG point (x, y) of the last render, `{ ti, measureIndex, beatIndex, string? }`, or null (see hitMap.js). */
+  hitTest(x, y) {
+    return hitTestMap(this.getHitMap(), x, y);
   }
 }
 

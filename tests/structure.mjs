@@ -40,6 +40,19 @@ const PASS_MODULES = ['curves', 'tabTechniques', 'techniqueLabels', 'playingDire
 const CALL_ORDER = ['renderTiesAndSlurs', 'renderGraceSlurs', 'renderTabArticulations', 'renderTechniqueLabelRuns',
   'renderPlayingDirections', 'renderChordSymbolsAndDynamics', 'renderFermatas'];
 
+const EDITOR = 'src/editor';
+// Pure editor modules: no DOM tokens (the controller lives in view.js, overlay.js and ScoreEditor.js).
+const isPureEditor = (n) => n.startsWith(`${EDITOR}/model/`) || ['keymap.js', 'announce.js', 'geometry.js', 'style.js', 'options.js', 'emitter.js'].some((b) => n === `${EDITOR}/${b}`);
+const DOM_TOKENS = /\b(document|window|requestAnimationFrame|addEventListener)\b/g;
+// Renderer modules any editor file may import, and the ones only named editor files may import.
+const EDITOR_SHARED = ['src/sanitize.js', 'src/duration.js', 'src/rational.js'];
+const EDITOR_ALLOWED = {
+  'src/MusicScoreRenderer.js': [`${EDITOR}/view.js`, `${EDITOR}/ScoreEditor.js`],
+  'src/hitMap.js': [`${EDITOR}/view.js`, `${EDITOR}/geometry.js`],
+  'src/draw/svgUtil.js': [`${EDITOR}/overlay.js`],
+  'src/textMetrics.js': [`${EDITOR}/geometry.js`],
+};
+
 // Each check returns an array of problem strings (empty = pass).
 export const checks = {
   'passes/ files are <= 300 lines': (f) => Object.entries(f)
@@ -102,6 +115,38 @@ export const checks = {
     return relOnly(f[p]).filter((s) => resolveSpec(p, s) === 'src/draw/notation.js').map((s) => `${p} imports ${s}`);
   },
 
+  // ---- 2.0.0 editor (src/editor/) ----
+  'nothing in src/ outside src/editor/ imports src/editor/': (f) => {
+    const probs = [];
+    for (const [n, t] of Object.entries(f)) {
+      if (n.startsWith(`${EDITOR}/`)) continue;
+      for (const s of relOnly(t)) if (resolveSpec(n, s).startsWith(`${EDITOR}/`)) probs.push(`${n} imports ${s}`);
+    }
+    return probs;
+  },
+
+  'editor model, keymap, announce, geometry and style are DOM-free': (f) => Object.entries(f)
+    .filter(([n]) => isPureEditor(n))
+    .flatMap(([n, t]) => [...new Set([...t.matchAll(DOM_TOKENS)].map((m) => m[1]))].map((tok) => `${n} uses ${tok}`)),
+
+  'editor imports from outside src/editor/ follow the allowlist (model: sanitize, duration, rational only)': (f) => {
+    const probs = [];
+    for (const [n, t] of Object.entries(f)) {
+      if (!n.startsWith(`${EDITOR}/`)) continue;
+      for (const s of relOnly(t)) {
+        const target = resolveSpec(n, s);
+        if (target.startsWith(`${EDITOR}/`) || EDITOR_SHARED.includes(target)) continue;
+        if (n.startsWith(`${EDITOR}/model/`) || !(EDITOR_ALLOWED[target] || []).includes(n)) probs.push(`${n} imports ${s}`);
+      }
+    }
+    return probs;
+  },
+
+  'src/editor/ files are <= 300 lines': (f) => Object.entries(f)
+    .filter(([p]) => p.startsWith(`${EDITOR}/`))
+    .filter(([, t]) => t.replace(/\n$/, '').split('\n').length > 300)
+    .map(([p, t]) => `${p} has ${t.split('\n').length} lines`),
+
   'MusicScoreRenderer.js calls the 7 passes in order': (f) => {
     const t = f['src/MusicScoreRenderer.js'];
     if (t === undefined) return ['MusicScoreRenderer.js missing'];
@@ -144,6 +189,30 @@ export async function notationExportProblems(extra = []) {
   return JSON.stringify(names) === JSON.stringify(want) ? [] : [`notation.js exports [${names}]`];
 }
 
+// Mutation tests for the editor guards: each mutated copy of the sources must make its check fail.
+export function mutationProblems(files) {
+  const imp = (spec) => `import { x } from '${spec}';\n`;
+  const cases = [
+    ['renderer module importing src/editor/ is caught', 'nothing in src/ outside src/editor/ imports src/editor/',
+      { 'src/theme.js': imp('./editor/style.js') + (files['src/theme.js'] || '') }],
+    ['DOM token in a model file is caught', 'editor model, keymap, announce, geometry and style are DOM-free',
+      { [`${EDITOR}/model/zz.js`]: 'export const w = () => window.innerWidth;\n' }],
+    ['addEventListener in keymap.js is caught', 'editor model, keymap, announce, geometry and style are DOM-free',
+      { [`${EDITOR}/keymap.js`]: 'el.addEventListener("x", f);\n' }],
+    ['model importing layout is caught', 'editor imports from outside src/editor/ follow the allowlist (model: sanitize, duration, rational only)',
+      { [`${EDITOR}/model/zz.js`]: imp('../../layout/index.js') }],
+    ['model importing hitMap is caught', 'editor imports from outside src/editor/ follow the allowlist (model: sanitize, duration, rational only)',
+      { [`${EDITOR}/model/zz.js`]: imp('../../hitMap.js') }],
+    ['overlay importing MusicScoreRenderer is caught', 'editor imports from outside src/editor/ follow the allowlist (model: sanitize, duration, rational only)',
+      { [`${EDITOR}/overlay.js`]: imp('../MusicScoreRenderer.js') }],
+    ['geometry importing svgUtil is caught', 'editor imports from outside src/editor/ follow the allowlist (model: sanitize, duration, rational only)',
+      { [`${EDITOR}/geometry.js`]: imp('../draw/svgUtil.js') }],
+    ['301-line editor file is caught', 'src/editor/ files are <= 300 lines',
+      { [`${EDITOR}/zz.js`]: 'x\n'.repeat(301) }],
+  ];
+  return cases.map(([name, check, over]) => [name, checks[check]({ ...files, ...over }).length ? [] : [`${check} did not fail`]]);
+}
+
 export async function summary() {
   let fail = 0;
   const files = loadSrc();
@@ -154,6 +223,7 @@ export async function summary() {
   report('barrel exports exactly the 8 pass functions', await barrelProblems());
   report('notation.js exports the pre-1.5 names plus fermataGlyph', await notationExportProblems(['fermataGlyph']));
   for (const [name, fn] of Object.entries(checks)) report(name, fn(files));
+  for (const [name, probs] of mutationProblems(files)) report(`mutation: ${name}`, probs);
   return fail;
 }
 

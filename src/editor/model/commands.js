@@ -1,0 +1,84 @@
+/**
+ * model/commands.js — the command registry and the one entry point that
+ * runs a command against the model.
+ *
+ * Kinds: 'nav' (moves; Right may append a measure), 'edit' (refused in
+ * read-only mode), 'history' (undo / redo, run by the controller) and
+ * 'buffer' (Escape, `cancelsBuffer`). History commands name their `step`. Commands that can change the model carry their undo
+ * `label`: a string, or a function of the command's announce descriptor. run() clamps the resulting cursor, clears the digit
+ * buffer after anything but a digit, and re-syncs the current duration
+ * when the position or the model changed.
+ */
+import {
+  moveLeft, moveRight, moveUp, moveDown, prevMeasure, nextMeasure, measureStart, measureEnd, scoreStart, scoreEnd,
+  prevTrack, nextTrack, clampCursor, sameCursor, syncDuration,
+} from './cursor.js';
+import { digit, deleteNote, toggleTie } from './notes.js';
+import { shorter, longer, setDuration, cycleDots, toggleTriplet, toggleRest, deleteBeat, insertBeat } from './beats.js';
+import { insertMeasureAfter, insertMeasureBefore, deleteMeasure } from './measures.js';
+import { trackAt, isVisible } from './access.js';
+
+const nav = (fn, label) => ({ fn, kind: 'nav', label });
+const edit = (fn, label) => ({ fn, kind: 'edit', label });
+
+export const COMMANDS = Object.freeze({
+  moveLeft: nav(moveLeft),
+  moveRight: nav(moveRight, 'add measure'),
+  moveUp: nav(moveUp),
+  moveDown: nav(moveDown),
+  prevMeasure: nav(prevMeasure),
+  nextMeasure: nav(nextMeasure),
+  measureStart: nav(measureStart),
+  measureEnd: nav(measureEnd),
+  scoreStart: nav(scoreStart),
+  scoreEnd: nav(scoreEnd),
+  prevTrack: nav(prevTrack),
+  nextTrack: nav(nextTrack),
+  digit: edit(digit, (d) => `fret ${d?.fret}`),
+  deleteNote: edit(deleteNote, 'delete note'),
+  toggleTie: edit(toggleTie, 'tie'),
+  shorter: edit(shorter, 'duration'),
+  longer: edit(longer, 'duration'),
+  setDuration: edit(setDuration, 'duration'),
+  cycleDots: edit(cycleDots, 'dots'),
+  toggleTriplet: edit(toggleTriplet, 'triplet'),
+  toggleRest: edit(toggleRest, (d) => (d?.id === 'changedToNote' ? 'note' : 'rest')),
+  deleteBeat: edit(deleteBeat, 'delete beat'),
+  insertBeat: edit(insertBeat, 'insert rest'),
+  insertMeasureAfter: edit(insertMeasureAfter, 'insert measure'),
+  insertMeasureBefore: edit(insertMeasureBefore, 'insert measure'),
+  deleteMeasure: edit(deleteMeasure, 'delete measure'),
+  undo: { fn: null, kind: 'history', step: 'undo' },
+  redo: { fn: null, kind: 'history', step: 'redo' },
+  clearBuffer: { fn: null, kind: 'buffer', cancelsBuffer: true },
+});
+
+/** The undo label of command `name` that announced `descriptor` ('fret 5', 'rest', 'insert measure' …). */
+export function undoLabel(name, descriptor) {
+  const label = COMMANDS[name]?.label;
+  return typeof label === 'function' ? label(descriptor) : label ?? name;
+}
+
+/**
+ * Run command `name` (nav or edit) → `{ score, cursor, state, changed,
+ * moved, announce, coalesce }`. `changed` is true exactly when a new model
+ * object came back; with no visible track every command is a no-op that
+ * announces it.
+ */
+export function run(name, score, cursor, state, ctx, arg) {
+  const def = COMMANDS[name];
+  if (!def || !def.fn) throw new Error(`Unknown command: ${name}`);
+  const cleared = state.digit && name !== 'digit' ? { ...state, digit: null } : state;
+  if (!isVisible(trackAt(score, cursor.track))) {
+    return { score, cursor, state: { ...state, digit: null }, changed: false, moved: false, announce: { id: 'noTrack' }, coalesce: false };
+  }
+  const res = def.fn(score, cursor, cleared, ctx, arg) || {};
+  const nextScore = res.score ?? score;
+  const nextCursor = clampCursor(nextScore, res.cursor ?? cursor);
+  let nextState = res.state ?? cleared;
+  if (name !== 'digit' && nextState.digit) nextState = { ...nextState, digit: null };
+  const changed = nextScore !== score;
+  const moved = !sameCursor(nextCursor, cursor);
+  if (moved || changed) nextState = syncDuration(nextScore, nextCursor, nextState);
+  return { score: nextScore, cursor: nextCursor, state: nextState, changed, moved, announce: res.announce ?? null, coalesce: !!res.coalesce };
+}

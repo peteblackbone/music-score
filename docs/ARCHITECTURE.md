@@ -15,7 +15,7 @@ backend. Applied here:
 2. The module (renderer + editor + playback) only ever interprets the
    module's own internal score format — never a foreign format directly.
 3. The module exposes an `exportScore()` that returns plain,
-   JSON-serializable data. What the caller does with it (POST to an API,
+   JSON-serializable data. (In 2.0.0 the editor's method is `ScoreEditor#getScore()`, with `toJSON()` as an alias. The name `exportScore` is internal to `src/editor/model/io.js`.) What the caller does with it (POST to an API,
    write to disk, IndexedDB, `localStorage`) is entirely the host's concern.
 4. The module exposes import functions that convert a foreign format
    (Guitar Pro `.gp3/.gp4/.gp5/.gpx`, later MusicXML) into the internal
@@ -35,6 +35,8 @@ user data exists:
 
 - A top-level `schemaVersion` field, starting at `1`. Free to add now,
   expensive to retrofit after scores are sitting in someone's database.
+  *Status: built in 2.0.0 for the editor's JSON. See "Editor (2.0.0)".
+  The JSON Schema and the migration seam below are not built.*
 - `core/migrate.js` as the seam for future format changes — old saved
   scores keep loading correctly even after the schema evolves. Essential
   for anything that will eventually look like Google Docs (long-lived
@@ -60,6 +62,21 @@ src/
 `render/` is already built. `editor/` and `playback/` are new, and both are
 built strictly on top of `core`'s data model — neither one is allowed to
 understand `.gp*` or any other foreign format directly.
+
+**Status after 2.0.0.** The layout above is a plan, and only part of it is
+built:
+
+| Proposed | Status |
+|---|---|
+| `src/core/schema.js` (JSON Schema) | Not built. Validation is done in code (`sanitize.js`, `src/editor/model/io.js`). |
+| `src/core/validate.js` (`validateScore`) | Not built. |
+| `src/core/migrate.js` (`migrateScore`) | Not built. The editor only checks that `schemaVersion` is 1. |
+| `src/io/json.js` (`toJSON` / `fromJSON`) | Partly built, inside the editor: `src/editor/model/io.js` parses and exports. The renderer has no JSON API. |
+| `src/io/guitarpro/` | Not built. |
+| `src/render/` | Not created. The renderer stays at the top of `src/`. |
+| `src/editor/` | Built. The model lives in `src/editor/model/`, not in a separate `core/` folder. See "Editor (2.0.0)". |
+| `src/playback/` | Not built. |
+| `index.js` | Built. It exports `MusicScoreRenderer`, `ScoreEditor` and `defaultTheme`. |
 
 ## `.gp*` import strategy
 
@@ -291,3 +308,202 @@ Design notes:
 - The `tuplets` bounds (integer count 2 to 64, `of` 1 to 64) are enforced in
   `validTuplets`. `splitRun` always advances its index, so a non-finite time
   cannot loop forever.
+
+## Editor (2.0.0)
+
+2.0.0 adds `ScoreEditor`, a keyboard editor for guitar and bass tablature. It
+also adds the renderer methods it needs: `getHitMap()`, `hitTest(x, y)` and
+`getSvg()`. The user-facing description is in the README, under "Editing scores
+(ScoreEditor)". This section records the structure and the decisions behind it.
+The design sources are `.12sp/requirements-2.0.md`, `.12sp/design.md` and
+`.12sp/ui.md`.
+
+### Layers
+
+1. **Renderer side.** `src/hitMap.js`, plus the private summary that `render()`
+   keeps (`this._hitSource`). `getHitMap()` builds plain data from that summary
+   when it is called. The SVG, normalize and layout do not change.
+2. **Pure model.** `src/editor/model/*`, `keymap.js`, `announce.js`,
+   `geometry.js`, `style.js`, `options.js` and `emitter.js`. A command takes
+   `(score, cursor, state, ctx)` and returns the next state. None of these
+   files touch the DOM.
+3. **Controller.** `ScoreEditor.js` (the public class), `view.js` (the wrapper
+   DOM, rendering, listeners and the live region) and `overlay.js` (the overlay
+   groups).
+
+### Module map
+
+| File | Role |
+|---|---|
+| `src/editor/ScoreEditor.js` | Public class: the API, command dispatch, history, events, read-only mode and `destroy()`. Adds `setDuration`, `getCursorInfo` and `refresh`. |
+| `src/editor/view.js` | The wrapper elements inside the container, the renderer it owns, DOM listeners, the render scheduler (per animation frame), the overlay, scrolling, the 150 ms live-region debounce and click coordinates. |
+| `src/editor/overlay.js` | Creates the overlay groups, and draws shape lists as SVG elements. |
+| `src/editor/emitter.js` | The listener map, and the queue of events that fire after the next render. |
+| `src/editor/keymap.js` | `keyToCommand(e)`: a keyboard event to a command name, or `null`. |
+| `src/editor/announce.js` | The live-region messages. Cursor moves speak only what changed. |
+| `src/editor/geometry.js` | `indexHitMap` (lookups by track and measure), `cursorShapes` and `fillShapes`. |
+| `src/editor/style.js` | Every visual value from the UI spec, and `resolveStyle(options)`. |
+| `src/editor/options.js` | Option defaults and validation. |
+| `src/editor/model/io.js` | `parseInput` (JSON or object to model), `exportScore` (model to JSON with `schemaVersion`) and `sanitizeFixed`. |
+| `src/editor/model/limits.js` | The input limits (`ScoreEditor.LIMITS`) and their checks. |
+| `src/editor/model/defaultScore.js` | The score a new editor starts with. |
+| `src/editor/model/durations.js` | Duration names, spoken words and fill words. The one copy of that vocabulary. |
+| `src/editor/model/access.js` | Reading and copy-on-write updating of beats, notes and measures. Voice 1 access that mirrors normalize. |
+| `src/editor/model/fill.js` | Measure fill (`under`, `full`, `over`) and beat onsets. |
+| `src/editor/model/cursor.js` | Positions, cursor clamping, the moves and `cursorInfo`. |
+| `src/editor/model/ties.js` | Repairing ties across the seams that edits create. Finding the previous and next main beat. |
+| `src/editor/model/notes.js` | Fret entry (with the two-digit buffer), delete note and toggle tie. |
+| `src/editor/model/beats.js` | Durations, dots, triplets, the rest and note toggle, delete beat and insert beat. |
+| `src/editor/model/measures.js` | Insert, delete and append measures. |
+| `src/editor/model/commands.js` | The command registry and `run()`, which clamps the cursor and syncs the duration. |
+| `src/editor/model/history.js` | The undo and redo stacks. |
+| `src/hitMap.js` (renderer side) | `buildHitMap` and `hitTestMap`. |
+
+Each file in `src/editor/` is 300 lines or fewer (a structure check).
+
+### Import rules
+
+`tests/structure.mjs` enforces these. Rules 1 to 5 each have a mutation test in
+the same file: it breaks the rule on purpose and checks that the check fails.
+
+1. Nothing in `src/` outside `src/editor/` imports from `src/editor/`. The root
+   `index.js` may.
+2. The pure files (`model/*`, `keymap.js`, `announce.js`, `geometry.js`,
+   `style.js`, `options.js` and `emitter.js`) contain no `document`, `window`,
+   `requestAnimationFrame` or `addEventListener` tokens.
+3. Files under `model/` import from outside `src/editor/` only
+   `src/sanitize.js`, `src/duration.js` and `src/rational.js`.
+4. Renderer modules outside `src/editor/` may be imported only by the editor
+   files on an allowlist: `MusicScoreRenderer.js` by `view.js` and
+   `ScoreEditor.js` only; `hitMap.js` by `view.js` and `geometry.js`;
+   `draw/svgUtil.js` by `overlay.js`; `textMetrics.js` by `geometry.js`.
+5. Files in `src/editor/` are 300 lines or fewer.
+6. The import graph under `src/` is acyclic. That check was already in place,
+   and it covers `src/editor/`.
+7. `index.js` exports exactly `MusicScoreRenderer`, `ScoreEditor` and
+   `defaultTheme`. This pin is a test in `tests/units.mjs`, not in
+   `tests/structure.mjs`. It was changed on purpose in 2.0.0.
+
+### Hit map: lazy lookup, not SVG attributes
+
+Addressing data could have gone into the SVG, as `data-*` attributes or ids on
+every beat. That would change the markup of every render. The snapshots and the
+C0 hash tests would then fail, and every page would carry editor data it does
+not use. The hit map is built on demand instead:
+
+- `render()` keeps a private summary of what it has already computed: the
+  layout, the width and height, and each staff's `y`, `lineBottom` and string
+  count. It holds references and numbers only, and writes nothing to the DOM,
+  the layout or the score.
+- `getHitMap()` builds plain objects from that summary on each call.
+- `hitTest(x, y)` picks the staff whose vertical extent is nearest, within a pad
+  (half a notation staff, or one string gap on TAB). It takes the measure whose
+  `[x, endX)` holds `x`, the nearest voice 1 non-grace element by `x` (ties go
+  to the lower index), and on TAB the nearest string, clamped to the string
+  count. An empty measure gives its element count. The append slot is not an
+  element, so a click never targets it.
+
+The check: for every snapshot case, serializing the SVG, calling `getHitMap()`
+and serializing again gives the same string (`tests/editor-dom.mjs`).
+
+The editor renders a view copy with `multiMeasureRests` off, while the model
+keeps the author's value. The hit map follows that view.
+
+### Model, copy-on-write and history
+
+- The model is the sanitized score without `schemaVersion`. It is never
+  mutated. A command returns a new model that shares every unchanged object
+  with the old one.
+- `updateBeat`, `updateBeats` and `updateNote` copy only the path to the edited
+  object: the score, its tracks array, the track, its measures array, the
+  measure and, in a two-voice measure, the voices array and `voices[0]`.
+  `voices[1]` and `measure.beats` are never touched. Test E12 checks, on a
+  fixture rich in 1.x effects, that untouched objects keep their identity.
+- A history entry is `{ before, after, label }`, where each side is
+  `{ score, cursor }`. Both sides are shared references, so an entry costs two
+  references, not a copy of the score. `push` clears redo and drops the oldest
+  entry past `historyLimit` (default 200; the integer is clamped to 0–10000).
+- The second digit of a two-digit fret replaces the top entry's `after`
+  (`coalesce`), so both digits make one step.
+- `run()` in `model/commands.js` clamps the resulting cursor. It clears the
+  digit buffer after any command other than `digit`, and re-syncs the current
+  duration when the position or the model changes.
+- Undo and redo restore the stored snapshot, clamp its cursor, clear the buffer
+  and re-sync the duration.
+
+### The invariant: `sanitizeScore(model) === model`
+
+After every command, `sanitizeScore(model)` returns the model itself. Commands
+keep this true by writing only shapes that sanitize accepts unchanged:
+
+- durations come only from `DURATIONS`;
+- `tuplet` is `3`, or absent;
+- frets are integers from 0 to `maxFret` (at most 99);
+- strings are clamped to the track's string count;
+- `pitch` is removed only from fretted notes, and the editor never writes it;
+- grace notes are never altered;
+- new measures are `{ beats: [] }`.
+
+`parseInput` turns the input into a model by repairing it until sanitize returns
+its input unchanged (`sanitizeFixed`, at most three passes). Two tests check the
+invariant. The B10 property test in `tests/editor-model.mjs` runs six start
+scores with 2000 seeded random commands each, and checks the invariant and a
+valid cursor after every command. It then undoes everything and redoes
+everything. An editor-level test in `tests/editor-dom.mjs` sends 300 keys, with
+frames flushed every 25 keys, and checks that the hit map agrees with the model.
+
+Known gap: `sanitizeFixed` stops after three passes. An input that needs more
+passes to settle would leave the model different from its sanitized form, and
+the invariant would not hold for it. The test fixtures settle within three passes.
+Input of that kind is not tested.
+
+### Saved format and `schemaVersion`
+
+- From 2.0.0, the editor's JSON carries `"schemaVersion": 1`. `getScore()`
+  writes it first.
+- On read, a missing value or `null` is accepted, and so is `1`. Any other
+  value throws `Error('Unsupported schemaVersion')` and changes nothing. A string
+  `"1"` is refused, because the check is strict. A value that is not a JSON
+  object throws `Error('Score must be a JSON object')`.
+- The key is removed from the model on read, and written again on export.
+- The renderer does not check `schemaVersion`. It ignores the key, so editor
+  JSON renders as before, and a file with another version value still renders.
+- Policy for a future format change: bump the version, and add a migration step
+  in `core/migrate.js` (not built). Until then, readers refuse newer values.
+
+### Input limits
+
+`src/editor/model/limits.js` holds `ScoreEditor.LIMITS`. The JSON length is
+checked first, then the parsed data, both before repair or drawing:
+
+| Limit | Value |
+|---|---|
+| JSON text | 5 MB (5,242,880 characters) |
+| Tracks | 32 |
+| Measures per track | 2000 |
+| Voices per measure | 4 |
+| Beats per voice per measure | 256 |
+| Notes per beat | 16 |
+| Tuning strings | 12 |
+
+The limits were added after the security review of 2.0.0. They keep a large or
+hostile file from stalling the page or filling storage. The renderer does not
+apply them.
+
+### Rendering and events
+
+- Edits re-render once per animation frame. Several edits in one frame give one
+  render. Without `requestAnimationFrame` (Node), the render is synchronous.
+- Hidden or background tabs pause animation frames, so a pending render also
+  runs after a 250 ms timeout (`RENDER_FALLBACK_MS`); `change` and the host's
+  autosave still happen.
+- A cursor move redraws only the overlay group, and emits `cursor` at once.
+- `change` is queued and fires after the render that it caused. The
+  `afterRender` hook drains the queue. A click flushes a pending render first,
+  so the hit map is current when it is used.
+- The overlay is rebuilt on each render. Cursor redraws clear their group with
+  `textContent`.
+- The editor re-renders once after `document.fonts.ready`. `refresh()` schedules
+  a render.
+- Full re-render per edit is the only cost model in 2.0. Incremental rendering is
+  not built. It is the next step if the speed targets are missed.

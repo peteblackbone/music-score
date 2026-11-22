@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>music-score editor</title>
+<style>
+  :root { --accent: #3b5bdb; --line: #dddcd8; --bg: #f4f3f1; --muted: #62636a; --error: #b42318; }
+  html { scroll-padding-top: 120px; }
+  body { font-family: system-ui, sans-serif; background: var(--bg); margin: 0; color: #1a1a1a; font-size: 14px; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 0 24px 32px; }
+  .top { position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .top .wrap { padding-top: 12px; padding-bottom: 10px; }
+  h1 { font-size: 18px; margin: 0 0 8px; }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 6px; }
+  .group { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+  .sep { width: 1px; align-self: stretch; background: var(--line); }
+  button, select, input[type="number"], input[type="text"] { font: inherit; }
+  button { background: #fff; border: 1px solid #c9c8c4; border-radius: 4px; padding: 4px 10px; cursor: pointer; color: inherit; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { color: #9b9ba0; cursor: default; background: #f9f9f8; }
+  button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .duration button { min-width: 34px; }
+  label.inline { display: inline-flex; align-items: center; gap: 4px; }
+  .notices { margin: 14px 0 0; display: flex; flex-direction: column; gap: 6px; }
+  .notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-radius: 6px; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--accent); }
+  .notice.error { border-left-color: var(--error); color: var(--error); }
+  .notice button { flex: none; }
+  .hint { color: var(--muted); margin: 12px 0 8px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 8px; overflow-x: auto; }
+  .music-score-editor:focus { outline: 2px solid #3b5bdb; outline-offset: 2px; }
+  .music-score text { user-select: none; }
+  .status { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 10px 0 0; padding: 8px 12px; background: #fff; border: 1px solid var(--line); border-radius: 6px; color: #1a1a1a; }
+  .status .k { color: var(--muted); }
+  .status .save { color: var(--muted); margin-left: auto; }
+  .status .badge { background: var(--muted); color: #fff; border-radius: 3px; padding: 0 6px; }
+  .status .badge[hidden] { display: none; }
+  details { margin-top: 14px; background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; }
+  summary { cursor: pointer; font-weight: 600; }
+  .keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 4px 24px; margin-top: 8px; }
+  .keys h3 { font-size: 13px; margin: 10px 0 4px; }
+  .keys dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; margin: 0; }
+  .keys dt { font-family: ui-monospace, monospace; white-space: nowrap; }
+  .keys dd { margin: 0; color: #333; }
+  .foot { color: var(--muted); margin: 10px 0 0; }
+  dialog { border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; min-width: 320px; }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.25); }
+  dialog h2 { font-size: 16px; margin: 0 0 12px; }
+  dialog .row { margin: 0 0 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  dialog fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 0 0 12px; }
+  dialog input[type="number"] { width: 4em; }
+  dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+</style>
+</head>
+<body>
+  <div class="top" id="top">
+    <div class="wrap">
+      <h1>music-score editor</h1>
+      <div class="toolbar">
+        <div class="group" role="group" aria-label="File">
+          <button type="button" id="new-btn">New…</button>
+          <label class="inline" for="example">Example:</label>
+          <select id="example">
+            <option value="lead-riff">lead-riff</option>
+            <option value="lead-solo-f">lead-solo-f</option>
+            <option value="example-score">example-score</option>
+          </select>
+          <button type="button" id="load-btn">Load</button>
+          <button type="button" id="open-btn">Open JSON…</button>
+          <input type="file" id="file" accept=".json,application/json" hidden />
+          <button type="button" id="download-btn">Download JSON</button>
+        </div>
+        <span class="sep" aria-hidden="true"></span>
+        <div class="group" role="group" aria-label="History">
+          <button type="button" id="undo-btn">Undo</button>
+          <button type="button" id="redo-btn">Redo</button>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="group duration" role="group" aria-label="Duration">
+          <span aria-hidden="true">Duration:</span>
+          <button type="button" data-duration="whole" aria-label="Whole" aria-pressed="false">W</button>
+          <button type="button" data-duration="half" aria-label="Half" aria-pressed="false">H</button>
+          <button type="button" data-duration="quarter" aria-label="Quarter" aria-pressed="true">Q</button>
+          <button type="button" data-duration="8th" aria-label="Eighth" aria-pressed="false">8</button>
+          <button type="button" data-duration="16th" aria-label="16th" aria-pressed="false">16</button>
+          <button type="button" data-duration="32nd" aria-label="32nd" aria-pressed="false">32</button>
+          <button type="button" data-duration="64th" aria-label="64th" aria-pressed="false">64</button>
+          <button type="button" id="dots-btn">Dots: 0</button>
+          <button type="button" id="triplet-btn" aria-pressed="false">Triplet</button>
+        </div>
+        <span class="sep" aria-hidden="true"></span>
+        <label class="inline"><input type="checkbox" id="readonly" /> Read-only</label>
+      </div>
+    </div>
+  </div>
+
+  <main class="wrap">
+    <div class="notices" id="notices" role="region" aria-label="Notices"></div>
+    <p class="hint" id="hint">Click the score or press Tab to start editing. Keyboard shortcuts are listed below.</p>
+    <div class="card" id="card"></div>
+    <p class="status" id="status">
+      <span><span class="k">Track:</span> <span id="st-track">–</span></span>
+      <span><span class="k">Measure:</span> <span id="st-measure">–</span></span>
+      <span><span class="k">Beat:</span> <span id="st-beat">–</span></span>
+      <span><span class="k">String:</span> <span id="st-string">–</span></span>
+      <span><span class="k">Fret:</span> <span id="st-fret">–</span></span>
+      <span><span class="k">Duration:</span> <span id="st-duration">–</span></span>
+      <span><span class="k">Fill:</span> <span id="st-fill">–</span></span>
+      <span class="badge" id="st-readonly" hidden>Read-only</span>
+      <span class="save" id="st-save"></span>
+    </p>
+
+    <details>
+      <summary>Keyboard shortcuts</summary>
+      <div class="keys">
+        <section><h3>Move</h3><dl>
+          <dt>← →</dt><dd>Previous / next beat</dd>
+          <dt>↑ ↓</dt><dd>Previous / next string</dd>
+          <dt>Ctrl+← →</dt><dd>Previous / next measure</dd>
+          <dt>Home / End</dt><dd>First / last beat of the measure</dd>
+          <dt>Ctrl+Home / End</dt><dd>Start / end of the score</dd>
+          <dt>PageUp / PageDown</dt><dd>Previous / next track</dd>
+        </dl></section>
+        <section><h3>Enter</h3><dl>
+          <dt>0–9</dt><dd>Fret on the cursor string (two quick digits: 10–24)</dd>
+          <dt>R</dt><dd>Rest / note</dd>
+          <dt>L</dt><dd>Tie to the previous note on this string</dd>
+        </dl></section>
+        <section><h3>Rhythm</h3><dl>
+          <dt>+ or =</dt><dd>Shorter duration</dd>
+          <dt>-</dt><dd>Longer duration</dd>
+          <dt>.</dt><dd>Dots 0 → 1 → 2</dd>
+          <dt>/</dt><dd>Triplet on / off</dd>
+        </dl></section>
+        <section><h3>Edit</h3><dl>
+          <dt>Delete / Backspace</dt><dd>Delete the note on the string</dd>
+          <dt>Ctrl+Delete / Ctrl+Backspace</dt><dd>Delete the beat</dd>
+          <dt>Insert or I</dt><dd>Insert a rest before the beat</dd>
+          <dt>Esc</dt><dd>Cancel a two-digit fret</dd>
+        </dl></section>
+        <section><h3>Measures</h3><dl>
+          <dt>M / Shift+M</dt><dd>Insert a measure after / before</dd>
+          <dt>Shift+Delete / Shift+Backspace</dt><dd>Delete the measure</dd>
+        </dl></section>
+        <section><h3>History</h3><dl>
+          <dt>Ctrl+Z</dt><dd>Undo</dd>
+          <dt>Ctrl+Y / Ctrl+Shift+Z</dt><dd>Redo</dd>
+        </dl></section>
+      </div>
+      <p class="foot">On Mac, Cmd works in place of Ctrl. Tab leaves the editor.</p>
+    </details>
+  </main>
+
+  <dialog id="new-dialog" aria-labelledby="new-title">
+    <form method="dialog" id="new-form">
+      <h2 id="new-title">New score</h2>
+      <div class="row"><label for="new-name">Title</label> <input type="text" id="new-name" value="Untitled" autocomplete="off" /></div>
+      <div class="row">
+        <label for="new-beats">Time signature</label>
+        <input type="number" id="new-beats" min="1" max="16" value="4" />
+        <span aria-hidden="true">/</span>
+        <select id="new-beat-type" aria-label="Beat type">
+          <option>2</option><option selected>4</option><option>8</option><option>16</option>
+        </select>
+      </div>
+      <div class="row">
+        <label for="new-preset">Instrument</label>
+        <select id="new-preset">
+          <option value="guitar6">6-string guitar</option>
+          <option value="bass4">4-string bass</option>
+          <option value="guitar7">7-string guitar</option>
+        </select>
+      </div>
+      <fieldset>
+        <legend>Staves</legend>
+        <label class="inline"><input type="radio" name="staves" value="both" checked /> Notation + TAB</label>
+        <label class="inline"><input type="radio" name="staves" value="tab" /> TAB only</label>
+      </fieldset>
+      <div class="actions">
+        <button type="submit" id="new-create" value="create">Create</button>
+        <button type="button" id="new-cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module">
+    import { startEditorDemo } from './examples/editor-demo.js';
+    startEditorDemo(document);
+  </script>
+</body>
+</html>
