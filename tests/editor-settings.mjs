@@ -225,6 +225,52 @@ test('cursorInfo: timeSignature (a fresh object), keySignature and tempo in forc
   eq(C.cursorInfo(model(sc(tab([{ beats: [] }]))), cur(0, 0, 0), st).tempo, null);
 });
 
+// ---------- tuning ----------
+const T = await imp('src/editor/model/settings/tuning.js');
+const tn = (duration, string, fret, flags = {}, extra = {}) => ({ type: 'note', duration, notes: [{ string, fret, ...flags }], ...extra });
+test('canonicalTuning: 1-12 pitches, letter upper case, # or b, octave 0-9, trimmed; anything else throws', () => {
+  eq(T.canonicalTuning([' e2 ', 'bb1', 'F#3', 'c0', 'G9']), ['E2', 'Bb1', 'F#3', 'C0', 'G9']);
+  eq(T.canonicalTuning(Array(12).fill('E2')).length, 12);
+  for (const bad of [[], Array(13).fill('E2'), ['H2'], ['E'], ['E10'], ['E-1'], ['Ex2'], ['E##2'], ['Ebb2'], ['E 2'], ['']]) throws(() => T.canonicalTuning(bad), RangeError, '', JSON.stringify(bad));
+  for (const bad of ['E2 A2', null, { 0: 'E2' }, [2], [null]]) throws(() => T.canonicalTuning(bad), TypeError);
+});
+test('retuneTrack: frets kept; pitch dropped only on changed strings (fret + pitch); pitch-only notes kept; same tuning (absent standard too) unchanged', () => {
+  const track = { name: 'G', showTablature: true, tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'], measures: [
+    { beats: [{ type: 'note', duration: 'quarter', notes: [{ string: 6, fret: 0, pitch: 'E2' }, { string: 5, fret: 2, pitch: 'B2' }, { pitch: 'C4' }, { string: 6, pitch: 'F2' }] }] },
+    { beats: [] },
+  ] };
+  const r = T.retuneTrack(track, ['D2', 'A2', 'D3', 'G3', 'B3', 'E4']);
+  eq(r.track.measures[0].beats[0].notes, [{ string: 6, fret: 0 }, { string: 5, fret: 2, pitch: 'B2' }, { pitch: 'C4' }, { string: 6, pitch: 'F2' }]);
+  eq([r.removed, r.track.tuning, [...r.droppedV1]], [0, ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'], []]);
+  ok(r.track.measures[1] === track.measures[1] && track.measures[0].beats[0].notes[0].pitch === 'E2', 'copy-on-write');
+  ok(T.retuneTrack(track, [...track.tuning]).track === track);
+  const bare = { name: 'G', measures: [] };
+  ok(T.retuneTrack(bare, ['E2', 'A2', 'D3', 'G3', 'B3', 'E4']).track === bare, 'absent default tuning stays absent');
+  eq(T.retuneTrack(bare, ['D2', 'A2', 'D3', 'G3', 'B3', 'E4']).track.tuning[0], 'D2');
+  const seven = T.retuneTrack(track, ['B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4']);
+  eq([seven.removed, seven.track.measures[0].beats[0].notes[0]], [0, { string: 6, fret: 0, pitch: 'E2' }], 'adding a low string changes nothing above it');
+});
+test('retuneTrack: removed strings across beats, every voice and graces; emptied beats become rests (slash beats kept), emptied graces dropped (droppedV1), ties stripped, counts; sanitize-stable', () => {
+  const s = model(sc(tab([
+    { beats: [tn('quarter', 7, 0, { tieStart: true }), graceB(7, 2), tn('quarter', 7, 0, { tieEnd: true }, { custom: 1 }), { type: 'note', duration: 'half', notes: [{ string: 7, fret: 3 }, { string: 1, fret: 0 }] }] },
+    { voices: [
+      { beats: [graceB(7, 1), graceB(1, 1), { type: 'note', duration: 'half', slash: true, notes: [{ string: 7, fret: 5 }] }, { type: 'note', duration: 'half', notes: [{ string: 7, fret: 5, pitch: 'C3', tieStart: true }] }] },
+      { beats: [tn('whole', 7, 0), { type: 'note', duration: 'whole', slash: true, notes: [{ string: 7, fret: 1 }] }] },
+    ], beats: [tn('whole', 7, 9)] },
+  ], { tuning: ['B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'] })));
+  const t0 = s.tracks[0];
+  const r = T.retuneTrack(t0, ['E2', 'A2', 'D3', 'G3', 'B3', 'E4']);
+  const [m0, m1] = r.track.measures;
+  eq(m0.beats, [rest('quarter'), rest('quarter', { custom: 1 }), { type: 'note', duration: 'half', notes: [{ string: 1, fret: 0 }] }]);
+  eq(m1.voices[0].beats, [graceB(1, 1), { type: 'note', duration: 'half', slash: true, notes: [] }, { type: 'note', duration: 'half', notes: [{ pitch: 'C3' }] }]);
+  eq(m1.voices[1].beats, [rest('whole'), { type: 'rest', duration: 'whole', slash: true }], 'voice 2: a slash beat is not kept with no notes');
+  eq(m1.beats, [rest('whole')], 'measure.beats beside voices is visited too');
+  eq(r.removed, 10);
+  eq([...r.droppedV1], [[0, [1]], [1, [0]]]);
+  const out = { ...s, tracks: [r.track] };
+  ok(sanitizeScore(out) === out, 'sanitize-stable');
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;
