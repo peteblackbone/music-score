@@ -18,7 +18,7 @@ import { parseInput, exportScore } from './model/io.js';
 import { EDITOR_LIMITS } from './model/limits.js';
 import { defaultScore } from './model/defaultScore.js';
 import { clampCursor, cursorInfo, syncDuration, sameCursor } from './model/cursor.js';
-import { checkedMeasureFill, fillTable } from './model/fill.js';
+import { checkedMeasureFill, overlayFills } from './model/fill.js';
 import { voiceOf } from './model/access.js';
 import { COMMANDS, run, undoLabel } from './model/commands.js';
 import { createHistory } from './model/history.js';
@@ -62,7 +62,7 @@ export class ScoreEditor {
     this._view = new EditorView(container, {
       viewScore: () => (this._model.multiMeasureRests ? { ...this._model, multiMeasureRests: false } : this._model),
       cursorInfo: () => this._info(),
-      fills: () => fillTable(this._model),
+      fills: () => overlayFills(this._model),
       afterRender: () => this._events.drain(),
       onKey: (e) => this.handleKey(e),
       onClick: (hit) => this._moveTo({ track: hit.ti, measure: hit.measureIndex, beat: hit.beatIndex, string: hit.string ?? this._cursor.string }),

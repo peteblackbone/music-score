@@ -12,7 +12,7 @@ import { toNumber, sub } from '../../rational.js';
 import { validTuplets } from '../../duration.js';
 import {
   tracksOf, trackAt, beatsAt, beatAt, isGrace, isRest, isVisible, hasTab, hasNotation, measureCount, stringCount, openPitch,
-  clampDots, notesOf, cursorNote, voiceOf,
+  clampDots, notesOf, cursorNote, voiceOf, isPickup,
 } from './access.js';
 import { measureFill, onsetOf, timeSignatureAt, keySignatureAt } from './fill.js';
 import { tempoAt } from './settings/tempo.js';
@@ -191,5 +191,7 @@ export function cursorInfo(score, cursor, state) {
     timeSignature: { beats: ts.beats, beatType: ts.beatType },
     keySignature: keySignatureAt(score, cursor),
     tempo: tempoAt(score, cursor),
+    // 2.3: measure 1 is a pickup and the cursor is in it
+    pickup: cursor.measure === 0 && isPickup(score),
   };
 }

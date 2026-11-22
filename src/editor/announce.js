@@ -94,6 +94,7 @@ const MEASURE_TEXT = {
   coda: (v) => (v ? 'Coda' : 'Coda removed'),
   jump: (v) => v ?? 'Jump removed',
   section: (v) => (v != null ? `Section ${typeof v === 'string' ? v : [v.letter, v.text].filter(Boolean).join(' ')}` : 'Section removed'),
+  pickup: (v) => (v ? 'Pickup' : 'Pickup removed'),
 };
 
 /** ', 1 tempo mark removed' / ', 2 tempo marks removed' (empty for none). */
@@ -134,7 +135,7 @@ export function describeCursor(info, prev = null, full = false) {
   if (trackChanged) parts.push(`Track ${info.track + 1}${info.trackName ? ` ${info.trackName}` : ''}`);
   if (measureChanged) parts.push(`measure ${info.measure + 1}`);
   parts.push(positionText(info));
-  const fill = measureChanged && !info.empty && info.fill !== 'full' ? `, ${fillWord(info.fill)}` : '';
+  const fill = measureChanged && !info.empty && info.fill !== 'full' ? `, ${info.pickup && info.fill === 'under' ? 'pickup' : fillWord(info.fill)}` : '';
   return cap(parts.join(', ') + fill);
 }
 

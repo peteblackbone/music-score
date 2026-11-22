@@ -577,7 +577,7 @@ test('getMeasureSettings: in force + here + inherited; navigation equals normali
   }
   const a = MS.getMeasureSettings(s, 1, 0);
   eq(a, { measure: 1, track: 0, timeSignature: { beats: 6, beatType: 8, here: true, inherited: { beats: 3, beatType: 4 } }, keySignature: { value: 1, here: false, inherited: 1 }, clef: { value: 'treble', here: false, inherited: 'treble' },
-    barline: 'repeatEnd', repeatCount: 3, ending: { numbers: [1, 2], text: null, open: null }, segno: false, coda: true, jump: null, jumpCustom: false, section: null });
+    barline: 'repeatEnd', repeatCount: 3, ending: { numbers: [1, 2], text: null, open: null }, segno: false, coda: true, jump: null, jumpCustom: false, section: null, pickup: false }); // 2.3 adds pickup
   const z = MS.getMeasureSettings(s, 0, 1);
   eq([z.clef, z.keySignature, z.timeSignature.inherited], [{ value: 'alto', here: true, inherited: 'tenor' }, { value: -2, here: false, inherited: -2 }, { beats: 4, beatType: 4 }]);
   eq([MS.getMeasureSettings(s, 2, 1).jump, MS.getMeasureSettings(s, 2, 1).jumpCustom], ['Play twice', true]);

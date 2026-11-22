@@ -50,6 +50,9 @@ export function measureCount(score) {
   return n;
 }
 
+/** Whether measure 1 is a pickup (2.3): any track has `measures[0].pickup === true`. */
+export const isPickup = (score) => tracksOf(score).some((t) => measureAt(t, 0)?.pickup === true);
+
 /** Track `track`'s measure `mi` when it is an object, else null (a hole). */
 export function measureAt(track, mi) {
   const m = measuresOf(track)[mi];

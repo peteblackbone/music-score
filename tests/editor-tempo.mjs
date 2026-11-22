@@ -198,6 +198,91 @@ test('render parity: on 50 seeded random multi-track scores the editor winners, 
   }
 });
 
+// ---------- pickup (criteria 39-42) ----------
+const MS = await imp('src/editor/model/settings/measureSettings.js');
+const M = await imp('src/editor/model/measures.js');
+const F = await imp('src/editor/model/fill.js');
+const { cases } = await import('./cases.mjs');
+const { serialize } = await import('./dom-shim.mjs');
+const { MusicScoreRenderer } = await imp('src/MusicScoreRenderer.js');
+const throws = (fn, Type, msg) => {
+  try { fn(); } catch (e) {
+    if (Type && !(e instanceof Type)) throw new Error(`threw ${e.constructor.name} "${e.message}", wanted ${Type.name}`);
+    if (msg && !String(e.message).includes(msg)) throw new Error(`threw "${e.message}", wanted "${msg}"`);
+    return;
+  }
+  throw new Error('did not throw');
+};
+/** Elements with class `cls` under `n`. */
+const nodesOf = (n, cls, out = []) => {
+  if ((n.getAttribute?.('class') || '').split(' ').includes(cls)) out.push(n);
+  for (const c of n.children || []) nodesOf(c, cls, out);
+  return out;
+};
+const pickupFixture = () => ({ tracks: [
+  tab([{ beats: [nt('quarter')] }, { beats: [nt('whole')] }, { beats: [nt('half')] }]),
+  { name: 'Hidden', showStandardNotation: false, measures: [] },
+  tab([{ beats: [nt('half')] }, { beats: [nt('whole')] }], { name: 'B' }),
+] });
+test('criterion 39: updateMeasure(0, {pickup: true}) writes the flag on every track (hidden and short ones padded); null removes it; other indices throw RangeError even for null; other values TypeError', () => {
+  const s = model(pickupFixture());
+  const r = MS.updateMeasure(s, cur(0, 0, 0), 0, { pickup: true });
+  eq(r.score.tracks.map((t) => t.measures[0].pickup), [true, true, true]);
+  eq(describe(r.announce), 'Pickup at measure 1');
+  eq(r.label, 'pickup');
+  ok(sanitizeScore(r.score) === r.score);
+  eq([MS.getMeasureSettings(r.score, 0, 0).pickup, MS.getMeasureSettings(r.score, 1, 0).pickup, MS.getMeasureSettings(s, 0, 0).pickup], [true, false, false]);
+  const off = MS.updateMeasure(r.score, cur(0, 0, 0), 0, { pickup: null });
+  ok(off.score.tracks.every((t) => !('pickup' in (t.measures[0] || {}))));
+  eq(describe(off.announce), 'Pickup removed at measure 1');
+  ok(MS.updateMeasure(s, cur(0, 0, 0), 0, { pickup: null }).score === s, 'nothing to remove: no change');
+  throws(() => MS.updateMeasure(s, cur(0, 0, 0), 1, { pickup: true }), RangeError, 'Only measure 1 can be a pickup');
+  throws(() => MS.updateMeasure(s, cur(0, 0, 0), 2, { pickup: null }), RangeError, 'Only measure 1 can be a pickup');
+  for (const bad of [false, 'yes', 1, {}]) throws(() => MS.updateMeasure(s, cur(0, 0, 0), 0, { pickup: bad }), TypeError, 'Pickup must be true or null');
+  eq(MS.updateMeasure(s, cur(0, 0, 0), 0, { pickup: true, barline: 'double' }).label, undefined, 'a mixed patch keeps the measure settings label');
+});
+test('criterion 40: a pickup measure has no underfull line; getMeasureFill is still under; cursor info and the move announcement say pickup; the controller undo label is pickup', () => {
+  const ed = mk(pickupFixture());
+  const svg = () => ed._view.svg;
+  const unders = () => nodesOf(svg(), 'editor-band-under').length;
+  const before = unders();
+  eq(ed.updateMeasure(0, { pickup: true }), true);
+  eq(unders(), before - 2, 'measure 1 of both visible tracks loses its line');
+  eq([ed.getMeasureFill(0, 0), ed.getCursorInfo().pickup], ['under', true]);
+  eq(F.overlayFills(ed._model)[0], ['pickup', 'full', 'under']);
+  ed.setCursor({ measure: 1 });
+  eq(ed.getCursorInfo().pickup, false);
+  ed.setCursor({ measure: 0, beat: 0 });
+  eq(ed.lastMessage, 'Measure 1, beat 1, string 1, fret 0, quarter, pickup');
+  ed.undo();
+  eq(ed.lastMessage, 'Undo: pickup');
+  ed.destroy();
+});
+test('criterion 41: addTrack copies the flag, removeTrack keeps it; Shift+M at measure 1 and deleting measure 1 drop it; clearing the only measure keeps only the carried fields', () => {
+  const s = MS.updateMeasure(model(pickupFixture()), cur(0, 0, 0), 0, { pickup: true }).score;
+  eq(TS.addTrack(s, cur(0, 0, 0), 'bass4').score.tracks[3].measures[0].pickup, true);
+  const only = model({ tracks: [tab([{ beats: [nt('quarter')], pickup: true }]), tab([{ beats: [] }], { name: 'B' })] });
+  eq(TS.removeTrack(only, cur(0, 0, 0), 0).score.tracks[0].measures[0].pickup, true, 'migrated from the removed track');
+  const ins = M.insertMeasureBefore(s, cur(0, 0, 0)).score;
+  ok(ins.tracks.every((t) => t.measures.every((m) => !('pickup' in m))), 'Shift+M at measure 1 drops it');
+  eq(ins.tracks[0].measures.slice(0, 2), [{ beats: [] }, { beats: [nt('quarter')] }]);
+  const del = M.deleteMeasure(s, cur(0, 0, 0)).score;
+  ok(del.tracks.every((t) => t.measures.every((m) => !('pickup' in m))), 'deleting measure 1 drops it');
+  const one = model({ tracks: [tab([{ beats: [nt('quarter')], pickup: true, timeSignature: { beats: 3, beatType: 4 } }])] });
+  eq(M.deleteMeasure(one, cur(0, 0, 0)).score.tracks[0].measures, [{ timeSignature: { beats: 3, beatType: 4 }, beats: [] }]);
+});
+test('criterion 42: the renderer output is identical with or without pickup on every snapshot case', () => {
+  const draw = (score, c) => { const b = makeContainer(); new MusicScoreRenderer(b, score, { width: c.width, ...(c.options || {}) }).render(); return serialize(b.children[0]); };
+  let n = 0;
+  for (const c of cases) {
+    const plain = JSON.parse(JSON.stringify(c.score));
+    const with1 = JSON.parse(JSON.stringify(c.score));
+    for (const t of with1.tracks || []) if (Array.isArray(t.measures) && t.measures[0] && typeof t.measures[0] === 'object') { t.measures[0].pickup = true; n++; }
+    ok(draw(with1, c) === draw(plain, c), c.id);
+  }
+  ok(n > 82, `${n} measures flagged`);
+});
+
 // ---------- report ----------
 export async function summary() {
   let fail = 0;

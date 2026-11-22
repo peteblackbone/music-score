@@ -60,7 +60,7 @@ export function installSettings(Editor) {
     if (r.refused) return this._settingsRefused(r.refused);
     if (r.score === this._model) return this._settingsRefused({ id: 'noChange' });
     if (exportedLength(r.score) > EDITOR_LIMITS.jsonChars) return this._settingsRefused({ id: 'tooLarge' });
-    return this._applyModel(name, def.label, r);
+    return this._applyModel(name, r.label ?? def.label, r);
   }));
   Object.defineProperty(proto, '_settingsRefused', hidden(function refused(d) {
     this._sayKept(describe(d));

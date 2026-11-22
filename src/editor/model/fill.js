@@ -6,7 +6,7 @@
  */
 import { R, ZERO, add, cmp } from '../../rational.js';
 import { durationR } from '../../duration.js';
-import { trackAt, tracksOf, measureAt, beatsOf, beatsAt, isGrace, clampDots, measureCount } from './access.js';
+import { trackAt, tracksOf, measureAt, beatsOf, beatsAt, isGrace, clampDots, measureCount, isPickup } from './access.js';
 
 /** The default time signature (4/4). */
 export const COMMON_TIME = Object.freeze({ beats: 4, beatType: 4 });
@@ -84,4 +84,11 @@ export function fillTable(score) {
     }
     return out;
   });
+}
+
+/** fillTable for the overlay: an underfull pickup measure 1 reads 'pickup' (no band is drawn for it). */
+export function overlayFills(score) {
+  const table = fillTable(score);
+  if (isPickup(score)) for (const row of table) if (row[0] === 'under') row[0] = 'pickup';
+  return table;
 }
