@@ -138,5 +138,10 @@ for (const c of cases) {
   const { summary } = await import('./editor-settings-edge-dom.mjs');
   fail += await summary();
 }
+// 2.3.0 characterization pins: per-track tempoAt, removeTrack tempo loss, insertMeasureAt(0), renderer tempo changes (tests/editor-pins-2.3.mjs)
+{
+  const { summary } = await import('./editor-pins-2.3.mjs');
+  fail += summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);
