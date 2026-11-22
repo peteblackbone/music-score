@@ -271,6 +271,160 @@ test('retuneTrack: removed strings across beats, every voice and graces; emptied
   ok(sanitizeScore(out) === out, 'sanitize-stable');
 });
 
+// ---------- updateTrack ----------
+const TR = await imp('src/editor/model/settings/track.js');
+const TS = await imp('src/editor/model/settings/tracks.js');
+const twoTracks = () => model({ tracks: [
+  tab([{ clef: 'bass', beats: [nt('quarter')] }, { beats: [] }], { name: 'Gtr', clef: 'treble', custom: { x: 1 } }),
+  tab([{ beats: [] }, { beats: [] }], { name: 'Bass', tuning: ['E1', 'A1', 'D2', 'G2'], showStandardNotation: false }),
+] });
+test('updateTrack: every field (written canonical / explicit / deleted), clef deletes measures[0].clef, unknown fields kept, no change returns the same score; announce', () => {
+  const s = twoTracks();
+  const c = cur(0, 0, 0);
+  const r = TR.updateTrack(s, c, 0, { name: ' Lead ', label: 'Ld.', clef: ' Treble8VB ', showStandardNotation: false, tabRhythm: true, tabArticulations: true, tiedFrets: 'parens', capo: 3 });
+  const t = r.score.tracks[0];
+  eq(t, { name: 'Lead', showTablature: true, clef: 'treble8vb', custom: { x: 1 }, measures: [{ beats: [nt('quarter')] }, { beats: [] }], label: 'Ld.', showStandardNotation: false, tabRhythm: true, tabArticulations: true, tiedFrets: 'parens', capo: 3 });
+  ok(r.score.tracks[1] === s.tracks[1] && t.measures[1] === s.tracks[0].measures[1] && sanitizeScore(r.score) === r.score);
+  eq(say(r), 'Track 1 Lead updated');
+  const back = TR.updateTrack(r.score, c, 0, { label: null, clef: null, tabRhythm: 'auto', tabArticulations: false, tiedFrets: false, capo: 0 }).score.tracks[0];
+  eq(['label', 'clef', 'tabRhythm', 'tabArticulations', 'tiedFrets', 'capo'].filter((k) => k in back), []);
+  eq(TR.updateTrack(r.score, c, 0, { tabRhythm: false, tiedFrets: null, capo: null }).score.tracks[0].tabRhythm, false);
+  const nullClef = TR.updateTrack(s, c, 0, { clef: null }).score.tracks[0];
+  ok(!('clef' in nullClef) && !('clef' in nullClef.measures[0]), 'null clef deletes both');
+  ok(TR.updateTrack(s, c, 0, { name: 'Gtr', clef: 'treble' }).score !== s, 'clef equal but measures[0].clef removed: a change');
+  ok(TR.updateTrack(s, c, 1, { name: ' Bass ', showTablature: true, capo: 0, tabRhythm: null }).score === s, 'equal values: same score');
+  ok(TR.updateTrack(s, c, 1, {}).score === s);
+  throwsClean(s, () => TR.updateTrack(s, c, 2, {}), RangeError);
+  throwsClean(s, () => TR.updateTrack(s, c, -1, {}), RangeError);
+  throwsClean(s, () => TR.updateTrack(s, c, '0', {}), TypeError);
+  throwsClean(s, () => TR.updateTrack(s, c, 0), TypeError, 'must be an object');
+  throwsClean(s, () => TR.updateTrack(s, c, 0, { name: 'ok', measures: [] }), TypeError, 'Unknown track field: measures');
+  throwsClean(s, () => TR.updateTrack(s, c, 0, JSON.parse('{"__proto__":{}}')), TypeError, '__proto__');
+  throwsClean(s, () => TR.updateTrack(s, c, 0, { name: 'ok', clef: 'soprano' }), RangeError, 'Unknown clef');
+  throwsClean(s, () => TR.updateTrack(s, c, 0, { clef: 1 }), TypeError);
+  throwsClean(s, () => TR.updateTrack(s, c, 0, { showTablature: null }), TypeError);
+  throwsClean(s, () => TR.updateTrack(s, c, 0, { tabRhythm: 'always' }), RangeError);
+  throwsClean(s, () => TR.updateTrack(s, c, 0, { tabRhythm: 1 }), TypeError);
+  throwsClean(s, () => TR.updateTrack(s, c, 0, { tiedFrets: true }), TypeError);
+  throwsClean(s, () => TR.updateTrack(s, c, 0, { tiedFrets: 'brackets' }), RangeError);
+  for (const bad of [31, -1, 2.5]) throwsClean(s, () => TR.updateTrack(s, c, 0, { capo: bad }), RangeError);
+  throwsClean(s, () => TR.updateTrack(s, c, 0, { capo: '2' }), TypeError);
+  throwsClean(s, () => TR.updateTrack(s, c, 0, { tuning: ['E2', 'Q2'] }), RangeError);
+  throwsClean(s, () => TR.updateTrack(s, c, 0, { name: 'ok', tuning: 'E2' }), TypeError);
+});
+test('updateTrack: hiding the last visible track is refused (lastVisible); hiding one of two is fine; a hidden track can be edited', () => {
+  const s = twoTracks();
+  const c = cur(0, 0, 0);
+  const hid = TR.updateTrack(s, c, 1, { showTablature: false, showStandardNotation: false });
+  ok(hid.score && !hid.refused);
+  eq(TR.updateTrack(hid.score, c, 0, { showTablature: false, showStandardNotation: false }), { refused: { id: 'lastVisible' } });
+  ok(TR.updateTrack(hid.score, c, 1, { name: 'Hidden bass' }).score, 'a hidden track is edited');
+  eq(describe({ id: 'lastVisible' }), 'At least one track must be visible');
+});
+test('updateTrack tuning: one call retunes, counts removed notes, adjusts the cursor beat for dropped graces below it; the string clamps later', () => {
+  const s = model(sc(tab([{ beats: [graceB(7, 1), graceB(7, 2), nt('quarter', 1, 0), nt('quarter', 7, 3)] }], { tuning: ['B1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'] })));
+  const r = TR.updateTrack(s, cur(0, 0, 3, 7), 0, { tuning: ['e2', 'a2', 'd3', 'g3', 'b3', 'e4'] });
+  eq(r.score.tracks[0].tuning, ['E2', 'A2', 'D3', 'G3', 'B3', 'E4']);
+  eq(r.score.tracks[0].measures[0].beats, [nt('quarter', 1, 0), rest('quarter')]);
+  eq(r.cursor, cur(0, 0, 1, 7));
+  eq(C.clampCursor(r.score, r.cursor), cur(0, 0, 1, 6));
+  eq(say(r), 'Track 1 Gtr updated, 3 notes removed');
+  eq(describe({ id: 'trackUpdated', n: 2, name: '', removed: 1 }), 'Track 2 updated, 1 note removed');
+  eq(TR.updateTrack(s, cur(0, 0, 2), 0, { tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'] }).cursor.beat, 0);
+  eq(TR.updateTrack(s, cur(0, 0, 2), 0, { tuning: ['A1', 'E2', 'A2', 'D3', 'G3', 'B3', 'E4'] }).cursor, cur(0, 0, 2), 'no strings removed');
+});
+test('uniqueName: trimmed, case-insensitive; first free "Name n" from 2', () => {
+  const ts = [{ name: 'Guitar' }, { name: ' guitar 2 ' }, { name: 'Bass' }, {}];
+  eq([TR.uniqueName(ts, 'Guitar'), TR.uniqueName(ts, 'BASS'), TR.uniqueName(ts, 'Uke'), TR.uniqueName([], 'Guitar')], ['Guitar 3', 'BASS 2', 'Uke', 'Guitar']);
+});
+
+// ---------- addTrack ----------
+test('addTrack: presets, spec precedence, numbering, position, cursor; measures per column with time / key from track 0 and navigation copied, clefs not', () => {
+  const s = model({ timeSignature: { beats: 3, beatType: 4 }, tracks: [
+    tab([
+      { timeSignature: { beats: 3, beatType: 4 }, clef: 'bass', barline: 'repeatStart', beats: [nt('quarter')] },
+      { keySignature: 2, ending: [1, 2], beats: [] },
+      { timeSignature: { beats: 6, beatType: 8 }, jump: 'D.S.', beats: [] },
+    ], { name: 'Guitar', keySignature: 1 }),
+    tab([{ beats: [] }, { beats: [], ending: 3, segno: true }, { beats: [], section: { letter: 'A' } }, { beats: [], repeatCount: 3, barline: 'repeatEnd', coda: false }], { name: 'Other' }),
+  ] });
+  const c = cur(1, 2, 0, 3);
+  const r = TS.addTrack(s, c);
+  eq(r.score.tracks.length, 3);
+  const t = r.score.tracks[2];
+  eq(t, { name: 'Guitar 2', clef: 'treble', showStandardNotation: true, showTablature: true, tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'], measures: [
+    { beats: [], keySignature: 1, barline: 'repeatStart' },
+    { beats: [], keySignature: 2, ending: [1, 2], segno: true },
+    { beats: [], timeSignature: { beats: 6, beatType: 8 }, jump: 'D.S.', section: { letter: 'A' } },
+    { beats: [], barline: 'repeatEnd', repeatCount: 3 },
+  ] });
+  eq(r.cursor, cur(2, 2, 0, 3));
+  eq(say(r), 'Track 3 Guitar 2 added');
+  ok(sanitizeScore(r.score) === r.score && r.score.tracks[0] === s.tracks[0]);
+  const b = TS.addTrack(s, c, 'bass5', 0);
+  eq([b.score.tracks[0].name, b.score.tracks[0].clef, b.score.tracks[0].tuning.length, b.cursor.track, b.score.tracks[1] === s.tracks[0]], ['5-string bass', 'bass', 5, 0, true]);
+  const spec = TS.addTrack(s, c, { preset: 'ukulele', name: ' Uke ', label: 'U', clef: 'TREBLE8VA', tuning: ['g4', 'c4', 'e4', 'a4'], showStandardNotation: false, capo: 2 }, 1);
+  eq(spec.score.tracks[1], { name: 'Uke', label: 'U', clef: 'treble8va', showStandardNotation: false, showTablature: true, tuning: ['G4', 'C4', 'E4', 'A4'], capo: 2, measures: t.measures });
+  eq(TS.addTrack(s, c, { name: 'other' }).score.tracks[2].name, 'other 2', 'clash: case-insensitive');
+  eq(TS.addTrack(s, c, { capo: 0, clef: null }).score.tracks[2].clef, undefined);
+  eq(TS.addTrack(model(sc()), cur(0, 0, 0), 'bass4').score.tracks[0].measures, [{ beats: [] }], 'a score with no tracks');
+  for (const [args, Type] of [[['nope'], RangeError], [['constructor'], RangeError], [[{ instrument: 'bass4' }], TypeError], [[5], TypeError], [[null], TypeError],
+    [[{ preset: 'x' }], RangeError], [[{ tuning: [] }], RangeError], [[undefined, 3], RangeError], [[undefined, -1], RangeError], [[undefined, '1'], TypeError],
+    [[{ name: 'a\nb' }], RangeError], [[{ showTablature: 'yes' }], TypeError], [[{ capo: 40 }], RangeError], [[JSON.parse('{"__proto__":{}}')], TypeError]]) {
+    throwsClean(s, () => TS.addTrack(s, c, ...args), Type, '', JSON.stringify(args));
+  }
+  const full = model({ tracks: Array.from({ length: 32 }, () => tab([{ beats: [] }])) });
+  eq(TS.addTrack(full, c), { refused: { id: 'tooManyTracks' } });
+  throws(() => TS.addTrack(full, c, 'nope'), RangeError, '', 'throws before the refusal');
+  eq(describe({ id: 'tooManyTracks' }), 'A score has at most 32 tracks');
+});
+
+// ---------- removeTrack / moveTrack ----------
+test('removeTrack: column fields only the removed track sets move to the others (all 9); fields another track sets stay; refusals; cursor', () => {
+  const s = model({ tracks: [
+    tab([{ beats: [] }, { beats: [], jump: 'Fine' }], { name: 'A' }),
+    tab([
+      { beats: [nt('quarter')], barline: 'double', ending: { numbers: [1], text: 'x' }, section: 'Verse', segno: true, coda: true, timeSignature: { beats: 3, beatType: 4 }, keySignature: -3 },
+      { beats: [], jump: 'D.C.', barline: 'repeatEnd', repeatCount: 4, clef: 'bass', custom: 1 },
+      { beats: [], ending: 'bogus' },
+    ], { name: 'B' }),
+    tab([{ beats: [] }], { name: 'C', showTablature: false, showStandardNotation: false }),
+  ] });
+  const r = TS.removeTrack(s, cur(1, 0, 0), 1);
+  eq(r.score.tracks.map((t) => t.name), ['A', 'C']);
+  const nav0 = { barline: 'double', ending: { numbers: [1], text: 'x' }, section: 'Verse', segno: true, coda: true, timeSignature: { beats: 3, beatType: 4 }, keySignature: -3 };
+  eq(r.score.tracks[0].measures, [{ beats: [], ...nav0 }, { beats: [], jump: 'Fine', barline: 'repeatEnd', repeatCount: 4 }]);
+  eq(r.score.tracks[1].measures, [{ beats: [], ...nav0 }, { beats: [], barline: 'repeatEnd', repeatCount: 4 }], 'hidden tracks get them too; jump set by A stays only on A');
+  eq(r.cursor.track, 1);
+  eq(C.clampCursor(r.score, r.cursor).track, 0, 'clamped to the nearest visible track');
+  eq(say(r), 'Track 2 B removed');
+  ok(sanitizeScore(r.score) === r.score);
+  eq(TS.removeTrack(s, cur(2, 0, 0), 0).cursor.track, 1, 'after the removed one: -1');
+  eq(TS.removeTrack(s, cur(0, 0, 0), 2).cursor.track, 0);
+  eq(TS.removeTrack(model(sc(tab([{ beats: [] }]))), cur(0, 0, 0), 0), { refused: { id: 'onlyTrack' } });
+  const oneVisible = model({ tracks: [tab([{ beats: [] }]), tab([{ beats: [] }], { showTablature: false, showStandardNotation: false })] });
+  eq(TS.removeTrack(oneVisible, cur(0, 0, 0), 0), { refused: { id: 'lastVisible' } });
+  ok(TS.removeTrack(oneVisible, cur(0, 0, 0), 1).score, 'the hidden one can go');
+  throwsClean(s, () => TS.removeTrack(s, cur(0, 0, 0), 3), RangeError);
+  throwsClean(s, () => TS.removeTrack(s, cur(0, 0, 0)), TypeError);
+  eq(describe({ id: 'onlyTrack' }), 'A score needs at least one track');
+});
+test('moveTrack: the track list reorders, the cursor stays on its track (every from / to / cursor combination); same index = no change', () => {
+  const s = model({ tracks: ['A', 'B', 'C', 'D'].map((name) => tab([{ beats: [] }], { name })) });
+  for (let from = 0; from < 4; from++) for (let to = 0; to < 4; to++) for (let c = 0; c < 4; c++) {
+    const r = TS.moveTrack(s, cur(c, 0, 0), from, to);
+    if (from === to) { ok(r.score === s && !r.announce); continue; }
+    const names = s.tracks.map((t) => t.name);
+    const [m] = names.splice(from, 1);
+    names.splice(to, 0, m);
+    eq(r.score.tracks.map((t) => t.name), names);
+    eq(r.score.tracks[r.cursor.track], s.tracks[c], `${from}->${to} cursor ${c}`);
+  }
+  eq(say(TS.moveTrack(s, cur(0, 0, 0), 3, 0)), 'Track D moved to position 1');
+  throwsClean(s, () => TS.moveTrack(s, cur(0, 0, 0), 0, 4), RangeError);
+  throwsClean(s, () => TS.moveTrack(s, cur(0, 0, 0), 0.5, 1), RangeError);
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

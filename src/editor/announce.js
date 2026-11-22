@@ -65,7 +65,18 @@ export const MESSAGES = Object.freeze({
   noChange: () => 'No change',
   scoreUpdated: (d) => `${!d.key ? 'Score settings updated' : FLAG_KEYS.includes(d.key) ? `${d.label} ${d.on ? 'on' : 'off'}` : `${d.label} ${d.on ? 'set' : 'removed'}`}${d.mmrOn ? ', shown when rendered, not in the editor' : ''}`,
   tempoSet: (d) => (d.tempo ? `Tempo ${tempoText(d.tempo)} at measure ${d.measure}, beat ${d.beat}` : 'Tempo removed'),
+  onlyTrack: () => 'A score needs at least one track',
+  tooManyTracks: () => 'A score has at most 32 tracks',
+  lastVisible: () => 'At least one track must be visible',
+  tooLarge: () => 'The score would be too large',
+  trackUpdated: (d) => `${trackText(d)} updated${d.removed ? `, ${d.removed} note${d.removed === 1 ? '' : 's'} removed` : ''}`,
+  trackAdded: (d) => `${trackText(d)} added`,
+  trackRemoved: (d) => `${trackText(d)} removed`,
+  trackMoved: (d) => `Track${d.name ? ` ${d.name}` : ''} moved to position ${d.n}`,
 });
+
+/** 'Track 2 Bass' / 'Track 2'. */
+const trackText = (d) => `Track ${d.n}${d.name ? ` ${d.name}` : ''}`;
 
 const FLAG_KEYS = ['showTuningChart', 'multiMeasureRests'];
 /** '120' for a quarter beat, else '80, dotted quarter'. */
