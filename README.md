@@ -356,7 +356,7 @@ Notes:
 - Keys are matched by the character they type, so they follow your keyboard layout.
 - 2.3.0 adds the selection, clipboard, F and Shift+F keys above. The settings dialogs open from their toolbar buttons, which Tab reaches.
 - Browser shortcuts are not taken: Ctrl+W, Ctrl+T, Ctrl+N, Ctrl+1 to 9 and the others. Alt combinations and the F-keys are not taken either. While the score has focus, Ctrl+A, Ctrl+Z and Ctrl+Y are taken by the editor, and Ctrl+C, Ctrl+X and Ctrl+V are handled as the editor's copy, cut and paste.
-- Shift+R, Shift+I, Shift+H, Shift+V, Shift+P, Shift+X, Shift+G and Shift+N do nothing. Shift with ← or → extends the selection, and Shift with Home or End extends it to the measure edge. Shift+↑ and Shift+↓ do nothing, and so do Ctrl+↑, Ctrl+↓, Ctrl+Shift+Home and Ctrl+Shift+End. Those four are reserved for 2.3.1, which adds effects and transposing on a selection. The effect keys are listed in [Effects](#effects).
+- Shift+H, Shift+V, Shift+P, Shift+X, Shift+G and Shift+N do nothing, and Shift+R and Shift+I are reserved for 2.3.1. Shift with ← or → extends the selection, and Shift with Home or End extends it to the measure edge. Shift+↑ and Shift+↓ do nothing, and so do Ctrl+↑, Ctrl+↓, Ctrl+Shift+Home and Ctrl+Shift+End. These six are reserved for 2.3.1, which adds effects and transposing on a selection. The effect keys are listed in [Effects](#effects).
 
 ### Editing rules
 

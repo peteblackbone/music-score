@@ -105,7 +105,7 @@ export const MESSAGES = Object.freeze({
   // 2.3 clipboard
   copied: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}`,
   cut: (d) => `Cut ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}, now rests`,
-  pasted: (d) => `Pasted ${d.kind === 'measures' ? `${plural(d.count, 'measure')} at measure ${d.at}` : `${plural(d.count, 'beat')}${d.replaced != null ? `, replaced ${d.replaced}` : ''}`}${d.dropped ? `, ${plural(d.dropped, 'note')} on missing strings dropped` : ''}`,
+  pasted: (d) => `Pasted ${d.kind === 'measures' ? `${plural(d.count, 'measure')} at measure ${d.at}` : `${plural(d.count, 'beat')}${d.replaced != null ? `, replaced ${d.replaced}` : ''}`}${d.dropped ? `, ${plural(d.dropped, 'note')} on missing strings dropped` : ''}${d.tempoRemoved ? `, ${plural(d.tempoRemoved, 'tempo mark')} removed` : ''}`,
   cutUnwritten: (d) => `Clipboard unavailable, nothing cut. ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')} copied in the editor`,
   nothingToCopy: () => 'Nothing to copy',
   nothingToPaste: () => 'Nothing to paste',

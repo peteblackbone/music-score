@@ -434,6 +434,10 @@ test('applyPaste beats: before the cursor beat and its graces; on the slot; over
   eq(v1(over.score, 0, 0).map((b) => b.duration), ['quarter', 'quarter']);
   eq(describe(over.announce), 'Pasted 2 beats, replaced 2');
   eq(over.cursor, cur(0, 0, 2));
+  // a drawn tempo mark on a replaced beat is counted, like a range delete
+  const withTempo = { ...s, tracks: [{ ...s.tracks[0], measures: [{ ...s.tracks[0].measures[0], beats: s.tracks[0].measures[0].beats.map((b, i) => (i === 0 ? { ...b, tempo: 90 } : b)) }, ...s.tracks[0].measures.slice(1)] }, ...s.tracks.slice(1)] };
+  const overT = PA.applyPaste(withTempo, cur(0, 0, 2), SEL.selectionRange(withTempo, 0, P(0, 0), P(0, 2)), clip);
+  eq(describe(overT.announce), 'Pasted 2 beats, replaced 2, 1 tempo mark removed');
 });
 test('applyPaste fits the clip to the track: 7 strings into 6 drops (counted, an emptied beat becomes a rest), a different tuning drops pitch from string+fret notes, a stray tieEnd is removed, no tempo arrives', () => {
   const s = six([{ beats: [nt('half')] }]);

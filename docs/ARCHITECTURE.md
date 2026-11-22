@@ -923,8 +923,8 @@ test. The `looksLikeClip` static is defined with `Object.defineProperty` in
   `ctx.selection` is set: `clearRange` (Delete), `removeRange` (Ctrl+Delete) and
   `deleteSelectedColumns` (Shift+Delete, refused unless the selection is `'measures'`).
   Each is one `run()` result, so one undo step.
-- `clearSlices` and `removeSlices` map the selected beats through `eachSlice`. Both
-  then repair ties on the edge measures with `fixTiesIn`. Tempo marks on removed beats
+- `clearSlices` and `removeSlices` map the selected beats through `eachSlice`, which
+  repairs ties on the edge measures with `fixTiesIn`. Tempo marks on removed beats
   are counted with `tempoIn`.
 - `deleteSelectedColumns` calls `deleteColumns` in `measures.js` once for the whole
   range. It moves the carried fields (time signature, key signature, clef) as repeated

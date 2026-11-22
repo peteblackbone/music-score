@@ -46,9 +46,11 @@ export function applyPaste(score, cursor, sel, clip) {
     if (!beats.length) return { refused: { id: 'nothingToPaste' } };
     let out = score;
     let at;
+    let tempoRemoved = 0;
     if (sel) {
       const r = removeSlices(score, sel);
       out = r.score;
+      tempoRemoved = r.tempoRemoved || 0;
       at = { track: ti, measure: r.cursor.measure, beat: r.cursor.beat };
     } else {
       const here = beatsAt(score, cursor);
@@ -58,7 +60,7 @@ export function applyPaste(score, cursor, sel, clip) {
     out = updateBeats(out, at, (bs) => [...bs.slice(0, at.beat), ...beats, ...bs.slice(at.beat)]);
     out = sanitizeFixed(fixTiesIn(out, ti, at.measure, at.measure));
     const shift = sel ? at.beat : Math.min(cursor.beat, beatsAt(score, cursor).length);
-    const announce = { id: 'pasted', kind: 'beats', count, dropped, ...(sel ? { replaced: sel.info.beatCount } : {}) };
+    const announce = { id: 'pasted', kind: 'beats', count, dropped, ...(sel ? { replaced: sel.info.beatCount } : {}), tempoRemoved };
     return { score: out, cursor: { ...cursor, measure: at.measure, beat: shift + beats.length }, announce };
   }
   const k = measures.length;
