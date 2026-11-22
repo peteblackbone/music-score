@@ -367,6 +367,10 @@ test('demo Score dialog: scoreValues / scorePatch send only changed keys (empty 
   eq(DS.scorePatch(v, { ...v, artist: 'A', title: '  ' }), { title: null });
   eq(DS.scorePatch(v, { ...v, subtitle: ' Sub ', showTuningChart: false, multiMeasureRests: true }), { subtitle: 'Sub', showTuningChart: null, multiMeasureRests: true });
   eq(DS.scoreErrors({ ...v, title: 'x'.repeat(201), copyright: 'y'.repeat(2001), instructions: 'z'.repeat(2000) }), { title: 'At most 200 characters.', copyright: 'At most 2000 characters.' });
+  // only changed fields are checked: an over-long title already in the file doesn't block another edit
+  const old = { ...v, title: 'x'.repeat(250) };
+  eq(DS.scoreErrors({ ...old, artist: 'New' }, old), {});
+  eq(DS.scoreErrors({ ...old, title: 'x'.repeat(251) }, old), { title: 'At most 200 characters.' });
   const { ed } = mk(fixture());
   eq(ed.updateScore(DS.scorePatch(DS.scoreValues(ed.getScore()), { ...DS.scoreValues(ed.getScore()), title: 'T2', copyright: 'c\nd' })), true);
   eq([ed.getScore().title, ed.getScore().copyright], ['T2', 'c\nd']);

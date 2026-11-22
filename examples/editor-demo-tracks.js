@@ -326,7 +326,7 @@ export function wireTracksDialog(doc, editor, { refresh = () => {} } = {}) {
     const s = tuning.length;
     tuning.shift();
     const k = notesOnRemovedStrings(score(), sel, s - 1) - notesOnRemovedStrings(score(), sel, s);
-    $('tr-string-note').textContent = k ? `String ${s} has ${k} note${k === 1 ? '' : 's'}. They'll be deleted when you apply.` : '';
+    $('tr-string-note').textContent = k ? `String ${s} has ${k} note${k === 1 ? '' : 's'}. They'll be removed from the TAB when you apply.` : '';
     renderStrings();
   });
   $('tr-add-tuning').addEventListener('click', () => {
@@ -353,7 +353,7 @@ export function wireTracksDialog(doc, editor, { refresh = () => {} } = {}) {
         const old = before.tuning ? before.tuning.length : 6;
         const lost = notesOnRemovedStrings(score(), sel, patch.tuning.length);
         const k = old - patch.tuning.length;
-        if (lost && !doc.defaultView.confirm(`Remove ${k} string${k === 1 ? '' : 's'}? ${lost} note${lost === 1 ? '' : 's'} on ${k === 1 ? 'it' : 'them'} will be deleted.`)) return false;
+        if (lost && !doc.defaultView.confirm(`Remove ${k} string${k === 1 ? '' : 's'}? ${lost} note${lost === 1 ? '' : 's'} on ${k === 1 ? 'it' : 'them'} will be removed from the TAB.`)) return false;
       }
       const done = callApi(editor, alert, () => editor.updateTrack(sel, patch));
       refresh();

@@ -50,9 +50,10 @@ export function scorePatch(before, values) {
 }
 
 /** Score dialog errors: `{ field: message }` (empty when every field is fine). */
-export function scoreErrors(values) {
+export function scoreErrors(values, before) {
   const out = {};
-  SCORE_TEXT.forEach((k) => {
+  // only fields the user changed: an over-long field in an older file must not block other edits
+  SCORE_TEXT.filter((k) => !before || String(values[k] ?? '') !== String(before[k] ?? '')).forEach((k) => {
     const max = LONG.includes(k) ? LIMITS.longTextChars : LIMITS.textChars;
     if (String(values[k] ?? '').trim().length > max) out[k] = `At most ${max} characters.`;
   });
@@ -81,7 +82,7 @@ export function wireSettings(doc, editor, { refresh = () => {} } = {}) {
     },
     apply() {
       const values = readScore();
-      const errs = scoreErrors(values);
+      const errs = scoreErrors(values, scoreBefore);
       if (showErrors(doc, $('score-error'), scoreFields.filter((el) => errs[el.dataset.field]).map((el) => [el, errs[el.dataset.field]]))) return false;
       const patch = scorePatch(scoreBefore, values);
       if (!Object.keys(patch).length) return true;
