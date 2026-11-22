@@ -16,6 +16,7 @@ const A = await imp('src/editor/model/access.js');
 const { run, COMMANDS, undoLabel } = await imp('src/editor/model/commands.js');
 const { EFFECTS, EFFECT_KEYS, EFFECT_BY_NAME, DYNAMIC_SCALE, bendStep } = await imp('src/editor/model/effectTable.js');
 const E = await imp('src/editor/model/effects.js');
+const { keyToCommand } = await imp('src/editor/keymap.js');
 
 const results = [];
 const test = (name, fn) => {
@@ -393,6 +394,25 @@ test('effectWords: note words (TAB, a note on the string) then beat words, in ta
     ok(edits > 500, `${edits} edits`);
   });
 }
+
+// ---------- AC16: keymap ----------
+const K = (key, mods = {}) => keyToCommand({ key, ctrlKey: false, shiftKey: false, altKey: false, metaKey: false, ...mods });
+test('AC16: the 15 effect keys map to their commands (either case without Shift = Caps Lock); Alt, Ctrl, Cmd, F-keys and Tab stay unconsumed', () => {
+  const rows = [['h', 'hammerPull'], ['s', 'slide'], ['S+', 'slideInOut'], ['b', 'bend'], ['B+', 'bendBack'], ['v', 'vibrato'], ['p', 'palmMute'], ['x', 'deadNote'],
+    ['g', 'ghostNote'], ['n', 'harmonic'], ['L+', 'letRing'], ['d', 'louder'], ['D+', 'softer'], ['a', 'accent'], ['A+', 'staccato']];
+  for (const [k, name] of rows) {
+    const shiftKey = k.endsWith('+');
+    const letter = k[0];
+    eq(K(letter, { shiftKey }), { name }, k);
+    eq(K(shiftKey ? letter.toLowerCase() : letter.toUpperCase(), { shiftKey }), { name }, `${k} with Caps Lock`);
+    for (const mods of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { altKey: true, shiftKey: true }, { ctrlKey: true, shiftKey: true }]) eq(K(letter, { shiftKey, ...mods }), null, `${k} ${J(mods)}`);
+  }
+  eq(new Set(rows.map(([, n]) => n)).size, 15);
+  eq(Object.entries(EFFECT_KEYS).map(([k, n]) => `${k}=${n}`).sort(), rows.map(([k, n]) => `${k.endsWith('+') ? `Shift+${k[0].toLowerCase()}` : k}=${n}`).sort());
+  eq([K('Tab'), K('Tab', { shiftKey: true }), K('F1'), K('F12', { shiftKey: true }), K('h', { isComposing: true })], [null, null, null, null, null]);
+  eq([K('r'), K('l'), K('i'), K('m'), K('M', { shiftKey: true })].map((c) => c.name), ['toggleRest', 'toggleTie', 'insertBeat', 'insertMeasureAfter', 'insertMeasureBefore'], '2.0 letters unchanged');
+  eq([K('R', { shiftKey: true }), K('I', { shiftKey: true }), K('H', { shiftKey: true }), K('N', { shiftKey: true })], [null, null, null, null]);
+});
 
 // ---------- report ----------
 export function summary() {

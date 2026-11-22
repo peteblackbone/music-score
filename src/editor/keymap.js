@@ -8,9 +8,11 @@
  * bound: Tab, anything with Alt, F-keys, IME composition, Ctrl with keys
  * other than Z, Y, the arrows, Home, End, Delete and Backspace (so the
  * browser keeps Ctrl+W/T/N/L/P/S/I/M, Ctrl+1–9, Ctrl+PageUp/PageDown),
- * Shift+arrows, Shift+Home/End and Shift+R / L / I (reserved). H, S, B, V,
- * P, X and G are reserved for 2.1.
+ * Shift+arrows, Shift+Home/End and Shift+R / I (reserved). The effect
+ * letters (H, S, Shift+S, B, Shift+B, V, P, X, G, N, Shift+L, D, Shift+D,
+ * A, Shift+A) come from EFFECT_KEYS (model/effectTable.js).
  */
+import { EFFECT_KEYS } from './model/effectTable.js';
 
 const cmd = (name, arg) => (arg === undefined ? { name } : { name, arg });
 
@@ -49,6 +51,8 @@ export function keyToCommand(e) {
     const l = key.toLowerCase();
     if (l === 'm') return cmd(shift ? 'insertMeasureBefore' : 'insertMeasureAfter');
     if (LETTERS[l] && !shift) return cmd(LETTERS[l]);
+    const fx = EFFECT_KEYS[(shift ? 'Shift+' : '') + l];
+    if (fx) return cmd(fx);
   }
   return null;
 }

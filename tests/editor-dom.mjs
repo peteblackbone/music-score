@@ -331,7 +331,7 @@ test('B6: setCursor clamps and returns the cursor; getMeasureFill; RangeError ou
 });
 test('B7: handleKey returns true for consumed keys only; the keydown listener prevents default only then and ignores other targets', () => {
   const { ed, root } = mk(twoBar());
-  eq(press(ed, 'ArrowRight', 'Tab', key('w', { ctrlKey: true }), 'h', 'Escape', 'ArrowUp'), [true, false, false, false, false, true]);
+  eq(press(ed, 'ArrowRight', 'Tab', key('w', { ctrlKey: true }), key('R', { shiftKey: true }), 'Escape', 'ArrowUp'), [true, false, false, false, false, true]);
   const e1 = root.dispatch('keydown', key('ArrowRight'));
   const e2 = root.dispatch('keydown', key('Tab'));
   const e3 = root.dispatch('keydown', { ...key('ArrowRight'), target: {} });
@@ -601,6 +601,8 @@ const KEYS = [
   key('End', { ctrlKey: true }), key('Home', { ctrlKey: true }), key('PageUp'), key('PageDown'),
   key('+'), key('-'), key('.'), key('/'), key('r'), key('l'), key('Delete'), key('Delete', { ctrlKey: true }), key('i'), key('Insert'),
   key('m'), key('M', { shiftKey: true }), key('Delete', { shiftKey: true }), key('z', { ctrlKey: true }), key('y', { ctrlKey: true }), key('Escape'),
+  // 2.1 effects
+  ...['h', 's', 'b', 'v', 'p', 'x', 'g', 'n', 'd', 'a'].map((k) => key(k)), ...['S', 'B', 'L', 'D', 'A'].map((k) => key(k, { shiftKey: true })),
 ];
 test('B10 (editor): 300 random keys, frames flushed every 25; the model stays sanitize-stable and the hit map voice-1 beats match the model (index, grace, rest)', () => {
   const rnd = mulberry32(7);

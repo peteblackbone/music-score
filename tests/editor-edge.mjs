@@ -701,7 +701,9 @@ function mulberry32(a) {
 }
 const FUZZ = ['moveLeft', 'moveRight', 'moveRight', 'moveUp', 'moveDown', 'prevMeasure', 'nextMeasure', 'measureStart', 'measureEnd', 'scoreStart', 'scoreEnd', 'prevTrack', 'nextTrack',
   ...Array(8).fill('digit'), 'deleteNote', 'toggleTie', 'toggleTie', 'toggleTie', 'shorter', 'longer', 'cycleDots', 'toggleTriplet', 'toggleRest', 'toggleRest', 'deleteBeat', 'insertBeat',
-  'insertMeasureAfter', 'insertMeasureBefore', 'deleteMeasure', 'setDuration'];
+  'insertMeasureAfter', 'insertMeasureBefore', 'deleteMeasure', 'setDuration',
+  // 2.1 effects
+  'hammerPull', 'slide', 'slideInOut', 'bend', 'bendBack', 'vibrato', 'palmMute', 'deadNote', 'ghostNote', 'harmonic', 'letRing', 'louder', 'softer', 'accent', 'staccato'];
 const fuzzStart = () => sc(
   tab([
     { beats: [tn('quarter', 1, 5, { tieStart: true }), tn('quarter', 1, 5, { tieEnd: true }), grace(), nt('half', 2, 3)] },
@@ -789,6 +791,14 @@ test('E12: unknown fields at every level survive every command that does not own
   eq(re.beats()[0].notes[0], { string: 1, fret: 7, zzNote: 1 });
   const del = play(s).key('Delete');
   eq(del.beats()[0], { type: 'rest', duration: 'quarter', zzBeat: 'x' });
+  // 2.1: every effect key, pressed through its whole cycle, on the note and on the rest it leaves
+  const fx = play(s);
+  const EFFECT_KEYS = ['h', 's', SHIFT('s'), 'b', SHIFT('b'), 'v', 'p', 'x', 'g', 'n', SHIFT('l'), 'd', SHIFT('d'), 'a', SHIFT('a')];
+  for (let i = 0; i < 9; i++) fx.go(...EFFECT_KEYS);
+  fx.go('ArrowRight', 'Delete', ...EFFECT_KEYS, 'r', ...EFFECT_KEYS);
+  const fxOut = JSON.stringify(fx.score);
+  for (const k of ['zzScore', 'zzTrack', 'zzMeasure', 'zzBeat', 'zzNote']) ok(fxOut.includes(k), `effects: ${k} kept`);
+  ok(fx.beats()[1].zzBeat === 'y' && fx.beats()[0].notes[0].zzNote === 1, 'effects: beat and note fields kept');
 });
 
 // ---------- H: demo helpers ----------

@@ -642,7 +642,7 @@ test('keymap: every row of the key table (D1)', () => {
   for (let d = 0; d <= 9; d++) eq(K(String(d)), { name: 'digit', arg: d });
   eq(K('7', { code: 'Numpad7' }), { name: 'digit', arg: 7 });
 });
-test('keymap: never consumes Tab, Alt, F-keys, IME, browser Ctrl combos, Shift+arrows, reserved Shift+R/L/I and 2.1 letters', () => {
+test('keymap: never consumes Tab, Alt, F-keys, IME, browser Ctrl combos, Shift+arrows, reserved Shift+R/I and unbound letters', () => {
   const none = [
     ['Tab'], ['Tab', { shiftKey: true }], ['ArrowLeft', { altKey: true }], ['ArrowRight', { altKey: true }], ['r', { altKey: true }],
     ['F1'], ['F5'], ['F12'], ['a', { isComposing: true }], ['Process'], ['Dead'],
@@ -651,8 +651,9 @@ test('keymap: never consumes Tab, Alt, F-keys, IME, browser Ctrl combos, Shift+a
     ['PageUp', { ctrlKey: true }], ['PageDown', { ctrlKey: true }], ['ArrowUp', { ctrlKey: true }], ['ArrowLeft', { ctrlKey: true, shiftKey: true }],
     ['ArrowLeft', { shiftKey: true }], ['ArrowRight', { shiftKey: true }], ['ArrowUp', { shiftKey: true }], ['ArrowDown', { shiftKey: true }],
     ['Home', { shiftKey: true }], ['End', { shiftKey: true }],
-    ['R', { shiftKey: true }], ['L', { shiftKey: true }], ['I', { shiftKey: true }],
-    ['h'], ['s'], ['b'], ['v'], ['p'], ['x'], ['g'], ['H'], ['a'], [' '], ['Enter'], [''], [undefined],
+    ['R', { shiftKey: true }], ['I', { shiftKey: true }],
+    ...['c', 'e', 'f', 'j', 'k', 'o', 'q', 't', 'u', 'w'].map((k) => [k]), ...['H', 'V', 'P', 'X', 'G', 'N'].map((k) => [k, { shiftKey: true }]),
+    [' '], ['Enter'], [''], [undefined],
   ];
   for (const [key, mods] of none) eq(K(key, mods), null, `${key} ${JSON.stringify(mods || {})}`);
   eq(keyToCommand(null), null);
@@ -670,6 +671,8 @@ const WEIGHTED = [
   'prevMeasure', 'nextMeasure', 'measureStart', 'measureEnd', 'scoreStart', 'scoreEnd', 'prevTrack', 'nextTrack',
   'deleteNote', 'deleteNote', 'toggleTie', 'toggleTie', 'shorter', 'longer', 'setDuration', 'cycleDots', 'toggleTriplet', 'toggleRest', 'toggleRest',
   'deleteBeat', 'insertBeat', 'insertMeasureAfter', 'insertMeasureBefore', 'deleteMeasure', 'jump',
+  // 2.1 effects
+  'hammerPull', 'slide', 'slideInOut', 'bend', 'bendBack', 'vibrato', 'palmMute', 'deadNote', 'ghostNote', 'harmonic', 'letRing', 'louder', 'softer', 'accent', 'staccato',
 ];
 export const B10_SCORES = () => [
   ['default', defaultScore()],
