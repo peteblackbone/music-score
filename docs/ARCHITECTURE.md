@@ -376,7 +376,9 @@ the same file: it breaks the rule on purpose and checks that the check fails.
 3. Files under `model/` import from outside `src/editor/` only
    `src/sanitize.js`, `src/duration.js` and `src/rational.js`. From 2.1.0 they
    may also import `src/directions.js`, `src/harmonics.js` and
-   `src/noteEffects.js` (see "Editor effects (2.1.0)").
+   `src/noteEffects.js` (see "Editor effects (2.1.0)"). From 2.2.0 they may
+   also import `src/clef.js`, `src/navigation.js`, `src/scoreText.js` and
+   `src/expression.js` (see "Editor settings (2.2.0)").
 4. Renderer modules outside `src/editor/` may be imported only by the editor
    files on an allowlist: `MusicScoreRenderer.js` by `view.js` and
    `ScoreEditor.js` only; `hitMap.js` by `view.js` and `geometry.js`;
@@ -492,7 +494,9 @@ checked first, then the parsed data, both before repair or drawing:
 
 The limits were added after the security review of 2.0.0. They keep a large or
 hostile file from stalling the page or filling storage. The renderer does not
-apply them.
+apply them. From 2.2.0 the same file holds the caps for the settings API (text
+lengths, beats, capo, tempo, endings, repeat counts), which only the settings
+calls check (see "Editor settings (2.2.0)").
 
 ### Rendering and events
 
@@ -608,6 +612,215 @@ for a custom value). For `louder`, the position is on the dynamic scale, so
 `ppp` is 0 and `fff` is 7. The demo's `effectButtonState` in
 `examples/editor-demo-effects.js` works this way. The button labels live in that
 demo file, not in the table.
+
+## Editor settings (2.2.0)
+
+2.2.0 adds the settings API to `ScoreEditor`: the header, tracks, tuning and capo,
+measure settings and tempo. The user-facing description is in the README, under
+"Editing scores (ScoreEditor)", "Score and track settings". The design sources are
+`.12sp/requirements-2.2.md`, `.12sp/design-2.2.md` and `.12sp/ui-2.2.md`. Where a
+design document and the code differ, the code is the reference. The orchestrator's
+reconciliation (R1 to R9) is in `design-2.2.md`, section 0.
+
+### Install pattern
+
+`src/editor/settings.js` exports `installSettings(ScoreEditor)`, which
+`ScoreEditor.js` calls once after the class. It defines these on the prototype with
+`Object.defineProperty`, all non-enumerable: the seven mutators and
+`getMeasureSettings`, each a thin wrapper, and the `lastMessage` getter. It also
+defines the private helpers `_settings`, `_settingsRefused`, `_sayKept` and
+`_applyModel`. The statics `INSTRUMENTS` and `TUNINGS` are defined there too, frozen.
+`SETTINGS_API` lists the public names for the surface pin test.
+
+Keeping the methods out of the class body holds `ScoreEditor.js` at about 285 lines,
+under the 300-line cap. The class itself gains four small edits: the import, the
+`installSettings` call, `_syncRoot()` in `_step` (undo and redo update the
+accessible name), and `_say` also setting `_lastMessage`.
+
+### Operations, the registry and the controller
+
+Settings do not go through `COMMANDS` or `run()`. Each operation is a pure function
+`(score, cursor, ...args)` that returns `{ score, cursor?, announce }`, or
+`{ refused: { id } }`. Operations live in `model/settings/`, and `ops.js` holds the
+registry `SETTINGS`: the seven mutators, each with its undo label. The labels are
+not in `COMMANDS`.
+
+The controller `_settings(name, args)` checks things in this order:
+
+1. `_alive()`.
+2. The operation. It validates its arguments and throws before it builds anything.
+   Bad arguments therefore throw even in read-only mode, and before the digit buffer
+   is cancelled.
+3. `_cancelBuffer()`. Any two-digit fret entry ends.
+4. Read-only: refused with `readOnly`.
+5. A refusal returned by the operation (`onlyTrack`, `lastVisible`, `tooManyTracks`,
+   `noBeat`).
+6. No change: when the operation returns the same score object, it is `noChange`.
+7. Size: `exportedLength(score) > LIMITS.jsonChars` is `tooLarge`.
+8. `_applyModel`: the cursor is clamped, the history entry is pushed with the label,
+   `_syncRoot()` runs, the spoken text is set, the `cursor` event fires if the cursor
+   moved, and the `change` event is queued with `{ source: 'edit', command, message }`.
+
+A refusal or a no-op speaks its text and returns `false`, with no history entry and
+no event. The settings path skips the hidden-track check that `run()` makes.
+
+### Pure model: `model/settings/`
+
+| File | Contents |
+|---|---|
+| `validate.js` | The argument checks: `object` (a copy of a plain object, each value read once), `checkKeys` (an allowlist with `Object.hasOwn`, so `__proto__`, `constructor`, `tracks` and `measures` are rejected), `index`, `intIn`, `text`, `flag`, `bool`, `same` and `withField`. `withField` returns the same object when nothing changes, so a no-op keeps every reference. |
+| `instruments.js` | `INSTRUMENTS` and `TUNINGS`, deep-frozen. |
+| `score.js` | `updateScore`, `setTempo`, `tempoAt`, `SCORE_FIELDS` and `TEMPO_UNITS`. |
+| `tuning.js` | `canonicalTuning` and `retuneTrack` (see "Retuning" below). |
+| `track.js` | `TRACK_FIELDS`, `checkTrackPatch`, `applyTrackPatch`, `updateTrack`, `uniqueName`. |
+| `column.js` | The column helpers: `columnValue`, `writeFields`, `setColumn`, `setTrackField`, `newTrackMeasures`, `migrateRemoved`. |
+| `tracks.js` | `addTrack`, `removeTrack`, `moveTrack`. |
+| `measureSettings.js` | `updateMeasure` and `getMeasureSettings`. |
+| `ops.js` | The `SETTINGS` registry. |
+
+`model/fill.js` gains `keySignatureAt`, and `model/cursor.js` adds `timeSignature`,
+`keySignature` and `tempo` to `cursorInfo`. `tempo` comes from `tempoAt` in
+`settings/score.js`. There is no import cycle: `score.js` imports only `access.js`,
+`validate.js`, `limits.js` and the shared `expression.js`.
+
+`model/limits.js` gains the caps for the settings: `textChars` (200),
+`longTextChars` (2000), `timeSignatureBeats` (32), `beatTypes` (1, 2, 4, 8, 16, 32),
+`capo` (30), `bpm` (1000), `endingNumber` (99), `endingNumbers` (32),
+`repeatCount` (99) and `sectionLetter` (3). `loadScore` does not enforce them.
+
+### Shared renderer modules
+
+`EDITOR_SHARED` in `tests/structure.mjs` gains `src/clef.js`, `src/navigation.js`,
+`src/scoreText.js` and `src/expression.js`. The model uses the renderer's own
+canonicalizers (`canonicalEnding`, `canonicalJump`, `mergeNavigation`,
+`canonicalSection`, `canonicalRepeatCount`, `clefOf`, `clefAt`, `trackClef`,
+`tempoOf`, `formatBpm`), not copies. A value the editor accepts is then one the
+renderer draws in the same class, and the 82 snapshots stay byte-identical.
+
+Two structure checks cover these modules. The first walks the relative imports of
+every shared module and requires the whole closure to be DOM-free. The second is a
+mutation case: a model file that imports `layout/navigation.js` (not the shared
+`src/navigation.js`) must still fail the allowlist check. `isPureEditor` includes
+`settings.js`. The import rule for `model/` (rule 3 above) lists the four modules.
+
+Accepted risk: `clef.js` caches the clef table per track object in a `WeakMap`. That
+is correct only because the model is never mutated.
+
+### Column-wide writes and migration
+
+A column field is one whose value spans every track at a measure index:
+`barline`, `ending`, `jump`, `section`, `repeatCount`, `segno`, `coda`,
+`timeSignature` and `keySignature`. Clef is per track.
+
+- **Reading.** `VALID` mirrors the renderer's canonicalizers, so a field counts
+  only when its value is valid there. `columnValue` returns the value from the
+  lowest track index that sets one validly. The same rule drives `getMeasureSettings`.
+- **Writing.** `writeFields(track, [[mi, field, value], …])` copies the measures
+  array once and each measure at most once. A write whose value is already stored is
+  skipped. A delete never creates a measure. A write past the end of a short track
+  pads it with `{ beats: [] }`.
+- **Scope.** `setColumn` writes on every track, hidden tracks included.
+  `setTrackField` writes on one track.
+- **Equality.** A time or key signature is compared with the value in force on that
+  track just before the measure (`timeBefore`, `keyBefore`). Equal means delete.
+  At measure 1 the baseline is the track's value, then the score's, then 4/4 or 0.
+- **New track.** `newTrackMeasures` follows track 0's time and key signatures with as
+  few writes as possible. At measure 1 it writes only when the value differs from the
+  score's baseline. After that it writes only where track 0's value changes. The
+  navigation fields come from `columnValue`, and clefs are never copied.
+- **Removal.** `migrateRemoved(score, ti)` runs before a track is spliced out. For
+  each measure and each of the nine column fields, when the removed track sets the
+  field and no remaining track sets it validly at that measure, the raw value is
+  written to every remaining track in one pass. The removed track's notes go with it.
+
+Padded measures are authored, so a track with `tabRhythm` draws a whole rest in each
+padded measure. This is a known effect of the padding (design risk).
+
+### Retuning
+
+`retuneTrack(track, tuning)` in `model/settings/tuning.js` works like this:
+
+1. `canonicalTuning` checks that the value is an array of 1 to 12 strings. Each
+   string must match `^\s*([A-Ga-g])([#b]?)(\d)\s*$` and is rewritten as letter,
+   accidental and octave.
+2. If the new tuning equals the old one, the track is returned unchanged. A track
+   without its own tuning counts as standard 6-string guitar.
+3. Two sets of string numbers are computed, counted from the highest string:
+   - the changed strings C, where s ≤ min(old, new) and the open pitch differs;
+   - the removed strings R, where new < s ≤ old.
+4. Every beat array that sanitize visits is processed: `measure.beats` (even when
+   `voices` exists) and each `voices[i].beats`, including grace notes. For a note:
+   - on a string in R, it is counted in `removed`. A note with a valid `pitch` keeps
+     it and loses `string`, `fret`, `tieStart` and `tieEnd`. Any other note is deleted;
+   - on a string in C with both `fret` and `pitch`, `pitch` is removed.
+5. A beat left with no notes becomes a rest that keeps its other fields. A voice-1
+   beat with `slash: true` keeps `notes: []`. An emptied grace is dropped, and its
+   index is recorded per measure so the cursor's beat can be corrected.
+6. The new `tuning` is written. Everything is copy-on-write.
+
+Ties need no separate step. A tie joins two notes on the same string, so its partner
+is on the same removed string and is either deleted or has its tie flags cleared.
+
+Two details matter for the count. `removed` includes notes that keep a `pitch`,
+because the count is taken before the pitch check. That is the count the message and
+the demo's confirm report. The editor never writes `pitch`.
+
+### Size check on the exported form
+
+`exportedLength(model)` in `model/io.js` returns the length of the JSON text that
+`getScore()` would give, `schemaVersion` included. A settings call past
+`LIMITS.jsonChars` is refused before it changes anything. The editor's own output
+therefore always loads again: `parseInput` checks the same limit.
+
+### Live region
+
+`EditorView.announce(text, keep)` in `view.js` handles the joined speech. A kept
+text (a settings result or refusal, passed as `keep`) stays in the window. A later
+text is appended after it with `. `. A later non-kept text replaces the last
+non-kept text. A repeat of the text just before is spoken once. The 2.0 rule (only
+the last message in the window is spoken) still holds for key messages. Test I2 in
+`tests/editor-dom.mjs` checks that rule.
+
+### Demo boundary
+
+The settings demo lives in `examples/editor-demo-settings.js` (the Score… dialog,
+the status items and the read-only state of the three buttons),
+`editor-demo-measure.js` (Measure…), `editor-demo-tracks.js` (Tracks… and the tuning
+editor) and `editor-demo-forms.js` (the form helpers). They keep `editor-demo.js`
+from growing.
+
+- The demo modules use the public API only. The one exception is
+  `src/editor/model/durations.js`, for the duration words, as in 2.1. A test
+  (`tests/editor-settings-dom.mjs`) greps the demo's imports and allows nothing else
+  from `src/`.
+- Where the demo needs the library's vocabulary (`SCORE_TEXT`, `SCORE_FLAGS`,
+  `BARLINES`), it keeps its own copy. Parity tests compare each copy with the
+  library's list.
+- The demo's `notesOnRemovedStrings` counts notes with the same rule the library uses
+  for `removed`. A test checks that the two agree. The library exposes no
+  `countNotes`.
+
+### Tests
+
+- `tests/editor-settings.mjs`: the model (validation for every operation, retuning,
+  column writes, migration, cursor remapping, `getMeasureSettings`, the INSTRUMENTS
+  and TUNINGS tables, a property test mixing commands and settings calls, and
+  undo-all and redo-all).
+- `tests/editor-settings-dom.mjs`: the controller (the public surface and its
+  non-enumerable pin, event order, undo labels, refusals and no-ops, read-only,
+  the aria-label after undo, joined announcements, each written value rendering its
+  class, the demo helpers and the boundary grep).
+- `tests/editor-settings-edge.mjs` and `tests/editor-settings-edge-dom.mjs`: the edge
+  cases, the prototype-key rejections, property checks on randomized scores (add,
+  remove, move and retune stay sanitize-stable, and `getMeasureSettings` matches the
+  normalized score), and the render checks.
+
+### Costs
+
+`tempoAt` scans backwards from the cursor beat on every `cursorInfo` call, which
+runs on each cursor redraw. Without a tempo mark it scans the whole track before the
+cursor. The design flagged this for a 2000-measure benchmark. Re-check it with
+`tests/bench-editor.mjs` before a release that changes the cursor path.
 
 ### Adding an effect (the 2.6 extension point)
 
