@@ -1,6 +1,6 @@
 # music-score
 
-Version 1.12.0 · MIT licence
+Version 1.12.1 · MIT licence
 
 A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL).
 
@@ -136,7 +136,7 @@ The pixel keys are not in `defaultTheme`. Reading or changing `renderer.theme.sy
 
 ## Score format
 
-A score is nested: score, then tracks, then measures, then beats, then notes. Field names are case-sensitive. There is no schema validation: unknown fields are ignored, and wrong values may throw an error or render oddly.
+A score is nested: score, then tracks, then measures, then beats, then notes. Field names are case-sensitive. There is no schema validation: unknown fields are ignored. Since 1.12.1, malformed values never make `render()` throw: they are repaired or dropped (see [Malformed input](#malformed-input)). Other wrong values may render oddly.
 
 ### Score
 
@@ -238,7 +238,7 @@ Beats are the rhythmic events in a measure, in order. Each beat is one note, one
 | Field | Type | Notes |
 |---|---|---|
 | `type` | `'note'`, `'rest'`, or `'grace'` | Required. |
-| `duration` | `'whole'`, `'half'`, `'quarter'`, `'8th'`, `'16th'`, `'32nd'`, `'64th'` | Required, except for grace notes. An unknown name throws an error. |
+| `duration` | `'whole'`, `'half'`, `'quarter'`, `'8th'`, `'16th'`, `'32nd'`, `'64th'` | Required, except for grace notes. An unknown name draws as a quarter (before 1.12.1 it threw an error). |
 | `dots` | integer, 0 to 4 | Augmentation dots. Default 0. Values above 4 are capped at 4, fractions are rounded down, and numeric strings count as their number (`'1'` is one dot). Anything else that isn't a number counts as 0. |
 | `tuplet` | number or `{ count, of }` | `3` means a triplet (3 notes in the time of 2). `of` defaults to 2. Consecutive beats with the same ratio form one bracket once they add up to a complete tuplet. |
 | `tuplets` | array of 1 or 2 entries, outer ratio first | Nested tuplets, such as a triplet inside a triplet. An entry is a whole number `n` (n notes in the time of 2) or `{ count, of }`, with `count` from 2 to 64 and `of` from 1 to 64 (`of` defaults to 2). A valid `tuplets` overrides `tuplet` on the same beat. If the array has more than two entries, or any entry is invalid, the whole field is ignored and `tuplet` applies. See [Nested tuplets](#nested-tuplets). |
@@ -286,7 +286,7 @@ Each entry in a beat's `notes` array.
 | `accidental` | `'sharp'`, `'flat'`, `'natural'`, `'doubleSharp'`, `'doubleFlat'` | Explicit accidental. Always drawn, on a grace note too, and overrides the key signature for this note. |
 | `tieStart`, `tieEnd` | boolean | Tie to the next note of the same pitch. Enharmonic spellings count as the same pitch (C#4 ties to Db4). A tie that crosses a line break is split into two parts. |
 | `string` | integer | Tab only. String 1 is the highest-pitched (top line). |
-| `fret` | integer | Tab only. 0 is an open string. If `pitch` is missing, it is worked out from `string`, `fret`, and the track's `tuning`. |
+| `fret` | integer | Tab only. 0 is an open string; 0 to 99. If `pitch` is missing, it is worked out from `string`, `fret`, and the track's `tuning`. |
 | `hammerPull` | `true`, `'h'`, or `'p'` | Slur to the next note on the same string, with H or P on tab. The notation staff gets the same slur (see `hammerPullSlurs` in [Theme](#theme)). Both notes need `string`. `true` picks hammer-on or pull-off from the fret direction. |
 | `slide` | `true`, `'up'`, `'down'`, or `'legato'` | Tab only. Slide to the next note on the same string. A slide that crosses a line break ends in a short stub at the end of the line. `'legato'` (any case) is a slide with a slur: it also draws a letterless arc on TAB and a slur on the notation staff, even with `hammerPullSlurs: false`. See [Hammer-ons, pull-offs, slides and bends](#hammer-ons-pull-offs-slides-and-bends). |
 | `slideIn` | `true`, `'up'` / `'below'`, or `'down'` / `'above'` | Short slide into the note: from below for `true`, `'up'` or `'below'`, from above for `'down'` or `'above'`. Drawn on tab and notation. Not drawn on a grace note, or on a note that a slide or hammer-on already leads into. Other values are ignored. |
@@ -537,6 +537,28 @@ SVG classes: `chord-diagram` (one group per diagram), `chord-diagram-grid`, `cho
 ```json
 { "type": "note", "duration": "quarter", "chord": "G", "chordDiagram": { "frets": [3, 2, 0, 0, 3, 3], "fingers": [2, 1, 0, 0, 3, 4] }, "notes": [{ "string": 6, "fret": 3 }] }
 ```
+
+### Malformed input
+
+Since 1.12.1, `render()` does not throw on a malformed score, such as a half-built score in an editor. Before drawing, bad values are repaired or dropped as below. The input object is never changed, and a valid score draws exactly as before.
+
+| Input | What happens |
+|---|---|
+| The score is not an object, or `tracks` is not an array | Treated as an empty score or no tracks. |
+| A track, beat or note that is not an object (for example `null`) | Dropped. A measure that is not an object becomes an empty measure, so measures stay aligned across tracks. |
+| `measures`, `beats` or `notes` that is not an array | Treated as empty. |
+| `tuning` that is not a non-empty array of pitches | The default guitar tuning. |
+| `timeSignature` without whole-number `beats` and `beatType` from 1 to 64 | Ignored: the previous time signature carries on. |
+| `duration` that is not one of the listed names | A quarter. Grace notes keep their own default. |
+| `tuplet` that is a number, `count` or `of` outside the whole numbers 1 to 64 (for example `0` or `NaN`) | Ignored. |
+| `dynamic` that is not a string | Ignored. |
+| `pitch` that is not a valid pitch with an octave from -1 to 10 | Ignored; `string` and `fret` are used if present. |
+| `fret` that is not a whole number from 0 to 99 | Ignored. |
+| A note left with no valid `pitch`, and no valid `string` (1 to the number of strings) and `fret` | Dropped. |
+| A note beat left with no notes (except a voice 1 rhythm slash) | Drawn as a rest of the same duration, keeping its other marks. |
+| A grace beat left with no notes | Dropped. |
+
+A track that shows neither notation nor TAB draws nothing, and no longer throws when it has technique labels such as palm mute.
 
 ## Page header
 
@@ -892,14 +914,14 @@ Each of these eighths lasts 1/18 of a whole note, so nine of them fill a half no
 - **Estimated sizes.** Glyph and text widths are estimated, not measured from the font. Spacing may look slightly different with another font or at unusual sizes.
 - **Rhythm on TAB staves.** Ties are not shown in the rhythm band. Tied-fret parentheses are drawn only with `tiedFrets: 'parens'` (see [Tied fret numbers](#tied-fret-numbers)). Tremolo picking stays above the fret number and is not drawn on the stem. On staves with four strings or fewer, 32nd and 64th rests can reach a little past the outer string lines; the gap to the staff above grows to fit them.
 - **Measure count.** Shorter tracks are padded with empty measures (whole-measure rests in notation, blank tab, no rest on a TAB rhythm staff). Their `measures` array is not extended in the input.
-- **Errors.** An unknown duration or an invalid pitch throws an error, and nothing is drawn for that score.
+- **Malformed input is repaired without warning.** A bad value is fixed or dropped silently (see [Malformed input](#malformed-input)); nothing reports what was changed.
 - **Dynamics.** Only the names listed under `dynamic` are drawn as symbols. Other names print as plain text.
 - **Dynamics line: no horizontal avoidance.** Dynamics, from either voice, take no horizontal room. Two dynamics at nearby but different times can overlap. Voice 2 grace notes do not draw a dynamic.
 - **Expression lines: tab-only tracks.** Hairpins and ottava brackets are not drawn on a track without notation. Fades, wah marks and tempo changes are drawn above the TAB.
 - **Ottava: one-beat bracket at a system end.** A bracket that covers only the last beat of a system can put its hook about 1.3 staff spaces past the barline.
 - **Ottava: the stored pitch.** Inside a bracket the note is drawn at a different place from its `pitch` (see [Expression lines, ottava and tempo](#expression-lines-ottava-and-tempo)). Notes outside a bracket are drawn as written.
 - **Tempo changes.** A tempo change shows its tempo but plays nothing. Long text is not wrapped.
-- **No validation, no `schemaVersion`.** A malformed score may throw or render oddly.
+- **No validation, no `schemaVersion`.** A malformed score does not throw, but may render oddly.
 - **Harmonics: sounding pitch.** A natural harmonic is drawn at the fretted (touch) pitch, written an octave above sounding pitch. Sounding-pitch notation and 8va markings for harmonics are not supported.
 - **Harmonics: heads.** An A.H. or other artificial harmonic has a single notehead. Double noteheads (touch and sounding) are not drawn.
 - **Harmonics: frets.** `harmonicFret` must be a whole number. Fractional frets are not supported.
@@ -992,6 +1014,21 @@ It prints `ALL PASSED` and exits with code 0 on success.
 - To run one group on its own: `node tests/units.mjs`, `node tests/engraving.mjs`, or `node tests/articulations.mjs`.
 
 ## Changelog
+
+### 1.12.1 — 2026-11-22
+
+Hardening for malformed input, ahead of edit mode. `render()` no longer throws on bad data: bad values are repaired or dropped as listed under [Malformed input](#malformed-input). Valid scores draw exactly as before.
+
+Changes to existing inputs (each used to throw an error or exhaust memory, unless noted):
+
+- An unknown `duration` draws as a quarter.
+- A note beat with no notes (`notes: []`, missing or all invalid) draws as a rest.
+- `tuplet: 0`, `NaN` or `Infinity`, and a time signature with `beatType: 0`, are ignored.
+- An invalid `pitch` or `fret` is ignored, and the note is dropped if nothing usable is left. A huge `fret` (for example `1e9`) or octave used to exhaust memory.
+- `null` entries in `tracks`, `beats` or `notes` are skipped.
+- A note on a string beyond the tuning, without a `pitch`, is dropped. It used to be kept with no pitch, and threw when the track showed notation.
+- A negative `fret` is ignored. It used to draw below the open string.
+- A track showing neither notation nor TAB no longer throws when it has palm mute, let ring or other technique labels.
 
 ### 1.12.0 — 2026-11-22
 
