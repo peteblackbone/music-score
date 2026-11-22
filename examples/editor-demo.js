@@ -1,7 +1,8 @@
 /**
  * editor-demo.js — page logic of editor.html (the 2.0.0 ScoreEditor demo).
  * Not part of the package. The pure helpers are exported for the tests:
- * sanitizeFilename, newScore, readAutosave, checkUpload.
+ * sanitizeFilename, newScore, readAutosave, checkUpload. The Effects
+ * group is wired by editor-demo-effects.js.
  *
  * Flows (ui.md §1, §6): first visit loads lead-riff with a notice; later
  * visits restore the browser autosave (debounced 500 ms after each edit,
@@ -16,6 +17,7 @@ import { leadRiff } from './lead-riff.js';
 import { leadSoloF } from './lead-solo-f.js';
 import { exampleScore } from './example-score.js';
 import { durationWords, FILL_WORDS } from '../src/editor/model/durations.js';
+import { wireEffects } from './editor-demo-effects.js';
 
 export const AUTOSAVE_KEY = 'music-score-editor:autosave';
 /** sessionStorage flag set while a restore renders; still set on the next load = that restore never finished. */
@@ -176,6 +178,8 @@ export function startEditorDemo(doc) {
   const undoBtn = $('undo-btn');
   const redoBtn = $('redo-btn');
   const readOnlyBox = $('readonly');
+  // Effects group: a click runs the button's key, then the whole UI refreshes and a pointer click returns focus
+  const refreshEffects = wireEffects(doc.querySelectorAll('[data-effect]'), editor, (e) => { refreshUi(); back(e); });
   function refreshUi() {
     const i = editor.getCursorInfo();
     const ro = editor.isReadOnly();
@@ -186,6 +190,7 @@ export function startEditorDemo(doc) {
     $('st-fret').textContent = i.hasTab && i.fret != null ? String(i.fret) : '–';
     $('st-duration').textContent = durationWords(i.duration, i.dots, i.triplet);
     $('st-fill').textContent = FILL_WORDS[i.fill]?.label ?? i.fill;
+    $('st-effects').textContent = i.effects.length ? i.effects.join(', ') : '–';
     $('st-readonly').hidden = !ro;
     durationButtons.forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.duration === i.duration)); b.disabled = ro; });
     dotsBtn.textContent = `Dots: ${i.dots}`;
@@ -194,6 +199,7 @@ export function startEditorDemo(doc) {
     tripletBtn.disabled = ro;
     undoBtn.disabled = !editor.canUndo();
     redoBtn.disabled = !editor.canRedo();
+    refreshEffects(i, ro);
   }
   editor.on('cursor', refreshUi);
   editor.on('change', (e) => {

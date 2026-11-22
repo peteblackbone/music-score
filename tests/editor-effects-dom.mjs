@@ -13,6 +13,9 @@ const { makeClock } = await import('./editor-shim.mjs');
 const { MusicScoreRenderer } = await imp('src/MusicScoreRenderer.js');
 const { ScoreEditor } = await imp('src/editor/ScoreEditor.js');
 const { sanitizeScore } = await imp('src/sanitize.js');
+const { keyToCommand } = await imp('src/editor/keymap.js');
+const { effectButtonState, wireEffects } = await imp('examples/editor-demo-effects.js');
+const fs = await import('node:fs');
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -201,6 +204,75 @@ test('AC18: every value the editor writes renders: hammer-pull, slide, legato-sl
   const count = (o, re) => (o.match(re) || []).length;
   ok(slide.out !== plain.out && count(slide.out, /<rect /g) > count(plain.out, /<rect /g), 'slide drawn');
   ed.destroy();
+});
+
+// ---------- AC19: demo Effects group ----------
+const OFF = {
+  hammerPull: { pressed: false }, slide: { label: 'Slide: off' }, bend: { label: 'Bend: off' }, vibrato: { label: 'Vibrato: off' },
+  palmMute: { pressed: false }, deadNote: { pressed: false }, ghostNote: { pressed: false }, harmonic: { label: 'Harmonic: off' },
+  letRing: { pressed: false }, louder: { label: 'Dynamic +' }, softer: { label: 'Dynamic −' }, accent: { label: 'Accent: off' }, staccato: { label: 'Staccato: off' },
+};
+test('AC19: effectButtonState — toggles pressed, cycle labels name the state, beat words never read as note words; empty info is all off', () => {
+  eq(effectButtonState({ effects: [], noteEffects: [] }), OFF);
+  eq(effectButtonState(null), OFF);
+  const st = effectButtonState({ noteEffects: ['pull-off', 'legato slide', 'bend pre-bend full', 'dead', 'ghost', 'pinch harmonic'],
+    effects: ['pull-off', 'legato slide', 'bend pre-bend full', 'dead', 'ghost', 'pinch harmonic', 'wide vibrato', 'palm mute', 'let ring', 'ff', 'tenuto', 'marcato', 'staccatissimo'] });
+  eq(st, {
+    hammerPull: { pressed: true }, slide: { label: 'Slide: legato' }, bend: { label: 'Bend: pre-bend full' }, vibrato: { label: 'Vibrato: wide' },
+    palmMute: { pressed: true }, deadNote: { pressed: true }, ghostNote: { pressed: true }, harmonic: { label: 'Harmonic: pinch' },
+    letRing: { pressed: true }, louder: { label: 'Dynamic + (ff)' }, softer: { label: 'Dynamic − (ff)' }, accent: { label: 'Accent: marcato' }, staccato: { label: 'Staccato: staccatissimo' },
+  });
+  const one = (note, beat = []) => effectButtonState({ noteEffects: note, effects: [...note, ...beat] });
+  eq([one(['slide']).slide, one(['bend']).bend, one(['bend half']).bend, one(['bend full and release']).bend, one(['natural harmonic']).harmonic, one(['hammer/pull']).hammerPull],
+    [{ label: 'Slide: on' }, { label: 'Bend: custom' }, { label: 'Bend: half' }, { label: 'Bend: full and release' }, { label: 'Harmonic: natural' }, { pressed: true }]);
+  eq([one([], ['vibrato']).vibrato, one([], ['accent', 'staccato']).accent, one([], ['accent', 'staccato']).staccato, one([], ['sfz']).louder],
+    [{ label: 'Vibrato: on' }, { label: 'Accent: on' }, { label: 'Staccato: on' }, { label: 'Dynamic +' }]);
+});
+/** A stub button: dataset, attributes, a click listener and the `disabled` / `textContent` properties the demo sets. */
+const stubButton = (effect, k, shift = false) => {
+  const attrs = {};
+  const listeners = [];
+  return {
+    dataset: { effect, key: k, ...(shift ? { shift: 'true' } : {}) }, textContent: '', disabled: false,
+    setAttribute: (n, v) => { attrs[n] = String(v); }, getAttribute: (n) => attrs[n] ?? null,
+    addEventListener: (type, fn) => { if (type === 'click') listeners.push(fn); },
+    click: (detail = 1) => listeners.forEach((fn) => fn({ detail })),
+  };
+};
+test('AC19: wireEffects drives the editor through handleKey, refreshes the buttons, calls back(event), and disables every button in read-only mode', () => {
+  const { ed } = mk(score());
+  const buttons = [stubButton('hammerPull', 'h'), stubButton('bend', 'b'), stubButton('softer', 'd', true), stubButton('letRing', 'l', true)];
+  const backs = [];
+  const refresh = wireEffects(buttons, ed, (e) => backs.push(e.detail));
+  const [hp, bend, softer, ring] = buttons;
+  refresh(ed.getCursorInfo(), ed.isReadOnly());
+  eq([hp.getAttribute('aria-pressed'), bend.textContent, softer.textContent, ring.getAttribute('aria-pressed'), bend.disabled], ['false', 'Bend: off', 'Dynamic −', 'false', false]);
+  hp.click(); bend.click(); bend.click(); softer.click(2); ring.click(0);
+  eq(beats(ed)[0], { type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 5, hammerPull: true, bend: '1/2' }], dynamic: 'mp', letRing: true });
+  eq([hp.getAttribute('aria-pressed'), bend.textContent, softer.textContent, ring.getAttribute('aria-pressed')], ['true', 'Bend: half', 'Dynamic − (mp)', 'true']);
+  eq(backs, [1, 1, 1, 2, 0], 'back gets every click event (the demo refocuses on detail > 0)');
+  ed.setReadOnly(true);
+  refresh(ed.getCursorInfo(), ed.isReadOnly());
+  ok(buttons.every((b) => b.disabled), 'disabled read-only');
+  ed.setReadOnly(false);
+  ed.setCursor({ track: 0, measure: 0, beat: 2 });
+  refresh(ed.getCursorInfo(), ed.isReadOnly());
+  eq([hp.getAttribute('aria-pressed'), bend.textContent, buttons.some((b) => b.disabled)], ['false', 'Bend: off', false], 'state follows the cursor');
+  ed.destroy();
+});
+test('AC19: editor.html has the Effects group (role=group, 13 buttons whose data-key / data-shift run their data-effect command), the Effects status item and a <dt> for every key', () => {
+  const html = fs.readFileSync(path.join(root, 'editor.html'), 'utf8');
+  ok(/<div class="group effects" role="group" aria-label="Effects">/.test(html), 'group');
+  const buttons = [...html.matchAll(/<button type="button" data-effect="(\w+)" data-key="(\w)"( data-shift="true")?[^>]*>/g)];
+  eq(buttons.map((m) => m[1]), ['hammerPull', 'slide', 'bend', 'vibrato', 'palmMute', 'deadNote', 'ghostNote', 'harmonic', 'letRing', 'louder', 'softer', 'accent', 'staccato']);
+  for (const [tag, name, k, shift] of buttons) {
+    eq(keyToCommand({ key: k, shiftKey: !!shift })?.name, name, name);
+    eq(/aria-pressed="false"/.test(tag), ['hammerPull', 'palmMute', 'deadNote', 'ghostNote', 'letRing'].includes(name), `${name}: aria-pressed only on toggles`);
+  }
+  ok(/<span id="st-effects">/.test(html), 'status item');
+  const dts = new Set([...html.matchAll(/<dt>([^<]+)<\/dt>/g)].map((m) => m[1]));
+  for (const k of ['H', 'S', 'Shift+S', 'B', 'Shift+B', 'V', 'P', 'X', 'G', 'N', 'Shift+L', 'D', 'Shift+D', 'A', 'Shift+A']) ok(dts.has(k), `<dt>${k}</dt>`);
+  ok(/<h3>Effects<\/h3>/.test(html), 'Effects section');
 });
 
 export async function summary() {
