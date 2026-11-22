@@ -322,7 +322,7 @@ Notes:
 **Durations, dots and triplets.** These change the beat under the cursor only. Nothing else in the measure moves, so a measure can end up too full or too empty. The status bar shows the fill of the measure as Under, Full or Over. The score draws an underfull measure with a dashed line below the staff, and an overfull measure with a red band. An empty measure has no mark. Moving onto a beat picks up its duration and dots, so the next note you type uses them. On the end-of-measure position, the duration and dots change the next note instead. Triplet does nothing on the end-of-measure position, and nothing on a beat with nested tuplets.
 
 **Measures.**
-- M and Shift+M add an empty measure in every track. Short tracks are padded with empty measures when needed.
+- M and Shift+M add an empty measure in every track. Short tracks are padded with empty measures when needed. Shift+M on the first measure moves its time signature, key signature and clef to the new first measure, so the score still starts with them.
 - Shift+Delete deletes the measure in every track. Its voice 2, endings, jumps, sections, segno and coda go with it.
 - If the deleted measure sets a time signature, key signature or clef, and the next measure sets none, the next measure takes them. Deleting the only measure empties it, and keeps those settings.
 - When the last measure is full or overfull, Right on its last beat adds an empty measure and moves into it. When it is underfull, Right first moves to the end-of-measure position, and Right again ends at the end of the score. Adding a measure this way is one undo step.
