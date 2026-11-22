@@ -49,7 +49,9 @@ export function updateScore(score, cursor, patch) {
   return { score: out, announce: { id: 'scoreUpdated', key, label: key && SCORE_FIELDS[key], on: !!key && out[key] !== undefined, mmrOn } };
 }
 
-const UNITS = ['whole', 'half', 'quarter', '8th', '16th', '32nd'];
+/** The beat units setTempo accepts (the renderer's tempoOf units). */
+export const TEMPO_UNITS = Object.freeze(['whole', 'half', 'quarter', '8th', '16th', '32nd']);
+const UNITS = TEMPO_UNITS;
 const TEMPO_KEYS = ['bpm', 'unit', 'dots', 'text'];
 
 /** The stored form of tempo `value`: null (remove), a bpm number (quarter beat), or `{ bpm, unit, dots?, text? }`. */

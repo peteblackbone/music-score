@@ -498,6 +498,40 @@ test('demo New dialog: newScore uses INSTRUMENTS and the API time-signature rang
   ok(!/const PRESETS/.test(readText('examples/editor-demo.js')), 'the local PRESETS table is gone');
 });
 
+test('demo vocabulary parity: the demo keeps its own copies of library lists (score fields, barlines, jumps, clefs, tempo units, beat types, track fields, pitch syntax); each equals the library', async () => {
+  const html = readText('editor.html');
+  const options = (id) => {
+    const at = html.indexOf(`<select id="${id}"`);
+    ok(at >= 0, id);
+    return [...html.slice(at, html.indexOf('</select>', at)).matchAll(/<option(?: value="([^"]*)")?[^>]*>([^<]*)<\/option>/g)].map((m) => m[1] ?? m[2]);
+  };
+  const { SCORE_FIELDS, TEMPO_UNITS } = await imp('src/editor/model/settings/score.js');
+  const { BARLINES } = await imp('src/editor/model/settings/measureSettings.js');
+  const { TRACK_FIELDS } = await imp('src/editor/model/settings/track.js');
+  const { canonicalTuning } = await imp('src/editor/model/settings/tuning.js');
+  const { JUMP_TEXTS } = await imp('src/navigation.js');
+  const { CLEF_NAMES } = await imp('src/clef.js');
+  eq([...DS.SCORE_TEXT, ...DS.SCORE_FLAGS], Object.keys(SCORE_FIELDS), 'score fields');
+  eq(DM.BARLINES, BARLINES, 'barlines');
+  eq(options('ms-barline'), ['', ...BARLINES], 'Barline select');
+  eq(options('ms-jump'), ['', ...JUMP_TEXTS], 'Jump select');
+  // the clef selects use the ui order (treble family, bass family, alto, tenor): compared as sets
+  eq(options('ms-clef').sort(), [...CLEF_NAMES].sort(), 'Measure clef select');
+  eq(options('tr-clef').sort(), [...CLEF_NAMES].sort(), 'Track clef select');
+  eq(options('ms-unit'), [...TEMPO_UNITS], 'Note select');
+  eq(options('ms-dots'), ['0', '1', '2'], 'Dots select');
+  for (const id of ['ms-beat-type', 'new-beat-type']) eq(options(id).map(Number), [...ScoreEditor.LIMITS.beatTypes], id);
+  const every = DT.trackValues({ name: 'a', label: 'b', tuning: ['E2', 'A2', 'D3', 'G3'], capo: 1, tabRhythm: true, tabArticulations: true, tiedFrets: 'parens', showTablature: true }, 'bass');
+  const keys = Object.keys(DT.trackPatch(every, { name: 'x', label: '', clef: 'alto', notation: false, tab: false, rhythm: 'false', artic: false, tied: false, tuning: ['D2', 'A2', 'D3', 'G3'], capo: '2' }));
+  eq(keys.filter((k) => !TRACK_FIELDS.includes(k)), [], 'trackPatch writes track fields only');
+  eq(keys.length, TRACK_FIELDS.length, 'and can write every one');
+  for (const p of ['E2', ' e2 ', 'F#3', 'bb1', 'C0', 'G9', 'E10', 'E-1', 'H2', 'Ex2', 'E##2', 'E 2', '', 'Cb4']) {
+    let lib = null;
+    try { lib = canonicalTuning([p])[0]; } catch { lib = null; }
+    eq(DT.canonicalPitch(p), lib, `pitch "${p}"`);
+  }
+});
+
 // ---------- editor.html and the demo boundary ----------
 test('editor.html: Settings group with 3 buttons; 3 dialogs (aria-labelledby, novalidate form, alert line, Apply first); every field labelled; fieldset / legend; error slots; status items; shortcuts; New dialog ranges', () => {
   const html = readText('editor.html');
