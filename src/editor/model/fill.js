@@ -6,15 +6,15 @@
  */
 import { R, ZERO, add, cmp } from '../../rational.js';
 import { durationR } from '../../duration.js';
-import { trackAt, tracksOf, measureAt, beatsOf, isGrace, clampDots, measureCount } from './access.js';
+import { trackAt, tracksOf, measureAt, beatsOf, beatsAt, isGrace, clampDots, measureCount } from './access.js';
 
 const COMMON = { beats: 4, beatType: 4 };
 
-/** Time signature in force at measure `mi` of track `ti`. */
-export function timeSignatureAt(score, ti, mi) {
-  const track = trackAt(score, ti);
+/** Time signature in force at the measure of `loc` (`{ track, measure }`). */
+export function timeSignatureAt(score, loc) {
+  const track = trackAt(score, loc.track);
   let cur = track?.timeSignature || score.timeSignature || COMMON;
-  for (let k = 0; k <= mi; k++) {
+  for (let k = 0; k <= loc.measure; k++) {
     const m = measureAt(track, k);
     if (m?.timeSignature) cur = m.timeSignature;
   }
@@ -40,9 +40,9 @@ export function fillOf(beats, ts) {
   return c < 0 ? 'under' : c > 0 ? 'over' : 'full';
 }
 
-/** Fill of track `ti` measure `mi`: 'under' | 'full' | 'over' (an empty measure or a hole is 'under'). */
-export function measureFill(score, ti, mi) {
-  const f = fillOf(beatsOf(measureAt(trackAt(score, ti), mi)), timeSignatureAt(score, ti, mi));
+/** Fill of the measure of `loc` (voice 1): 'under' | 'full' | 'over' (an empty measure or a hole is 'under'). */
+export function measureFill(score, loc) {
+  const f = fillOf(beatsAt(score, { track: loc.track, measure: loc.measure }), timeSignatureAt(score, loc));
   return f === 'empty' ? 'under' : f;
 }
 
@@ -50,7 +50,7 @@ export function measureFill(score, ti, mi) {
 export function checkedMeasureFill(score, ti, mi) {
   if (!Number.isInteger(ti) || ti < 0 || ti >= tracksOf(score).length) throw new RangeError('track out of range');
   if (!Number.isInteger(mi) || mi < 0 || mi >= measureCount(score)) throw new RangeError('measure out of range');
-  return measureFill(score, ti, mi);
+  return measureFill(score, { track: ti, measure: mi });
 }
 
 /** Per track, per measure column: 'empty' | 'under' | 'full' | 'over', in one forward pass. */

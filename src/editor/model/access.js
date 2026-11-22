@@ -1,8 +1,13 @@
 /**
  * model/access.js — reading and copy-on-write updating of the editor model
- * (a sanitized raw score). Reads mirror normalize.js: voice 1 is
- * `voices[0].beats` when `voices` is a non-empty array, else `beats`; a
- * missing measure (null, false or out of range) reads as `{ beats: [] }`.
+ * (a sanitized raw score).
+ *
+ * Locations: model functions address beats and notes with a location
+ * `loc = { track, measure, beat, string, voice = 1 }` — the cursor shape.
+ * Reads mirror normalize.js: voice 1 is `voices[0].beats` when `voices` is
+ * a non-empty array, else `beats`; voice 2 is `voices[1].beats`; a missing
+ * measure (null, false or out of range) reads as `{ beats: [] }`. In 2.0
+ * only voice 1 is written; voice 2 is read-only.
  *
  * Updates copy only the edited path (score, tracks array, track, measures
  * array, measure, and in two-voice measures the voices array and
@@ -11,17 +16,27 @@
  * on its first write; voice 2 and `measure.beats` of a two-voice measure
  * are never touched.
  */
+import { STANDARD_TUNING } from './defaultScore.js';
 
 export const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const DEFAULT_STRINGS = 6;
 const MAX_DOTS = 4;
 
+/** The voice of location `loc` (1 when missing). */
+export const voiceOf = (loc) => loc.voice ?? 1;
+/** `loc` with `changes` applied (a new location object). */
+export const locAt = (loc, changes) => ({ ...loc, ...changes });
+
 export const tracksOf = (score) => (Array.isArray(score.tracks) ? score.tracks : []);
 export const trackAt = (score, ti) => tracksOf(score)[ti] ?? null;
 export const measuresOf = (track) => (track && Array.isArray(track.measures) ? track.measures : []);
 
+/** Tuning of a (sanitized) track, low to high: its own, else standard 6-string. */
+export const tuningOf = (track) => (track && Array.isArray(track.tuning) && track.tuning.length ? track.tuning : STANDARD_TUNING);
 /** String count of a (sanitized) track: its tuning length, else 6. */
 export const stringCount = (track) => (track && Array.isArray(track.tuning) && track.tuning.length ? track.tuning.length : DEFAULT_STRINGS);
+/** Open pitch of string `s` (1 = highest) of `track`, or null. */
+export const openPitch = (track, s) => tuningOf(track)[stringCount(track) - s] ?? null;
 /** Whether the track shows a TAB staff (normalize default: false). */
 export const hasTab = (track) => !!track?.showTablature;
 /** Whether the track shows a notation staff (normalize default: true). */
@@ -44,21 +59,30 @@ export function measureAt(track, mi) {
 /** `m.voices` when it is a non-empty array (a two-voice measure), else null. */
 export const voicesOf = (m) => (m && Array.isArray(m.voices) && m.voices.length ? m.voices : null);
 
-/** Voice-1 beats of measure `m` (null reads as no beats). */
-export function beatsOf(m) {
+/** Beats of `voice` (1 or 2) of measure `m` (null reads as no beats). */
+export function beatsOf(m, voice = 1) {
   if (!m) return [];
   const voices = voicesOf(m);
-  if (voices) return Array.isArray(voices[0]?.beats) ? voices[0].beats : [];
+  if (voices) return Array.isArray(voices[voice - 1]?.beats) ? voices[voice - 1].beats : [];
+  if (voice !== 1) return [];
   return Array.isArray(m.beats) ? m.beats : [];
 }
 
-export const beatsAt = (score, ti, mi) => beatsOf(measureAt(trackAt(score, ti), mi));
+/** Beats of the measure and voice of `loc`. */
+export const beatsAt = (score, loc) => beatsOf(measureAt(trackAt(score, loc.track), loc.measure), voiceOf(loc));
+/** The beat at `loc` (null on the append slot). */
+export const beatAt = (score, loc) => beatsAt(score, loc)[loc.beat] ?? null;
 export const isGrace = (b) => b.type === 'grace';
 export const isRest = (b) => b.type === 'rest';
 export const notesOf = (b) => (Array.isArray(b?.notes) ? b.notes : []);
 /** Index of the note on string `s` in beat `b`, or -1. */
 export const noteIndexOn = (b, s) => notesOf(b).findIndex((n) => n.string === s);
 export const noteOn = (b, s) => notesOf(b).find((n) => n.string === s) ?? null;
+/** The note on `loc.string` of the (non-rest) beat at `loc`, or null. */
+export function cursorNote(score, loc) {
+  const b = beatAt(score, loc);
+  return b && !isRest(b) ? noteOn(b, loc.string) : null;
+}
 
 /** Augmentation dots as normalize reads them: an integer 0..4. */
 export function clampDots(d) {
@@ -81,19 +105,20 @@ export function updateTrack(score, ti, fn) {
   return { ...score, tracks };
 }
 
-/** `score` with track `ti`'s measure `mi` replaced by fn(measure), a hole first becoming `{ beats: [] }`. */
-export function updateMeasure(score, ti, mi, fn) {
-  return updateTrack(score, ti, (t) => {
+/** `score` with the measure of `loc` replaced by fn(measure), a hole first becoming `{ beats: [] }`. */
+export function updateMeasure(score, loc, fn) {
+  return updateTrack(score, loc.track, (t) => {
     const measures = measuresOf(t).slice();
-    while (measures.length < mi) measures.push({ beats: [] });
-    measures[mi] = fn(measureAt(t, mi) ?? { beats: [] });
+    while (measures.length < loc.measure) measures.push({ beats: [] });
+    measures[loc.measure] = fn(measureAt(t, loc.measure) ?? { beats: [] });
     return { ...t, measures };
   });
 }
 
-/** `score` with track `ti`'s measure `mi` voice-1 beats replaced by fn(beats); voice 2 keeps its reference. */
-export function updateBeats(score, ti, mi, fn) {
-  return updateMeasure(score, ti, mi, (m) => {
+/** `score` with the beats of `loc`'s measure replaced by fn(beats); voice 1 only (voice 2 is read-only in 2.0). */
+export function updateBeats(score, loc, fn) {
+  if (voiceOf(loc) !== 1) throw new Error('Only voice 1 can be edited');
+  return updateMeasure(score, loc, (m) => {
     const voices = voicesOf(m);
     if (!voices) return { ...m, beats: fn(beatsOf(m)) };
     const v0 = voices[0];
@@ -104,18 +129,18 @@ export function updateBeats(score, ti, mi, fn) {
   });
 }
 
-/** `score` with voice-1 beat `bi` replaced by fn(beat); `score` itself when fn returns the same beat. */
-export function updateBeat(score, ti, mi, bi, fn) {
-  const beat = beatsAt(score, ti, mi)[bi];
+/** `score` with the beat at `loc` replaced by fn(beat); `score` itself when fn returns the same beat. */
+export function updateBeat(score, loc, fn) {
+  const beat = beatAt(score, loc);
   const next = fn(beat);
   if (next === beat) return score;
-  return updateBeats(score, ti, mi, (beats) => beats.map((b, i) => (i === bi ? next : b)));
+  return updateBeats(score, loc, (beats) => beats.map((b, i) => (i === loc.beat ? next : b)));
 }
 
-/** `score` with the note on string `s` of beat `bi` replaced by fn(note); unchanged when there is none or fn returns it. */
-export function updateNote(score, ti, mi, bi, s, fn) {
-  return updateBeat(score, ti, mi, bi, (beat) => {
-    const k = noteIndexOn(beat, s);
+/** `score` with the note on `loc.string` of the beat at `loc` replaced by fn(note); unchanged when there is none or fn returns it. */
+export function updateNote(score, loc, fn) {
+  return updateBeat(score, loc, (beat) => {
+    const k = noteIndexOn(beat, loc.string);
     if (k < 0) return beat;
     const note = beat.notes[k];
     const next = fn(note);

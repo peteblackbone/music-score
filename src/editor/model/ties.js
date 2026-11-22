@@ -3,92 +3,84 @@
  * create or change.
  *
  * A note on string s of beat A is tied to the note on s of the next main
- * (non-grace) voice-1 beat B when A's note has `tieStart` and B's has
- * `tieEnd`. The main-beat neighbours look into the adjacent measure only.
- * fixSeam(A, B) removes both flags unless they still pair up, so an edit
- * never leaves a half tie behind.
+ * (non-grace) beat B of the same voice when A's note has `tieStart` and
+ * B's has `tieEnd`. The main-beat neighbours look into the adjacent measure
+ * only. fixSeam(A, B) removes both flags unless they still pair up, so an
+ * edit never leaves a half tie behind. Beats are addressed by locations
+ * (access.js); a neighbour is returned as a location, or null.
  */
-import { beatsAt, isGrace, notesOf, noteOn, updateNote, without } from './access.js';
+import { beatsAt, beatAt, isGrace, notesOf, noteOn, updateNote, without, locAt } from './access.js';
 
-/** `{ mi, bi }` of the main beat before index `bi` of measure `mi` (or the previous measure's last), or null. */
-export function prevMainBeat(score, ti, mi, bi) {
-  const beats = beatsAt(score, ti, mi);
-  for (let k = Math.min(bi, beats.length) - 1; k >= 0; k--) if (!isGrace(beats[k])) return { mi, bi: k };
-  if (mi <= 0) return null;
-  const prev = beatsAt(score, ti, mi - 1);
-  for (let k = prev.length - 1; k >= 0; k--) if (!isGrace(prev[k])) return { mi: mi - 1, bi: k };
+/** The main beat before `loc` in its measure, else the previous measure's last; or null. */
+export function prevMainBeat(score, loc) {
+  const beats = beatsAt(score, loc);
+  for (let k = Math.min(loc.beat, beats.length) - 1; k >= 0; k--) if (!isGrace(beats[k])) return locAt(loc, { beat: k });
+  return loc.measure > 0 ? lastMainIn(score, locAt(loc, { measure: loc.measure - 1 })) : null;
+}
+
+/** The main beat after `loc` in its measure, else the next measure's first; or null. */
+export function nextMainBeat(score, loc) {
+  const beats = beatsAt(score, loc);
+  for (let k = Math.max(loc.beat + 1, 0); k < beats.length; k++) if (!isGrace(beats[k])) return locAt(loc, { beat: k });
+  return firstMainIn(score, locAt(loc, { measure: loc.measure + 1 }));
+}
+
+/** The last main beat inside the measure of `loc` only, or null. */
+export function lastMainIn(score, loc) {
+  const beats = beatsAt(score, loc);
+  for (let k = beats.length - 1; k >= 0; k--) if (!isGrace(beats[k])) return locAt(loc, { beat: k });
   return null;
 }
 
-/** `{ mi, bi }` of the main beat after index `bi` of measure `mi` (or the next measure's first), or null. */
-export function nextMainBeat(score, ti, mi, bi) {
-  const beats = beatsAt(score, ti, mi);
-  for (let k = Math.max(bi + 1, 0); k < beats.length; k++) if (!isGrace(beats[k])) return { mi, bi: k };
-  const next = beatsAt(score, ti, mi + 1);
-  for (let k = 0; k < next.length; k++) if (!isGrace(next[k])) return { mi: mi + 1, bi: k };
-  return null;
+/** The first main beat inside the measure of `loc` only, or null. */
+export function firstMainIn(score, loc) {
+  const k = beatsAt(score, loc).findIndex((b) => !isGrace(b));
+  return k < 0 ? null : locAt(loc, { beat: k });
 }
 
-/** `{ mi, bi }` of the last main beat inside measure `mi` only, or null. */
-export function lastMainIn(score, ti, mi) {
-  const beats = beatsAt(score, ti, mi);
-  for (let k = beats.length - 1; k >= 0; k--) if (!isGrace(beats[k])) return { mi, bi: k };
-  return null;
-}
-
-/** `{ mi, bi }` of the first main beat inside measure `mi` only, or null. */
-export function firstMainIn(score, ti, mi) {
-  const k = beatsAt(score, ti, mi).findIndex((b) => !isGrace(b));
-  return k < 0 ? null : { mi, bi: k };
-}
-
-const beatAt = (score, ti, loc) => (loc ? beatsAt(score, ti, loc.mi)[loc.bi] ?? null : null);
-
-/** `score` with `flag` removed from the note on string `s` at `loc` (unchanged when it is not set). */
-export function stripFlag(score, ti, loc, s, flag) {
+/** `score` with `flag` removed from the note at `loc` (on `loc.string`); unchanged when it is not set. */
+export function stripFlag(score, loc, flag) {
   if (!loc) return score;
-  return updateNote(score, ti, loc.mi, loc.bi, s, (n) => (n[flag] ? without(n, flag) : n));
+  return updateNote(score, loc, (n) => (n[flag] ? without(n, flag) : n));
 }
 
 /**
- * The seam between main beats A and B (`{ mi, bi }` or null) repaired on
- * string `s`, or on every string either has: unless A's note has
+ * The seam between main beats A and B (locations or null) repaired on
+ * string `string`, or on every string either has: unless A's note has
  * `tieStart` and B's note has `tieEnd`, both flags are removed.
  */
-export function fixSeam(score, ti, A, B, s = null) {
-  const a = beatAt(score, ti, A);
-  const b = beatAt(score, ti, B);
-  const strings = s != null ? [s] : [...new Set([...notesOf(a), ...notesOf(b)].map((n) => n.string).filter((x) => x != null))];
+export function fixSeam(score, A, B, string = null) {
+  const a = A ? beatAt(score, A) : null;
+  const b = B ? beatAt(score, B) : null;
+  const strings = string != null ? [string] : [...new Set([...notesOf(a), ...notesOf(b)].map((n) => n.string).filter((x) => x != null))];
   let out = score;
-  for (const str of strings) {
-    const na = a ? noteOn(a, str) : null;
-    const nb = b ? noteOn(b, str) : null;
+  for (const s of strings) {
+    const na = a ? noteOn(a, s) : null;
+    const nb = b ? noteOn(b, s) : null;
     if (na?.tieStart && nb?.tieEnd) continue;
-    if (na?.tieStart) out = stripFlag(out, ti, A, str, 'tieStart');
-    if (nb?.tieEnd) out = stripFlag(out, ti, B, str, 'tieEnd');
+    if (na?.tieStart) out = stripFlag(out, locAt(A, { string: s }), 'tieStart');
+    if (nb?.tieEnd) out = stripFlag(out, locAt(B, { string: s }), 'tieEnd');
   }
   return out;
 }
 
-/** Both seams of main beat `bi` of measure `mi` repaired (on string `s`, or every string). */
-export function fixSeamsAround(score, ti, mi, bi, s = null) {
-  const here = { mi, bi };
-  const out = fixSeam(score, ti, prevMainBeat(score, ti, mi, bi), here, s);
-  return fixSeam(out, ti, here, nextMainBeat(out, ti, mi, bi), s);
+/** Both seams of the main beat at `loc` repaired (on `string`, or every string). */
+export function fixSeamsAround(score, loc, string = null) {
+  const out = fixSeam(score, prevMainBeat(score, loc), loc, string);
+  return fixSeam(out, loc, nextMainBeat(out, loc), string);
 }
 
-/** The tie partners of the note on string `s` at beat `bi` lose their flags (the note itself keeps its own). */
-export function untiePartners(score, ti, mi, bi, s) {
-  const note = noteOn(beatsAt(score, ti, mi)[bi], s);
+/** The tie partners of the note at `loc` lose their flags (the note itself keeps its own). */
+export function untiePartners(score, loc) {
+  const note = noteOn(beatAt(score, loc), loc.string);
   if (!note) return score;
   let out = score;
-  if (note.tieEnd) out = stripFlag(out, ti, prevMainBeat(out, ti, mi, bi), s, 'tieStart');
-  if (note.tieStart) out = stripFlag(out, ti, nextMainBeat(out, ti, mi, bi), s, 'tieEnd');
+  if (note.tieEnd) out = stripFlag(out, prevMainBeat(out, loc), 'tieStart');
+  if (note.tieStart) out = stripFlag(out, nextMainBeat(out, loc), 'tieEnd');
   return out;
 }
 
-/** The note on string `s` at beat `bi` and its partners untied. */
-export function untieNote(score, ti, mi, bi, s) {
-  const out = untiePartners(score, ti, mi, bi, s);
-  return updateNote(out, ti, mi, bi, s, (n) => without(n, 'tieStart', 'tieEnd'));
+/** The note at `loc` and its partners untied. */
+export function untieNote(score, loc) {
+  return updateNote(untiePartners(score, loc), loc, (n) => without(n, 'tieStart', 'tieEnd'));
 }

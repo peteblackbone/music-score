@@ -19,6 +19,7 @@ import { EDITOR_LIMITS } from './model/limits.js';
 import { defaultScore } from './model/defaultScore.js';
 import { clampCursor, cursorInfo, syncDuration, sameCursor } from './model/cursor.js';
 import { checkedMeasureFill, fillTable } from './model/fill.js';
+import { voiceOf } from './model/access.js';
 import { COMMANDS, run, undoLabel } from './model/commands.js';
 import { createHistory } from './model/history.js';
 import { bufferLive } from './model/notes.js';
@@ -184,7 +185,7 @@ export class ScoreEditor {
     this._view.setRootState({ focused: this._focused, readOnly: this._readOnly, title: this._model.title });
   }
 
-  _cursorPayload() { return { ...this._cursor, voice: 1 }; }
+  _cursorPayload() { return { ...this._cursor, voice: voiceOf(this._cursor) }; }
   _emitCursor() { this._events.emit('cursor', this._cursorPayload()); }
   /** Queue the change event (sent after the render) and schedule that render. */
   _modelChanged(source, command) {

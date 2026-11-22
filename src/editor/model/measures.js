@@ -28,8 +28,8 @@ export function insertMeasureAt(score, at) {
     return { ...t, measures };
   }) };
   tracks.forEach((_, ti) => {
-    out = fixSeam(out, ti, lastMainIn(out, ti, at - 1), null);
-    out = fixSeam(out, ti, null, firstMainIn(out, ti, at + 1));
+    out = fixSeam(out, lastMainIn(out, { track: ti, measure: at - 1 }), null);
+    out = fixSeam(out, null, firstMainIn(out, { track: ti, measure: at + 1 }));
   });
   return out;
 }
@@ -81,7 +81,7 @@ export function deleteMeasure(score, cursor) {
     copy.splice(m, 1);
     return { ...t, measures: copy };
   }) };
-  for (const ti of touched) out = fixSeam(out, ti, lastMainIn(out, ti, m - 1), firstMainIn(out, ti, m));
+  for (const ti of touched) out = fixSeam(out, lastMainIn(out, { track: ti, measure: m - 1 }), firstMainIn(out, { track: ti, measure: m }));
   const count = measureCount(out);
   return { score: out, cursor: { ...cursor, measure: Math.min(m, count - 1), beat: 0 }, announce: { id: 'measureDeleted', n: m + 1 } };
 }

@@ -37,6 +37,7 @@ const graceB = (string = 2, fret = 3) => ({ type: 'grace', duration: '16th', not
 const tab = (measures, extra = {}) => ({ name: 'Gtr', showTablature: true, ...extra, measures });
 const sc = (...tracks) => ({ tracks });
 const cur = (track, measure, beat, string = 1) => ({ track, measure, beat, string });
+const mloc = (track, measure) => ({ track, measure });
 
 // ---------- io ----------
 test('io: parseInput accepts objects and JSON strings, drops schemaVersion 1 / null / missing, clones the input', () => {
@@ -127,9 +128,9 @@ test('access: voice-1 reads mirror normalize (voices[0].beats, beats, holes, non
     { voices: [5] },
     { voices: [], beats: [rest()] },
   ]));
-  eq([0, 1, 2, 3, 4, 9].map((mi) => A.beatsAt(s, 0, mi).map((b) => b.duration)), [['half'], ['whole'], [], [], ['quarter'], []]);
+  eq([0, 1, 2, 3, 4, 9].map((mi) => A.beatsAt(s, mloc(0, mi)).map((b) => b.duration)), [['half'], ['whole'], [], [], ['quarter'], []]);
   const n = normalizeScore(s);
-  [0, 1, 2, 3, 4].forEach((mi) => eq(A.beatsAt(s, 0, mi).length, n.tracks[0].measures[mi].beats.length, `m${mi}`));
+  [0, 1, 2, 3, 4].forEach((mi) => eq(A.beatsAt(s, mloc(0, mi)).length, n.tracks[0].measures[mi].beats.length, `m${mi}`));
 });
 test('access: track helpers (stringCount, hasTab, hasNotation, isVisible, measureCount with hidden tracks and holes)', () => {
   eq(A.stringCount({ tuning: ['E1', 'A1', 'D2', 'G2'] }), 4);
@@ -147,7 +148,7 @@ test('access: updateBeats copies only the edited path; a two-voice measure keeps
   const v2 = { beats: [nt('whole', 3, 2)] };
   const legacy = [nt('quarter')];
   const s = sc(tab([{ beats: [nt('whole')] }, { voices: [v1, v2], beats: legacy }]), tab([{ beats: [] }]));
-  const out = A.updateBeats(s, 0, 1, (b) => [...b, rest()]);
+  const out = A.updateBeats(s, mloc(0, 1), (b) => [...b, rest()]);
   ok(out !== s && out.tracks !== s.tracks && out.tracks[0] !== s.tracks[0], 'path copied');
   ok(out.tracks[1] === s.tracks[1] && out.tracks[0].measures[0] === s.tracks[0].measures[0], 'siblings shared');
   const m = out.tracks[0].measures[1];
@@ -158,12 +159,12 @@ test('access: updateBeats copies only the edited path; a two-voice measure keeps
 });
 test('access: writing a hole materializes { beats: [] } (padding up to it); updateBeat / updateNote return the score itself when nothing changes', () => {
   const s = sc(tab([{ beats: [nt('whole')] }]));
-  const out = A.updateBeats(s, 0, 2, (b) => [...b, rest('whole')]);
+  const out = A.updateBeats(s, mloc(0, 2), (b) => [...b, rest('whole')]);
   eq(out.tracks[0].measures, [{ beats: [nt('whole')] }, { beats: [] }, { beats: [rest('whole')] }]);
-  ok(A.updateBeat(s, 0, 0, 0, (b) => b) === s);
-  ok(A.updateNote(s, 0, 0, 0, 5, () => ({})) === s, 'no note on string 5');
-  ok(A.updateNote(s, 0, 0, 0, 1, (n) => n) === s);
-  eq(A.updateNote(s, 0, 0, 0, 1, (n) => ({ ...n, fret: 7 })).tracks[0].measures[0].beats[0].notes, [{ string: 1, fret: 7 }]);
+  ok(A.updateBeat(s, cur(0, 0, 0), (b) => b) === s);
+  ok(A.updateNote(s, cur(0, 0, 0, 5), () => ({})) === s, 'no note on string 5');
+  ok(A.updateNote(s, cur(0, 0, 0, 1), (n) => n) === s);
+  eq(A.updateNote(s, cur(0, 0, 0, 1), (n) => ({ ...n, fret: 7 })).tracks[0].measures[0].beats[0].notes, [{ string: 1, fret: 7 }]);
 });
 test('access: clampDots mirrors normalize; without() keeps identity when no key is present', () => {
   eq([undefined, 0, 1, 2, '1', 7, -1, 'x', 2.7].map(A.clampDots), [0, 0, 1, 2, 1, 4, 0, 0, 2]);
@@ -179,8 +180,8 @@ test('fill: timeSignatureAt mirrors normalize (track, score, 4/4, measure change
     tab([{ beats: [] }], { timeSignature: { beats: 6, beatType: 8 } }),
   ] };
   const n = normalizeScore(s);
-  n.tracks.forEach((t, ti) => t.measures.forEach((m, mi) => eq(F.timeSignatureAt(s, ti, mi), m.timeSignature, `t${ti} m${mi}`)));
-  eq(F.timeSignatureAt({ tracks: [tab([{}])] }, 0, 0), { beats: 4, beatType: 4 });
+  n.tracks.forEach((t, ti) => t.measures.forEach((m, mi) => eq(F.timeSignatureAt(s, mloc(ti, mi)), m.timeSignature, `t${ti} m${mi}`)));
+  eq(F.timeSignatureAt({ tracks: [tab([{}])] }, mloc(0, 0)), { beats: 4, beatType: 4 });
 });
 test('fill: measureFill counts voice 1 only (hidden rests count, graces do not, dots and tuplets exact); empty / hole is under', () => {
   const s = sc(tab([
@@ -192,7 +193,7 @@ test('fill: measureFill counts voice 1 only (hidden rests count, graces do not, 
     { beats: [graceB()] },
     { beats: [nt('whole'), nt('8th', 1, 0, { dots: '1' })] },
   ]));
-  eq([0, 1, 2, 3, 4, 5, 6, 7].map((mi) => F.measureFill(s, 0, mi)), ['full', 'over', 'full', 'under', 'under', 'under', 'over', 'under']);
+  eq([0, 1, 2, 3, 4, 5, 6, 7].map((mi) => F.measureFill(s, mloc(0, mi))), ['full', 'over', 'full', 'under', 'under', 'under', 'over', 'under']);
   eq(F.fillTable(s), [['full', 'over', 'full', 'under', 'empty', 'empty', 'over']]);
 });
 test('fill: onsetOf sums non-grace beats before i; the append slot onset is the total', () => {
@@ -214,11 +215,11 @@ const riff = () => sc(
 );
 test('cursor: positions skip graces, include hidden rests, add the append slot only when under (C2-C4)', () => {
   const s = riff();
-  eq(C.positions(s, 0, 0), [0, 2, 3, 4]);
-  eq(C.positions(s, 0, 1), [0, 1, 2]);
-  eq(C.positions(s, 0, 2), [0]);
-  eq(C.positions(s, 2, 1), [0], 'hole is an empty measure');
-  eq(C.positions(sc(tab([{ beats: [graceB()] }])), 0, 0), [1]);
+  eq(C.positions(s, mloc(0, 0)), [0, 2, 3, 4]);
+  eq(C.positions(s, mloc(0, 1)), [0, 1, 2]);
+  eq(C.positions(s, mloc(0, 2)), [0]);
+  eq(C.positions(s, mloc(2, 1)), [0], 'hole is an empty measure');
+  eq(C.positions(sc(tab([{ beats: [graceB()] }])), mloc(0, 0)), [1]);
 });
 test('cursor: clampCursor (invisible track -> nearest visible, measure, next position at or after, string by tuning)', () => {
   const s = riff();
@@ -294,23 +295,24 @@ test('cursor: cursorInfo summarizes the cursor (fret, duration, slot, fill, name
 const T = await imp('src/editor/model/ties.js');
 const N = await imp('src/editor/model/notes.js');
 const tn = (duration, string, fret, flags = {}) => ({ type: 'note', duration, notes: [{ string, fret, ...flags }] });
-const beatsOf = (s, ti = 0, mi = 0) => A.beatsAt(s, ti, mi);
+const beatsOf = (s, ti = 0, mi = 0) => A.beatsAt(s, mloc(ti, mi));
 test('ties: prevMainBeat / nextMainBeat skip graces and cross into the adjacent measure only', () => {
   const s = sc(tab([{ beats: [nt('half'), graceB(), nt('half')] }, { beats: [] }, { beats: [graceB(), nt('whole')] }]));
-  eq(T.prevMainBeat(s, 0, 0, 2), { mi: 0, bi: 0 });
-  eq(T.prevMainBeat(s, 0, 0, 0), null);
-  eq(T.nextMainBeat(s, 0, 0, 0), { mi: 0, bi: 2 });
-  eq(T.nextMainBeat(s, 0, 0, 2), null, 'next measure is empty');
-  eq(T.prevMainBeat(s, 0, 2, 1), null, 'previous measure is empty');
-  eq(T.prevMainBeat(s, 0, 1, 0), { mi: 0, bi: 2 });
-  eq(T.nextMainBeat(s, 0, 1, -1), { mi: 2, bi: 1 });
+  eq(T.prevMainBeat(s, cur(0, 0, 2, 3)), cur(0, 0, 0, 3), 'a location, string kept');
+  eq(T.prevMainBeat(s, cur(0, 0, 0)), null);
+  eq(T.nextMainBeat(s, cur(0, 0, 0)), cur(0, 0, 2));
+  eq(T.nextMainBeat(s, cur(0, 0, 2)), null, 'next measure is empty');
+  eq(T.prevMainBeat(s, cur(0, 2, 1)), null, 'previous measure is empty');
+  eq(T.prevMainBeat(s, cur(0, 1, 0)), cur(0, 0, 2));
+  eq(T.nextMainBeat(s, cur(0, 1, -1)), cur(0, 2, 1));
+  eq([T.lastMainIn(s, mloc(0, 2)), T.firstMainIn(s, mloc(0, 2)), T.firstMainIn(s, mloc(0, 1))], [{ track: 0, measure: 2, beat: 1 }, { track: 0, measure: 2, beat: 1 }, null]);
 });
 test('ties: fixSeam keeps a pair, strips half ties, and returns the score itself when nothing changes', () => {
   const s = sc(tab([{ beats: [tn('half', 1, 5, { tieStart: true }), tn('half', 1, 5, { tieEnd: true })] }, { beats: [tn('whole', 2, 3, { tieEnd: true })] }]));
-  ok(T.fixSeam(s, 0, { mi: 0, bi: 0 }, { mi: 0, bi: 1 }) === s, 'pair kept');
-  const out = T.fixSeam(s, 0, { mi: 0, bi: 1 }, { mi: 1, bi: 0 });
+  ok(T.fixSeam(s, cur(0, 0, 0), cur(0, 0, 1)) === s, 'pair kept');
+  const out = T.fixSeam(s, cur(0, 0, 1), cur(0, 1, 0));
   eq(beatsOf(out, 0, 1)[0].notes[0], { string: 2, fret: 3 });
-  const broken = T.fixSeam(s, 0, { mi: 0, bi: 0 }, null);
+  const broken = T.fixSeam(s, cur(0, 0, 0), null);
   eq(beatsOf(broken)[0].notes[0], { string: 1, fret: 5 });
   ok(beatsOf(broken)[1] === beatsOf(s)[1], 'other beat untouched');
 });
@@ -411,6 +413,30 @@ test('toggleTie: ties to the previous main beat (also across a barline), copies 
   eq(N.toggleTie(s, cur(0, 0, 0, 3)).announce.id, 'nothingToTie');
   eq(N.toggleTie(s, cur(0, 0, 0, 1)).announce.id, 'noNoteHere');
   eq(N.toggleTie(sc(tab([{ beats: [rest(), nt('half', 1, 1)] }])), cur(0, 0, 1, 1)).announce.id, 'nothingToTie');
+});
+
+// ---------- locations (Q7 / Q8) ----------
+test('locations: beatsAt reads loc.voice (voice 2 of a two-voice measure); writing voice 2 throws (read-only in 2.0)', () => {
+  const s = sc(tab([{ voices: [{ beats: [nt('whole')] }, { beats: [nt('half', 3, 3), nt('half', 4, 4)] }] }, { beats: [nt('whole')] }]));
+  eq(A.beatsAt(s, { track: 0, measure: 0 }).length, 1);
+  eq(A.beatsAt(s, { track: 0, measure: 0, voice: 2 }).map((b) => b.notes[0].fret), [3, 4]);
+  eq(A.beatsAt(s, { track: 0, measure: 1, voice: 2 }), [], 'single-voice measure has no voice 2');
+  eq(A.beatAt(s, { track: 0, measure: 0, beat: 1, voice: 2 }).notes[0].string, 4);
+  let msg = ''; try { A.updateBeats(s, { track: 0, measure: 0, voice: 2 }, (b) => b); } catch (e) { msg = e.message; }
+  eq(msg, 'Only voice 1 can be edited');
+  eq([A.voiceOf({}), A.voiceOf({ voice: 2 })], [1, 2]);
+  eq(C.cursorInfo(s, { track: 0, measure: 0, beat: 0, string: 1, voice: 2 }, ST).voice, 2, 'cursorInfo reports the location voice');
+});
+test('locations: cursorNote (null on rests and the slot), tuningOf / openPitch, the fret helpers behind digit', () => {
+  const s = sc(tab([{ beats: [nt('half', 2, 5), { type: 'rest', duration: 'quarter', notes: [{ string: 2, fret: 1 }] }] }], { tuning: ['D2', 'A2', 'D3', 'G3', 'B3', 'E4'] }), { measures: [{ beats: [] }] });
+  eq(A.cursorNote(s, cur(0, 0, 0, 2)), { string: 2, fret: 5 });
+  eq([A.cursorNote(s, cur(0, 0, 0, 1)), A.cursorNote(s, cur(0, 0, 1, 2)), A.cursorNote(s, cur(0, 0, 2, 2))], [null, null, null]);
+  eq([A.openPitch(s.tracks[0], 6), A.openPitch(s.tracks[0], 1), A.openPitch(s.tracks[1], 6), A.tuningOf(s.tracks[1]).length], ['D2', 'E4', 'E2', 6]);
+  eq(C.cursorInfo(s, cur(0, 0, 0, 6), ST).tuningNote, 'D2');
+  eq(beatsOf(N.fretIntoSlot(s, cur(0, 0, 2, 3), { ...ST, duration: '8th' }, 9).score)[2], nt('8th', 3, 9));
+  eq(beatsOf(N.fretIntoRest(s, cur(0, 0, 1, 4), 2).score)[1], { type: 'note', duration: 'quarter', notes: [{ string: 4, fret: 2 }] });
+  eq(N.fretIntoNote(s, cur(0, 0, 0, 3), 7).announce, { id: 'chordNote', fret: 7, count: 2 });
+  ok(N.fretIntoNote(s, cur(0, 0, 0, 2), 5).score === s, 'same fret: no change');
 });
 
 // ---------- beats (E4, E6, E8, rhythm keys) ----------
