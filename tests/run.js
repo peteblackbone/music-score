@@ -213,5 +213,10 @@ for (const c of cases) {
   const { summary } = await import('./editor-columns-edge-dom.mjs');
   fail += await summary();
 }
+// 2.3.3 characterization pins: rhythm keys with a selection act on the cursor beat and clear it, L copies the fret, a transpose below fret 0 is refused (tests/editor-pins-2.3.3.mjs)
+{
+  const { summary } = await import('./editor-pins-2.3.3.mjs');
+  fail += summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);
