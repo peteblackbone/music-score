@@ -1,6 +1,6 @@
 /**
- * editor-demo-edit.js — the 2.3 Edit group (Copy, Cut, Paste, and in 2.3.1
- * Paste as new measures), the Measures group (Fill, Reflow), the 2.3.1
+ * editor-demo-edit.js — the 2.3 Edit group (2.3.2 Select all tracks, Copy,
+ * Cut, Paste, and in 2.3.1 Paste as new measures), the Measures group (Fill, Reflow), the 2.3.1
  * Transpose group (−1, +1, −12, +12) of editor.html, and the Selection
  * status item. Not part of the package; uses the ScoreEditor public API only.
  *
@@ -9,7 +9,9 @@
  * 'clipboard-read' permission is already granted (never a prompt), else
  * the editor's internal clipboard; Ctrl+V / Ctrl+Shift+V in the editor use
  * the native paste event and so also reach other tabs. Paste as new
- * measures is paste(text, { insert: true }). Fill, Reflow and Transpose go
+ * measures is paste(text, { insert: true }). Fill, Reflow, Transpose and
+ * Select all tracks (Ctrl+A, pressed again unless that already selected
+ * several tracks; never disabled: selecting works in read-only mode) go
  * through handleKey. A pointer click returns focus to the editor; a focused
  * button that becomes disabled hands focus to an enabled sibling.
  *
@@ -17,14 +19,15 @@
  */
 import { ScoreEditor } from '../index.js';
 
-/** The status bar's Selection text for getSelection() `sel`: '–', '6 beats, measures 2–3', '4 beats, measure 2', '3 measures (2–4)', '1 measure (2)'. */
+/** The status bar's Selection text for getSelection() `sel`: '–', '6 beats, measures 2–3', '4 beats, measure 2', '3 measures (2–4)', '1 measure (2)', 2.3.2 '2 measures (3–4), 3 tracks'. */
 export function selectionText(sel) {
   if (!sel) return '–';
   const [a, b] = sel.measures;
   const span = a === b ? `${a + 1}` : `${a + 1}–${b + 1}`;
   if (sel.kind === 'measures') {
     const n = b - a + 1;
-    return `${n} measure${n === 1 ? '' : 's'} (${span})`;
+    const tracks = sel.tracks?.length > 1 ? `, ${sel.tracks.length} tracks` : '';
+    return `${n} measure${n === 1 ? '' : 's'} (${span})${tracks}`;
   }
   return `${sel.beatCount} beat${sel.beatCount === 1 ? '' : 's'}, measure${a === b ? '' : 's'} ${span}`;
 }
@@ -40,6 +43,7 @@ export const isClipText = (t) => ScoreEditor.looksLikeClip(t);
 export function wireEdit(doc, editor, { refresh = () => {}, back = () => {} } = {}) {
   const $ = (id) => doc.getElementById(id);
   const nav = doc.defaultView?.navigator;
+  const allTracksBtn = $('select-all-tracks-btn');
   const copyBtn = $('copy-btn');
   const cutBtn = $('cut-btn');
   const pasteBtn = $('paste-btn');
@@ -60,6 +64,8 @@ export function wireEdit(doc, editor, { refresh = () => {}, back = () => {} } = 
     return isClipText(text) ? text : undefined;
   };
 
+  const selectAll = () => editor.handleKey({ key: 'a', ctrlKey: true });
+  allTracksBtn.addEventListener('click', (e) => { selectAll(); if ((editor.getSelection()?.tracks.length ?? 0) < 2) selectAll(); done(e); });
   copyBtn.addEventListener('click', (e) => { write(editor.copy()); done(e); });
   cutBtn.addEventListener('click', (e) => { write(editor.cut()); done(e); });
   for (const [btn, insert] of [[pasteBtn, false], [pasteNewBtn, true]]) {
@@ -70,7 +76,7 @@ export function wireEdit(doc, editor, { refresh = () => {}, back = () => {} } = 
   for (const t of transpose) t.btn.addEventListener('click', (e) => { editor.handleKey({ key: t.key, ctrlKey: true, shiftKey: t.shiftKey }); done(e); });
 
   const transposeBtns = transpose.map((t) => t.btn);
-  const groups = [[copyBtn, cutBtn, pasteBtn, pasteNewBtn], [fillBtn, reflowBtn], transposeBtns];
+  const groups = [[allTracksBtn, copyBtn, cutBtn, pasteBtn, pasteNewBtn], [fillBtn, reflowBtn], transposeBtns];
   return function refreshEdit(info, readOnly) {
     const nothing = !info.selection && info.appendSlot;
     const was = doc.activeElement;

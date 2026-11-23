@@ -391,6 +391,51 @@ test('criterion 35: with nothing selected on a one-position measure, Ctrl+Shift+
   t.ed.destroy();
 });
 
+// ---------- demo (criterion 36) ----------
+const fsMod = await import('node:fs');
+const DE = await imp('examples/editor-demo-edit.js');
+const html = fsMod.readFileSync(path.join(root, 'editor.html'), 'utf8');
+test('criterion 36: markup: "Select all tracks" opens the Edit group with its title; the shortcuts list Shift+Up / Down and Shift+PageUp / PageDown and the second Ctrl+A', () => {
+  const at = (s) => html.indexOf(s);
+  ok(html.includes('<button type="button" id="select-all-tracks-btn" title="Select every measure of every visible track (Ctrl+A twice)">Select all tracks</button>'));
+  ok(at('aria-label="Edit"') < at('id="select-all-tracks-btn"') && at('id="select-all-tracks-btn"') < at('id="copy-btn"'));
+  ok(html.includes('<dt>Shift+↑ ↓ or Shift+PageUp / PageDown</dt><dd>Extend to the previous / next track (whole measures)</dd>'));
+  ok(html.includes('<dt>Ctrl+A</dt><dd>Select the whole track; press again for all tracks</dd>'));
+  const sel = html.slice(at('<section><h3>Selection</h3>'), html.indexOf('</section>', at('<section><h3>Selection</h3>')));
+  ok(sel.includes('Shift+PageUp / PageDown') && sel.includes('press again for all tracks'), 'both in the Selection section');
+});
+test('criterion 36: wiring: Select all tracks is Ctrl+A twice through handleKey (once when the first press already took several tracks), never disabled (read-only too), first in the Edit focus group; the Selection status names the tracks', async () => {
+  const mkBtn = (id) => ({ id, disabled: false, handlers: [], addEventListener(tp, f) { this.handlers.push(f); }, focus() { fake.activeElement = this; }, click(detail = 0) { return Promise.all(this.handlers.map((f) => f({ detail }))); } });
+  const ids = ['select-all-tracks-btn', 'copy-btn', 'cut-btn', 'paste-btn', 'paste-new-btn', 'fill-btn', 'reflow-btn', 'transpose-down-1-btn', 'transpose-up-1-btn', 'transpose-down-12-btn', 'transpose-up-12-btn'];
+  const els = Object.fromEntries(ids.map((id) => [id, mkBtn(id)]));
+  els['st-selection'] = { textContent: '' };
+  const fake = { activeElement: null, getElementById: (id) => els[id], defaultView: { navigator: {} } };
+  const t = mk(withHidden(), { readOnly: true });
+  const refreshEdit = DE.wireEdit(fake, t.ed, { refresh: () => refreshEdit(t.ed.getCursorInfo(), t.ed.isReadOnly()) });
+  refreshEdit(t.ed.getCursorInfo(), true);
+  eq([els['select-all-tracks-btn'].disabled, els['copy-btn'].disabled, els['cut-btn'].disabled], [false, false, true], 'read-only: selecting and copying stay enabled');
+  await els['select-all-tracks-btn'].click();
+  eq([t.ed.getSelection().tracks, t.ed.lastMessage, els['st-selection'].textContent], [[0, 2, 3], 'Selected all measures, all tracks', '3 measures (1–3), 3 tracks']);
+  await els['select-all-tracks-btn'].click();
+  eq([t.ed.getSelection().tracks, t.ed.lastMessage], [[0, 2, 3], 'Selected all measures, all tracks'], 'already all tracks: one press, the same selection');
+  t.ed.setReadOnly(false);
+  t.ed.setCursor({ track: 2, measure: 0, beat: 0 });
+  els['cut-btn'].focus();
+  t.ed.setReadOnly(true);
+  refreshEdit(t.ed.getCursorInfo(), true);
+  eq(fake.activeElement, els['select-all-tracks-btn'], 'the Edit group hands focus to Select all tracks');
+  t.ed.destroy();
+  const one = mk({ tracks: [tab([{ beats: [nt('whole')] }])] });
+  for (const b of Object.values(els)) if (b.handlers) b.handlers = [];
+  const r1 = DE.wireEdit(fake, one.ed);
+  r1(one.ed.getCursorInfo(), false);
+  await els['select-all-tracks-btn'].click();
+  eq([one.ed.getSelection().tracks, one.ed.lastMessage], [[0], 'Selected all of Track 1 Gtr, 1 measure'], 'one visible track: the whole track');
+  one.ed.destroy();
+  eq([DE.selectionText({ kind: 'measures', beatCount: 9, measures: [2, 3], tracks: [0, 1, 2] }), DE.selectionText({ kind: 'measures', beatCount: 2, measures: [1, 1], tracks: [0] }), DE.selectionText({ kind: 'beats', beatCount: 4, measures: [1, 1], tracks: [0] })],
+    ['2 measures (3–4), 3 tracks', '1 measure (2)', '4 beats, measure 2']);
+});
+
 // ---------- B10 (controller) ----------
 const { clampCursor } = await imp('src/editor/model/cursor.js');
 const { selectionOf, anchorOf, focusOf } = await imp('src/editor/model/columns.js');

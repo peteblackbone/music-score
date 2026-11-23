@@ -103,6 +103,7 @@
         </div>
         <span class="sep" aria-hidden="true"></span>
         <div class="group" role="group" aria-label="Edit">
+          <button type="button" id="select-all-tracks-btn" title="Select every measure of every visible track (Ctrl+A twice)">Select all tracks</button>
           <button type="button" id="copy-btn" title="Copy the selection, or the beat (Ctrl+C)">Copy</button>
           <button type="button" id="cut-btn" title="Cut the selection, or the beat (Ctrl+X)">Cut</button>
           <button type="button" id="paste-btn" title="Paste over the selected or blank measures, else before the cursor (Ctrl+V)">Paste</button>
@@ -202,7 +203,8 @@
           <dt>Ctrl+Shift+← →</dt><dd>Extend to the barline</dd>
           <dt>Shift+Home / End</dt><dd>Extend to the measure start or end</dd>
           <dt>Ctrl+Shift+Home / End</dt><dd>Extend to the start or end of the score</dd>
-          <dt>Ctrl+A</dt><dd>Select the whole track</dd>
+          <dt>Shift+↑ ↓ or Shift+PageUp / PageDown</dt><dd>Extend to the previous / next track (whole measures)</dd>
+          <dt>Ctrl+A</dt><dd>Select the whole track; press again for all tracks</dd>
         </dl></section>
         <section><h3>Enter</h3><dl>
           <dt>0–9</dt><dd>Fret on the cursor string (two quick digits: 10–24)</dd>

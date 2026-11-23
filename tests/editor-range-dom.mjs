@@ -265,7 +265,7 @@ test('criterion 29: markup: Paste as new measures after Paste, the Paste title, 
 });
 test('criterion 29: wiring: Paste as new measures calls paste(text, { insert: true }) (system clipboard only when granted), Transpose buttons go through handleKey, every new button is disabled in read-only mode and hands focus on within its group', async () => {
   const mkBtn = (id) => ({ id, disabled: false, handlers: [], addEventListener(tp, f) { this.handlers.push(f); }, focus() { fake.activeElement = this; }, click(detail = 0) { return Promise.all(this.handlers.map((f) => f({ detail }))); } });
-  const ids = ['copy-btn', 'cut-btn', 'paste-btn', 'paste-new-btn', 'fill-btn', 'reflow-btn', ...TRANSPOSE_IDS];
+  const ids = ['select-all-tracks-btn', 'copy-btn', 'cut-btn', 'paste-btn', 'paste-new-btn', 'fill-btn', 'reflow-btn', ...TRANSPOSE_IDS];
   const els = Object.fromEntries(ids.map((id) => [id, mkBtn(id)]));
   els['st-selection'] = { textContent: '' };
   let state = 'prompt';
@@ -299,7 +299,7 @@ test('criterion 29: wiring: Paste as new measures calls paste(text, { insert: tr
   ok(document.activeElement === t.rootEl, 'no enabled sibling in the Transpose group: focus goes back to the editor');
   els['paste-new-btn'].focus();
   refreshEdit(t.ed.getCursorInfo(), true);
-  eq(fake.activeElement, els['copy-btn'], 'the Edit group hands focus to Copy');
+  eq(fake.activeElement, els['select-all-tracks-btn'], 'the Edit group hands focus to its first enabled button (2.3.2: Select all tracks)');
   t.ed.destroy();
 });
 

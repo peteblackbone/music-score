@@ -698,7 +698,7 @@ test('demo markup: Edit group (Copy, Cut, Paste) between History and Settings, M
 });
 test('demo wiring: buttons call the public API, Copy / Cut also try navigator.clipboard (refusal ignored), Paste reads the system clipboard only with the permission granted; disabled states; a focused button that turns disabled hands focus on', async () => {
   const mkBtn = (id) => ({ id, disabled: false, handlers: [], addEventListener(t, f) { this.handlers.push(f); }, focus() { fake.activeElement = this; }, click(detail = 0) { return Promise.all(this.handlers.map((f) => f({ detail }))); } });
-  const els = Object.fromEntries(['copy-btn', 'cut-btn', 'paste-btn', 'paste-new-btn', 'fill-btn', 'reflow-btn', 'transpose-down-1-btn', 'transpose-up-1-btn', 'transpose-down-12-btn', 'transpose-up-12-btn'].map((id) => [id, mkBtn(id)]));
+  const els = Object.fromEntries(['select-all-tracks-btn', 'copy-btn', 'cut-btn', 'paste-btn', 'paste-new-btn', 'fill-btn', 'reflow-btn', 'transpose-down-1-btn', 'transpose-up-1-btn', 'transpose-down-12-btn', 'transpose-up-12-btn'].map((id) => [id, mkBtn(id)]));
   els['st-selection'] = { textContent: '' };
   const writes = [];
   let state = 'prompt';
@@ -731,7 +731,7 @@ test('demo wiring: buttons call the public API, Copy / Cut also try navigator.cl
   ed.setReadOnly(true);
   refreshEdit(ed.getCursorInfo(), true);
   eq(['copy-btn', 'cut-btn', 'paste-btn', 'fill-btn', 'reflow-btn'].map((id) => els[id].disabled), [false, true, true, true, true]);
-  eq(fake.activeElement, els['copy-btn'], 'focus moved to an enabled sibling');
+  eq(fake.activeElement, els['select-all-tracks-btn'], 'focus moved to an enabled sibling (2.3.2: Select all tracks, first in the group)');
   ed.setReadOnly(false);
   ed.loadScore({ tracks: [{ showTablature: true, measures: [{ beats: [nt('whole'), nt('quarter')] }] }] });
   await els['reflow-btn'].click();
