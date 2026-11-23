@@ -3,13 +3,16 @@
  * way settings.js is (ScoreEditor stays under its size budget).
  *
  *   editor.setSelection({ anchor: { measure: 1, beat: 0 }, focus: { measure: 2, beat: 3 } });
- *   editor.getSelection();   // { kind, track, start, end, beatCount, measures } or null
+ *   editor.getSelection();   // { kind, track, start, end, beatCount, measures, tracks } or null
  *   editor.clearSelection();
  *   editor.on('selection', (info) => …);   // info or null
  *
  * State: `_selection` is null or `{ track, anchor, focus, slices, info }`
- * (model/selection.js); the focus is always the cursor. Select commands
- * (Shift+arrows, Ctrl+Shift+arrows, Shift+Home / End, Ctrl+A) go through
+ * (model/selection.js), or (2.3.2) a column selection `{ track, tracks,
+ * anchor, focus, parts, info }` (model/columns.js) when the two ends are on
+ * different tracks; the focus is always the cursor, and the ends carry their
+ * tracks. Select commands (Shift+arrows, Ctrl+Shift+arrows, Shift+Home /
+ * End, Ctrl+A, 2.3.2 Shift+Up / Down / PageUp / PageDown) go through
  * `_extend`, also in read-only mode. Every model change, plain move,
  * click, undo / redo and load clears the selection (`_dropSelection`,
  * which fires `selection` with null first); a refused or no-op edit keeps
@@ -22,8 +25,9 @@
  * clipboard.js (installed here).
  */
 import { COMMANDS, run } from './model/commands.js';
-import { selectionRange, selectionInfo, selectionWords, startOf } from './model/selection.js';
-import { clampCursor, syncDuration } from './model/cursor.js';
+import { selectionInfo, startOf } from './model/selection.js';
+import { anchorOf, focusOf, selectionOf, coversTrack, allTracks, wordsOf } from './model/columns.js';
+import { clampCursor, syncDuration, positions } from './model/cursor.js';
 import { tracksOf } from './model/access.js';
 import { removeTrackImpact } from './model/settings/tracks.js';
 import { describe } from './announce.js';
@@ -52,17 +56,17 @@ export function installSelection(Editor) {
 
   def('getSelection', function getSelection() { this._alive(); return selectionInfo(this._selection); });
 
-  /** Select from `anchor` to `focus` (`{ track?, measure, beat }`, clamped); the cursor moves to the focus. Returns getSelection(). */
+  /** Select from `anchor` to `focus` (`{ track?, measure, beat }`, clamped; 2.3.2: on two tracks, a column); the cursor moves to the focus. Returns getSelection(). */
   def('setSelection', function setSelection(spec) {
     this._alive();
     if (spec === null || typeof spec !== 'object') throw new TypeError('setSelection needs { anchor, focus }');
     const a = point(spec.anchor, 'anchor');
     const f = point(spec.focus, 'focus');
     const ti = f.track ?? this._cursor.track;
-    if (a.track !== undefined && a.track !== ti) throw new RangeError('A selection covers one track');
+    const ai = a.track ?? ti;
     this._cancelBuffer();
     const cursor = clampCursor(this._model, { ...this._cursor, track: ti, measure: f.measure, beat: f.beat });
-    const anchor = clampCursor(this._model, { ...cursor, measure: a.measure, beat: a.beat });
+    const anchor = clampCursor(this._model, { ...cursor, track: ai, measure: a.measure, beat: a.beat });
     this._state = syncDuration(this._model, cursor, this._state);
     this._range(anchor, cursor, false, null);
     return selectionInfo(this._selection);
@@ -73,14 +77,29 @@ export function installSelection(Editor) {
   /** What removeTrack(ti) would delete: `{ notes, tempoMarks }` (no side effects). */
   def('getRemoveTrackImpact', function getRemoveTrackImpact(ti) { this._alive(); return removeTrackImpact(this._model, ti); });
 
-  /** Run select command `name`: anchor (kept, else the cursor; Select all: the start), move, reselect, announce. */
+  /**
+   * Run select command `name`: anchor (kept, else the cursor; Select all:
+   * the start), move, reselect, announce. 2.3.2: a second Ctrl+A on a
+   * selection that covers the track selects all visible tracks; with
+   * nothing selected, Ctrl+Shift+Left / Right on a measure with one
+   * position selects that measure first; a track extend at an edge
+   * (`edgeKeeps`) says so and changes nothing.
+   */
   def('_extend', function extend(name) {
     this._cancelBuffer();
     const cmd = COMMANDS[name];
     const c = this._cursor;
-    const anchor = cmd.fromStart ? startOf(this._model, c) : this._selection?.anchor ?? { measure: c.measure, beat: c.beat };
+    const sel = this._selection;
+    if (cmd.fromStart && coversTrack(this._model, sel)) {
+      const all = allTracks(this._model, c);
+      if (all) { this._state = syncDuration(this._model, all.cursor, this._state); this._range(all.anchor, all.cursor, true, null); return true; }
+    }
+    const here = { track: c.track, measure: c.measure, beat: c.beat };
+    if (cmd.measureStep && !sel && positions(this._model, c).length === 1) { this._range(here, c, false, null); return true; }
+    const anchor = cmd.fromStart ? { track: c.track, ...startOf(this._model, c) } : anchorOf(sel) ?? here;
     const r = run(name, this._model, c, this._state, this._ctx());
     this._state = r.state;
+    if (cmd.edgeKeeps && !r.moved) { this._say(describe(r.announce)); return true; }
     this._range(anchor, r.cursor, !!cmd.fromStart, r.moved ? null : r.announce);
     return true;
   });
@@ -90,13 +109,13 @@ export function installSelection(Editor) {
     const prev = this._selection;
     const moved = cursor.measure !== this._cursor.measure || cursor.beat !== this._cursor.beat || cursor.track !== this._cursor.track;
     this._cursor = cursor;
-    const sel = tracksOf(this._model).length ? selectionRange(this._model, cursor.track, anchor, cursor) : null;
+    const sel = tracksOf(this._model).length ? selectionOf(this._model, { ...anchor, track: anchor.track ?? cursor.track }, cursor) : null;
     this._selection = sel;
     if (moved) { this._view.requestScroll(); this._emitCursor(); }
     if (!same(prev, sel)) this._events.emit('selection', selectionInfo(sel));
     if (!this._view.pending) this._view.drawOverlay();
     if (edge && same(prev, sel) && sel) this._say(describe(edge)); // at an edge with nothing new: say the edge
-    else if (sel) this._say(describe(selectionWords(this._model, sel, all && sel.info.kind === 'measures')));
+    else if (sel) this._say(describe(wordsOf(this._model, sel, all && sel.info.kind === 'measures')));
     else this._say(describe({ id: prev ? 'selectionCleared' : 'nothingToSelect' }));
   });
 
@@ -105,7 +124,7 @@ export function installSelection(Editor) {
     const cmd = COMMANDS[name];
     if (r.changed && cmd.keepsSelection && this._selection) {
       const prev = this._selection;
-      const next = selectionRange(this._model, prev.track, prev.anchor, prev.focus);
+      const next = selectionOf(this._model, anchorOf(prev), focusOf(prev));
       if (!next) return this._dropSelection();
       this._selection = next;
       if (!same(prev, next)) this._events.emit('selection', selectionInfo(next));
@@ -131,6 +150,7 @@ export function installSelection(Editor) {
   def('_selectionInfo', function info() { return selectionInfo(this._selection); });
   def('_selectionView', function view() {
     const s = this._selection;
-    return s && { track: s.track, kind: s.info.kind, slices: s.slices };
+    if (!s) return s;
+    return s.parts ? { tracks: s.tracks, measures: s.info.measures } : { track: s.track, kind: s.info.kind, slices: s.slices };
   });
 }

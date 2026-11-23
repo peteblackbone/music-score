@@ -4,12 +4,15 @@
  *   { "type": "music-score-clip", "version": 1, "kind": "beats" | "measures",
  *     "tracks": [{ "tuning": [...], "beats": [...] }] }          // or "measures": [{ beats } | { voices }]
  *
- * A clip holds one track. Beats clips are the selected voice-1 beats with
+ * A clip holds one track, or (2.3.2, measures clips only) 2 to 32 track
+ * entries of equal measure counts: a column selection's visible tracks in
+ * order. Beats clips are the selected voice-1 beats with
  * their graces; measures clips keep each measure's beats or voices only
  * (no time / key signature, clef, barline, navigation, pickup), and each
  * voice only its beats. `tempo` is never copied. parseClip treats its input as untrusted, the way
  * io.js parseInput does: a `__proto__` key anywhere refuses the whole clip,
- * LIMITS apply, and the result goes through sanitize. It never throws.
+ * LIMITS apply (per track entry), and every entry goes through sanitize.
+ * It never throws.
  */
 import { EDITOR_LIMITS, checkLimits } from './limits.js';
 import { sanitizeFixed } from './io.js';
@@ -44,8 +47,18 @@ export function cursorRange(score, cursor) {
   return { track: cursor.track, slices: [slice], info: { kind: 'beats', beatCount: 1, measures: [cursor.measure, cursor.measure] } };
 }
 
-/** The clip of range `sel` (a selection or cursorRange): `{ text, kind, count }` (count: beats, or measures). */
+/** The clip of range `sel` (a selection or cursorRange): `{ text, kind, count }` (count: beats, or measures); a column selection adds `tracks`, its track count. */
 export function buildClip(score, sel) {
+  if (sel.parts) {
+    const [a, b] = sel.info.measures;
+    const tracks = sel.tracks.map((ti) => {
+      const t = trackAt(score, ti);
+      const measures = [];
+      for (let mi = a; mi <= b; mi++) measures.push(clipMeasure(measureAt(t, mi)));
+      return { tuning: [...tuningOf(t)], measures };
+    });
+    return { text: JSON.stringify({ type: CLIP_TYPE, version: CLIP_VERSION, kind: 'measures', tracks }), kind: 'measures', count: b - a + 1, tracks: tracks.length };
+  }
   const track = trackAt(score, sel.track);
   const { kind } = sel.info;
   const entry = { tuning: [...tuningOf(track)] };
@@ -70,7 +83,27 @@ export function looksLikeClip(text) {
 
 const refuse = (id) => ({ refused: { id } });
 
-/** The clip in `input` (JSON text or a plain object): `{ clip: { kind, tuning, beats | measures } }` or `{ refused: { id } }`. */
+/** Track entry `t` of a clip of `kind` checked: `{ tuning, fake }` (fake: a one-track score of its measures for the limits and sanitize), or null when invalid. */
+function entryOf(t, kind) {
+  if (!plain(t)) return null;
+  let tuning = null;
+  if (t.tuning !== undefined) {
+    try { tuning = canonicalTuning(t.tuning); } catch { return null; }
+  }
+  const content = kind === 'beats' ? t.beats : t.measures;
+  if (!Array.isArray(content) || (kind === 'measures' && !content.every(plain))) return null;
+  const measures = kind === 'beats' ? [{ beats: content }] : content.map((m) => (voicesOf(m) ? { voices: m.voices } : { beats: Array.isArray(m.beats) ? m.beats : [] }));
+  return { tuning, fake: { tracks: [{ ...(tuning ? { tuning } : {}), showTablature: true, measures }] } };
+}
+
+/**
+ * The clip in `input` (JSON text or a plain object): `{ clip: { kind,
+ * tuning, beats | measures } }` for one track entry, `{ clip: { kind:
+ * 'measures', tracks: [{ tuning, measures }, …] } }` for 2 to 32, or
+ * `{ refused: { id } }`. Checks in order: type and size, parse, the entry
+ * list, each entry, equal measure counts, the limits of every entry, then
+ * sanitize each.
+ */
 export function parseClip(input) {
   try {
     let text;
@@ -85,19 +118,24 @@ export function parseClip(input) {
     if (data.version !== CLIP_VERSION) return refuse('clipVersion');
     const { kind, tracks } = data;
     if (kind !== 'beats' && kind !== 'measures') return refuse('clipInvalid');
-    if (!Array.isArray(tracks) || tracks.length !== 1 || !plain(tracks[0])) return refuse('clipInvalid');
-    const t = tracks[0];
-    let tuning = null;
-    if (t.tuning !== undefined) {
-      try { tuning = canonicalTuning(t.tuning); } catch { return refuse('clipInvalid'); }
+    if (!Array.isArray(tracks) || !tracks.length) return refuse('clipInvalid');
+    if (tracks.length > EDITOR_LIMITS.tracks) return refuse('clipTooLarge');
+    if (kind === 'beats' && tracks.length > 1) return refuse('clipInvalid');
+    const entries = [];
+    for (const t of tracks) {
+      const e = entryOf(t, kind);
+      if (!e) return refuse('clipInvalid');
+      entries.push(e);
     }
-    const content = kind === 'beats' ? t.beats : t.measures;
-    if (!Array.isArray(content) || (kind === 'measures' && !content.every(plain))) return refuse('clipInvalid');
-    const measures = kind === 'beats' ? [{ beats: content }] : content.map((m) => (voicesOf(m) ? { voices: m.voices } : { beats: Array.isArray(m.beats) ? m.beats : [] }));
-    const fake = { tracks: [{ ...(tuning ? { tuning } : {}), showTablature: true, measures }] };
-    try { checkLimits(fake); } catch { return refuse('clipTooLarge'); }
-    const clean = sanitizeFixed(fake).tracks[0].measures.map((m) => clipMeasure(isObj(m) ? m : null));
-    return { clip: kind === 'beats' ? { kind, tuning, beats: clean[0].beats } : { kind, tuning, measures: clean } };
+    const k = entries[0].fake.tracks[0].measures.length;
+    if (entries.some((e) => e.fake.tracks[0].measures.length !== k)) return refuse('clipInvalid');
+    for (const e of entries) {
+      try { checkLimits(e.fake); } catch { return refuse('clipTooLarge'); }
+    }
+    const clean = entries.map((e) => ({ tuning: e.tuning, measures: sanitizeFixed(e.fake).tracks[0].measures.map((m) => clipMeasure(isObj(m) ? m : null)) }));
+    if (clean.length > 1) return { clip: { kind: 'measures', tracks: clean } };
+    const { tuning, measures } = clean[0];
+    return { clip: kind === 'beats' ? { kind, tuning, beats: measures[0].beats } : { kind, tuning, measures } };
   } catch {
     return refuse('clipInvalid');
   }

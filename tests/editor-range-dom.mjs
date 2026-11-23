@@ -20,7 +20,7 @@ test('criterion 10: Shift+Right across 3 blank measures selects them ("Selected 
   t.ed.setCursor({ measure: 4, beat: 0 });
   t.spoken();
   t.press(key('ArrowRight', SHIFT), key('ArrowRight', SHIFT));
-  eq(t.ed.getSelection(), { kind: 'measures', track: 0, start: { measure: 4, beat: 0 }, end: { measure: 6, beat: 0 }, beatCount: 0, measures: [4, 6] });
+  eq(t.ed.getSelection(), { kind: 'measures', track: 0, start: { measure: 4, beat: 0 }, end: { measure: 6, beat: 0 }, beatCount: 0, measures: [4, 6], tracks: [0] });
   eq(t.spoken(), 'Selected measures 5 to 7, no beats');
   t.press('Delete');
   eq([t.spoken(), t.ed.canUndo(), t.ed.getSelection().measures], ['Already rests', false, [4, 6]]);
@@ -203,7 +203,8 @@ test('criterion 22: Ctrl / Cmd+Up / Down and Ctrl+Shift+Up / Down transpose thro
   eq(t.events.map((e) => e[0]), ['change'], 'the selection stays, no selection event');
   t.ed.undo();
   eq([frets(t.ed), t.spoken(), t.ed.getSelection()], [[14, 2, 3, 4], 'Undo: transpose', null]);
-  for (const k of [key('PageUp', { ctrlKey: true, shiftKey: true }), key('F', { ctrlKey: true, shiftKey: true }), key('ArrowUp', SHIFT), key('ArrowUp', { ctrlKey: true, altKey: true })]) eq(down(k).defaultPrevented, false, k.key);
+  for (const k of [key('PageUp', { ctrlKey: true, shiftKey: true }), key('F', { ctrlKey: true, shiftKey: true }), key('ArrowUp', { ctrlKey: true, altKey: true })]) eq(down(k).defaultPrevented, false, k.key);
+  eq([down(key('ArrowUp', SHIFT)).defaultPrevented, t.ed.getSelection()], [true, null], '2.3.2: Shift+Up extends to a track (here the first: nothing changes)');
   stable(t.ed);
   t.ed.destroy();
 });
@@ -264,7 +265,7 @@ test('criterion 29: markup: Paste as new measures after Paste, the Paste title, 
 });
 test('criterion 29: wiring: Paste as new measures calls paste(text, { insert: true }) (system clipboard only when granted), Transpose buttons go through handleKey, every new button is disabled in read-only mode and hands focus on within its group', async () => {
   const mkBtn = (id) => ({ id, disabled: false, handlers: [], addEventListener(tp, f) { this.handlers.push(f); }, focus() { fake.activeElement = this; }, click(detail = 0) { return Promise.all(this.handlers.map((f) => f({ detail }))); } });
-  const ids = ['copy-btn', 'cut-btn', 'paste-btn', 'paste-new-btn', 'fill-btn', 'reflow-btn', ...TRANSPOSE_IDS];
+  const ids = ['select-all-tracks-btn', 'copy-btn', 'cut-btn', 'paste-btn', 'paste-new-btn', 'fill-btn', 'reflow-btn', ...TRANSPOSE_IDS];
   const els = Object.fromEntries(ids.map((id) => [id, mkBtn(id)]));
   els['st-selection'] = { textContent: '' };
   let state = 'prompt';
@@ -298,13 +299,13 @@ test('criterion 29: wiring: Paste as new measures calls paste(text, { insert: tr
   ok(document.activeElement === t.rootEl, 'no enabled sibling in the Transpose group: focus goes back to the editor');
   els['paste-new-btn'].focus();
   refreshEdit(t.ed.getCursorInfo(), true);
-  eq(fake.activeElement, els['copy-btn'], 'the Edit group hands focus to Copy');
+  eq(fake.activeElement, els['select-all-tracks-btn'], 'the Edit group hands focus to its first enabled button (2.3.2: Select all tracks)');
   t.ed.destroy();
 });
 
 // ---------- B10 (controller) ----------
 const { clampCursor } = await imp('src/editor/model/cursor.js');
-const { selectionRange } = await imp('src/editor/model/selection.js');
+const { selectionOf, anchorOf, focusOf } = await imp('src/editor/model/columns.js');
 test('B10 (controller, 300 steps): keys (transpose, range effects, Ctrl+Shift+Home / End, the reflow cascade), Ctrl+V and Ctrl+Shift+V with native events or the fallback, blur, keep sanitizeScore(model) === model, a valid cursor and a valid selection; undo all restores the start, redo all the end', () => {
   function mulberry32(a) {
     return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -333,7 +334,7 @@ test('B10 (controller, 300 steps): keys (transpose, range effects, Ctrl+Shift+Ho
     ok(sanitizeScore(t.ed._model) === t.ed._model, `step ${i}`);
     eq(clampCursor(t.ed._model, t.ed._cursor), t.ed._cursor, `step ${i}: valid cursor`);
     const sel = t.ed._selection;
-    if (sel) eq(selectionRange(t.ed._model, sel.track, sel.anchor, sel.focus)?.info, sel.info, `step ${i}: valid selection`);
+    if (sel) eq(selectionOf(t.ed._model, anchorOf(sel), focusOf(sel))?.info, sel.info, `step ${i}: valid selection`); // 2.3.2: a second Ctrl+A makes a column
   }
   const end = t.ed._model;
   while (t.ed.undo());

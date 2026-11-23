@@ -324,7 +324,7 @@ The design sources are `.12sp/requirements-2.0.md`, `.12sp/design.md` and
    keeps (`this._hitSource`). `getHitMap()` builds plain data from that summary
    when it is called. The SVG, normalize and layout do not change.
 2. **Pure model.** `src/editor/model/*`, `keymap.js`, `announce.js`,
-   `geometry.js`, `style.js`, `options.js` and `emitter.js`. A command takes
+   `geometry.js`, `selectionShapes.js`, `style.js`, `options.js` and `emitter.js`. A command takes
    `(score, cursor, state, ctx)` and returns the next state. None of these
    files touch the DOM.
 3. **Controller.** `ScoreEditor.js` (the public class), `view.js` (the wrapper
@@ -370,7 +370,7 @@ the same file: it breaks the rule on purpose and checks that the check fails.
 
 1. Nothing in `src/` outside `src/editor/` imports from `src/editor/`. The root
    `index.js` may.
-2. The pure files (`model/*`, `keymap.js`, `announce.js`, `geometry.js`,
+2. The pure files (`model/*`, `keymap.js`, `announce.js`, `geometry.js`, `selectionShapes.js`,
    `style.js`, `options.js` and `emitter.js`) contain no `document`, `window`,
    `requestAnimationFrame` or `addEventListener` tokens.
 3. Files under `model/` import from outside `src/editor/` only
@@ -887,14 +887,14 @@ test. The `looksLikeClip` static is defined with `Object.defineProperty` in
 | `selection.js` | Controller installer: the selection methods, `_extend`, `_range`, `_escape`, `_dropSelection`. |
 | `clipboard.js` | Controller installer: `copy`, `cut`, `paste`, `_clipboardEvent` and the Safari fallback timer. Holds the module-level `internal` clipboard. |
 | `view.js` | `drawSelection`, the overlay groups, and the `document` listeners for copy, cut and paste. |
-| `geometry.js` | `selectionShapes`. |
+| `selectionShapes.js` | `selectionShapes`, moved here from `geometry.js` in 2.3.2 (which re-exports it). Column bands from 2.3.2. |
 | `style.js` | `selectionColor` and the selection constants. |
 | `model/access.js` | `isPickup`. `model/fill.js`: `overlayFills` shows a pickup's underfull as `'pickup'`. `model/cursor.js`: `cursorInfo` gains `pickup`. |
 
 ### Selection model
 
 - `_selection` is `null` or `{ track, anchor, focus, slices, info }`. The focus is
-  always the cursor. A model change clears the selection; it is never remapped. The one exception (2.3.1) is a `keepsSelection` command, which re-derives the selection from its anchor and focus.
+  always the cursor. From 2.3.2 it can also be a column selection, `{ track, tracks, anchor, focus, parts, info }` (see "2.3.2 additions"). A model change clears the selection; it is never remapped. The one exception (2.3.1) is a `keepsSelection` command, which re-derives the selection from its anchor and focus.
 - `rangeSlices(score, track, anchor, focus)` cuts the range into one slice per
   measure, `{ measure, from, to, first, last }`. `[from, to)` are beat indices, and
   `first` and `last` say whether the slice starts at the measure's first position and
@@ -939,7 +939,7 @@ test. The `looksLikeClip` static is defined with `Object.defineProperty` in
 ### Clip pipeline and security
 
 Copy: `buildClip(score, range)` returns the JSON text: `type`, `version: 1`, `kind`,
-and one `tracks` entry with the track's tuning and its `beats` or `measures`. `cleanBeats`
+and one `tracks` entry with the track's tuning and its `beats` or `measures` (2.3.2: one entry per selected track of a column). `cleanBeats`
 removes `tempo` from every beat. `clipMeasure` keeps only a measure's voices and their
 beats. The text goes to the module-level `internal` clipboard, which every editor on
 the page shares, and to the system clipboard in the copy or cut event.
@@ -953,10 +953,10 @@ the page shares, and to the system clipboard in the copy or cut event.
 3. `JSON.parse` with a reviver that drops `__proto__` and sets a flag. The flag refuses
    the whole clip (decision D12).
 4. Shape: a plain object (not an array); `type` (otherwise `notClip`); `version` 1
-   (otherwise `clipVersion`); `kind` is `beats` or `measures`; `tracks` holds exactly
-   one plain object; `tuning`, if present, goes through `canonicalTuning`; the content
+   (otherwise `clipVersion`); `kind` is `beats` or `measures`; `tracks` holds one plain
+   object per track (2.3.2: 1 to 32 for a measures clip, exactly one for a beats clip); `tuning`, if present, goes through `canonicalTuning`; the content
    is an array, and each measure of a measures clip is a plain object.
-5. Limits: `checkLimits` runs on a one-track fake score, so the paste applies the same
+5. Limits: `checkLimits` runs on a one-track fake score for each entry (2.3.2), so the paste applies the same
    `LIMITS` as `parseInput`.
 6. Clean: `sanitizeFixed` (the same fixed-point sanitize as `io.js`), then `clipMeasure`
    again, which removes `tempo` and keeps voice beats only.
@@ -1176,24 +1176,162 @@ reference. The one change to `ScoreEditor.js` is in `_exec`, which calls
 
 - `keymap.js`: Ctrl/Cmd+↑/↓ → `transpose` (±1). Ctrl/Cmd+Shift+↑/↓ → `transpose` (±12).
   Ctrl/Cmd+Shift+Home/End → `selectScoreStart` and `selectScoreEnd`, the select commands
-  run by `_extend`. Shift+↑/↓ and Shift+R/I are still reserved for 2.3.2. Ctrl/Cmd+Shift+V
+  run by `_extend`. Shift+↑/↓ were reserved until 2.3.2 (now bound, see "2.3.2 additions"), and Shift+R/I stay reserved. Ctrl/Cmd+Shift+V
   is not a command (see Paste modes).
 
-### Extension points for 2.3.2
+### 2.3.2 additions
 
-- Multi-track selection: `_selectionView()` gives `geometry.selectionShapes` the track,
-  `kind` and `slices`. A multi-track selection would need a track list there and a per-track
-  overlay. `rangeSlices` and `selectionRange` take one track.
-- Column clipboard: the clip envelope keeps `tracks` as an array. `parseClip` accepts
-  exactly one entry today (decision D13). A multi-track clip keeps the envelope and changes
-  only that check. Clip version 1 is unchanged in 2.3.1.
-- `applyPaste` already takes its track from `sel.track`. `pasteMeasures` writes only that
-  track's measures. Other tracks change only through `insertMeasuresAt` and `rehomeTempo`.
-- The clip envelope keeps `tracks` as an array. `parseClip` accepts exactly one entry
-  today (decision D13). A multi-track clip keeps the envelope and changes only that check.
-- Shift+↑ and Shift+↓, and Shift+R and Shift+I, stay reserved in `keymap.js`.
-- `_selectionView()` gives `geometry.selectionShapes` the track, `kind` and `slices`.
-  A multi-track selection would need a track list there, and a per-track overlay.
+2.3.2 adds the column selection, the column clipboard, the column range edits and the one-beat
+measure rule. The user-facing description is in the README, under "Editing rules" ("Column mode",
+"Column clipboard", "Column range edits") and "Limitations in 2.3". The design sources are
+`.12sp/requirements-2.3.2.md` and `.12sp/design-2.3.2.md` (decisions C1 to C18). Where they
+differ from the code, the code is the reference (see "Where the code differs from the design").
+
+| File | 2.3.2 change |
+|---|---|
+| `model/columns.js` | New. `anchorOf`, `focusOf`, `visibleBetween`, `columnRange`, `selectionOf`, `coversTrack`, `allTracks`, `columnWords`, `wordsOf`, `columnar`, `columnPrev`, `columnNext`, `columnStay`. |
+| `model/pasteColumns.js` | New. `pasteColumns`, the paste of a clip with several tracks. |
+| `model/paste.js` | Exports `fit`. Adds `planMeasures` (the overwrite or insert plan that both pastes share), `afterMeasures` and `overwriteMeasures`. A column selection with a one-track clip goes to its top part. |
+| `model/clip.js` | `buildClip` writes one entry per part of a column. `parseClip` takes 1 to 32 entries, and checks and sanitizes each one. |
+| `model/selection.js` | `selectionInfo` adds `tracks`. |
+| `model/rangeEdit.js` | `partsOf`, `tracksField`, `clearParts`, `removeParts`, `eachSelectedBeat`. |
+| `model/effects.js` | `effectRange` runs over the parts. Note rows skip the tracks without TAB and count them. |
+| `model/transpose.js` | The selection branch runs over the parts, all or nothing. |
+| `model/reflow.js` | `fill` loops over the selected tracks and counts cells. |
+| `model/commands.js` | `selectPrevTrack` and `selectNextTrack` (`edgeKeeps`), `columnar` wrappers, `measureStep` on the one-beat commands. |
+| `selection.js` | `setSelection` without the `RangeError`, `_extend` (second Ctrl+A, the one-beat rule, track edges), `_range` and `_settleSelection` through `selectionOf`, and `_selectionView` returns `{ tracks, measures }` for a column. |
+| `clipboard.js` | Cut through `clearParts`, copy with the `tooLarge` flag, and the paste dispatch to `pasteColumns`. |
+| `keymap.js` | Shift+↑, Shift+↓, Shift+PageUp and Shift+PageDown are bound. Shift+R and Shift+I are the only reserved keys. |
+| `selectionShapes.js` | `selectionShapes` (moved from `geometry.js`) and `columnShapes`, with the shared helpers `bandStyle`, `pushBand`, `staffSpan` and `systemExtents`. |
+| `announce.js` | New ids `selectedColumns` and `selectedAllTracks`, and the suffix helpers `onTracks`, `tracksText`, `notPasted` and `tooBig`. |
+| `examples/editor-demo-edit.js`, `editor.html` | The Select all tracks button, and `selectionText` with the track count. |
+
+#### Parts model
+
+- A column selection is `{ track, tracks, anchor, focus, parts, info }`. `tracks` lists the
+  selected visible tracks in ascending order, and `track` is `tracks[0]`. Each `parts[i]` is a
+  single-track `selectionRange` (model/selection.js) over whole measures `a..b` on `tracks[i]`.
+  There is no top-level `slices`.
+- `partsOf(sel)` (rangeEdit.js) is `sel.parts ?? [sel]`. Every consumer loops over it, so a
+  single-track selection runs through the same code as before.
+- The controller keeps both ends, each with its track. The snap to whole measures is computed,
+  never stored. `selectionOf(score, anchor, focus)` uses `selectionRange` when both ends are on
+  one track, and `columnRange` otherwise. Going back to one track gives the beat range again.
+- `columnRange` falls back to a single-track selection when fewer than two visible tracks lie
+  between the ends.
+- `selectionInfo` returns `{ ...info, start, end, measures, tracks }`, where `tracks` is `[track]`
+  for a single-track selection.
+
+#### Keys and controller
+
+- `keymap.js` maps ArrowUp and PageUp to `selectPrevTrack`, and ArrowDown and PageDown to
+  `selectNextTrack`. Both carry `edgeKeeps`, so at an edge the selection stays and the edge is
+  spoken. Otherwise they reuse `changeTrack` (cursor.js): the nearest onset, with hidden tracks
+  skipped.
+- Ctrl+A: `_extend` first checks `coversTrack(sel)`, which is kind `'measures'` over the whole
+  score. Then `allTracks` gives the anchor at the first visible track's start and the cursor at the
+  last visible track's last position. It returns null with fewer than two visible tracks, and the
+  normal path runs. A third press gives the same selection and repeats the words.
+- One-beat rule (D10): `selectPrevMeasure` and `selectNextMeasure` carry `measureStep`. With no
+  live selection and a measure with exactly one position, `_extend` selects that measure. The
+  test is `positions(score, cursor).length === 1`. An empty measure has one position (its
+  end-of-measure slot), so it takes the rule too.
+- Column mode: `columnar(single, column)` runs the column variant while `ctx.selection.parts` is set.
+  Shift+←/→ and Ctrl+Shift+←/→ use `columnPrev` and `columnNext`, which move one whole measure and
+  otherwise announce "Start of score" or "End of score". Shift+Home and Shift+End use `columnStay`,
+  which returns `{}`, so the words repeat. Ctrl+Shift+Home, Ctrl+Shift+End and Ctrl+A are not
+  wrapped.
+- `setSelection` no longer throws. The focus track (the cursor's by default) and the anchor track
+  (the focus's by default) are clamped to visible tracks, and `_range` builds the selection with
+  `selectionOf`.
+- `_settleSelection` re-derives a column selection from `anchorOf` and `focusOf` after a
+  `keepsSelection` command. `_selectionView` returns `{ tracks, measures }` for a column.
+
+#### Consumers
+
+- Delete, Ctrl+Delete and Shift+Delete. `clearParts` chains `clearSlices` over the parts, and the
+  cursor goes to the top part's first filled beat. `removeParts` chains `removeSlices`, and its
+  tempo count is `tempoIn` per part on the original score. Measures are left empty, so there is
+  no reflow. Shift+Delete is unchanged: `deleteColumns` already acts on every track.
+- `fill` loops over `sel.tracks` (or the cursor's track) and over each measure. It counts cells,
+  so a 2-measure, 3-track column counts 6. A single-measure early return applies only to one cell.
+- `effectRange` uses the parts with TAB for note rows, and all parts for beat rows. It writes
+  per usable track through `eachSlice(…, repair = false)`, and reports `tracks` and `skippedTracks`.
+- `transpose` loops over the parts. Its tie keys are `track:measure:beat:string`. A refusal names
+  the first problem in track order, then measure order (`transposeRange` with `track`).
+- `eachSelectedBeat(score, parts, fn)` (rangeEdit.js) calls `fn(beat, loc)` for every beat,
+  graces included, in each part's slices. Effects and transpose use it now. It is the iterator for
+  2.3.3's rhythm over a range. Rhythm keys still act on the cursor beat, and transpose still keeps
+  strings.
+
+#### Column clipboard
+
+- `buildClip` with `sel.parts` writes one entry per part, `{ tuning, measures }` over `a..b`.
+  Hidden tracks are never included. The result also reports `tracks`, the entry count.
+- `parseClip` checks in this order, and never throws (the whole body is in one `try`):
+  1. Type and size: a non-string or non-object is `clipInvalid`, and text over 5 MB is `clipTooLarge`.
+  2. Parse: the `__proto__` flag, a non-plain root, `notClip`, `clipVersion` and `kind`.
+  3. Entry list: missing or empty is `clipInvalid`, more than 32 is `clipTooLarge`, and a beats clip
+     with more than one entry is `clipInvalid`.
+  4. Each entry: plain, `canonicalTuning` (throws as `clipInvalid`), and a measures array of plain
+     objects.
+  5. Equal measure counts across the entries (`clipInvalid` otherwise).
+  6. `checkLimits` on a one-track fake score for each entry (`clipTooLarge`).
+  7. `sanitizeFixed` and `clipMeasure`, separately for each entry.
+  One entry gives the 2.3.1 shape. Two to 32 give `{ kind: 'measures', tracks: [{ tuning, measures }] }`.
+- `_clip` marks `tooLarge` when the text is over `jsonChars`. The copy still happens, and the
+  announcement adds ", too large to paste back". A cut of that size writes the clip but clears
+  nothing (`cutTooLarge`), since `parseClip` would refuse the clip and the beats could not come back.
+- `_pasteFrom` dispatches `p.clip.tracks ? pasteColumns : applyPaste`. The `exportedLength` check
+  applies to both.
+
+#### Column paste (pasteColumns.js)
+
+- `base` is the selection's track (the top part), or the cursor's track. `targets` are the first
+  `clip.tracks.length` visible tracks from `base` upward. `droppedTracks` is the number left over.
+- `planMeasures(score, cursor, sel, targets, k, insert)` refuses with `nothingToPaste`,
+  `pasteNeedsMeasures` (a beats selection, unless `insert`) or `tooLarge` (past 2000 measures). It
+  gives the start `a` (the selection's first measure, or `targetMeasure`), `over` (an overwrite: on a
+  selection unless `insert`, and without one only when every target is blank over the k measures),
+  `added` (the columns past the end), `marks` (the tempo winners per target on the overwritten
+  measures, read before the paste) and the score with the room made. An insert adds k columns once,
+  in every track.
+- Each target is fitted to its own tuning (`fit`) and written with `overwriteMeasures`. The tempo
+  marks are rehomed per target after all the writes (`rehomeTempo`, decision C16). The result is
+  sanitized. The cursor goes to `afterMeasures` on the base track, and the selection is cleared.
+- A one-track clip on a column goes through `applyPaste` with `sel.parts[0]` (decision C14).
+- The announcements are `pastedOver` and `pasted`, with `tracks` (", N tracks") and `droppedTracks`
+  (", N clip track(s) not pasted").
+
+#### Overlay
+
+- `selectionShapes` begins with `if (sel.tracks) return columnShapes(...)`. Single-track output is
+  unchanged, and pin (f) in `tests/editor-pins-2.3.2.mjs` checks it.
+- `columnShapes` builds one segment per system for measures `a..b` (x from the top track's
+  measures), and draws one tint and one outline per segment. The vertical span runs from the top
+  of the top track's first staff to the bottom of the last track's last staff. Both edges are open
+  at a system break. The classes are `editor-sel editor-sel-columns` and
+  `editor-sel-outline editor-sel-columns`. Hidden tracks take no space.
+
+#### Where the code differs from the design
+
+- The shared overlay helpers (`bandStyle`, `pushBand`, `staffSpan` and `systemExtents`) are in
+  `selectionShapes.js`. The design put them in `geometry.js`, which now only re-exports
+  `selectionShapes`.
+- The one-beat rule (D10) applies to any measure with one position. That includes an empty
+  measure, whose only position is its end-of-measure slot. The design's wording covered one-beat
+  measures only.
+
+#### Tests
+
+- `tests/editor-pins-2.3.2.mjs` pins the 2.3.1 behaviour that 2.3.2 changes: the `RangeError`,
+  the unbound Shift+arrow and Shift+PageUp/PageDown keys, the second Ctrl+A, the one-entry
+  `parseClip`, the one-beat Ctrl+Shift+→, and the single-track overlay shapes.
+- `tests/editor-columns.mjs` covers the model (the selection, the clip, `pasteColumns`, the range
+  edits, and the property runs with undo and redo).
+- `tests/editor-columns-dom.mjs` covers the controller (the wording, the band, the clipboard
+  through native events and the fallback, the keys, the demo, and the one-beat rule).
+- `tests/bench-editor.mjs` times the model operations on 4 tracks by 2000 measures.
 
 ### Tests
 

@@ -5,7 +5,11 @@
  * Kinds: 'nav' (moves; Right may append a measure), 'edit' (refused in
  * read-only mode), 'history' (undo / redo, run by the controller),
  * 'buffer' (Escape, `cancelsBuffer`) and 2.3 'select' (moves that extend
- * the selection, run by the controller's _extend; `fromStart`: Select all).
+ * the selection, run by the controller's _extend; `fromStart`: Select all;
+ * 2.3.2 `edgeKeeps`: at an edge the selection stays; `measureStep`: with
+ * nothing selected on a one-position measure the first press selects that
+ * measure; the column variants of model/columns.js run while a column
+ * selection is live).
  * With a selection (ctx.selection) the three delete keys act on the range (model/rangeEdit.js), and (2.3.1) the effect
  * keys act on every selected beat or note (effects.js effectRange); `keepsSelection` marks the commands after
  * which the controller keeps the selection, re-derived, instead of clearing it. History commands name their `step`. Commands that can change the model carry their undo
@@ -28,6 +32,7 @@ import {
 } from './selection.js';
 import { ranged, clearRange, removeRange, deleteSelectedColumns } from './rangeEdit.js';
 import { fill, reflow } from './reflow.js';
+import { columnar, columnPrev, columnNext, columnStay } from './columns.js';
 import { transpose } from './transpose.js';
 
 const nav = (fn, label) => ({ fn, kind: 'nav', label });
@@ -68,15 +73,17 @@ export const COMMANDS = Object.freeze({
   // 2.1 effects, one command per row of effectTable.js; 2.3.1: over the selection when there is one
   ...Object.fromEntries(EFFECTS.map((d) => [d.name, keep(edit(ranged(effectCommand(d), effectRange(d)), d.label))])),
   // 2.3 selection
-  selectLeft: select(selectLeft),
-  selectRight: select(selectRight),
-  selectMeasureStart: select(selectMeasureStart),
-  selectMeasureEnd: select(selectMeasureEnd),
-  selectPrevMeasure: select(selectPrevMeasure),
-  selectNextMeasure: select(selectNextMeasure),
+  selectLeft: select(columnar(selectLeft, columnPrev)),
+  selectRight: select(columnar(selectRight, columnNext)),
+  selectMeasureStart: select(columnar(selectMeasureStart, columnStay)),
+  selectMeasureEnd: select(columnar(selectMeasureEnd, columnStay)),
+  selectPrevMeasure: select(columnar(selectPrevMeasure, columnPrev), { measureStep: true }),
+  selectNextMeasure: select(columnar(selectNextMeasure, columnNext), { measureStep: true }),
   selectAll: select(selectAll, { fromStart: true }),
   selectScoreStart: select(selectScoreStart),
   selectScoreEnd: select(selectScoreEnd),
+  selectPrevTrack: select(prevTrack, { edgeKeeps: true }), // 2.3.2: column selection
+  selectNextTrack: select(nextTrack, { edgeKeeps: true }),
   undo: { fn: null, kind: 'history', step: 'undo' },
   redo: { fn: null, kind: 'history', step: 'redo' },
   clearBuffer: { fn: null, kind: 'buffer', cancelsBuffer: true },
