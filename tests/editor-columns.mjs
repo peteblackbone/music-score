@@ -433,6 +433,19 @@ test('criterion 22: transpose covers every selected track (TAB or not), all or n
 
 // ---------- B10 / E12 (2.3.2) ----------
 const RE = await imp('src/editor/model/rangeEdit.js');
+test('eachSelectedBeat visits every selected beat, graces included, in track, measure, beat order with its location; a single-track selection is one part', () => {
+  const s = model({ tracks: [
+    tab([{ beats: [nt('half'), { type: 'grace', duration: '16th', notes: [{ string: 2, fret: 3 }] }, nt('half', 1, 2)] }, { beats: [nt('whole', 1, 3)] }]),
+    tab([{ beats: [nt('whole', 2, 4)] }, { beats: [] }], { name: 'B' }),
+  ] });
+  const seen = [];
+  RE.eachSelectedBeat(s, COL.columnRange(s, T(0, 0, 0), T(1, 1, 0)).parts, (b, loc) => seen.push([loc, b.type]));
+  eq(seen, [[T(0, 0, 0), 'note'], [T(0, 0, 1), 'grace'], [T(0, 0, 2), 'note'], [T(0, 1, 0), 'note'], [T(1, 0, 0), 'note']]);
+  const one = [];
+  const sel = SEL.selectionRange(s, 0, { measure: 0, beat: 2 }, { measure: 1, beat: 0 });
+  RE.eachSelectedBeat(s, RE.partsOf(sel), (b, loc) => one.push(loc));
+  eq(one, [T(0, 0, 1), T(0, 0, 2), T(0, 1, 0)], 'the grace leading into beat 3 goes with it');
+});
 const { exampleScore } = await imp('examples/example-score.js');
 const { leadRiff } = await imp('examples/lead-riff.js');
 const { defaultScore } = await imp('src/editor/model/defaultScore.js');

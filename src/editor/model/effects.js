@@ -24,9 +24,9 @@
  * without TAB and refuse needsTab only when no selected track has one.
  */
 import {
-  trackAt, hasTab, beatAt, isRest, isGrace, cursorNote, updateBeat, updateNote, without, measureAt, beatsOf, notesOf,
+  trackAt, hasTab, beatAt, isRest, isGrace, cursorNote, updateBeat, updateNote, without, notesOf,
 } from './access.js';
-import { eachSlice, partsOf } from './rangeEdit.js';
+import { eachSlice, eachSelectedBeat, partsOf } from './rangeEdit.js';
 import { fretIntoSlot, fretIntoRest, fretIntoNote } from './notes.js';
 import { EFFECTS, SUFFIXES } from './effectTable.js';
 
@@ -95,17 +95,11 @@ export function effectRange(def) {
     const usable = noteRow ? parts.filter((p) => hasTab(trackAt(score, p.track))) : parts;
     if (!usable.length) return refuse('needsTab');
     const targets = [];
-    for (const { track: ti, slices } of usable) {
-      const track = trackAt(score, ti);
-      for (const s of slices) {
-        const beats = beatsOf(measureAt(track, s.measure));
-        for (let k = s.from; k < s.to; k++) {
-          if (!onBeat(beats[k])) continue;
-          if (!noteRow) targets.push({ loc: { track: ti, measure: s.measure, beat: k }, t: beats[k] });
-          else for (const n of notesOf(beats[k])) if (onNote(n)) targets.push({ loc: { track: ti, measure: s.measure, beat: k, string: n.string }, t: n });
-        }
-      }
-    }
+    eachSelectedBeat(score, usable, (b, loc) => {
+      if (!onBeat(b)) return;
+      if (!noteRow) targets.push({ loc, t: b });
+      else for (const n of notesOf(b)) if (onNote(n)) targets.push({ loc: { ...loc, string: n.string }, t: n });
+    });
     if (!targets.length) return refuse(!noteRow && def.onRest ? 'noBeatsInSelection' : 'noNotesInSelection');
     const steps = targets.map((x) => def.classify(x.t));
     const step = nextStep(def, steps.every((v) => v === steps[0]) ? steps[0] : -1);

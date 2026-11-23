@@ -17,9 +17,9 @@
  *   alone. 2.3.2: over a column, every selected track, all or nothing; the
  *   first problem in track, then measure order is named with its track.
  */
-import { trackAt, hasTab, measureAt, beatsOf, isGrace, isRest, notesOf, cursorNote, updateNote, without } from './access.js';
+import { trackAt, hasTab, isGrace, isRest, notesOf, cursorNote, updateNote, without } from './access.js';
 import { untieNote, nextMainBeat, prevMainBeat, stripFlag } from './ties.js';
-import { eachSlice, partsOf, onTracks } from './rangeEdit.js';
+import { eachSlice, eachSelectedBeat, partsOf, onTracks } from './rangeEdit.js';
 
 const refuse = (id, extra) => ({ announce: { id, ...extra } });
 const fretted = (n) => Number.isInteger(n.fret);
@@ -44,19 +44,13 @@ export function transpose(score, cursor, state, ctx, semis) {
   const parts = partsOf(sel);
   const targets = [];
   let skipped = 0;
-  for (const { track: ti, slices } of parts) {
-    const track = trackAt(score, ti);
-    for (const s of slices) {
-      const beats = beatsOf(measureAt(track, s.measure));
-      for (let k = s.from; k < s.to; k++) {
-        if (isRest(beats[k])) continue;
-        for (const n of notesOf(beats[k])) {
-          if (fretted(n)) targets.push({ track: ti, measure: s.measure, beat: k, n, grace: isGrace(beats[k]) });
-          else skipped++;
-        }
-      }
+  eachSelectedBeat(score, parts, (b, loc) => {
+    if (isRest(b)) return;
+    for (const n of notesOf(b)) {
+      if (fretted(n)) targets.push({ ...loc, n, grace: isGrace(b) });
+      else skipped++;
     }
-  }
+  });
   if (!targets.length) return refuse('nothingToTranspose', { skipped });
   const bad = targets.find((x) => !fits(x.n));
   if (bad) return outOfRange(bad.measure, sel.parts ? { track: bad.track + 1 } : {});

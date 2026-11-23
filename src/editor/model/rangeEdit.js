@@ -39,6 +39,16 @@ export function eachSlice(score, track, slices, fn, repair = true) {
   return out === score || !repair ? out : fixTiesIn(out, track, slices[0].measure, slices[slices.length - 1].measure);
 }
 
+/** Call fn(beat, { track, measure, beat }) for every beat (graces included) in the slices of every part of `parts`, in track, measure, beat order. */
+export function eachSelectedBeat(score, parts, fn) {
+  for (const { track, slices } of parts) {
+    for (const s of slices) {
+      const beats = beatsAt(score, { track, measure: s.measure });
+      for (let k = s.from; k < s.to; k++) fn(beats[k], { track, measure: s.measure, beat: k });
+    }
+  }
+}
+
 /** A note beat as a rest of the same length (effects, unknown fields and tempo kept); rests unchanged. */
 const asRest = (b) => (isRest(b) ? b : { ...without(b, 'notes', 'slash'), type: 'rest' });
 
