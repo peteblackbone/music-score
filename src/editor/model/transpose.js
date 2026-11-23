@@ -3,26 +3,41 @@
  * semitone, Ctrl+Shift+Up / Down ±12): `transpose(score, cursor, state,
  * ctx, semis)`.
  *
- * A note stays on its string: only `fret` changes (and an integer
- * `harmonicFret` by the same amount); `pitch` is removed from every
- * changed note, `mute`, `harmonic` and other effects are kept. All or
- * nothing: when any fret would leave 0..ctx.maxFret nothing changes and the
- * first measure with a problem is named.
+ * A note that fits stays on its string: only `fret` changes (and an
+ * integer `harmonicFret` by the same amount); `pitch` is removed from every
+ * changed note, `mute`, `harmonic` and other effects are kept. 2.3.3: a
+ * note whose fret would leave 0..ctx.maxFret moves to the nearest free
+ * string that plays the same pitch (stringMove.js), keeping its effects; a
+ * harmonic (or a note without a string) never moves. All or nothing: when
+ * any note can't be placed nothing changes and the first measure with a
+ * problem is named.
  * - No selection: the voice-1 note on the cursor string of a TAB track; its
- *   ties are removed (both partners).
+ *   ties are removed (both partners); the cursor follows a moved note.
  * - With a selection (TAB staff or not): every voice-1 note with a fret on
  *   the selected non-rest beats, graces included; notes without a fret
  *   (pitch-only) are skipped and counted. A main-beat tie survives when
- *   both notes were transposed, else both flags go; ties on graces are left
- *   alone. 2.3.2: over a column, every selected track, all or nothing; the
- *   first problem in track, then measure order is named with its track.
+ *   both notes were transposed and neither moved, or both moved to the
+ *   same string and fret; else both flags go. Ties on graces are left
+ *   alone, except that a moved grace drops its own. 2.3.2: over a column,
+ *   every selected track, all or nothing; the first problem in track, then
+ *   measure order is named with its track.
  */
-import { trackAt, hasTab, isGrace, isRest, notesOf, cursorNote, updateNote, without } from './access.js';
+import { trackAt, hasTab, isGrace, isRest, notesOf, beatAt, cursorNote, updateNote, without } from './access.js';
 import { untieNote, nextMainBeat, prevMainBeat, stripFlag } from './ties.js';
 import { eachSlice, eachSelectedBeat, partsOf, tracksField } from './rangeEdit.js';
+import { isHarmonic, placeMoves } from './stringMove.js';
 
 const refuse = (id, extra) => ({ announce: { id, ...extra } });
 const fretted = (n) => Number.isInteger(n.fret);
+const beatKey = (loc) => `${loc.track}:${loc.measure}:${loc.beat}`;
+const key = (loc, string) => `${beatKey(loc)}:${string}`;
+const sameBeat = (a, b) => a.track === b.track && a.measure === b.measure && a.beat === b.beat;
+/** Notes of `b` a selection transposes: fretted, with a string that no other note of the beat shares (malformed duplicates and stringless notes are skipped). */
+function movable(b) {
+  const seen = new Map();
+  for (const n of notesOf(b)) if (n.string != null) seen.set(n.string, (seen.get(n.string) ?? 0) + 1);
+  return (n) => fretted(n) && n.string != null && seen.get(n.string) === 1;
+}
 
 /** Transpose by `semis` semitones (see the header). */
 export function transpose(score, cursor, state, ctx, semis) {
@@ -30,45 +45,86 @@ export function transpose(score, cursor, state, ctx, semis) {
   const ok = (f) => f >= 0 && f <= max;
   const fits = (n) => ok(n.fret + semis) && (!Number.isInteger(n.harmonicFret) || ok(n.harmonicFret + semis));
   const shifted = (n) => ({ ...without(n, 'pitch'), fret: n.fret + semis, ...(Number.isInteger(n.harmonicFret) ? { harmonicFret: n.harmonicFret + semis } : {}) });
-  const outOfRange = (mi, track) => refuse('transposeRange', { measure: mi + 1, max, up: semis > 0, ...track });
+  const outOfRange = (mi, extra) => refuse('transposeRange', { measure: mi + 1, max, up: semis > 0, ...extra });
   const sel = ctx.selection;
   if (!sel) {
     if (!hasTab(trackAt(score, cursor.track))) return refuse('needsTab');
     const n = cursorNote(score, cursor);
     if (!n) return refuse('noNoteToTranspose');
     if (!fretted(n)) return refuse('pitchOnlyNote'); // a note with a pitch but no fret
-    if (!fits(n)) return outOfRange(cursor.measure);
-    const out = updateNote(untieNote(score, cursor), cursor, shifted);
-    return { score: out, announce: { id: 'transposed', semitones: semis, count: 1, fret: n.fret + semis } };
+    if (fits(n)) {
+      const out = updateNote(untieNote(score, cursor), cursor, shifted);
+      return { score: out, announce: { id: 'transposed', semitones: semis, count: 1, fret: n.fret + semis } };
+    }
+    if (isHarmonic(n)) return outOfRange(cursor.measure, { harmonic: true });
+    const to = placeMoves(trackAt(score, cursor.track), notesOf(beatAt(score, cursor)), [n], semis, max)?.get(n);
+    if (!to) return outOfRange(cursor.measure);
+    const out = updateNote(untieNote(score, cursor), cursor, (x) => ({ ...without(x, 'pitch'), string: to.string, fret: to.fret }));
+    return { score: out, cursor: { ...cursor, string: to.string }, announce: { id: 'transposed', semitones: semis, count: 1, moved: 1 } };
   }
   const parts = partsOf(sel);
   const targets = [];
-  let skipped = 0;
+  let skipped = 0; // pitch-only notes
+  let unusable = 0; // fretted notes with no string, or sharing a string with another note of the beat
   eachSelectedBeat(score, parts, (b, loc) => {
     if (isRest(b)) return;
+    const can = movable(b);
     for (const n of notesOf(b)) {
-      if (fretted(n)) targets.push({ ...loc, n, grace: isGrace(b) });
+      if (can(n)) targets.push({ ...loc, n, grace: isGrace(b) });
+      else if (fretted(n)) unusable++;
       else skipped++;
     }
   });
-  if (!targets.length) return refuse('nothingToTranspose', { skipped });
-  const bad = targets.find((x) => !fits(x.n));
-  if (bad) return outOfRange(bad.measure, sel.parts ? { track: bad.track + 1 } : {});
-  const write = (b) => (isRest(b) || !Array.isArray(b.notes) ? b : { ...b, notes: b.notes.map((n) => (fretted(n) ? shifted(n) : n)) });
+  if (!targets.length) return refuse('nothingToTranspose', { skipped, unusable });
+  const moves = new Map(); // 'track:measure:beat' → Map(note → { string, fret }) of the beat's moved notes
+  let moved = 0;
+  const misfits = targets.filter((x) => !fits(x.n));
+  for (let i = 0; i < misfits.length;) { // the misfits of each beat together, in target order
+    const at = misfits[i];
+    const movers = [];
+    while (i < misfits.length && sameBeat(misfits[i], at)) movers.push(misfits[i++].n);
+    const where = sel.parts ? { track: at.track + 1 } : {};
+    const stuck = movers.find((n) => isHarmonic(n) || n.string == null);
+    if (stuck) return outOfRange(at.measure, { ...where, ...(isHarmonic(stuck) ? { harmonic: true } : {}) });
+    const placed = placeMoves(trackAt(score, at.track), notesOf(beatAt(score, at)), movers, semis, max);
+    if (!placed) return outOfRange(at.measure, where);
+    moves.set(beatKey(at), placed);
+    moved += placed.size;
+  }
+  /** Where the note on `string` of the beat at `loc` moved, or undefined. */
+  const movedTo = (loc, string) => { for (const [n, to] of moves.get(beatKey(loc)) ?? []) if (n.string === string) return to; return undefined; };
+  const write = (b, loc) => {
+    if (isRest(b) || !Array.isArray(b.notes)) return b;
+    const placed = moves.size ? moves.get(beatKey(loc)) : null;
+    const drop = isGrace(b) ? ['pitch', 'tieStart', 'tieEnd'] : ['pitch'];
+    const can = movable(b);
+    return { ...b, notes: b.notes.map((n) => {
+      if (!can(n)) return n;
+      const to = placed?.get(n);
+      return to ? { ...without(n, ...drop), string: to.string, fret: to.fret } : shifted(n);
+    }) };
+  };
   let out = score;
-  for (const p of parts) out = eachSlice(out, p.track, p.slices, (part) => part.map(write), false);
-  const key = (loc, string) => `${loc.track}:${loc.measure}:${loc.beat}:${string}`;
-  const moved = new Set(targets.filter((x) => !x.grace).map((x) => key(x, x.n.string)));
-  for (const x of targets) {
-    if (x.grace || x.n.string == null) continue;
-    const loc = { track: x.track, measure: x.measure, beat: x.beat, string: x.n.string };
+  for (const p of parts) out = eachSlice(out, p.track, p.slices, (part, s) => part.map((b, i) => write(b, { track: p.track, measure: s.measure, beat: s.from + i })), false);
+  const tied = targets.filter((x) => !x.grace && x.n.string != null && (x.n.tieStart || x.n.tieEnd));
+  const done = tied.length ? new Set(targets.filter((x) => !x.grace).map((x) => key(x, x.n.string))) : null;
+  for (const x of tied) {
+    const mine = movedTo(x, x.n.string);
+    const here = { track: x.track, measure: x.measure, beat: x.beat, string: mine?.string ?? x.n.string };
     for (const [flag, other, find] of [['tieStart', 'tieEnd', nextMainBeat], ['tieEnd', 'tieStart', prevMainBeat]]) {
       if (!x.n[flag]) continue;
-      const p = find(score, loc);
-      if (p && moved.has(key(p, x.n.string))) continue;
-      out = stripFlag(out, loc, flag);
-      if (p) out = stripFlag(out, { ...p, string: x.n.string }, other);
+      const p = find(score, here);
+      const theirs = p && movedTo(p, x.n.string);
+      const kept = p && done.has(key(p, x.n.string)) && (mine && theirs ? mine.string === theirs.string && mine.fret === theirs.fret : !mine && !theirs);
+      if (kept) continue;
+      out = stripFlag(out, here, flag);
+      if (p) out = stripFlag(out, { ...p, string: theirs?.string ?? x.n.string }, other);
     }
   }
-  return { score: out, announce: { id: 'transposed', semitones: semis, count: targets.length, skipped, ...tracksField(sel) } };
+  const follow = movedTo(cursor, cursor.string);
+  return {
+    score: out,
+    ...(follow ? { cursor: { ...cursor, string: follow.string } } : {}),
+    announce: { id: 'transposed', semitones: semis, count: targets.length, moved, skipped, unusable, ...tracksField(sel) },
+  };
 }

@@ -280,10 +280,13 @@ test('criterion 18: the cursor note moves one fret up (pitch removed, mute and h
   eq(said(run('transpose', n, cur(0, 0, 0), null, 1)), 'Needs a TAB staff');
   ok(same(up.score) && same(h.score) && same(oct.score));
 });
-test('criterion 19: all or nothing: a selection with fret 0 and Ctrl+Down, fret 24 at maxFret 24 and Ctrl+Up, or a harmonicFret leaving the range are refused naming the first measure; nothing changes', () => {
+test('criterion 19 (2.3.3: fret 0 down moves to another string): all or nothing: string 6 fret 0 and Ctrl+Down, fret 24 at maxFret 24 and Ctrl+Up, or a harmonicFret leaving the range are refused naming the first measure; nothing changes', () => {
   const s = model({ tracks: [tab([q4(), { beats: [tn('whole', 1, 0)] }, { beats: [tn('whole', 1, 24)] }])] });
   const all = SEL.selectionRange(s, 0, P(0, 0), P(2, 0));
-  const down = run('transpose', s, cur(0, 2, 0), all, -1);
+  const moved = run('transpose', s, cur(0, 2, 0), all, -1);
+  eq([v1(moved.score, 0, 1)[0].notes[0], said(moved)], [{ string: 2, fret: 4 }, 'Transposed 6 notes down 1 semitone, 1 moved to another string'], '2.3.3: string 1 fret 0 down moves to string 2 fret 4');
+  const low = model({ tracks: [tab([q4(), { beats: [tn('whole', 6, 0)] }, { beats: [tn('whole', 1, 24)] }])] });
+  const down = run('transpose', low, cur(0, 2, 0), SEL.selectionRange(low, 0, P(0, 0), P(2, 0)), -1);
   eq([down.changed, said(down)], [false, "Can't transpose, measure 2 would go below fret 0"]);
   const upr = run('transpose', s, cur(0, 2, 0), all, 1);
   eq([upr.changed, said(upr)], [false, "Can't transpose, measure 3 would go above fret 24"]);

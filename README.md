@@ -1,8 +1,8 @@
 # music-score
 
-Version 2.3.2 · MIT licence
+Version 2.3.3 · MIT licence
 
-A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL). From 2.0.0 it also includes a keyboard editor for tablature (`ScoreEditor`), and from 2.1.0 that editor can add playing techniques such as hammer-ons, slides, bends and accents from the keyboard. From 2.2.0 it can also change the score's header, its tracks, tuning and capo, time and key signatures, clef changes, repeats, endings, navigation marks, sections and tempo. From 2.3.0 it can also select a range of beats or whole measures from the keyboard, copy, cut and paste it, delete, fill and reflow a range, read tempo marks from every track, and mark a pickup measure. From 2.3.1 it can also paste over blank or selected measures, insert with Ctrl+Shift+V, transpose a selection, apply effects to a selection, and split a beat that crosses a barline when you reflow. From 2.3.2 a selection can cover several tracks at once, as a column of whole measures, and you can copy, cut, paste, delete, fill, give effects to and transpose that column in one step. See [Editing scores](#editing-scores-scoreeditor).
+A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL). From 2.0.0 it also includes a keyboard editor for tablature (`ScoreEditor`), and from 2.1.0 that editor can add playing techniques such as hammer-ons, slides, bends and accents from the keyboard. From 2.2.0 it can also change the score's header, its tracks, tuning and capo, time and key signatures, clef changes, repeats, endings, navigation marks, sections and tempo. From 2.3.0 it can also select a range of beats or whole measures from the keyboard, copy, cut and paste it, delete, fill and reflow a range, read tempo marks from every track, and mark a pickup measure. From 2.3.1 it can also paste over blank or selected measures, insert with Ctrl+Shift+V, transpose a selection, apply effects to a selection, and split a beat that crosses a barline when you reflow. From 2.3.2 a selection can cover several tracks at once, as a column of whole measures, and you can copy, cut, paste, delete, fill, give effects to and transpose that column in one step. From 2.3.3 the rhythm keys (+, =, -, ., /, R and L) and the duration palette act on every selected beat and keep the selection, and a transposed note whose fret would leave the range moves to the nearest string that plays the same pitch, instead of the transpose being refused. See [Editing scores](#editing-scores-scoreeditor).
 
 - No build step and no dependencies. Plain ES modules.
 - Standard notation staves, tab staves, or both, stacked per track.
@@ -242,7 +242,7 @@ A value that isn't a number falls back to the default. `maxFret` and `historyLim
 | `getCursorInfo()` | object | What a status bar needs: fret, duration, dots, triplet, rest, fill, track name, string count, tuning note, effects, time signature, key signature, tempo, selection, pickup and more. The effect, settings and selection fields are described below the table. |
 | `getMeasureFill(track, measure)` | `'under'`, `'full'` or `'over'` | An empty measure is `'under'`. Throws `RangeError` for an index out of range. |
 | `handleKey(event)` | `true` if the key was used | Runs the command for a keyboard event (`key`, `code`, `ctrlKey`, `shiftKey`, `altKey`, `metaKey`). The editor calls this for you. Use it to drive the editor from your own buttons, for example `handleKey({ key: '.' })` for the dots button. |
-| `setDuration(name)` | `true` or `false` | Sets the cursor beat's duration, or the duration of the next note on the end-of-measure position. Names: `whole`, `half`, `quarter`, `8th`, `16th`, `32nd`, `64th`. Returns `false` for an unknown name or in read-only mode. |
+| `setDuration(name)` | `true` or `false` | Sets the cursor beat's duration, or the duration of the next note on the end-of-measure position. From 2.3.3, with a selection live it sets the duration of every selected beat, on every selected track, and keeps the selection (one undo step). A selection of blank measures gives "No beats in the selection" and changes nothing. Names: `whole`, `half`, `quarter`, `8th`, `16th`, `32nd`, `64th`. Returns `false` for an unknown name or in read-only mode. |
 | `undo()` / `redo()` | `true` or `false` | `false` when there is nothing to undo or redo. |
 | `canUndo()` / `canRedo()` | boolean | Always `false` in read-only mode. |
 | `setReadOnly(flag)` / `isReadOnly()` | nothing / boolean | Read-only mode is described under [Editing rules](#editing-rules). |
@@ -319,16 +319,16 @@ The editor acts only while it has focus. Tab and Shift+Tab are never taken, so k
 | Shift+PageUp / Shift+PageDown | The same as Shift+↑ and Shift+↓ (from 2.3.2). |
 | Ctrl+C / Ctrl+X / Ctrl+V | Copy, cut and paste, through the browser's copy, cut and paste events. Copy takes the selection, or the cursor beat when nothing is selected. Cut turns the beats into rests. Paste replaces a selection, or overwrites blank measures, and otherwise goes before the cursor (see [Clipboard](#editing-rules)). These keys work only while the score has focus, so click it first. |
 | Ctrl+Shift+V | Insert paste: the same clip as Ctrl+V, but nothing is replaced. Measures go in as new measures and beats go in before the cursor or the selection (from 2.3.1). Only while the score has focus. |
-| Ctrl+↑ / Ctrl+↓ | Transpose the cursor note, or every fretted note in the selection, up or down one semitone (from 2.3.1). On a column selection, every selected track is transposed, or none (from 2.3.2). See [Transpose](#editing-rules). |
+| Ctrl+↑ / Ctrl+↓ | Transpose the cursor note, or every fretted note in the selection, up or down one semitone (from 2.3.1). On a column selection, every selected track is transposed, or none (from 2.3.2). From 2.3.3, a note whose fret would leave the range moves to the nearest string that plays the same pitch, and the transpose is refused only when no string can take it. See [Transpose](#editing-rules). |
 | Ctrl+Shift+↑ / Ctrl+Shift+↓ | As Ctrl+↑ and Ctrl+↓, but by an octave (12 semitones) (from 2.3.1). |
 | Ctrl+Shift+Home / Ctrl+Shift+End | Extend the selection to the first position of the score, or the last position of the last measure, on the cursor track (from 2.3.1). When the cursor is already there, the editor says "Start of score" or "End of score". |
 | 0 to 9 (also on the keypad) | Fret on the cursor string. Two quick digits make a two-digit fret, such as 12. |
-| + or = | Shorter duration: halved, down to 64th. |
-| - | Longer duration: doubled, up to whole. |
-| . | Dots: 0, then 1, then 2, then 0. |
-| / | Triplet on or off. |
-| R | Note to rest, or rest to note. |
-| L | Tie to the previous note on this string. On a tied note, removes the tie. |
+| + or = | Shorter duration: halved, down to 64th. With a selection (from 2.3.3), every selected beat is halved and the selection stays. If any of them is already at 64th, nothing changes and the editor says "Duration limit". |
+| - | Longer duration: doubled, up to whole. With a selection (from 2.3.3), every selected beat is doubled and the selection stays. If any of them is already whole, nothing changes and the editor says "Duration limit". |
+| . | Dots: 0, then 1, then 2, then 0. With a selection (from 2.3.3), every selected beat moves together: if they all have the same number of dots, they move to the next count, otherwise they all get one dot. The selection stays. |
+| / | Triplet on or off. With a selection (from 2.3.3), every selected beat that has no nested tuplets is turned on or off together, and beats with nested tuplets are skipped and counted. The selection stays. |
+| R | Note to rest, or rest to note. With a selection (from 2.3.3), if any selected beat is a note every note becomes a rest, otherwise every rest becomes a note at fret 0 on the cursor string. Only tracks with a TAB staff change, and the selection stays. |
+| L | Tie to the previous note on this string. On a tied note, removes the tie. With a selection (from 2.3.3), ties every pair of equal neighbouring notes in it, or unties them all when they are all tied already. The selection stays. |
 | Delete or Backspace | Delete the note on the cursor string. With a selection, turn the selected beats into rests of the same lengths. On a column selection, this applies on every selected track (from 2.3.2). |
 | Ctrl+Delete or Ctrl+Backspace | Delete the beat, with the grace notes just before it. With a selection, delete the selected beats and their grace notes. On a column selection, the beats go on every selected track and the measures are left empty (from 2.3.2). |
 | Insert or I | Insert a rest with the current duration before the beat. |
@@ -363,6 +363,7 @@ Notes:
 - 2.3.0 adds the selection, clipboard, F and Shift+F keys above. The settings dialogs open from their toolbar buttons, which Tab reaches.
 - Browser shortcuts are not taken: Ctrl+W, Ctrl+T, Ctrl+N, Ctrl+1 to 9 and the others. Alt combinations and the F-keys are not taken either. While the score has focus, Ctrl+A, Ctrl+Z and Ctrl+Y are taken by the editor, and Ctrl+C, Ctrl+X and Ctrl+V are handled as the editor's copy, cut and paste.
 - 2.3.1 binds Ctrl+↑, Ctrl+↓, Ctrl+Shift+↑, Ctrl+Shift+↓, Ctrl+Shift+Home and Ctrl+Shift+End, and Ctrl+Shift+V is the insert paste (above). The effect keys act on a live selection from 2.3.1 (see [Effects](#effects)).
+- 2.3.3 makes + = - . / R and L act on a live selection, on every selected beat. Each one keeps the selection. The rules are under [Rhythm over a selection](#editing-rules) in Editing rules.
 - Shift+H, Shift+V, Shift+P, Shift+X, Shift+G and Shift+N do nothing. Shift+R and Shift+I are the only reserved keys, and they do nothing. Shift with ← or → extends the selection, and Shift with Home or End extends it to the measure edge. From 2.3.2, Shift with ↑, ↓, PageUp or PageDown extends it to another visible track. The effect keys are listed in [Effects](#effects).
 
 ### Editing rules
@@ -387,11 +388,11 @@ Notes:
 - Ctrl+Delete removes the whole beat, with the grace notes just before it. The cursor moves to where the beat was. A measure can end up with no beats.
 - Insert adds a rest before the beat, and before its grace notes, and moves the cursor onto it.
 
-**Ties.** L ties the cursor note to the note on the same string in the previous beat. That beat can be the last beat of the previous measure. The tied note takes that note's fret. Press L on the tied note again to remove the tie. With no note to tie to, the editor says "Nothing to tie to". Changing the fret of a tied note, or deleting it, removes its tie.
+**Ties.** L ties the cursor note to the note on the same string in the previous beat. That beat can be the last beat of the previous measure. The tied note takes that note's fret. Press L on the tied note again to remove the tie. With no note to tie to, the editor says "Nothing to tie to". Changing the fret of a tied note, or deleting it, removes its tie. With a selection (from 2.3.3), L works on every pair in it instead (see Rhythm over a selection below).
 
 **Ties at edited seams (2.3.1).** When an edit joins two notes across a barline or a beat, a tie is kept only when the two notes match. Both notes with a fret must have the same fret, and both pitch-only notes must have the same pitch. A tie between two fretted notes with different frets, or two pitch-only notes with different pitches, is removed from both notes. A tie between a fretted note and a pitch-only note is kept. Ties at seams that no edit touches are not changed.
 
-**Durations, dots and triplets.** These change the beat under the cursor only. Nothing else in the measure moves, so a measure can end up too full or too empty. The status bar shows the fill of the measure as Under, Full or Over. The score draws an underfull measure with a dashed line below the staff, and an overfull measure with a red band. An empty measure has no mark. Moving onto a beat picks up its duration and dots, so the next note you type uses them. On the end-of-measure position, the duration and dots change the next note instead. Triplet does nothing on the end-of-measure position, and nothing on a beat with nested tuplets.
+**Durations, dots and triplets.** These change the beat under the cursor only, unless a selection is live (from 2.3.3, see Rhythm over a selection below). Nothing else in the measure moves, so a measure can end up too full or too empty. The status bar shows the fill of the measure as Under, Full or Over. The score draws an underfull measure with a dashed line below the staff, and an overfull measure with a red band. An empty measure has no mark. Moving onto a beat picks up its duration and dots, so the next note you type uses them. On the end-of-measure position, the duration and dots change the next note instead. Triplet does nothing on the end-of-measure position, and nothing on a beat with nested tuplets.
 
 **Measures.**
 - M and Shift+M add an empty measure in every track. Short tracks are padded with empty measures when needed. Shift+M on the first measure moves its time signature, key signature and clef to the new first measure, so the score still starts with them.
@@ -418,11 +419,11 @@ Notes:
 
 From 2.3.1, a range that covers blank measures is a selection too, even with no note beat in it. A blank measure has only rests (hidden rests included) or nothing in it, and a column past the end of the score counts as blank. Shift+→ across three blank measures selects them, and the editor says "Selected measures 5 to 7, no beats". Such a selection has `beatCount` 0 (see [Methods](#methods)). Ctrl+A on an empty track selects its measures. A range that covers part of one measure with no note beat is still no selection.
 
-- A selection is cleared by a plain move (arrows, Home, End, PageUp, PageDown), a click, Esc, undo, redo, a load, a settings change, and any edit that changes the score. The exception is an effect key or transpose, which keeps the selection when it changes the score (2.3.1). Ctrl+Z and Ctrl+Y clear it even when there is nothing to undo or redo.
+- A selection is cleared by a plain move (arrows, Home, End, PageUp, PageDown), a click, Esc, undo, redo, a load, a settings change, and any edit that changes the score. The exceptions are an effect key or transpose (2.3.1), and from 2.3.3 the rhythm keys and the duration palette, which keep the selection when they change the score. Ctrl+Z and Ctrl+Y clear it even when there is nothing to undo or redo.
 - A refused command and an edit that changes nothing keep it.
-- Effect keys and transpose act on the whole selection, and keep it when they change the score (2.3.1).
+- Effect keys and transpose act on the whole selection, and keep it when they change the score (2.3.1). From 2.3.3 the rhythm keys do the same (see Rhythm over a selection below).
 - Delete, Ctrl+Delete, Shift+Delete and Fill act on the selection, and clear it when they change the score. Reflow ignores the selection and clears it when it changes the score.
-- Duration, dots, triplet, R and L act on the cursor beat only, and clear the selection when they change the score.
+- From 2.3.3, duration, dots, triplet, R and L act on every selected beat and keep the selection. Fret entry still acts on the cursor beat only, and clears the selection when it changes the score.
 
 **Column mode (2.3.2).** A column selection is a selection whose two ends are on different visible tracks. It covers whole measures, from the earlier to the later of the two measures, on every visible track between the two ends. Hidden tracks are skipped, so they are never selected, copied or given an effect. The ends keep their beats, and only the selection is snapped to whole measures. Moving the focus back onto the anchor's track gives the beat range again.
 
@@ -475,7 +476,19 @@ From 2.3.1, a range that covers blank measures is a selection too, even with no 
 - F fills every measure on every selected track. A measure it can't fill is skipped and counted. The announcement counts cells, one per measure per track, so a 2-measure column on 3 tracks that is all filled reads "Filled 6 measures on 3 tracks".
 - Effect keys act on the whole column and keep it. Note effects (H, S, Shift+S, B, Shift+B, X, G and N) act on the tracks with a TAB staff only, and the announcement counts the other tracks, such as "1 track without TAB skipped". They say "Needs a TAB staff" only when no selected track has one. Beat effects (V, P, Shift+L, D, Shift+D, A and Shift+A) act on every selected track, notation-only tracks included.
 - Transpose moves every fretted note on every selected track, notation-only tracks included, and it is all or nothing. If one note would leave the fret range, nothing changes. The refusal names the first problem by track and then by measure, such as "Can't transpose, measure 3 on track 2 would go above fret 24".
-- Shift+F ignores the selection, as before. Duration, dots, triplet, R, L and fret entry still act on the cursor beat only, and clear the selection when they change the score.
+- Shift+F ignores the selection, as before. Fret entry still acts on the cursor beat only. From 2.3.3, duration, dots, triplet, R and L act on every selected beat (see below).
+
+**Rhythm over a selection (2.3.3).** With a selection live, the rhythm keys act on every selected beat, on every selected track, and the selection stays. Each key is one undo step. Without a selection, they work on the cursor beat as before.
+
+- The targets are the voice-1 main beats of the selection. Grace notes, voice 2 and the end-of-measure position are never changed, and a rest is a target like a note.
+- Nothing reflows. A measure can end up too full or too empty, and the fill marks show it, as with a single beat.
+- **Duration (+, =, -, and the duration palette).** + halves every target and - doubles it. If any target is already at 64th (for +) or whole (for -), nothing changes and the editor says "Duration limit". The palette sets every target to the chosen duration, and is never limited.
+- **Dots (.).** If every target has the same number of dots, they all move to the next count (0, then 1, then 2, then 0). Otherwise they all get one dot. Zero dots removes the dot.
+- **Triplet (/).** If every target that has no nested tuplets is already a triplet, the triplets are turned off. Otherwise they are turned on. Beats with nested tuplets are skipped and counted, as in "Triplet on, 3 beats, 1 nested tuplet skipped". If every target has nested tuplets, nothing changes and the editor says "Nested tuplet, unchanged".
+- **Rest and note (R).** Only tracks with a TAB staff change. Tracks without one are skipped and counted, as in "2 beats changed to rests on 3 tracks, 1 track without TAB skipped". If any target is a note, every note becomes a rest of the same length, with its effects kept, as Delete does. If every target is a rest, each becomes a note at fret 0 on the cursor string, or on the last string of the track when it has fewer. If no selected track has a TAB staff, the editor says "Needs a TAB staff".
+- **Tie (L).** A pair is two neighbouring selected beats, with a note on the same string at the same fret in both. A rest between them breaks the pair, and the second beat can be the first beat of the next measure. If every pair is already tied, all of them are untied. Otherwise all of them are tied. Frets are never copied. With no pair, the editor says "Nothing to tie to". Like R, L changes only tracks with a TAB staff.
+- A selection of blank measures has no beats, so these keys say "No beats in the selection" and change nothing.
+- In read-only mode, each key is refused and the selection stays.
 
 **Fill (F).** Adds rests to the end of the cursor measure, so it reaches its time signature. With a selection, it fills each measure of the selection. At each position, the rest is the largest plain duration that fits and that the position allows, from whole to 64th, with no dots or triplets. In 4/4 with a dotted quarter, F adds an eighth rest, then a half rest. Fill refuses a measure that is already full ("Measure already full"), overfull ("Measure overfull, try Reflow"), a pickup measure ("Pickup measure, not filled"), and a gap that plain rests can't fill, such as the rest of an unfinished triplet ("Finish the tuplet first"). With a selection, the refused measures are skipped and the announcement says how many were filled.
 
@@ -562,13 +575,25 @@ Moving the cursor speaks the effects at the new position, after the duration. Up
 Transpose moves notes by semitones (from 2.3.1). A note stays on its string, and only its fret changes.
 
 - **Keys.** Ctrl+↑ and Ctrl+↓ move by one semitone. Ctrl+Shift+↑ and Ctrl+Shift+↓ move by 12 semitones, an octave. Cmd works in place of Ctrl. The demo's Transpose buttons send the same keys.
-- **The cursor note.** With no selection, the note on the cursor string moves, and the editor says the new fret, such as "Fret 6, up 1 semitone". This needs a TAB staff. On a rest, an empty string or the end-of-measure position, the editor says "No note here". A note with only a written pitch (no fret) says "Only fretted notes can be transposed". Ties on the note are removed, on both notes.
-- **A selection.** With a selection, every note that has a fret moves, in voice 1 and in the selected beats, grace notes included. It works on a track with or without a TAB staff. Notes given only by pitch are skipped, and the announcement counts them, such as "Transposed 14 notes up 1 semitone, 2 pitch-only notes skipped". Voice 2 is not changed.
-- **All or nothing.** If any fret, or any harmonic fret, would go below 0 or above `maxFret` (24 by default), nothing changes and there is no undo step. The editor names the first measure with the problem, such as "Can't transpose, measure 3 would go above fret 24".
+- **The cursor note.** With no selection, the note on the cursor string moves, and the editor says the new fret, such as "Fret 6, up 1 semitone". If the note has to move to another string, the editor says so, such as "Transposed 1 note down 1 semitone, 1 moved to another string", and the cursor follows the note (from 2.3.3). This needs a TAB staff. On a rest, an empty string or the end-of-measure position, the editor says "No note here". A note with only a written pitch (no fret) says "Only fretted notes can be transposed". Ties on the note are removed, on both notes.
+- **A selection.** With a selection, every note that has a fret moves, in voice 1 and in the selected beats, grace notes included. It works on a track with or without a TAB staff. Notes given only by pitch are skipped, and the announcement counts them, such as "Transposed 14 notes up 1 semitone, 2 pitch-only notes skipped". From 2.3.3, notes with a fret but no string, and notes that share a string with another note in their beat, are skipped too and counted separately, such as ", 2 notes without their own string skipped". Voice 2 is not changed.
+- **All or nothing.** If a note can't be placed, nothing changes and there is no undo step. The editor names the first measure with the problem, such as "Can't transpose, measure 3 would go above fret 24", and on a column it also names the track. A note can't be placed when its fret would leave 0 to `maxFret` (24 by default) and no other string can play it, or when it is a harmonic that would have to move (see below). Before 2.3.3, any note that would leave the range refused the whole transpose.
 - **What stays.** A note that moves loses its `pitch`, so it sounds from its string, fret and the track's tuning. Its mute, harmonic, bend and other effects stay. A harmonic fret moves by the same amount.
-- **Ties.** On a selection, a tie is kept when both of its notes move. A tie to a note outside the selection is removed from both notes. Ties on grace notes are not changed.
-- **Natural harmonics.** A natural harmonic keeps its harmonic setting and moves with its fret, so after a transpose it can sit on a fret that isn't a harmonic node. The editor doesn't check this, so listen or look at the tab.
+- **Ties.** On a selection, a tie is kept when both of its notes move the same way: both stay on their string, or both move to the same string and fret. Otherwise, or when the partner is outside the selection, the tie is removed from both notes. Ties on grace notes are not changed, except that a grace note that moves loses its own ties (from 2.3.3).
+- **Natural harmonics.** A natural harmonic keeps its harmonic setting and moves with its fret when that fret still fits, so after a transpose it can sit on a fret that isn't a harmonic node. The editor doesn't check this, so listen or look at the tab.
 - **Undo and selection.** A transpose is one undo step labelled "transpose". The selection is kept.
+
+**Transpose to another string (2.3.3).** A note whose fret would leave 0 to `maxFret` moves to another string instead of making the transpose fail. The note keeps its effects and loses its written pitch.
+
+- Only notes whose fret would leave the range move. Every other note keeps its string.
+- A moved note goes to the nearest string that plays the same pitch under the track's tuning, at a fret within the range, and that has no other note in the same beat once the notes that stay put are placed. "Nearest" means the fewest strings away. Where two strings are equally near, the lower fret wins. The notes of a chord that must move are placed in string order, from string 1 (the highest) down, so the first placed takes its best string and the rest have to fit around it.
+- The placement is greedy, so a chord can be refused even when a different arrangement of its strings would work. In that case nothing changes, and the editor names the measure. The fix is to change the frets by hand.
+- Voice 2 notes are ignored when the editor checks whether a string is free, so a moved note can share a string with a voice-2 note in the same beat.
+- A harmonic never moves to another string. If one would have to move, the whole transpose is refused, and the message adds "harmonics stay on their string". Notes with no string are skipped (see A selection above).
+- Only the notes that would leave the fret range move, so a chord can end up spread over strings in a shape that is hard to play (for example an open A chord a semitone down). Undo, or transpose a few notes at a time, when that happens.
+- Ties on a moved note are kept only when both partners end on the same string and fret, as above.
+- The cursor follows its note when the note moves. For example, on standard tuning, the B on string 2 at fret 0 moved down a semitone goes to string 3 at fret 3, and the editor says "Transposed 1 note down 1 semitone, 1 moved to another string".
+- On a selection, the moves are all or nothing across every selected track.
 
 ### Score and track settings
 
@@ -845,10 +870,12 @@ When the editor loses focus, the cursor is drawn dimmer.
 ### Limitations in 2.3
 
 - **A selection covers voice 1 only.** A beats selection stays on one track. From 2.3.2 a selection can cover several tracks, but only as whole measures (a column). Ctrl+A selects the cursor track, and pressed again, every visible track. A selection can't reach voice 2.
-- **Transposing keeps strings and skips pitch-only notes.** Transposing moves frets along a string, so a note can't be moved to another string. Pitch-only notes, chord symbols and key signatures are not transposed. Pitch-only notes are counted in the announcement.
+- **Transposing keeps strings where it can, and skips pitch-only notes.** A note moves to another string only when its fret would leave the range (from 2.3.3, see Transpose under [Editing rules](#editing-rules)). Pitch-only notes, chord symbols and key signatures are not transposed. Skipped notes are counted in the announcement.
 - **No mouse selection.** Dragging does not select. A click places the cursor and clears the selection.
-- **Rhythm keys act on the cursor beat only, until 2.3.3.** Duration, dots, triplet, R, L and fret entry ignore a column selection. Rhythm over a range is planned for 2.3.3.
-- **Transpose keeps strings until 2.3.3.** Transposing moves frets along a string, so a note can't move to another string. Transpose to another string is planned for 2.3.3.
+- **Rhythm keys skip grace notes and voice 2, and never reflow.** Over a selection, + = - . / R and L change only the voice-1 main beats of the selected tracks. Measures can end up over or under full. R and L skip tracks without a TAB staff, and the announcement counts them. Fret entry still acts on the cursor beat only.
+- **Transpose to another string is greedy.** Notes that have to move are placed in string order, so a chord can be refused although a different arrangement of its strings would work. The editor says which measure it is. There is no option to turn the string move off.
+- **A moved grace note can leave its partner's tie.** A grace note that moves loses its own tie flags, but a tie on the note it was tied to is not checked. The editor does not create ties on grace notes, so this only matters for ties that came from a file.
+- **Voice 2 is ignored by a transpose's string check.** A moved note can share a string with a voice-2 note in the same beat.
 - **Older editors refuse multi-track clips.** An editor from before 2.3.2 refuses a column clip with "Not a music-score clip". Copy and paste columns between editors on the same version.
 - **A full-score column copy can exceed 5 MB.** Such a copy is still written, but it can't be pasted back. A cut of that size copies the clip and clears nothing, so no beats are lost. Copy a smaller range instead.
 - **No beat-level column selection.** A column covers whole measures on each track. A range of beats can't cover more than one track.
@@ -877,7 +904,7 @@ When the editor loses focus, the cursor is drawn dimmer.
 - **One barline per measure.** A measure can't have both a repeat start and a repeat end.
 - **Only standard jump texts can be set.** A custom jump already in the file is kept and reported as custom. Measure-repeat signs are not set.
 - **No writtenOctaveUp or instrument field.** The editor doesn't set them.
-- **Planned for later releases.** For 2.3.3: rhythm over a range, and transpose to another string. Shift+R and Shift+I stay reserved until then. After that: playback; then chord symbols, lyrics, a repeat start and end on one measure, and bend amounts; then mouse pitch entry on notation; then voice 2 and grace-note entry; then file import.
+- **Planned for later releases.** Shift+R and Shift+I stay reserved. Next: playback; then chord symbols, lyrics, a repeat start and end on one measure, and bend amounts; then mouse pitch entry on notation; then voice 2 and grace-note entry; then file import.
 
 ## Score format
 
@@ -1771,6 +1798,27 @@ It prints `ALL PASSED` and exits with code 0 on success.
 - To run one group on its own: `node tests/units.mjs`, `node tests/engraving.mjs`, or `node tests/articulations.mjs`. The editor groups run only through `node tests/run.js`.
 
 ## Changelog
+
+### 2.3.3 — 2026-11-23
+
+Rhythm over a selection, and transpose to another string. The rhythm keys (+, =, -, ., /, R and L) and the duration palette now act on every selected beat, on every selected track, and keep the selection. A transposed note whose fret would leave the range now moves to the nearest string that plays the same pitch, instead of the transpose being refused. See [Editing rules](#editing-rules) and [Limitations in 2.3](#limitations-in-23).
+
+Rendering is unchanged. The renderer draws the same SVG as in 2.3.2, and every existing snapshot is byte-identical. The score format is unchanged, and clips are still version 1.
+
+New:
+
+- + = - . / R and L act on every selected beat when a selection is live. Each key is one undo step, and it is announced with the number of beats and tracks.
+- R and L act only on tracks with a TAB staff. The others are skipped and counted in the announcement.
+- The duration palette, the Dots and Triplet buttons of the demo, and `setDuration()` act on the selection too.
+- A transpose moves a note to the nearest string that plays the same pitch when its fret would leave 0 to `maxFret`. A harmonic never moves to another string.
+- A new "Duration limit" message. A duration key that would go past whole or 64th changes nothing.
+- The shortcuts panel says that the rhythm keys act on a selection, and that Ctrl+↑ and Ctrl+↓ can move a note to another string.
+
+Behaviour changes from 2.3.2:
+
+- The rhythm keys and `setDuration()` no longer act only on the cursor beat and clear the selection. With a selection they change every selected beat and keep the selection. Without a selection they work as before.
+- Transposing a note at fret 0 down, or at the top fret up, is no longer always refused. The note moves to another string when one plays the same pitch, and the transpose is still refused when none can.
+- A transpose over a selection skips stringless notes and notes that share a string with another note in their beat, and counts them as skipped.
 
 ### 2.3.2 — 2026-11-23
 

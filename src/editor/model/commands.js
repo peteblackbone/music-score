@@ -11,7 +11,7 @@
  * measure; the column variants of model/columns.js run while a column
  * selection is live).
  * With a selection (ctx.selection) the three delete keys act on the range (model/rangeEdit.js), and (2.3.1) the effect
- * keys act on every selected beat or note (effects.js effectRange); `keepsSelection` marks the commands after
+ * keys act on every selected beat or note (effects.js effectRange), and (2.3.3) the rhythm keys on every selected beat (rhythmRange.js); `keepsSelection` marks the commands after
  * which the controller keeps the selection, re-derived, instead of clearing it. History commands name their `step`. Commands that can change the model carry their undo
  * `label`: a string, or a function of the command's announce descriptor. run() clamps the resulting cursor, clears the digit
  * buffer after anything but a digit, and re-syncs the current duration
@@ -34,6 +34,7 @@ import { ranged, clearRange, removeRange, deleteSelectedColumns } from './rangeE
 import { fill, reflow } from './reflow.js';
 import { columnar, columnPrev, columnNext, columnStay } from './columns.js';
 import { transpose } from './transpose.js';
+import { shorterRange, longerRange, setDurationRange, dotsRange, tripletRange, restRange, tieRange } from './rhythmRange.js';
 
 const nav = (fn, label) => ({ fn, kind: 'nav', label });
 const edit = (fn, label) => ({ fn, kind: 'edit', label });
@@ -55,13 +56,13 @@ export const COMMANDS = Object.freeze({
   nextTrack: nav(nextTrack),
   digit: edit(digit, (d) => `fret ${d?.fret}`),
   deleteNote: edit(ranged(deleteNote, clearRange), (d) => (d?.id === 'rangeCleared' ? 'clear beats' : 'delete note')),
-  toggleTie: edit(toggleTie, 'tie'),
-  shorter: edit(shorter, 'duration'),
-  longer: edit(longer, 'duration'),
-  setDuration: edit(setDuration, 'duration'),
-  cycleDots: edit(cycleDots, 'dots'),
-  toggleTriplet: edit(toggleTriplet, 'triplet'),
-  toggleRest: edit(toggleRest, (d) => (d?.id === 'changedToNote' ? 'note' : 'rest')),
+  toggleTie: keep(edit(ranged(toggleTie, tieRange), 'tie')),
+  shorter: keep(edit(ranged(shorter, shorterRange), 'duration')),
+  longer: keep(edit(ranged(longer, longerRange), 'duration')),
+  setDuration: keep(edit(ranged(setDuration, setDurationRange), 'duration')),
+  cycleDots: keep(edit(ranged(cycleDots, dotsRange), 'dots')),
+  toggleTriplet: keep(edit(ranged(toggleTriplet, tripletRange), 'triplet')),
+  toggleRest: keep(edit(ranged(toggleRest, restRange), (d) => (d?.id === 'changedToNote' || d?.id === 'rangeToNote' ? 'note' : 'rest'))),
   deleteBeat: edit(ranged(deleteBeat, removeRange), (d) => (d?.id === 'rangeRemoved' ? 'delete beats' : 'delete beat')),
   insertBeat: edit(insertBeat, 'insert rest'),
   insertMeasureAfter: edit(insertMeasureAfter, 'insert measure'),
