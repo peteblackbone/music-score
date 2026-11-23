@@ -86,17 +86,26 @@ test('pin (d), inverted in 2.3.2: parseClip of a measures clip with 2 track entr
 });
 
 // (e) Inverted in 2.3.2 commit 6: on a one-beat measure the first press selects the measure alone; multi-beat measures stay.
-test('pin (e): with nothing selected, Ctrl+Shift+Right on a whole-note measure 1 selects measures 1-2, and Ctrl+Shift+Left on a whole-note measure 2 selects measures 1-2', () => {
+test('pin (e), inverted in 2.3.2: with nothing selected, Ctrl+Shift+Right on a whole-note measure 1 first selects measure 1 alone, the second press measures 1-2; Ctrl+Shift+Left on a whole-note measure 2 likewise; a multi-beat measure is as in 2.3.1 (not inverted)', () => {
   const score = { tracks: [tab([{ beats: [nt('whole')] }, { beats: [nt('whole')] }, { beats: [nt('whole')] }])] };
   const r = mk(score);
+  r.ed.handleKey(key('ArrowRight', { ctrlKey: true, shiftKey: true }));
+  eq([r.ed.getSelection().measures, r.spoken()], [[0, 0], 'Selected measure 1, 1 beat']);
   r.ed.handleKey(key('ArrowRight', { ctrlKey: true, shiftKey: true }));
   eq([r.ed.getSelection().measures, r.spoken()], [[0, 1], 'Selected measures 1 to 2, 2 beats']);
   r.ed.destroy();
   const l = mk(score);
   l.ed.setCursor({ measure: 1, beat: 0 });
   l.ed.handleKey(key('ArrowLeft', { ctrlKey: true, shiftKey: true }));
+  eq([l.ed.getSelection().measures, l.spoken()], [[1, 1], 'Selected measure 2, 1 beat']);
+  l.ed.handleKey(key('ArrowLeft', { ctrlKey: true, shiftKey: true }));
   eq([l.ed.getSelection().measures, l.spoken()], [[0, 1], 'Selected measures 1 to 2, 2 beats']);
   l.ed.destroy();
+  const m = mk({ tracks: [tab([{ beats: [nt('half'), nt('half')] }, { beats: [nt('whole')] }])] });
+  m.ed.setCursor({ measure: 0, beat: 1 });
+  m.ed.handleKey(key('ArrowRight', { ctrlKey: true, shiftKey: true }));
+  eq([m.ed.getSelection().measures, m.ed.getSelection().kind, m.spoken()], [[0, 1], 'beats', 'Selected measure 1 beat 2 to measure 2 beat 1, 2 beats'], 'on the last position of a 2-beat measure: on to the next measure, as in 2.3.1');
+  m.ed.destroy();
 });
 
 // (f) Never inverted: the single-track overlay is unchanged by the column band.

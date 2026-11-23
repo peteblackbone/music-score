@@ -27,7 +27,7 @@
 import { COMMANDS, run } from './model/commands.js';
 import { selectionInfo, startOf } from './model/selection.js';
 import { anchorOf, focusOf, selectionOf, coversTrack, allTracks, wordsOf } from './model/columns.js';
-import { clampCursor, syncDuration } from './model/cursor.js';
+import { clampCursor, syncDuration, positions } from './model/cursor.js';
 import { tracksOf } from './model/access.js';
 import { removeTrackImpact } from './model/settings/tracks.js';
 import { describe } from './announce.js';
@@ -80,8 +80,10 @@ export function installSelection(Editor) {
   /**
    * Run select command `name`: anchor (kept, else the cursor; Select all:
    * the start), move, reselect, announce. 2.3.2: a second Ctrl+A on a
-   * selection that covers the track selects all visible tracks; a track
-   * extend at an edge (`edgeKeeps`) says so and changes nothing.
+   * selection that covers the track selects all visible tracks; with
+   * nothing selected, Ctrl+Shift+Left / Right on a measure with one
+   * position selects that measure first; a track extend at an edge
+   * (`edgeKeeps`) says so and changes nothing.
    */
   def('_extend', function extend(name) {
     this._cancelBuffer();
@@ -93,6 +95,7 @@ export function installSelection(Editor) {
       if (all) { this._state = syncDuration(this._model, all.cursor, this._state); this._range(all.anchor, all.cursor, true, null); return true; }
     }
     const here = { track: c.track, measure: c.measure, beat: c.beat };
+    if (cmd.measureStep && !sel && positions(this._model, c).length === 1) { this._range(here, c, false, null); return true; }
     const anchor = cmd.fromStart ? { track: c.track, ...startOf(this._model, c) } : anchorOf(sel) ?? here;
     const r = run(name, this._model, c, this._state, this._ctx());
     this._state = r.state;

@@ -364,6 +364,33 @@ test('criterion 37: Tab is never taken in column mode; the selection is re-annou
   t.ed.destroy();
 });
 
+// ---------- one-beat measures (criterion 35) ----------
+test('criterion 35: with nothing selected on a one-position measure, Ctrl+Shift+Right / Left first select that measure ("Selected measure 1, 1 beat"), then go on; an empty measure gives its blank selection; multi-beat measures and a live selection are as in 2.3.1; no history entry', () => {
+  const t = mk({ tracks: [tab([{ beats: [nt('whole')] }, { beats: [] }, { beats: [nt('half'), nt('half')] }, { beats: [nt('whole')] }])] });
+  t.press(key('ArrowRight', CS));
+  eq([t.ed.getSelection().measures, t.ed.getCursor().beat, t.spoken()], [[0, 0], 0, 'Selected measure 1, 1 beat']);
+  t.press(key('ArrowRight', CS));
+  eq([t.ed.getSelection().measures, t.spoken()], [[0, 1], 'Selected measures 1 to 2, 1 beat']);
+  t.press('Escape');
+  t.ed.setCursor({ measure: 1, beat: 0 });
+  t.spoken();
+  t.press(key('ArrowLeft', CS));
+  eq([t.ed.getSelection().measures, t.ed.getSelection().beatCount, t.spoken()], [[1, 1], 0, 'Selected measure 2, no beats'], 'the empty measure: one position (its slot)');
+  t.press('Escape');
+  t.ed.setCursor({ measure: 3, beat: 0 });
+  t.spoken();
+  t.press(key('ArrowLeft', CS));
+  eq([t.ed.getSelection().measures, t.spoken()], [[3, 3], 'Selected measure 4, 1 beat']);
+  t.press(key('ArrowLeft', CS));
+  eq([t.ed.getSelection().measures, t.ed.getCursor().beat, t.spoken()], [[2, 3], 0, 'Selected measures 3 to 4, 3 beats']);
+  t.press('Escape');
+  t.ed.setCursor({ measure: 2, beat: 0 });
+  t.press(key('ArrowRight', CS));
+  eq([t.ed.getSelection().measures, t.ed.getCursor().beat], [[2, 2], 1], 'a 2-beat measure: to its last position, as in 2.3.1');
+  eq(t.ed.canUndo(), false, 'select commands add no history entry');
+  t.ed.destroy();
+});
+
 // ---------- report ----------
 export async function summary() {
   let fail = 0;

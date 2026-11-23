@@ -6,8 +6,10 @@
  * read-only mode), 'history' (undo / redo, run by the controller),
  * 'buffer' (Escape, `cancelsBuffer`) and 2.3 'select' (moves that extend
  * the selection, run by the controller's _extend; `fromStart`: Select all;
- * 2.3.2 `edgeKeeps`: at an edge the selection stays; the column variants of
- * model/columns.js run while a column selection is live).
+ * 2.3.2 `edgeKeeps`: at an edge the selection stays; `measureStep`: with
+ * nothing selected on a one-position measure the first press selects that
+ * measure; the column variants of model/columns.js run while a column
+ * selection is live).
  * With a selection (ctx.selection) the three delete keys act on the range (model/rangeEdit.js), and (2.3.1) the effect
  * keys act on every selected beat or note (effects.js effectRange); `keepsSelection` marks the commands after
  * which the controller keeps the selection, re-derived, instead of clearing it. History commands name their `step`. Commands that can change the model carry their undo
@@ -75,8 +77,8 @@ export const COMMANDS = Object.freeze({
   selectRight: select(columnar(selectRight, columnNext)),
   selectMeasureStart: select(columnar(selectMeasureStart, columnStay)),
   selectMeasureEnd: select(columnar(selectMeasureEnd, columnStay)),
-  selectPrevMeasure: select(columnar(selectPrevMeasure, columnPrev)),
-  selectNextMeasure: select(columnar(selectNextMeasure, columnNext)),
+  selectPrevMeasure: select(columnar(selectPrevMeasure, columnPrev), { measureStep: true }),
+  selectNextMeasure: select(columnar(selectNextMeasure, columnNext), { measureStep: true }),
   selectAll: select(selectAll, { fromStart: true }),
   selectScoreStart: select(selectScoreStart),
   selectScoreEnd: select(selectScoreEnd),
