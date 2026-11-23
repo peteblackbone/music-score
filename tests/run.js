@@ -193,5 +193,10 @@ for (const c of cases) {
   const { summary } = await import('./editor-pins-2.3.2.mjs');
   fail += summary();
 }
+// 2.3.2 column selection, multi-track clips, column paste and column range edits at model level (tests/editor-columns.mjs)
+{
+  const { summary } = await import('./editor-columns.mjs');
+  fail += summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);
