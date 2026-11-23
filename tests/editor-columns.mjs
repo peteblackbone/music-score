@@ -366,6 +366,12 @@ test('criterion 18: Ctrl+Delete leaves the measures empty on every selected trac
   const blank = model({ tracks: [tab([{ beats: [] }]), tab([{ beats: [] }], { name: 'B' })] });
   eq(said(run('deleteBeat', blank, cur(1, 0, 0), COL.columnRange(blank, T(0, 0, 0), T(1, 0, 0)))), 'No beats to delete');
 });
+test('Ctrl+Delete on a column whose top track has no beat in it: the cursor goes to the first removed beat of the first track that had one', () => {
+  const s = model({ tracks: [tab([{ beats: [] }, { beats: [] }]), tab([{ beats: [] }, { beats: [nt('half'), nt('half')] }], { name: 'B' }), tab([{ beats: [nt('whole')] }, { beats: [] }], { name: 'C' })] });
+  const r = run('deleteBeat', s, cur(2, 1, 0), COL.columnRange(s, T(0, 0, 0), T(2, 1, 0)));
+  eq([said(r), r.cursor], ['3 beats deleted on 3 tracks', cur(1, 1, 0)]);
+  eq(run('deleteBeat', s, cur(0, 0, 0), COL.columnRange(s, T(0, 0, 0), T(2, 0, 0))).cursor, cur(2, 0, 0), 'tracks 1 and 2 have no beat in measure 1');
+});
 test('criterion 19: Shift+Delete on a column deletes those columns from every track, hidden ones too', () => {
   const s = four();
   const r = run('deleteMeasure', s, cur(3, 1, 0), COL.columnRange(s, T(0, 0, 0), T(3, 1, 0)));

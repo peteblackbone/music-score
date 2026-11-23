@@ -98,17 +98,19 @@ export function clearParts(score, sel) {
   return { score: out, cursor, count: sel.info.beatCount };
 }
 
-/** The beats and graces of every part of `sel` removed (the measures stay): `{ score, cursor, count, tempoRemoved }`, tempo marks counted on `score`. */
+/** The beats and graces of every part of `sel` removed (the measures stay): `{ score, cursor, count, tempoRemoved }`, tempo marks counted on `score`; the cursor on the first removed main beat of the first part that has one. */
 export function removeParts(score, sel) {
   const parts = partsOf(sel);
-  const first = firstFilled(score, parts[0].track, parts[0].slices);
+  const hasMain = (p) => p.slices.some((s) => beatsAt(score, { track: p.track, measure: s.measure }).slice(s.from, s.to).some((b) => !isGrace(b)));
+  const top = parts.find(hasMain) ?? parts[0];
+  const first = firstFilled(score, top.track, top.slices);
   let out = score;
   let tempoRemoved = 0;
   for (const p of parts) {
     out = eachSlice(out, p.track, p.slices, () => []);
     tempoRemoved += tempoIn(score, p.track, p.slices);
   }
-  return { score: out, cursor: { track: parts[0].track, measure: first.measure, beat: first.from }, count: sel.info.beatCount, tempoRemoved };
+  return { score: out, cursor: { track: top.track, measure: first.measure, beat: first.from }, count: sel.info.beatCount, tempoRemoved };
 }
 
 /** Delete / Backspace with a selection. */
