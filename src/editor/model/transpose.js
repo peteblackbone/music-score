@@ -29,7 +29,9 @@ import { isHarmonic, placeMoves } from './stringMove.js';
 
 const refuse = (id, extra) => ({ announce: { id, ...extra } });
 const fretted = (n) => Number.isInteger(n.fret);
-const key = (loc, string) => `${loc.track}:${loc.measure}:${loc.beat}:${string}`;
+const beatKey = (loc) => `${loc.track}:${loc.measure}:${loc.beat}`;
+const key = (loc, string) => `${beatKey(loc)}:${string}`;
+const sameBeat = (a, b) => a.track === b.track && a.measure === b.measure && a.beat === b.beat;
 
 /** Transpose by `semis` semitones (see the header). */
 export function transpose(score, cursor, state, ctx, semis) {
@@ -65,52 +67,54 @@ export function transpose(score, cursor, state, ctx, semis) {
     }
   });
   if (!targets.length) return refuse('nothingToTranspose', { skipped });
-  const groups = new Map(); // the misfits of each beat, in target order
-  for (const x of targets) {
-    if (fits(x.n)) continue;
-    const k = key(x, '');
-    if (!groups.has(k)) groups.set(k, { at: x, movers: [] });
-    groups.get(k).movers.push(x.n);
-  }
-  const moves = new Map(); // track:measure:beat:original string → { string, fret }
-  for (const { at, movers } of groups.values()) {
+  const moves = new Map(); // 'track:measure:beat' → Map(note → { string, fret }) of the beat's moved notes
+  let moved = 0;
+  const misfits = targets.filter((x) => !fits(x.n));
+  for (let i = 0; i < misfits.length;) { // the misfits of each beat together, in target order
+    const at = misfits[i];
+    const movers = [];
+    while (i < misfits.length && sameBeat(misfits[i], at)) movers.push(misfits[i++].n);
     const where = sel.parts ? { track: at.track + 1 } : {};
     const stuck = movers.find((n) => isHarmonic(n) || n.string == null);
     if (stuck) return outOfRange(at.measure, { ...where, ...(isHarmonic(stuck) ? { harmonic: true } : {}) });
     const placed = placeMoves(trackAt(score, at.track), notesOf(beatAt(score, at)), movers, semis, max);
     if (!placed) return outOfRange(at.measure, where);
-    for (const [n, to] of placed) moves.set(key(at, n.string), to);
+    moves.set(beatKey(at), placed);
+    moved += placed.size;
   }
+  /** Where the note on `string` of the beat at `loc` moved, or undefined. */
+  const movedTo = (loc, string) => { for (const [n, to] of moves.get(beatKey(loc)) ?? []) if (n.string === string) return to; return undefined; };
   const write = (b, loc) => {
     if (isRest(b) || !Array.isArray(b.notes)) return b;
+    const placed = moves.size ? moves.get(beatKey(loc)) : null;
     const drop = isGrace(b) ? ['pitch', 'tieStart', 'tieEnd'] : ['pitch'];
     return { ...b, notes: b.notes.map((n) => {
       if (!fretted(n)) return n;
-      const to = n.string != null && moves.get(key(loc, n.string));
+      const to = placed?.get(n);
       return to ? { ...without(n, ...drop), string: to.string, fret: to.fret } : shifted(n);
     }) };
   };
   let out = score;
   for (const p of parts) out = eachSlice(out, p.track, p.slices, (part, s) => part.map((b, i) => write(b, { track: p.track, measure: s.measure, beat: s.from + i })), false);
-  const done = new Set(targets.filter((x) => !x.grace).map((x) => key(x, x.n.string)));
-  for (const x of targets) {
-    if (x.grace || x.n.string == null) continue;
-    const mine = moves.get(key(x, x.n.string));
+  const tied = targets.filter((x) => !x.grace && x.n.string != null && (x.n.tieStart || x.n.tieEnd));
+  const done = tied.length ? new Set(targets.filter((x) => !x.grace).map((x) => key(x, x.n.string))) : null;
+  for (const x of tied) {
+    const mine = movedTo(x, x.n.string);
     const here = { track: x.track, measure: x.measure, beat: x.beat, string: mine?.string ?? x.n.string };
     for (const [flag, other, find] of [['tieStart', 'tieEnd', nextMainBeat], ['tieEnd', 'tieStart', prevMainBeat]]) {
       if (!x.n[flag]) continue;
       const p = find(score, here);
-      const theirs = p && moves.get(key(p, x.n.string));
+      const theirs = p && movedTo(p, x.n.string);
       const kept = p && done.has(key(p, x.n.string)) && (mine && theirs ? mine.string === theirs.string && mine.fret === theirs.fret : !mine && !theirs);
       if (kept) continue;
       out = stripFlag(out, here, flag);
       if (p) out = stripFlag(out, { ...p, string: theirs?.string ?? x.n.string }, other);
     }
   }
-  const follow = moves.get(key(cursor, cursor.string));
+  const follow = movedTo(cursor, cursor.string);
   return {
     score: out,
     ...(follow ? { cursor: { ...cursor, string: follow.string } } : {}),
-    announce: { id: 'transposed', semitones: semis, count: targets.length, moved: moves.size, skipped, ...tracksField(sel) },
+    announce: { id: 'transposed', semitones: semis, count: targets.length, moved, skipped, ...tracksField(sel) },
   };
 }
