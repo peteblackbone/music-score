@@ -188,5 +188,10 @@ for (const c of cases) {
   const { summary } = await import('./editor-range-edge-dom.mjs');
   fail += await summary();
 }
+// 2.3.2 characterization pins: setSelection on one track, Shift+Up / Down unbound, the second Ctrl+A, one-track clips, one-beat Ctrl+Shift+Right, the single-track overlay, the 2.3.1 getSelection shape (tests/editor-pins-2.3.2.mjs)
+{
+  const { summary } = await import('./editor-pins-2.3.2.mjs');
+  fail += summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);
