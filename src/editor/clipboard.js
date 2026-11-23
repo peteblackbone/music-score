@@ -51,10 +51,17 @@ export function installClipboard(Editor) {
   Object.defineProperty(Editor, 'looksLikeClip', { value: looksLikeClip, enumerable: true, writable: false, configurable: false });
   const def = (name, fn) => method(Editor, name, fn);
 
-  /** The clip of the selection or the cursor beat → `{ text, kind, count, tracks?, range }`, or null on the slot. */
+  /**
+   * The clip of the selection or the cursor beat → `{ text, range, words }`
+   * (words: `{ kind, count, tracks?, tooLarge }` for the announcements), or
+   * null on the slot. 2.3.2: a clip longer than LIMITS.jsonChars is still
+   * copied (other apps can take it) but said to be too large to paste back.
+   */
   def('_clip', function clip() {
     const range = this._selection ?? cursorRange(this._model, this._cursor);
-    return range && { ...buildClip(this._model, range), range };
+    if (!range) return null;
+    const { text, kind, count, tracks } = buildClip(this._model, range);
+    return { text, range, words: { kind, count, tracks, tooLarge: text.length > EDITOR_LIMITS.jsonChars } };
   });
 
   def('copy', function copy() {
@@ -62,7 +69,7 @@ export function installClipboard(Editor) {
     const c = this._clip();
     if (!c) { this._say(describe({ id: 'nothingToCopy' })); return null; }
     internal = c.text;
-    this._say(describe({ id: 'copied', kind: c.kind, count: c.count, tracks: c.tracks }));
+    this._say(describe({ id: 'copied', ...c.words }));
     return c.text;
   });
 
@@ -83,9 +90,9 @@ export function installClipboard(Editor) {
     const c = this._clip();
     if (!c) { this._say(describe({ id: 'nothingToCopy' })); return null; }
     internal = c.text;
-    if (event && !writeClip(data, c.text)) { this._sayKept(describe({ id: 'cutUnwritten', kind: c.kind, count: c.count, tracks: c.tracks })); return null; }
+    if (event && !writeClip(data, c.text)) { this._sayKept(describe({ id: 'cutUnwritten', ...c.words })); return null; }
     const r = clearParts(this._model, c.range);
-    const announce = { id: 'cut', kind: c.kind, count: c.count, tracks: c.tracks };
+    const announce = { id: 'cut', ...c.words };
     if (r.score === this._model) this._say(describe({ ...announce, id: 'copiedRests' })); // only rests: copied, nothing to clear
     else this._applyModel('cut', 'cut', { score: r.score, cursor: { ...this._cursor, ...r.cursor }, announce });
     return c.text;

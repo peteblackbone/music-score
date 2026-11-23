@@ -101,7 +101,7 @@ export const MESSAGES = Object.freeze({
   // 2.3 range edits
   rangeCleared: (d) => `${plural(d.count, 'beat')} changed to rest${d.count === 1 ? '' : 's'}${onTracks(d.tracks)}`,
   rangeAlreadyRests: () => 'Already rests',
-  copiedRests: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}${tracksText(d.tracks)}, already rests`,
+  copiedRests: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}${tracksText(d.tracks)}, already rests${tooBig(d)}`,
   rangeNoBeats: () => 'No beats to delete',
   rangeRemoved: (d) => `${plural(d.count, 'beat')} deleted${onTracks(d.tracks)}${tempoRemoved(d.tempoRemoved)}`,
   columnsDeleted: (d) => `${d.all ? 'All measures deleted, 1 empty measure left' : d.a === d.b ? `Measure ${d.a} deleted` : `Measures ${d.a} to ${d.b} deleted`}${tempoRemoved(d.tempoRemoved)}`,
@@ -120,8 +120,8 @@ export const MESSAGES = Object.freeze({
   reflowCrossing: (d) => `Beat ${d.beat} crosses the barline and stays`,
   reflowNothing: () => 'Nothing to reflow',
   // 2.3 clipboard
-  copied: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}${tracksText(d.tracks)}`,
-  cut: (d) => `Cut ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}${tracksText(d.tracks)}, now rests`,
+  copied: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}${tracksText(d.tracks)}${tooBig(d)}`,
+  cut: (d) => `Cut ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}${tracksText(d.tracks)}, now rests${tooBig(d)}`,
   pasted: (d) => `${d.kind === 'measures' ? `Inserted ${plural(d.count, 'measure')} at measure ${d.at}${tracksText(d.tracks)}${notPasted(d.droppedTracks)}` : `Pasted ${plural(d.count, 'beat')}${d.replaced ? `, replaced ${d.replaced}` : ''}`}${droppedText(d.dropped)}${tempoRemoved(d.tempoRemoved)}`,
   pastedOver: (d) => {
     const r = d.count - d.added;
@@ -130,7 +130,7 @@ export const MESSAGES = Object.freeze({
     return `Pasted ${plural(d.count, 'measure')} ${where}${tracksText(d.tracks)}${notPasted(d.droppedTracks)}${droppedText(d.dropped)}${tempoRemoved(d.tempoRemoved)}`;
   },
   pasteNeedsMeasures: () => 'Select whole measures to paste measures',
-  cutUnwritten: (d) => `Clipboard unavailable, nothing cut. ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}${tracksText(d.tracks)} copied in the editor`,
+  cutUnwritten: (d) => `Clipboard unavailable, nothing cut. ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}${tracksText(d.tracks)} copied in the editor${tooBig(d)}`,
   nothingToCopy: () => 'Nothing to copy',
   nothingToPaste: () => 'Nothing to paste',
   notClip: () => 'Not a music-score clip',
@@ -169,6 +169,8 @@ const onTracks = (n) => (n ? ` on ${plural(n, 'track')}` : '');
 /** ', 3 tracks' / ', 1 clip track not pasted' (empty without a count). */
 const tracksText = (n) => (n ? `, ${plural(n, 'track')}` : '');
 const notPasted = (n) => (n ? `, ${plural(n, 'clip track')} not pasted` : '');
+/** ', too large to paste back' for a clip longer than LIMITS.jsonChars (empty otherwise). */
+const tooBig = (d) => (d.tooLarge ? ', too large to paste back' : '');
 /** ', 2 pitch-only notes skipped' (empty for none). */
 const skippedText = (n) => (n ? `, ${plural(n, 'pitch-only note')} skipped` : '');
 /** ', 2 notes on missing strings dropped' (empty for none). */

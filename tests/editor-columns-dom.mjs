@@ -312,6 +312,34 @@ test('criterion 12 and size: Ctrl+V with no selection overwrites blank measures 
   big.ed.destroy();
 });
 
+test('a clip longer than 5 MB is still copied and cut, and said to be too large to paste back; pasting it is refused as "Clip too large"; a normal clip says nothing more', () => {
+  const t = mk(trio());
+  t.ed.focus();
+  const pad = 'x'.repeat(Math.ceil(L.jsonChars / 2) + 1000);
+  const m = t.ed._model; // a model too large to load (the limit is on input), reached here directly: copy reads only the model
+  t.ed._model = { ...m, tracks: m.tracks.slice(0, 2).map((tr) => ({ ...tr, measures: [{ beats: [{ ...tr.measures[0].beats[0], pad }] }] })) };
+  t.ed.setSelection({ anchor: { track: 0, measure: 0, beat: 0 }, focus: { track: 1, measure: 0, beat: 0 } });
+  t.spoken();
+  const text = t.ed.copy();
+  ok(text.length > L.jsonChars);
+  eq(t.spoken(), 'Copied 1 measure, 2 tracks, too large to paste back');
+  eq([t.ed.paste(text), t.spoken()], [false, 'Clip too large']);
+  const c = fire('copy');
+  eq([c.e.defaultPrevented, c.clipboardData.data.get(CLIP_MIME) === text, t.spoken()], [true, true, 'Copied 1 measure, 2 tracks, too large to paste back'], 'the copy event writes it too');
+  const refused = fire('cut', {}, { throws: true });
+  eq([refused.e.defaultPrevented, t.spoken()], [false, 'Clipboard unavailable, nothing cut. 1 measure, 2 tracks copied in the editor, too large to paste back']);
+  fire('cut');
+  eq(t.spoken(), 'Cut 1 measure, 2 tracks, now rests, too large to paste back');
+  t.ed.undo();
+  eq(t.ed._model.tracks[0].measures[0].beats[0].pad.length, pad.length, 'one undo step brings it back');
+  t.ed.loadScore(trio());
+  t.ed.setSelection({ anchor: { track: 0, measure: 0, beat: 0 }, focus: { track: 1, measure: 0, beat: 0 } });
+  t.spoken();
+  t.ed.copy();
+  eq(t.spoken(), 'Copied 1 measure, 2 tracks');
+  t.ed.destroy();
+});
+
 // ---------- range edits (criteria 17-22) ----------
 test('criteria 17-22 at controller level: Delete, Ctrl+Delete, Shift+Delete, F and Shift+F on a column; effects and transpose keep the column selection (re-derived, no selection event) with one undo step each', () => {
   const t = mk(trio());
