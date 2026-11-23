@@ -96,6 +96,13 @@ test('criterion 2: hidden tracks are skipped and not listed; visibleBetween in e
   eq([hiddenEnd.parts, hiddenEnd.info], [undefined, SEL.selectionRange(s, 0, { measure: 0, beat: 0 }, { measure: 0, beat: 1 }).info]);
   eq(COL.wordsOf(s, sel), { id: 'selectedColumns', a: 1, b: 2, t1: 1, t2: 4, hidden: 1 });
 });
+test('the single-track fallback of columnRange never takes a hidden track: one end hidden gives the visible track between, both ends on hidden tracks the visible track nearest the focus', () => {
+  const s = four();
+  eq(COL.columnRange(s, T(0, 0, 0), T(1, 0, 1)).track, 0, 'the focus on the hidden track 1');
+  eq(COL.columnRange(s, T(1, 0, 0), T(0, 0, 1)).track, 0, 'the anchor on the hidden track 1');
+  const hid = model({ tracks: [tab([{ beats: [nt('whole')] }]), { name: 'H1', showStandardNotation: false, measures: [{ beats: [nt('whole')] }] }, { name: 'H2', showStandardNotation: false, measures: [{ beats: [nt('whole')] }] }, tab([{ beats: [nt('whole')] }], { name: 'D' })] });
+  eq([COL.columnRange(hid, T(1, 0, 0), T(2, 0, 0)).track, COL.columnRange(hid, T(2, 0, 0), T(1, 0, 0)).track], [3, 0], 'nearest to the focus (2: track 3 is one away; 1: track 0)');
+});
 test('blank and empty measures in a column: zero-beat parts count 0, the column still covers them; a column of blank measures has beatCount 0', () => {
   const s = four();
   const sel = COL.columnRange(s, T(0, 2, 0), T(3, 2, 0));

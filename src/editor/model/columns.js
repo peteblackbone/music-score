@@ -37,13 +37,15 @@ const lastPos = (score, ti, mi) => { const p = positions(score, { track: ti, mea
 /**
  * The column selection from `anchor` to `focus` (`{ track, measure, beat }`
  * each): kind 'measures', beatCount the total of the parts. Fewer than two
- * visible tracks between the ends: the single-track selection on the focus track.
+ * visible tracks between the ends: the single-track selection on the one
+ * visible track between them, else on the visible track nearest the focus
+ * (never a hidden track).
  */
 export function columnRange(score, anchor, focus) {
   const a = Math.min(anchor.measure, focus.measure);
   const b = Math.max(anchor.measure, focus.measure);
   const tracks = visibleBetween(score, anchor.track, focus.track);
-  if (tracks.length < 2) return selectionRange(score, focus.track, anchor, focus);
+  if (tracks.length < 2) return selectionRange(score, tracks[0] ?? clampCursor(score, { track: focus.track, measure: 0, beat: 0 }).track, anchor, focus);
   const parts = tracks.map((ti) => selectionRange(score, ti, { measure: a, beat: firstPos(score, ti, a) }, { measure: b, beat: lastPos(score, ti, b) }));
   let beatCount = 0;
   for (const p of parts) beatCount += p.info.beatCount;
