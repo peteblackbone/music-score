@@ -195,7 +195,10 @@ test('transpose over a column is all or nothing: a failing note on the last trac
   const down = run('transpose', s, cur(2, 1, 0), sel, -2);
   eq([down.changed, fret(down.score, 0, 0), fret(down.score, 2, 1)], [true, 1, 22]);
   const low = run('transpose', s, cur(2, 1, 0), sel, -4);
-  eq([low.changed, said(low)], [false, "Can't transpose, measure 1 on track 1 would go below fret 0"]);
+  eq([fret(low.score, 0, 0), low.score.tracks[0].measures[0].beats[0].notes[0].string, said(low)], [4, 2, 'Transposed 5 notes down 4 semitones on 3 tracks, 2 moved to another string, 1 pitch-only note skipped'], '2.3.3: below fret 0 moves to another string');
+  const s6 = model({ tracks: [tab([{ beats: [nt('whole', 1, 3)] }]), tab([{ beats: [nt('whole', 6, 0)] }], { name: 'Low' })] });
+  const stuck = run('transpose', s6, cur(1, 0, 0), COL.columnRange(s6, T(0, 0, 0), T(1, 0, 0)), -1);
+  eq([stuck.changed, stuck.score === s6, said(stuck)], [false, true, "Can't transpose, measure 1 on track 2 would go below fret 0"]);
 });
 test('effects over a column: skip counts for notation-only tracks, needsTab only when no selected track has TAB, beat effects use every track', () => {
   const s = gaps();

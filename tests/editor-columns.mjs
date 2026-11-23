@@ -439,7 +439,9 @@ test('criterion 22: transpose covers every selected track (TAB or not), all or n
   const bad = run('transpose', s, cur(2, 1, 0), all, 3);
   eq([bad.changed, said(bad)], [false, "Can't transpose, measure 2 on track 1 would go above fret 24"]);
   const second = run('transpose', s, cur(2, 1, 0), COL.columnRange(s, T(1, 0, 0), T(2, 1, 0)), 2);
-  eq(said(second), "Can't transpose, measure 2 on track 2 would go above fret 24", 'track numbers count from 1');
+  eq([v1(second.score, 1, 1)[0].notes[0], said(second)], [{ string: 1, fret: 20 }, 'Transposed 4 notes up 2 semitones on 2 tracks, 1 moved to another string, 1 pitch-only note skipped'], '2.3.3: string 2 fret 23 moves to string 1 fret 20');
+  const top = model({ tracks: [tab([{ beats: [nt('whole', 1, 3)] }]), tab([{ beats: [nt('whole', 1, 23)] }], { name: 'B' })] });
+  eq(said(run('transpose', top, cur(1, 0, 0), COL.columnRange(top, T(0, 0, 0), T(1, 0, 0)), 2)), "Can't transpose, measure 1 on track 2 would go above fret 24", 'track numbers count from 1');
   const half = run('transpose', s, cur(2, 1, 0), COL.columnRange(s, T(0, 0, 0), T(2, 0, 0)), 1);
   eq([v1(half.score, 2, 0)[0].notes[0], v1(half.score, 2, 1)[0].notes[0]], [{ string: 1, fret: 2 }, { string: 1, fret: 1 }], 'a tie to an untransposed note goes on both sides');
 });

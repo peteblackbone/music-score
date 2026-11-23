@@ -197,7 +197,13 @@ test('criterion 22: Ctrl / Cmd+Up / Down and Ctrl+Shift+Up / Down transpose thro
   t.spoken();
   t.events.length = 0;
   down(key('ArrowDown', { ctrlKey: true, shiftKey: true }));
-  eq([frets(t.ed), t.spoken(), t.ed.getSelection().beatCount, t.ed.canUndo()], [[14, 2, 3, 4], "Can't transpose, measure 1 would go below fret 0", 4, true]);
+  const notes = () => ms(t.ed)[0].beats.map((b) => b.notes[0]);
+  eq([notes(), t.spoken(), t.ed.getSelection().beatCount], [[{ string: 1, fret: 2 }, { string: 4, fret: 4 }, { string: 3, fret: 0 }, { string: 3, fret: 1 }], 'Transposed 4 notes down an octave, 3 moved to another string', 4], '2.3.3: below fret 0 moves to another string');
+  t.ed.undo();
+  t.ed.setSelection({ anchor: { measure: 0, beat: 0 }, focus: { measure: 0, beat: 3 } });
+  t.spoken();
+  t.events.length = 0;
+  eq([frets(t.ed), t.ed.canUndo()], [[14, 2, 3, 4], true]);
   down(key('ArrowUp', CTRL));
   eq([frets(t.ed), t.ed.lastMessage, t.ed.getSelection().beatCount], [[15, 3, 4, 5], 'Transposed 4 notes up 1 semitone', 4]);
   eq(t.events.map((e) => e[0]), ['change'], 'the selection stays, no selection event');

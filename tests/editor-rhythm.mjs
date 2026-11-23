@@ -244,6 +244,99 @@ test('criterion 29: without a selection every rhythm key runs the 2.0 single-bea
   }
 });
 
+// ---------- criteria 30-34: transpose to another string ----------
+const SM = await imp('src/editor/model/stringMove.js');
+const PITCH = await imp('src/pitch.js');
+test('midiOf equals midiNumber(parsePitch(p)) from pitch.js for every valid pitch (both letter cases, #, ##, x, b, bb, octaves -1 to 10, padded); anything else is NaN', () => {
+  let n = 0;
+  for (const step of 'ABCDEFGabcdefg') {
+    for (const acc of ['', '#', '##', 'x', 'b', 'bb']) {
+      for (let oct = -1; oct <= 10; oct++) {
+        const p = `${step}${acc}${oct}`;
+        eq(SM.midiOf(p), PITCH.midiNumber(PITCH.parsePitch(p)), p);
+        eq(SM.midiOf(` ${p} `), SM.midiOf(p), 'trimmed');
+        n++;
+      }
+    }
+  }
+  eq(n, 14 * 6 * 12);
+  eq([SM.midiOf('E4'), SM.midiOf('B3'), SM.midiOf('E2'), SM.midiOf('C-1')], [64, 59, 40, 0]);
+  for (const bad of ['H4', 'E', 'E#b4', '4E', '', null, undefined, 64, 'Ebbb4']) ok(Number.isNaN(SM.midiOf(bad)), String(bad));
+});
+const one = (string, fret, note = {}) => model({ tracks: [tab([{ beats: [tn('whole', string, fret, note)] }])] });
+test('criterion 30: string 2 fret 0 and Ctrl+Down moves the note to string 3 fret 3, without and with a selection; "Transposed 1 note down 1 semitone, 1 moved to another string"; the cursor follows', () => {
+  const s = one(2, 0);
+  const a = run('transpose', s, cur(0, 0, 0, 2), null, -1);
+  eq([v1(a.score, 0, 0)[0].notes, said(a), a.cursor.string], [[{ string: 3, fret: 3 }], 'Transposed 1 note down 1 semitone, 1 moved to another string', 3]);
+  const b = run('transpose', s, cur(0, 0, 0, 2), range(s, 0, P(0, 0), P(0, 0)), -1);
+  eq([v1(b.score, 0, 0)[0].notes, said(b), b.cursor.string], [[{ string: 3, fret: 3 }], 'Transposed 1 note down 1 semitone, 1 moved to another string', 3]);
+  const c = run('transpose', s, cur(0, 0, 0, 1), range(s, 0, P(0, 0), P(0, 0)), -1);
+  eq(c.cursor.string, 1, 'a cursor on another string stays');
+  ok(same(a.score) && same(b.score));
+});
+test('criterion 31: string 6 fret 0 with Ctrl+Down and string 1 fret 24 with Ctrl+Up (maxFret 24) are refused; the score is unchanged', () => {
+  for (const [s, string, semis, word] of [[one(6, 0), 6, -1, 'below fret 0'], [one(1, 24), 1, 1, 'above fret 24']]) {
+    for (const sel of [null, range(s, 0, P(0, 0), P(0, 0))]) {
+      const r = run('transpose', s, cur(0, 0, 0, string), sel, semis);
+      eq([r.changed, r.score === s, said(r)], [false, true, `Can't transpose, measure 1 would go ${word}`]);
+    }
+  }
+});
+test('criterion 32: a note never moves onto a string another note keeps; movers go nearest first, then the lower fret; if any note cannot be placed nothing changes and the measure is named', () => {
+  const chord = (...notes) => ({ type: 'note', duration: 'whole', notes });
+  const s = model({ tracks: [tab([
+    { beats: [chord({ string: 1, fret: 0 }, { string: 2, fret: 5 })] },
+    { beats: [chord({ string: 1, fret: 0 }, { string: 2, fret: 0 })] },
+    { beats: [chord({ string: 5, fret: 0 }, { string: 6, fret: 0 })] },
+  ])] });
+  const r = run('transpose', s, cur(0, 1, 0), range(s, 0, P(0, 0), P(1, 0)), -1);
+  eq(v1(r.score, 0, 0)[0].notes, [{ string: 3, fret: 8 }, { string: 2, fret: 4 }], 'string 2 is kept: string 1 goes to string 3');
+  eq(v1(r.score, 0, 1)[0].notes, [{ string: 2, fret: 4 }, { string: 3, fret: 3 }], 'both move: string 1 first, onto the string 2 leaves');
+  eq(said(r), 'Transposed 4 notes down 1 semitone, 3 moved to another string');
+  ok(same(r.score));
+  const bad = run('transpose', s, cur(0, 2, 0), range(s, 0, P(0, 0), P(2, 0)), -1);
+  eq([bad.changed, bad.score === s, said(bad)], [false, true, "Can't transpose, measure 3 would go below fret 0"]);
+  const tie = model({ tracks: [tab([{ beats: [tn('whole', 3, 2)] }])] });
+  eq(v1(run('transpose', tie, cur(0, 0, 0, 3), null, 23).score, 0, 0)[0].notes[0], { string: 2, fret: 21 }, 'up: the nearest string');
+  const far = SM.placeMoves({ tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'] }, [{ string: 3, fret: 0 }], [{ string: 3, fret: 0 }], -1, 24);
+  eq([...far.values()], [{ string: 4, fret: 4 }], 'G3 - 1: string 4 (distance 1) beats string 5 (distance 2)');
+  const even = SM.placeMoves({ tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'] }, [{ string: 3, fret: 24 }], [{ string: 3, fret: 24 }], 1, 24);
+  eq([...even.values()], [{ string: 2, fret: 21 }], 'both neighbours in reach: the lower fret');
+});
+test('criterion 33: notes in range keep their string; a moved note keeps its effects and unknown fields and loses pitch', () => {
+  const s = model({ tracks: [tab([{ beats: [{ type: 'note', duration: 'whole', zz: 1, notes: [{ string: 1, fret: 0, pitch: 'E4', vibrato: true, zz: 2 }, { string: 4, fret: 2, pitch: 'E3' }] }] }])] });
+  const r = run('transpose', s, cur(0, 0, 0), range(s, 0, P(0, 0), P(0, 0)), -1);
+  eq(v1(r.score, 0, 0)[0], { type: 'note', duration: 'whole', zz: 1, notes: [{ string: 2, fret: 4, vibrato: true, zz: 2 }, { string: 4, fret: 1 }] });
+  ok(same(r.score));
+});
+test('criterion 33: a tie survives only when both partners end on the same string and fret (or neither moved); otherwise both flags go, at the final strings; a moved grace drops its own flags', () => {
+  const s = model({ tracks: [tab([
+    { beats: [tn('half', 2, 0, { tieStart: true }), tn('half', 2, 0, { tieEnd: true })] },
+    { beats: [{ type: 'note', duration: 'half', notes: [{ string: 1, fret: 0, tieStart: true }, { string: 2, fret: 5 }] }, tn('half', 1, 0, { tieEnd: true })] },
+    { beats: [tn('half', 2, 3, { tieStart: true }), tn('half', 2, 3, { tieEnd: true })] },
+    { beats: [{ type: 'grace', duration: '8th', notes: [{ string: 2, fret: 0, tieStart: true }] }, tn('whole', 3, 4)] },
+  ])] });
+  const r = run('transpose', s, cur(0, 0, 0), range(s, 0, P(0, 0), P(3, 0)), -1);
+  eq(v1(r.score, 0, 0).map((b) => b.notes), [[{ string: 3, fret: 3, tieStart: true }], [{ string: 3, fret: 3, tieEnd: true }]], 'both moved to string 3 fret 3: kept');
+  eq(v1(r.score, 0, 1).map((b) => b.notes), [[{ string: 3, fret: 8 }, { string: 2, fret: 4 }], [{ string: 2, fret: 4 }]], 'different strings: both flags go');
+  eq(v1(r.score, 0, 2).map((b) => b.notes), [[{ string: 2, fret: 2, tieStart: true }], [{ string: 2, fret: 2, tieEnd: true }]], 'neither moved: kept');
+  eq(v1(r.score, 0, 3)[0].notes, [{ string: 3, fret: 3 }], 'a moved grace drops its flags');
+  ok(same(r.score));
+  const half = run('transpose', s, cur(0, 0, 0), range(s, 0, P(0, 0), P(0, 0)), -1);
+  eq(v1(half.score, 0, 0).map((b) => b.notes), [[{ string: 3, fret: 3 }], [{ string: 2, fret: 0 }]], 'the partner was not transposed: both flags go');
+});
+test('criterion 34: a harmonic (harmonic or harmonicFret) that would leave the range is never moved: the whole transpose is refused with ", harmonics stay on their string"', () => {
+  for (const note of [{ harmonic: 'natural' }, { harmonic: 'pinch', harmonicFret: 0 }]) {
+    const s = model({ tracks: [tab([{ beats: [tn('whole', 1, 5)] }, { beats: [tn('whole', 2, 0, note)] }])] });
+    const sel = run('transpose', s, cur(0, 1, 0), range(s, 0, P(0, 0), P(1, 0)), -1);
+    eq([sel.changed, said(sel)], [false, "Can't transpose, measure 2 would go below fret 0, harmonics stay on their string"]);
+    const single = run('transpose', s, cur(0, 1, 0, 2), null, -1);
+    eq([single.changed, said(single)], [false, "Can't transpose, measure 2 would go below fret 0, harmonics stay on their string"]);
+  }
+  const c = model({ tracks: [tab([{ beats: [tn('whole', 1, 0, { harmonic: 'natural' })] }]), tab([{ beats: [tn('whole', 2, 0)] }], { name: 'B' })] });
+  eq(said(run('transpose', c, cur(1, 0, 0), COL.columnRange(c, T(0, 0, 0), T(1, 0, 0)), -1)), "Can't transpose, measure 1 on track 1 would go below fret 0, harmonics stay on their string");
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

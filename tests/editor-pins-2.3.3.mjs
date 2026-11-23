@@ -94,19 +94,20 @@ test('pin (d), inverted in 2.3.3: with beats 1-3 selected, L ties the pair of eq
 });
 
 // (e) Inverted in 2.3.3 commit 5: the note moves to string 3 fret 3.
-test('pin (e): Ctrl+Down on string 2 fret 0, with and without a selection, is refused ("Can\'t transpose, measure 1 would go below fret 0") and changes nothing', () => {
+test('pin (e), inverted in 2.3.3: Ctrl+Down on string 2 fret 0, with and without a selection, moves the note to string 3 fret 3 and the cursor with it', () => {
   const score = () => ({ tracks: [tab([{ beats: [nt('whole', 2, 0)] }])] });
   const n = mk(score());
   n.ed.setCursor({ string: 2 });
   n.spoken();
   n.ed.handleKey(key('ArrowDown', CTRL));
-  eq([n.ed.getScore().tracks[0].measures[0].beats[0].notes, n.spoken(), n.ed.canUndo(), n.ed.getCursor().string], [[{ string: 2, fret: 0 }], "Can't transpose, measure 1 would go below fret 0", false, 2]);
+  eq([n.ed.getScore().tracks[0].measures[0].beats[0].notes, n.spoken(), n.ed.canUndo(), n.ed.getCursor().string], [[{ string: 3, fret: 3 }], 'Transposed 1 note down 1 semitone, 1 moved to another string', true, 3]);
   n.ed.destroy();
   const s = mk(score());
+  s.ed.setCursor({ string: 2 });
   s.ed.setSelection({ anchor: { measure: 0, beat: 0 }, focus: { measure: 0, beat: 0 } });
   s.spoken();
   s.ed.handleKey(key('ArrowDown', CTRL));
-  eq([s.ed.getScore().tracks[0].measures[0].beats[0].notes, s.spoken(), s.ed.canUndo(), s.ed.getSelection().beatCount], [[{ string: 2, fret: 0 }], "Can't transpose, measure 1 would go below fret 0", false, 1]);
+  eq([s.ed.getScore().tracks[0].measures[0].beats[0].notes, s.spoken(), s.ed.canUndo(), s.ed.getSelection().beatCount, s.ed.getCursor().string], [[{ string: 3, fret: 3 }], 'Transposed 1 note down 1 semitone, 1 moved to another string', true, 1, 3]);
   s.ed.destroy();
 });
 

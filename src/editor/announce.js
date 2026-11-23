@@ -78,8 +78,8 @@ export const MESSAGES = Object.freeze({
   rangeTie: (d) => `${d.tied ? 'Tied' : 'Untied'} ${plural(d.count, 'note pair')}${onTracks(d.tracks)}${noTab(d.skippedTracks)}`,
   noBeatsInSelection: () => 'No beats in the selection',
   // 2.3.1 transpose
-  transposed: (d) => (d.fret != null ? `Fret ${d.fret}, ${semitoneText(d.semitones)}` : `Transposed ${plural(d.count, 'note')} ${semitoneText(d.semitones)}${onTracks(d.tracks)}${skippedText(d.skipped)}`),
-  transposeRange: (d) => `Can't transpose, measure ${d.measure}${d.track ? ` on track ${d.track}` : ''} would go ${d.up ? `above fret ${d.max}` : 'below fret 0'}`,
+  transposed: (d) => (d.fret != null ? `Fret ${d.fret}, ${semitoneText(d.semitones)}` : `Transposed ${plural(d.count, 'note')} ${semitoneText(d.semitones)}${onTracks(d.tracks)}${movedText(d.moved)}${skippedText(d.skipped)}`),
+  transposeRange: (d) => `Can't transpose, measure ${d.measure}${d.track ? ` on track ${d.track}` : ''} would go ${d.up ? `above fret ${d.max}` : 'below fret 0'}${d.harmonic ? ', harmonics stay on their string' : ''}`,
   noNoteToTranspose: () => 'No note here',
   pitchOnlyNote: () => 'Only fretted notes can be transposed',
   nothingToTranspose: (d) => `No fretted notes to transpose${skippedText(d.skipped)}`,
@@ -184,6 +184,8 @@ const tracksText = (n) => (n ? `, ${plural(n, 'track')}` : '');
 const notPasted = (n) => (n ? `, ${plural(n, 'clip track')} not pasted` : '');
 /** ', too large to paste back' for a clip longer than LIMITS.jsonChars (empty otherwise). */
 const tooBig = (d) => (d.tooLarge ? ', too large to paste back' : '');
+/** 2.3.3: ', 3 moved to another string' (empty for none). */
+const movedText = (n) => (n ? `, ${n} moved to another string` : '');
 /** ', 2 pitch-only notes skipped' (empty for none). */
 const skippedText = (n) => (n ? `, ${plural(n, 'pitch-only note')} skipped` : '');
 /** ', 2 notes on missing strings dropped' (empty for none). */
