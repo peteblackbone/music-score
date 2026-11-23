@@ -130,6 +130,7 @@ export const MESSAGES = Object.freeze({
     return `Pasted ${plural(d.count, 'measure')} ${where}${tracksText(d.tracks)}${notPasted(d.droppedTracks)}${droppedText(d.dropped)}${tempoRemoved(d.tempoRemoved)}`;
   },
   pasteNeedsMeasures: () => 'Select whole measures to paste measures',
+  cutTooLarge: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}${tracksText(d.tracks)}, too large to paste back, nothing cut`,
   cutUnwritten: (d) => `Clipboard unavailable, nothing cut. ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}${tracksText(d.tracks)} copied in the editor${tooBig(d)}`,
   nothingToCopy: () => 'Nothing to copy',
   nothingToPaste: () => 'Nothing to paste',

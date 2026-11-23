@@ -91,6 +91,8 @@ export function installClipboard(Editor) {
     if (!c) { this._say(describe({ id: 'nothingToCopy' })); return null; }
     internal = c.text;
     if (event && !writeClip(data, c.text)) { this._sayKept(describe({ id: 'cutUnwritten', ...c.words })); return null; }
+    // a clip too large to paste back is copied but nothing is cleared: a cut must not lose what can't come back
+    if (c.words.tooLarge) { this._sayKept(describe({ id: 'cutTooLarge', ...c.words })); return c.text; }
     const r = clearParts(this._model, c.range);
     const announce = { id: 'cut', ...c.words };
     if (r.score === this._model) this._say(describe({ ...announce, id: 'copiedRests' })); // only rests: copied, nothing to clear

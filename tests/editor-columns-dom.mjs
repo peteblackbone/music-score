@@ -312,7 +312,7 @@ test('criterion 12 and size: Ctrl+V with no selection overwrites blank measures 
   big.ed.destroy();
 });
 
-test('a clip longer than 5 MB is still copied and cut, and said to be too large to paste back; pasting it is refused as "Clip too large"; a normal clip says nothing more', () => {
+test('a clip longer than 5 MB is still copied and said to be too large to paste back; a cut then clears nothing; pasting it is refused as "Clip too large"; a normal clip says nothing more', () => {
   const t = mk(trio());
   t.ed.focus();
   const pad = 'x'.repeat(Math.ceil(L.jsonChars / 2) + 1000);
@@ -328,10 +328,11 @@ test('a clip longer than 5 MB is still copied and cut, and said to be too large 
   eq([c.e.defaultPrevented, c.clipboardData.data.get(CLIP_MIME) === text, t.spoken()], [true, true, 'Copied 1 measure, 2 tracks, too large to paste back'], 'the copy event writes it too');
   const refused = fire('cut', {}, { throws: true });
   eq([refused.e.defaultPrevented, t.spoken()], [false, 'Clipboard unavailable, nothing cut. 1 measure, 2 tracks copied in the editor, too large to paste back']);
+  const beforeCut = t.ed._model;
   fire('cut');
-  eq(t.spoken(), 'Cut 1 measure, 2 tracks, now rests, too large to paste back');
-  t.ed.undo();
-  eq(t.ed._model.tracks[0].measures[0].beats[0].pad.length, pad.length, 'one undo step brings it back');
+  eq(t.spoken(), 'Copied 1 measure, 2 tracks, too large to paste back, nothing cut');
+  ok(t.ed._model === beforeCut && !t.ed.canUndo(), 'an over-limit cut copies but clears nothing (no undo step)');
+  eq(t.ed._model.tracks[0].measures[0].beats[0].pad.length, pad.length, 'the beats are still there');
   t.ed.loadScore(trio());
   t.ed.setSelection({ anchor: { track: 0, measure: 0, beat: 0 }, focus: { track: 1, measure: 0, beat: 0 } });
   t.spoken();
