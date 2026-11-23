@@ -77,19 +77,19 @@ test('pin (b), inverted in 2.3.3: with beats 1-3 selected, . and / change every 
 });
 
 // (c) Inverted in 2.3.3 commit 4: R acts on every selected beat and keeps the selection.
-test('pin (c): with beats 1-3 selected, R turns the cursor beat only into a rest and clears the selection', () => {
+test('pin (c), inverted in 2.3.3: with beats 1-3 selected, R turns every selected beat into a rest and keeps the selection', () => {
   const { ed, spoken } = selected();
   ed.handleKey(key('r'));
-  eq([beats(ed).map((b) => b.type), spoken(), ed.getSelection()], [['note', 'note', 'rest', 'note'], 'Changed to rest', null]);
+  eq([beats(ed).map((b) => b.type), spoken(), ed.getSelection().beatCount], [['rest', 'rest', 'rest', 'note'], '3 beats changed to rests', 3]);
   ed.destroy();
 });
 
 // (d) Inverted in 2.3.3 commit 4: L ties or unties every pair of equal neighbouring notes and never copies a fret.
-test('pin (d): with beats 1-3 selected, L ties the cursor note to the previous note on its string, copying that fret, and clears the selection', () => {
+test('pin (d), inverted in 2.3.3: with beats 1-3 selected, L ties the pair of equal notes (fret 5, fret 5), leaves fret 7 alone and keeps the selection', () => {
   const { ed, spoken } = selected({ tracks: [tab([{ beats: [nt('8th', 1, 5), nt('quarter', 1, 5), nt('quarter', 1, 7), nt('quarter', 2, 0)] }])] });
   ed.handleKey(key('l'));
-  eq([beats(ed).slice(0, 3).map((b) => b.notes[0]), spoken(), ed.getSelection()],
-    [[{ string: 1, fret: 5 }, { string: 1, fret: 5, tieStart: true }, { string: 1, fret: 5, tieEnd: true }], 'Tied to fret 5', null]);
+  eq([beats(ed).slice(0, 3).map((b) => b.notes[0]), spoken(), ed.getSelection().beatCount],
+    [[{ string: 1, fret: 5, tieStart: true }, { string: 1, fret: 5, tieEnd: true }, { string: 1, fret: 7 }], 'Tied 1 note pair', 3]);
   ed.destroy();
 });
 

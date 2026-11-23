@@ -73,6 +73,9 @@ export const MESSAGES = Object.freeze({
   rangeDuration: (d) => `${d.duration ? `${cap(durationWords(d.duration, d.dots))}, ${plural(d.count, 'beat')}` : `${plural(d.count, 'beat')} ${d.dir}`}${onTracks(d.tracks)}`,
   rangeDots: (d) => `${RANGE_DOTS[d.dots] ?? RANGE_DOTS[0]}, ${plural(d.count, 'beat')}${onTracks(d.tracks)}`,
   rangeTriplet: (d) => `Triplet ${d.on ? 'on' : 'off'}, ${plural(d.count, 'beat')}${onTracks(d.tracks)}${d.skipped ? `, ${plural(d.skipped, 'nested tuplet')} skipped` : ''}`,
+  rangeToRest: (d) => `${plural(d.count, 'beat')} changed to rest${d.count === 1 ? '' : 's'}${onTracks(d.tracks)}${noTab(d.skippedTracks)}`,
+  rangeToNote: (d) => `${plural(d.count, 'rest')} changed to note${d.count === 1 ? '' : 's'}${onTracks(d.tracks)}${noTab(d.skippedTracks)}`,
+  rangeTie: (d) => `${d.tied ? 'Tied' : 'Untied'} ${plural(d.count, 'note pair')}${onTracks(d.tracks)}${noTab(d.skippedTracks)}`,
   noBeatsInSelection: () => 'No beats in the selection',
   // 2.3.1 transpose
   transposed: (d) => (d.fret != null ? `Fret ${d.fret}, ${semitoneText(d.semitones)}` : `Transposed ${plural(d.count, 'note')} ${semitoneText(d.semitones)}${onTracks(d.tracks)}${skippedText(d.skipped)}`),

@@ -34,7 +34,7 @@ import { ranged, clearRange, removeRange, deleteSelectedColumns } from './rangeE
 import { fill, reflow } from './reflow.js';
 import { columnar, columnPrev, columnNext, columnStay } from './columns.js';
 import { transpose } from './transpose.js';
-import { shorterRange, longerRange, setDurationRange, dotsRange, tripletRange } from './rhythmRange.js';
+import { shorterRange, longerRange, setDurationRange, dotsRange, tripletRange, restRange, tieRange } from './rhythmRange.js';
 
 const nav = (fn, label) => ({ fn, kind: 'nav', label });
 const edit = (fn, label) => ({ fn, kind: 'edit', label });
@@ -56,13 +56,13 @@ export const COMMANDS = Object.freeze({
   nextTrack: nav(nextTrack),
   digit: edit(digit, (d) => `fret ${d?.fret}`),
   deleteNote: edit(ranged(deleteNote, clearRange), (d) => (d?.id === 'rangeCleared' ? 'clear beats' : 'delete note')),
-  toggleTie: edit(toggleTie, 'tie'),
+  toggleTie: keep(edit(ranged(toggleTie, tieRange), 'tie')),
   shorter: keep(edit(ranged(shorter, shorterRange), 'duration')),
   longer: keep(edit(ranged(longer, longerRange), 'duration')),
   setDuration: keep(edit(ranged(setDuration, setDurationRange), 'duration')),
   cycleDots: keep(edit(ranged(cycleDots, dotsRange), 'dots')),
   toggleTriplet: keep(edit(ranged(toggleTriplet, tripletRange), 'triplet')),
-  toggleRest: edit(toggleRest, (d) => (d?.id === 'changedToNote' ? 'note' : 'rest')),
+  toggleRest: keep(edit(ranged(toggleRest, restRange), (d) => (d?.id === 'changedToNote' || d?.id === 'rangeToNote' ? 'note' : 'rest'))),
   deleteBeat: edit(ranged(deleteBeat, removeRange), (d) => (d?.id === 'rangeRemoved' ? 'delete beats' : 'delete beat')),
   insertBeat: edit(insertBeat, 'insert rest'),
   insertMeasureAfter: edit(insertMeasureAfter, 'insert measure'),

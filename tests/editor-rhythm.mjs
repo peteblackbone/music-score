@@ -29,6 +29,8 @@ const ok = (c, m = 'assertion failed') => { if (!c) throw new Error(m); };
 
 const model = (s) => io.parseInput(s);
 const nt = (duration, string = 1, fret = 0, extra = {}) => ({ type: 'note', duration, notes: [{ string, fret }], ...extra });
+/** A note beat whose note has `note` fields (ties), the beat `extra`. */
+const tn = (duration, string, fret, note = {}, extra = {}) => ({ type: 'note', duration, notes: [{ string, fret, ...note }], ...extra });
 const rest = (duration, extra = {}) => ({ type: 'rest', duration, ...extra });
 const grace = (string = 1, fret = 2) => ({ type: 'grace', duration: '8th', notes: [{ string, fret }] });
 const tab = (measures, extra = {}) => ({ name: 'Gtr', showTablature: true, ...extra, measures });
@@ -151,6 +153,95 @@ test('mainBeats / mapMain: graces are never targets; nothing changed returns the
   const seen = [];
   RR.mapMain(s, parts, (b, loc) => { seen.push(loc); return b; });
   eq(seen, [T(0, 0, 0), T(0, 0, 2), T(0, 0, 3), T(0, 1, 0)]);
+});
+
+/// ---------- criterion 26: R ----------
+test('criterion 26: any note among the targets -> every note beat becomes a rest of the same length, effects kept as with Delete; ties at the edges repaired; graces kept', () => {
+  const s = model({ tracks: [tab([
+    { beats: [tn('quarter', 1, 3, { tieStart: true })] },
+    { beats: [tn('quarter', 1, 3, { tieEnd: true }, { vibrato: true, zz: 1 }), grace(), rest('quarter'), tn('half', 2, 1, { tieStart: true })] },
+    { beats: [tn('whole', 2, 1, { tieEnd: true })] },
+  ])] });
+  ok(same(s));
+  const sel = range(s, 0, P(1, 0), P(1, 3));
+  const r = run('toggleRest', s, cur(0, 1, 3), sel);
+  eq(v1(r.score, 0, 1), [rest('quarter', { vibrato: true, zz: 1 }), grace(), rest('quarter'), rest('half')]);
+  eq([v1(r.score, 0, 0)[0].notes[0], v1(r.score, 0, 2)[0].notes[0]], [{ string: 1, fret: 3 }, { string: 2, fret: 1 }], 'both outside partners untied');
+  eq([said(r), CMD.undoLabel('toggleRest', r.announce)], ['2 beats changed to rests', 'rest']);
+  ok(same(r.score) && CMD.COMMANDS.toggleRest.keepsSelection);
+});
+test("criterion 26: all targets rests -> notes at fret 0 on the cursor string, clamped to each track's string count (hidden dropped, other fields kept); undo label \"note\"", () => {
+  const s = model({ tracks: [
+    tab([{ beats: [rest('half', { hidden: true, zz: 2 }), rest('half')] }]),
+    tab([{ beats: [rest('whole')] }], { name: 'Bass', tuning: ['E1', 'A1', 'D2', 'G2'] }),
+  ] });
+  const sel = COL.columnRange(s, T(0, 0, 0), T(1, 0, 0));
+  const r = run('toggleRest', s, cur(1, 0, 0, 6), sel);
+  eq([v1(r.score, 0, 0), v1(r.score, 1, 0)], [
+    [{ type: 'note', duration: 'half', zz: 2, notes: [{ string: 6, fret: 0 }] }, { type: 'note', duration: 'half', notes: [{ string: 6, fret: 0 }] }],
+    [{ type: 'note', duration: 'whole', notes: [{ string: 4, fret: 0 }] }],
+  ]);
+  eq([said(r), CMD.undoLabel('toggleRest', r.announce)], ['3 rests changed to notes on 2 tracks', 'note']);
+  ok(same(r.score));
+});
+test('criterion 26: notation-only tracks are skipped and counted; with no TAB track selected R is refused "Needs a TAB staff"; no main beat: "No beats in the selection"', () => {
+  const s = cols();
+  const sel = COL.columnRange(s, T(0, 0, 0), T(2, 0, 0));
+  const r = run('toggleRest', s, cur(2, 0, 0), sel);
+  eq([said(r), r.score.tracks[1] === s.tracks[1], field(r.score, 2, 0, 'type')], ['5 beats changed to rests on 2 tracks, 1 track without TAB skipped', true, ['rest', 'rest']]);
+  const n = run('toggleRest', s, cur(1, 0, 0), range(s, 1, P(0, 0), P(0, 1)));
+  eq([n.changed, said(n)], [false, 'Needs a TAB staff']);
+  const e = model({ tracks: [tab([{ beats: [] }])] });
+  eq(said(run('toggleRest', e, cur(0, 0, 0), range(e, 0, P(0, 0), P(0, 0)))), 'No beats in the selection');
+});
+
+// ---------- criterion 27: L ----------
+test('criterion 27: L ties every pair of neighbouring selected main beats with a note on the same string at the same fret, across a barline too; frets are never copied', () => {
+  const s = model({ tracks: [tab([
+    { beats: [{ type: 'note', duration: 'quarter', notes: [{ string: 1, fret: 5 }, { string: 2, fret: 3 }] }, nt('quarter', 1, 5), grace(), nt('quarter', 1, 7), nt('quarter', 1, 7)] },
+    { beats: [nt('half', 1, 7), rest('quarter'), nt('quarter', 1, 7)] },
+  ])] });
+  const sel = range(s, 0, P(0, 0), P(1, 2));
+  const r = run('toggleTie', s, cur(0, 1, 2), sel);
+  eq(v1(r.score, 0, 0).map((b) => b.notes), [
+    [{ string: 1, fret: 5, tieStart: true }, { string: 2, fret: 3 }], [{ string: 1, fret: 5, tieEnd: true }], grace().notes,
+    [{ string: 1, fret: 7, tieStart: true }], [{ string: 1, fret: 7, tieEnd: true, tieStart: true }],
+  ]);
+  eq(v1(r.score, 0, 1).map((b) => b.notes ?? null), [[{ string: 1, fret: 7, tieEnd: true }], null, [{ string: 1, fret: 7 }]], 'a rest breaks adjacency');
+  eq([said(r), CMD.undoLabel('toggleTie', r.announce)], ['Tied 3 note pairs', 'tie']);
+  ok(same(r.score) && CMD.COMMANDS.toggleTie.keepsSelection);
+  const back = run('toggleTie', r.score, cur(0, 1, 2), range(r.score, 0, P(0, 0), P(1, 2)));
+  eq([JSON.stringify(back.score) === JSON.stringify(s), said(back)], [true, 'Untied 3 note pairs'], 'every pair tied: all removed');
+});
+test('criterion 27: some pairs tied -> all tied; unequal frets, pitch-only notes and different strings are no pair: "Nothing to tie to"; TAB only (needsTab, skipped count)', () => {
+  const s = model({ tracks: [tab([{ beats: [tn('quarter', 1, 5, { tieStart: true }), tn('quarter', 1, 5, { tieEnd: true }), nt('quarter', 1, 5), nt('quarter', 2, 5)] }])] });
+  const r = run('toggleTie', s, cur(0, 0, 3), range(s, 0, P(0, 0), P(0, 3)));
+  eq([v1(r.score, 0, 0).map((b) => [!!b.notes[0].tieStart, !!b.notes[0].tieEnd]), said(r)], [[[true, false], [true, true], [false, true], [false, false]], 'Tied 2 note pairs']);
+  const none = model({ tracks: [tab([{ beats: [nt('quarter', 1, 5), nt('quarter', 1, 6), nt('quarter', 2, 6), { type: 'note', duration: 'quarter', notes: [{ pitch: 'C4' }] }] }])] });
+  const n = run('toggleTie', none, cur(0, 0, 3), range(none, 0, P(0, 0), P(0, 3)));
+  eq([n.changed, said(n)], [false, 'Nothing to tie to']);
+  const c = cols();
+  const t = run('toggleTie', c, cur(2, 0, 0), COL.columnRange(c, T(0, 0, 0), T(2, 1, 0)));
+  eq(said(t), 'Tied 3 note pairs on 2 tracks, 1 track without TAB skipped');
+  eq(said(run('toggleTie', c, cur(1, 0, 0), range(c, 1, P(0, 0), P(1, 0)))), 'Needs a TAB staff');
+});
+
+// ---------- criteria 28-29 ----------
+test('criterion 28: nothing reflows (measures may end over or under); sanitize identity after every rhythm key', () => {
+  const s = eqq();
+  for (const [name, arg] of [['shorter'], ['longer'], ['setDuration', 'whole'], ['cycleDots'], ['toggleTriplet'], ['toggleRest'], ['toggleTie']]) {
+    const r = run(name, s, cur(0, 0, 3), range(s, 0, P(0, 0), P(1, 0)), arg);
+    eq([r.score.tracks[0].measures.length, v1(r.score, 0, 0).length], [2, 4], name);
+    ok(same(r.score), name);
+  }
+});
+const B = await imp('src/editor/model/beats.js');
+const N = await imp('src/editor/model/notes.js');
+test('criterion 29: without a selection every rhythm key runs the 2.0 single-beat command', () => {
+  const s = eqq();
+  for (const [name, fn, arg] of [['shorter', B.shorter], ['longer', B.longer], ['setDuration', B.setDuration, 'half'], ['cycleDots', B.cycleDots], ['toggleTriplet', B.toggleTriplet], ['toggleRest', B.toggleRest], ['toggleTie', N.toggleTie]]) {
+    for (const c of [cur(0, 0, 3), cur(0, 0, 4), cur(0, 1, 0)]) eq(CMD.COMMANDS[name].fn(s, c, st(), ctx(null), arg), fn(s, c, st(), ctx(null), arg), name);
+  }
 });
 
 // ---------- report ----------

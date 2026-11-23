@@ -8,13 +8,14 @@
  * graces and voice 2 never); nothing reflows, so measures may end up over
  * or under. Each key is one result, so one undo step; a key that changes
  * nothing returns the same score (no undo step) and still speaks. Every
- * announcement carries the column's track count.
+ * announcement carries the column's track count. R and L need a string:
+ * they use the selected tracks with TAB only and count the others skipped.
  */
 import { validTuplets } from '../../duration.js';
-import { isGrace, clampDots, without } from './access.js';
+import { trackAt, hasTab, isGrace, isRest, clampDots, notesOf, noteOn, stringCount, without } from './access.js';
 import { DURATIONS } from './durations.js';
-import { fixTiesIn } from './ties.js';
-import { eachSlice, eachSelectedBeat, partsOf, tracksField } from './rangeEdit.js';
+import { fixTiesIn, nextMainBeat } from './ties.js';
+import { eachSlice, eachSelectedBeat, partsOf, tracksField, asRest } from './rangeEdit.js';
 
 const refuse = (id, extra) => ({ announce: { id, ...extra } });
 
@@ -107,4 +108,65 @@ export function tripletRange(score, cursor, state, ctx) {
     return b.tuplet == null ? { ...b, tuplet: 3 } : b;
   });
   return { score: out, announce: { id: 'rangeTriplet', on, count: eligible.length, skipped: targets.length - eligible.length, ...tracksField(sel) } };
+}
+
+/** The parts of `sel` on tracks with TAB, and the column fields `{ tracks, skippedTracks }` (nothing for one track). */
+function tabParts(score, sel) {
+  const parts = partsOf(sel);
+  const usable = parts.filter((p) => hasTab(trackAt(score, p.track)));
+  return { usable, cols: sel.parts ? { tracks: usable.length, skippedTracks: parts.length - usable.length } : {} };
+}
+
+/** R over a range: any note → every note beat a rest (as Delete); all rests → notes at fret 0 on the cursor string (clamped per track). Ties repaired. */
+export function restRange(score, cursor, state, ctx) {
+  const { usable, cols } = tabParts(score, ctx.selection);
+  if (!usable.length) return refuse('needsTab');
+  const targets = mainBeats(score, usable);
+  if (!targets.length) return refuse('noBeatsInSelection');
+  const notes = targets.filter(({ b }) => !isRest(b)).length;
+  if (notes) return { score: mapMain(score, usable, asRest, true), announce: { id: 'rangeToRest', count: notes, ...cols } };
+  const toNote = (b, loc) => ({ ...without(b, 'hidden'), type: 'note', notes: [{ string: Math.min(cursor.string, stringCount(trackAt(score, loc.track))), fret: 0 }] });
+  return { score: mapMain(score, usable, toNote, true), announce: { id: 'rangeToNote', count: targets.length, ...cols } };
+}
+
+const noteKey = (loc, string) => `${loc.track}:${loc.measure}:${loc.beat}:${string}`;
+const sameLoc = (a, b) => !!a && a.track === b.track && a.measure === b.measure && a.beat === b.beat;
+
+/** The tie pairs of `parts`: neighbouring main beats (a rest breaks them) with a note on the same string at the same integer fret. */
+function tiePairs(score, parts) {
+  const pairs = [];
+  for (const p of parts) {
+    let prev = null;
+    for (const x of mainBeats(score, [p])) {
+      const next = prev && !isRest(prev.b) && !isRest(x.b) && (prev.loc.measure === x.loc.measure || sameLoc(nextMainBeat(score, prev.loc), x.loc));
+      for (const a of next ? notesOf(prev.b) : []) {
+        const c = a.string != null && Number.isInteger(a.fret) ? noteOn(x.b, a.string) : null;
+        if (c && c.fret === a.fret) pairs.push({ from: prev.loc, to: x.loc, string: a.string, tied: !!a.tieStart && !!c.tieEnd });
+      }
+      prev = x;
+    }
+  }
+  return pairs;
+}
+
+/** L over a range: every pair already tied → all untied, else all tied; only the tie flags change (never frets or pitch). */
+export function tieRange(score, cursor, state, ctx) {
+  const { usable, cols } = tabParts(score, ctx.selection);
+  if (!usable.length) return refuse('needsTab');
+  const pairs = tiePairs(score, usable);
+  if (!pairs.length) return refuse('nothingToTie');
+  const tie = !pairs.every((x) => x.tied);
+  const flags = new Map();
+  const want = (loc, string, flag) => {
+    const k = noteKey(loc, string);
+    flags.set(k, [...(flags.get(k) ?? []), flag]);
+  };
+  for (const x of pairs) { want(x.from, x.string, 'tieStart'); want(x.to, x.string, 'tieEnd'); }
+  const write = (n, list) => list.reduce((m, f) => (tie ? (m[f] ? m : { ...m, [f]: true }) : without(m, f)), n);
+  const out = mapMain(score, usable, (b, loc) => {
+    if (isRest(b) || !Array.isArray(b.notes)) return b;
+    const notes = b.notes.map((n) => (n.string != null && flags.has(noteKey(loc, n.string)) ? write(n, flags.get(noteKey(loc, n.string))) : n));
+    return notes.some((n, i) => n !== b.notes[i]) ? { ...b, notes } : b;
+  });
+  return { score: out, announce: { id: 'rangeTie', tied: tie, count: pairs.length, ...cols } };
 }
