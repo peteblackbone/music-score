@@ -68,6 +68,11 @@ export const MESSAGES = Object.freeze({
   // 2.3.1 effects over a selection: the step's words, the count, the suffix once
   effectRange: (d) => (Object.hasOwn(EFFECT_BY_NAME, d.name) ? rangeEffectText(EFFECT_BY_NAME[d.name], d) : ''),
   noNotesInSelection: () => 'No notes in the selection',
+  // 2.3.3 rhythm keys over a selection
+  durationLimit: () => 'Duration limit',
+  rangeDuration: (d) => `${d.duration ? `${cap(durationWords(d.duration, d.dots))}, ${plural(d.count, 'beat')}` : `${plural(d.count, 'beat')} ${d.dir}`}${onTracks(d.tracks)}`,
+  rangeDots: (d) => `${RANGE_DOTS[d.dots] ?? RANGE_DOTS[0]}, ${plural(d.count, 'beat')}${onTracks(d.tracks)}`,
+  rangeTriplet: (d) => `Triplet ${d.on ? 'on' : 'off'}, ${plural(d.count, 'beat')}${onTracks(d.tracks)}${d.skipped ? `, ${plural(d.skipped, 'nested tuplet')} skipped` : ''}`,
   noBeatsInSelection: () => 'No beats in the selection',
   // 2.3.1 transpose
   transposed: (d) => (d.fret != null ? `Fret ${d.fret}, ${semitoneText(d.semitones)}` : `Transposed ${plural(d.count, 'note')} ${semitoneText(d.semitones)}${onTracks(d.tracks)}${skippedText(d.skipped)}`),
@@ -163,6 +168,8 @@ const MEASURE_TEXT = {
   pickup: (v) => (v ? 'Pickup' : 'Pickup removed'),
 };
 
+/** The 2.3.3 dots-over-a-range words for 0, 1 and 2 dots. */
+const RANGE_DOTS = ['No dot', 'Dotted', 'Double-dotted'];
 /** 'up 1 semitone' / 'down an octave'. */
 const semitoneText = (n) => `${n > 0 ? 'up' : 'down'} ${Math.abs(n) === 12 ? 'an octave' : plural(Math.abs(n), 'semitone')}`;
 /** 2.3.2 column suffix: ' on 3 tracks' (empty without a track count). */

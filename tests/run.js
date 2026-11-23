@@ -218,5 +218,10 @@ for (const c of cases) {
   const { summary } = await import('./editor-pins-2.3.3.mjs');
   fail += summary();
 }
+// 2.3.3 rhythm keys over a selection and transpose to another string at model level (tests/editor-rhythm.mjs)
+{
+  const { summary } = await import('./editor-rhythm.mjs');
+  fail += summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);

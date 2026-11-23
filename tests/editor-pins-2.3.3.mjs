@@ -51,28 +51,28 @@ function selected(score = fx(), opts = {}) {
 }
 
 // (a) Inverted in 2.3.3 commit 3: + / - / setDuration act on every selected beat and keep the selection.
-test('pin (a): with beats 1-3 selected, + / - / setDuration change the cursor beat (the focus) only and clear the selection', () => {
+test('pin (a), inverted in 2.3.3: with beats 1-3 selected, + / - / setDuration change every selected beat and keep the selection', () => {
   for (const [act, want, said] of [
-    [(ed) => ed.handleKey(key('+')), ['8th', 'quarter', '8th', 'quarter'], 'Eighth'],
-    [(ed) => ed.handleKey(key('-')), ['8th', 'quarter', 'half', 'quarter'], 'Half, measure overfull'],
-    [(ed) => ed.setDuration('whole'), ['8th', 'quarter', 'whole', 'quarter'], 'Whole, measure overfull'],
+    [(ed) => ed.handleKey(key('+')), ['16th', '8th', '8th', 'quarter'], '3 beats halved'],
+    [(ed) => ed.handleKey(key('-')), ['quarter', 'half', 'half', 'quarter'], '3 beats doubled, measure overfull'],
+    [(ed) => ed.setDuration('whole'), ['whole', 'whole', 'whole', 'quarter'], 'Whole, 3 beats, measure overfull'],
   ]) {
     const { ed, spoken } = selected();
     act(ed);
-    eq([durs(ed), spoken(), ed.getSelection()], [want, said, null]);
+    eq([durs(ed), spoken(), ed.getSelection().beatCount], [want, said, 3]);
     ed.destroy();
   }
 });
 
 // (b) Inverted in 2.3.3 commit 3: . and / act on every selected beat and keep the selection.
-test('pin (b): with beats 1-3 selected, . and / change the cursor beat only and clear the selection', () => {
+test('pin (b), inverted in 2.3.3: with beats 1-3 selected, . and / change every selected beat and keep the selection', () => {
   const d = selected();
   d.ed.handleKey(key('.'));
-  eq([beats(d.ed).map((b) => b.dots ?? 0), d.spoken(), d.ed.getSelection()], [[0, 0, 1, 0], 'Dotted quarter, measure full', null]);
+  eq([beats(d.ed).map((b) => b.dots ?? 0), d.spoken(), d.ed.getSelection().beatCount], [[1, 1, 1, 0], 'Dotted, 3 beats, measure overfull', 3]);
   d.ed.destroy();
   const t = selected();
   t.ed.handleKey(key('/'));
-  eq([beats(t.ed).map((b) => b.tuplet ?? null), t.spoken(), t.ed.getSelection()], [[null, null, 3, null], 'Triplet on', null]);
+  eq([beats(t.ed).map((b) => b.tuplet ?? null), t.spoken(), t.ed.getSelection().beatCount], [[3, 3, 3, null], 'Triplet on, 3 beats', 3]);
   t.ed.destroy();
 });
 
