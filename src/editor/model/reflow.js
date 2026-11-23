@@ -8,6 +8,8 @@
  * measure that is full, overfull, a pickup or has a gap plain rests can't
  * write (an unfinished tuplet) is refused; with a selection such measures
  * are skipped and counted, each other one is filled all or nothing.
+ * 2.3.2: a column selection fills each measure of every selected track
+ * (counted as cells: measures × tracks).
  *
  * Reflow moves the beats whose onset is at or past the measure's length
  * (with their leading graces) to the start of the next measure, adding a
@@ -56,28 +58,31 @@ function appendRests(score, loc, rests) {
   return fixTiesIn(out, loc.track, loc.measure, loc.measure);
 }
 
-/** F: fill the cursor measure, or each measure of the selection (see the header). */
+/** F: fill the cursor measure, or each measure of the selection on each of its tracks (see the header). */
 export function fill(score, cursor, state, ctx) {
   const sel = ctx?.selection;
   const [a, b] = sel ? sel.info.measures : [cursor.measure, cursor.measure];
+  const tracks = sel?.parts ? sel.tracks : [cursor.track];
   let out = score;
   let filled = 0;
   let added = 0;
   let refusal = null;
-  for (let mi = a; mi <= b; mi++) {
-    const loc = { track: cursor.track, measure: mi };
-    let plan = fillPlan(out, loc);
-    if (plan.rests && beatsAt(out, loc).length + plan.rests.length > EDITOR_LIMITS.beatsPerVoice) plan = { refused: 'tooLarge' };
-    if (plan.refused) { refusal ??= plan.refused; continue; }
-    out = appendRests(out, loc, plan.rests);
-    filled++;
-    added += plan.rests.length;
-    if (a === b) return { score: out, announce: { id: 'filled', rests: plan.rests } };
+  for (const track of tracks) {
+    for (let mi = a; mi <= b; mi++) {
+      const loc = { track, measure: mi };
+      let plan = fillPlan(out, loc);
+      if (plan.rests && beatsAt(out, loc).length + plan.rests.length > EDITOR_LIMITS.beatsPerVoice) plan = { refused: 'tooLarge' };
+      if (plan.refused) { refusal ??= plan.refused; continue; }
+      out = appendRests(out, loc, plan.rests);
+      filled++;
+      added += plan.rests.length;
+      if (a === b && tracks.length === 1) return { score: out, announce: { id: 'filled', rests: plan.rests } };
+    }
   }
-  const total = b - a + 1;
+  const total = (b - a + 1) * tracks.length;
   if (total === 1) return { announce: { id: refusal } };
   if (!filled) return { announce: { id: 'nothingToFill' } };
-  return { score: out, announce: { id: 'filledMany', count: filled, total, rests: added } };
+  return { score: out, announce: { id: 'filledMany', count: filled, total, rests: added, ...(sel?.parts ? { tracks: tracks.length } : {}) } };
 }
 
 /**

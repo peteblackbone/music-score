@@ -19,12 +19,14 @@
  * selected main beat (rests too with `onRest`); graces and voice 2 are left
  * alone and X never adds a note. When every target is at the same step they
  * all go to the next one, else all go to the start step. Ties are not
- * touched, so they are not repaired either.
+ * touched, so they are not repaired either. 2.3.2: over a column the same
+ * rule spans every selected track; note rows skip (and count) the tracks
+ * without TAB and refuse needsTab only when no selected track has one.
  */
 import {
   trackAt, hasTab, beatAt, isRest, isGrace, cursorNote, updateBeat, updateNote, without, measureAt, beatsOf, notesOf,
 } from './access.js';
-import { eachSlice } from './rangeEdit.js';
+import { eachSlice, partsOf } from './rangeEdit.js';
 import { fretIntoSlot, fretIntoRest, fretIntoNote } from './notes.js';
 import { EFFECTS, SUFFIXES } from './effectTable.js';
 
@@ -88,16 +90,20 @@ export function effectRange(def) {
   const onBeat = (b) => !isGrace(b) && (noteRow ? !isRest(b) && Array.isArray(b.notes) : !isRest(b) || def.onRest);
   const onNote = (n) => n.string != null;
   return (score, cursor, state, ctx) => {
-    const { track: ti, slices } = ctx.selection;
-    const track = trackAt(score, ti);
-    if (noteRow && !hasTab(track)) return refuse('needsTab');
+    const sel = ctx.selection;
+    const parts = partsOf(sel);
+    const usable = noteRow ? parts.filter((p) => hasTab(trackAt(score, p.track))) : parts;
+    if (!usable.length) return refuse('needsTab');
     const targets = [];
-    for (const s of slices) {
-      const beats = beatsOf(measureAt(track, s.measure));
-      for (let k = s.from; k < s.to; k++) {
-        if (!onBeat(beats[k])) continue;
-        if (!noteRow) targets.push({ loc: { track: ti, measure: s.measure, beat: k }, t: beats[k] });
-        else for (const n of notesOf(beats[k])) if (onNote(n)) targets.push({ loc: { track: ti, measure: s.measure, beat: k, string: n.string }, t: n });
+    for (const { track: ti, slices } of usable) {
+      const track = trackAt(score, ti);
+      for (const s of slices) {
+        const beats = beatsOf(measureAt(track, s.measure));
+        for (let k = s.from; k < s.to; k++) {
+          if (!onBeat(beats[k])) continue;
+          if (!noteRow) targets.push({ loc: { track: ti, measure: s.measure, beat: k }, t: beats[k] });
+          else for (const n of notesOf(beats[k])) if (onNote(n)) targets.push({ loc: { track: ti, measure: s.measure, beat: k, string: n.string }, t: n });
+        }
       }
     }
     if (!targets.length) return refuse(!noteRow && def.onRest ? 'noBeatsInSelection' : 'noNotesInSelection');
@@ -107,9 +113,11 @@ export function effectRange(def) {
       if (!onBeat(b)) return b;
       return noteRow ? { ...b, notes: b.notes.map((n) => (onNote(n) ? writeStep(def, n, step) : n)) } : writeStep(def, b, step);
     };
-    const out = eachSlice(score, ti, slices, (part) => part.map(write), false);
+    let out = score;
+    for (const p of usable) out = eachSlice(out, p.track, p.slices, (part) => part.map(write), false);
     const suffix = step >= 0 && def.suffix && def.suffix !== 'link' ? suffixOf(def, out, targets[0].loc) : null;
-    return { score: out, announce: { id: 'effectRange', name: def.name, step, count: targets.length, unit: noteRow ? 'note' : 'beat', suffix } };
+    const columns = sel.parts ? { tracks: usable.length, skippedTracks: parts.length - usable.length } : {};
+    return { score: out, announce: { id: 'effectRange', name: def.name, step, count: targets.length, unit: noteRow ? 'note' : 'beat', suffix, ...columns } };
   };
 }
 

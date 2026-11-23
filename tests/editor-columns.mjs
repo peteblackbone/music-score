@@ -13,6 +13,9 @@ const io = await imp('src/editor/model/io.js');
 const SEL = await imp('src/editor/model/selection.js');
 const COL = await imp('src/editor/model/columns.js');
 const C = await imp('src/editor/model/cursor.js');
+const CMD = await imp('src/editor/model/commands.js');
+const { describe } = await imp('src/editor/announce.js');
+const { sanitizeScore } = await imp('src/sanitize.js');
 
 const results = [];
 const test = (name, fn) => {
@@ -31,6 +34,10 @@ const tab = (measures, extra = {}) => ({ name: 'Gtr', showTablature: true, ...ex
 const cur = (track, measure, beat, string = 1) => ({ track, measure, beat, string });
 const T = (track, measure, beat) => ({ track, measure, beat });
 const st = () => ({ duration: 'quarter', dots: 0, digit: null });
+const run = (name, s, c, sel, arg) => CMD.run(name, s, c, st(), { maxFret: 24, now: 0, twoDigitDelayMs: 800, allowAppend: true, selection: sel }, arg);
+const said = (r) => describe(r.announce);
+const v1 = (s, ti, mi) => s.tracks[ti].measures[mi].beats;
+const same = (s) => sanitizeScore(s) === s;
 const BASS = ['E1', 'A1', 'D2', 'G2'];
 /** 4 tracks: 0 TAB + notation, 1 hidden, 2 notation only, 3 a 4-string TAB-only bass; 4 measures each. */
 const four = () => model({ tracks: [
@@ -125,6 +132,100 @@ test('criterion 5 (model): a column selection is re-derived identically from its
   const again = COL.selectionOf(s, COL.anchorOf(col), COL.focusOf(col));
   eq(again, col);
   ok(C.clampCursor(s, cur(col.focus.track, col.focus.measure, col.focus.beat)).track === 2);
+});
+
+// ---------- range edits over a column (criteria 17-22) ----------
+test('criterion 17: Delete turns the beats of every selected track into rests (graces go), hidden tracks untouched, the cursor on the top track; all rests already: "Already rests"', () => {
+  const s = four();
+  const sel = COL.columnRange(s, T(0, 0, 0), T(3, 1, 0));
+  const r = run('deleteNote', s, cur(3, 1, 0), sel);
+  eq(said(r), '9 beats changed to rests on 3 tracks');
+  eq([r.announce, CMD.undoLabel('deleteNote', r.announce)], [{ id: 'rangeCleared', count: 9, tracks: 3 }, 'clear beats']);
+  for (const ti of [0, 2, 3]) for (const mi of [0, 1]) ok(v1(r.score, ti, mi).every((b) => b.type === 'rest'), `track ${ti} measure ${mi}`);
+  eq(r.score.tracks[1], s.tracks[1], 'the hidden track is the same object');
+  eq([v1(r.score, 0, 3), v1(r.score, 3, 3)], [v1(s, 0, 3), v1(s, 3, 3)], 'measures outside the column untouched');
+  eq(r.cursor, cur(0, 0, 0), 'the top track start');
+  ok(same(r.score));
+  const again = run('deleteNote', r.score, cur(3, 1, 0), COL.columnRange(r.score, T(0, 0, 0), T(3, 1, 0)));
+  eq([again.changed, said(again)], [false, 'Already rests']);
+});
+test('criterion 18: Ctrl+Delete leaves the measures empty on every selected track, the measure count unchanged; winning tempo marks counted on the original score; no beats at all: "No beats to delete"', () => {
+  const s = model({ tracks: [
+    tab([{ beats: [nt('whole', 1, 1, { tempo: 90 })] }, { beats: [nt('whole')] }, { beats: [nt('whole')] }]),
+    tab([{ beats: [nt('half', 2, 2), nt('half', 2, 3, { tempo: 100 })] }, { beats: [nt('whole')] }, { beats: [nt('whole')] }], { name: 'B' }),
+  ] });
+  const r = run('deleteBeat', s, cur(1, 1, 0), COL.columnRange(s, T(0, 0, 0), T(1, 1, 0)));
+  eq(said(r), '5 beats deleted on 2 tracks, 2 tempo marks removed');
+  eq([r.announce.tracks, CMD.undoLabel('deleteBeat', r.announce)], [2, 'delete beats']);
+  eq(r.score.tracks.map((t) => t.measures.map((m) => m.beats.length)), [[0, 0, 1], [0, 0, 1]]);
+  eq(r.cursor, cur(0, 0, 0));
+  ok(same(r.score));
+  const blank = model({ tracks: [tab([{ beats: [] }]), tab([{ beats: [] }], { name: 'B' })] });
+  eq(said(run('deleteBeat', blank, cur(1, 0, 0), COL.columnRange(blank, T(0, 0, 0), T(1, 0, 0)))), 'No beats to delete');
+});
+test('criterion 19: Shift+Delete on a column deletes those columns from every track, hidden ones too', () => {
+  const s = four();
+  const r = run('deleteMeasure', s, cur(3, 1, 0), COL.columnRange(s, T(0, 0, 0), T(3, 1, 0)));
+  eq([said(r), r.score.tracks.map((t) => t.measures.length)], ['Measures 1 to 2 deleted', [2, 2, 2, 2]]);
+  eq(CMD.undoLabel('deleteMeasure', r.announce), 'delete measures');
+});
+test('criterion 20: F fills every measure of every selected track (cells counted), refused ones skipped and counted; one measure on 2 tracks is 2 cells; criterion 21: Shift+F ignores the column', () => {
+  const s = model({ tracks: [
+    tab([{ beats: [nt('quarter')] }, { beats: [nt('whole')] }]),
+    tab([{ beats: [] }, { beats: [nt('half')] }], { name: 'B' }),
+    tab([{ beats: [nt('half')] }, { beats: [nt('quarter')] }], { name: 'C' }),
+  ] });
+  const r = run('fill', s, cur(2, 1, 0), COL.columnRange(s, T(0, 0, 0), T(2, 1, 0)));
+  eq(said(r), 'Filled 5 of 6 measures on 3 tracks, 7 rests added');
+  eq([r.announce.tracks, r.announce.total, r.announce.count], [3, 6, 5]);
+  eq(r.score.tracks.map((t) => t.measures.map((m) => m.beats.length)), [[3, 1], [1, 2], [2, 3]]);
+  ok(same(r.score));
+  const one = run('fill', s, cur(1, 0, 0), COL.columnRange(s, T(0, 0, 0), T(1, 0, 0)));
+  eq(said(one), 'Filled 2 measures on 2 tracks, 3 rests added');
+  const full = model({ tracks: [tab([{ beats: [nt('whole')] }]), tab([{ beats: [nt('whole')] }], { name: 'B' })] });
+  eq(said(run('fill', full, cur(1, 0, 0), COL.columnRange(full, T(0, 0, 0), T(1, 0, 0)))), 'Nothing to fill');
+  const over = model({ tracks: [tab([{ beats: [nt('whole'), nt('half')] }, { beats: [] }]), tab([{ beats: [nt('whole'), nt('whole')] }, { beats: [] }], { name: 'B' })] });
+  const rf = run('reflow', over, cur(1, 0, 0), COL.columnRange(over, T(0, 0, 0), T(1, 0, 0)));
+  eq([v1(rf.score, 0, 0).length, v1(rf.score, 1, 0).length, said(rf)], [2, 1, 'Moved 1 beat to measure 2'], 'Shift+F on the cursor track only');
+});
+test('criterion 22: a beat effect follows the toggle rule across all selected tracks; note effects skip notation-only tracks and count them; needsTab only when no selected track has TAB', () => {
+  const s = four();
+  const sel = COL.columnRange(s, T(0, 0, 0), T(3, 1, 0));
+  const p = run('palmMute', s, cur(3, 1, 0), sel);
+  eq(said(p), 'Palm mute on, 9 beats on 3 tracks');
+  eq(p.announce.skippedTracks, 0);
+  for (const ti of [0, 2, 3]) ok(v1(p.score, ti, 0).every((b) => b.palmMute === true), `track ${ti}`);
+  eq(p.score.tracks[1], s.tracks[1], 'hidden track untouched');
+  const off = run('palmMute', p.score, cur(3, 1, 0), COL.columnRange(p.score, T(0, 0, 0), T(3, 1, 0)));
+  eq(said(off), 'Palm mute off, 9 beats on 3 tracks');
+  const mixed = run('palmMute', s, cur(3, 1, 0), COL.columnRange(s, T(0, 0, 0), T(3, 0, 0)));
+  const p2 = run('palmMute', mixed.score, cur(3, 1, 0), sel);
+  eq(said(p2), 'Palm mute on, 9 beats on 3 tracks', 'mixed steps all go to the start step');
+  const x = run('deadNote', s, cur(3, 1, 0), sel);
+  eq(said(x), 'Dead note on, 6 notes on 2 tracks, 1 track without TAB skipped');
+  eq(v1(x.score, 2, 1), v1(s, 2, 1), 'the notation-only track untouched');
+  const notes = model({ tracks: [{ name: 'N', measures: [{ beats: [nt('whole')] }] }, { name: 'M', measures: [{ beats: [nt('whole')] }] }] });
+  eq(said(run('deadNote', notes, cur(1, 0, 0), COL.columnRange(notes, T(0, 0, 0), T(1, 0, 0)))), 'Needs a TAB staff');
+  ok(CMD.COMMANDS.palmMute.keepsSelection && same(x.score));
+});
+test('criterion 22: transpose covers every selected track (TAB or not), all or nothing; the first misfit in track then measure order is named with its track; ties survive only between transposed notes of the same track', () => {
+  const tied = (fret, flag) => ({ type: 'note', duration: 'whole', notes: [{ string: 1, fret, [flag]: true }] });
+  const s = model({ tracks: [
+    tab([{ beats: [nt('whole', 1, 3)] }, { beats: [nt('whole', 1, 22)] }]),
+    { name: 'Notes', measures: [{ beats: [{ type: 'note', duration: 'whole', notes: [{ pitch: 'C4' }, { string: 2, fret: 1 }] }] }, { beats: [nt('whole', 2, 23)] }] },
+    tab([{ beats: [tied(1, 'tieStart')] }, { beats: [tied(1, 'tieEnd')] }], { name: 'C' }),
+  ] });
+  const all = COL.columnRange(s, T(0, 0, 0), T(2, 1, 0));
+  const up = run('transpose', s, cur(2, 1, 0), all, 1);
+  eq(said(up), 'Transposed 6 notes up 1 semitone on 3 tracks, 1 pitch-only note skipped');
+  eq([v1(up.score, 0, 1)[0].notes[0].fret, v1(up.score, 1, 0)[0].notes, v1(up.score, 2, 0)[0].notes[0]], [23, [{ pitch: 'C4' }, { string: 2, fret: 2 }], { string: 1, fret: 2, tieStart: true }]);
+  ok(same(up.score));
+  const bad = run('transpose', s, cur(2, 1, 0), all, 3);
+  eq([bad.changed, said(bad)], [false, "Can't transpose, measure 2 on track 1 would go above fret 24"]);
+  const second = run('transpose', s, cur(2, 1, 0), COL.columnRange(s, T(1, 0, 0), T(2, 1, 0)), 2);
+  eq(said(second), "Can't transpose, measure 2 on track 2 would go above fret 24", 'track numbers count from 1');
+  const half = run('transpose', s, cur(2, 1, 0), COL.columnRange(s, T(0, 0, 0), T(2, 0, 0)), 1);
+  eq([v1(half.score, 2, 0)[0].notes[0], v1(half.score, 2, 1)[0].notes[0]], [{ string: 1, fret: 2 }, { string: 1, fret: 1 }], 'a tie to an untransposed note goes on both sides');
 });
 
 // ---------- report ----------

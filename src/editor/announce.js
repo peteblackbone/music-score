@@ -19,8 +19,8 @@ const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 const fillWord = (f) => FILL_WORDS[f]?.word ?? f;
 /** The effect text of `def` for descriptor `d`: added, the step's words, or off; plus the suffix. */
 const effectText = (def, d) => `${d.added ? def.added : d.step >= 0 ? def.say[d.step] : def.off}${Object.hasOwn(SUFFIXES, d.suffix ?? '') ? SUFFIXES[d.suffix].text : ''}`;
-/** 'Palm mute on, 8 beats' / 'Accent, 8 beats, not shown on TAB only': the step's words, the count of `unit`, the suffix. */
-const rangeEffectText = (def, d) => `${d.step >= 0 ? def.say[d.step] : def.off}, ${plural(d.count, d.unit)}${Object.hasOwn(SUFFIXES, d.suffix ?? '') ? SUFFIXES[d.suffix].text : ''}`;
+/** 'Palm mute on, 8 beats' / 'Accent, 8 beats, not shown on TAB only': the step's words, the count of `unit` (2.3.2: the tracks, the skipped ones), the suffix. */
+const rangeEffectText = (def, d) => `${d.step >= 0 ? def.say[d.step] : def.off}, ${plural(d.count, d.unit)}${onTracks(d.tracks)}${d.skippedTracks ? `, ${plural(d.skippedTracks, 'track')} without TAB skipped` : ''}${Object.hasOwn(SUFFIXES, d.suffix ?? '') ? SUFFIXES[d.suffix].text : ''}`;
 /** ', hammer/pull, palm mute' (empty when there are none). */
 const effectsText = (list) => (list?.length ? `, ${list.join(', ')}` : '');
 
@@ -70,8 +70,8 @@ export const MESSAGES = Object.freeze({
   noNotesInSelection: () => 'No notes in the selection',
   noBeatsInSelection: () => 'No beats in the selection',
   // 2.3.1 transpose
-  transposed: (d) => (d.fret != null ? `Fret ${d.fret}, ${semitoneText(d.semitones)}` : `Transposed ${plural(d.count, 'note')} ${semitoneText(d.semitones)}${skippedText(d.skipped)}`),
-  transposeRange: (d) => `Can't transpose, measure ${d.measure} would go ${d.up ? `above fret ${d.max}` : 'below fret 0'}`,
+  transposed: (d) => (d.fret != null ? `Fret ${d.fret}, ${semitoneText(d.semitones)}` : `Transposed ${plural(d.count, 'note')} ${semitoneText(d.semitones)}${onTracks(d.tracks)}${skippedText(d.skipped)}`),
+  transposeRange: (d) => `Can't transpose, measure ${d.measure}${d.track ? ` on track ${d.track}` : ''} would go ${d.up ? `above fret ${d.max}` : 'below fret 0'}`,
   noNoteToTranspose: () => 'No note here',
   pitchOnlyNote: () => 'Only fretted notes can be transposed',
   nothingToTranspose: (d) => `No fretted notes to transpose${skippedText(d.skipped)}`,
@@ -96,16 +96,16 @@ export const MESSAGES = Object.freeze({
   selectionCleared: () => 'Selection cleared',
   nothingToSelect: () => 'Nothing to select',
   // 2.3 range edits
-  rangeCleared: (d) => `${plural(d.count, 'beat')} changed to rest${d.count === 1 ? '' : 's'}`,
+  rangeCleared: (d) => `${plural(d.count, 'beat')} changed to rest${d.count === 1 ? '' : 's'}${onTracks(d.tracks)}`,
   rangeAlreadyRests: () => 'Already rests',
   copiedRests: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}, already rests`,
   rangeNoBeats: () => 'No beats to delete',
-  rangeRemoved: (d) => `${plural(d.count, 'beat')} deleted${tempoRemoved(d.tempoRemoved)}`,
+  rangeRemoved: (d) => `${plural(d.count, 'beat')} deleted${onTracks(d.tracks)}${tempoRemoved(d.tempoRemoved)}`,
   columnsDeleted: (d) => `${d.all ? 'All measures deleted, 1 empty measure left' : d.a === d.b ? `Measure ${d.a} deleted` : `Measures ${d.a} to ${d.b} deleted`}${tempoRemoved(d.tempoRemoved)}`,
   needsMeasureSelection: () => 'Select whole measures first',
   // 2.3 fill and reflow
   filled: (d) => `Added ${plural(d.rests.length, 'rest')}: ${d.rests.map((r) => DURATION_WORDS[r]).join(', ')}`,
-  filledMany: (d) => `Filled ${d.count === d.total ? plural(d.count, 'measure') : `${d.count} of ${d.total} measures`}, ${plural(d.rests, 'rest')} added`,
+  filledMany: (d) => `Filled ${d.count === d.total ? plural(d.count, 'measure') : `${d.count} of ${d.total} measures`}${onTracks(d.tracks)}, ${plural(d.rests, 'rest')} added`,
   fillFull: () => 'Measure already full',
   fillOver: () => 'Measure overfull, try Reflow',
   fillTuplet: () => 'Finish the tuplet first',
@@ -161,6 +161,8 @@ const MEASURE_TEXT = {
 
 /** 'up 1 semitone' / 'down an octave'. */
 const semitoneText = (n) => `${n > 0 ? 'up' : 'down'} ${Math.abs(n) === 12 ? 'an octave' : plural(Math.abs(n), 'semitone')}`;
+/** 2.3.2 column suffix: ' on 3 tracks' (empty without a track count). */
+const onTracks = (n) => (n ? ` on ${plural(n, 'track')}` : '');
 /** ', 2 pitch-only notes skipped' (empty for none). */
 const skippedText = (n) => (n ? `, ${plural(n, 'pitch-only note')} skipped` : '');
 /** ', 2 notes on missing strings dropped' (empty for none). */
