@@ -585,6 +585,30 @@ test('robustness by hand: 1-string and 12-string tunings, duplicate strings in a
   ok(!tw.changed, 'string 12 fret 0 down has nowhere to go');
 });
 
+// ---------- 2.3.3 verification bugs, fixed: stringless and duplicate-string notes are skipped by a range transpose ----------
+{
+  const io2 = await imp('src/editor/model/io.js');
+  const SEL2 = await imp('src/editor/model/selection.js');
+  const CMD2 = await imp('src/editor/model/commands.js');
+  const { sanitizeScore: san } = await imp('src/sanitize.js');
+  const tab2 = (measures) => ({ name: 'Gtr', showTablature: true, measures });
+  const st2 = () => ({ duration: 'quarter', dots: 0, digit: null });
+  const sel1 = (s) => SEL2.selectionRange(s, 0, { measure: 0, beat: 0 }, { measure: 0, beat: 0 });
+  const go = (s, sel, semis) => CMD2.run('transpose', s, { track: 0, measure: 0, beat: 0, string: 1 }, st2(), { maxFret: 24, now: 0, allowAppend: true, selection: sel }, semis);
+  test('bug fix: a fretted note with a pitch but no string is skipped (counted) by a range transpose and the model stays a sanitize fixpoint', () => {
+    const s = io2.parseInput({ tracks: [tab2([{ beats: [{ type: 'note', duration: 'quarter', notes: [{ fret: 3, pitch: 'C4' }, { string: 1, fret: 2 }] }] }])] });
+    const r = go(s, sel1(s), 1);
+    const notes = r.score.tracks[0].measures[0].beats[0].notes;
+    if (!(r.changed && san(r.score) === r.score)) throw new Error('not a sanitize fixpoint');
+    if (JSON.stringify(notes) !== JSON.stringify([{ fret: 3, pitch: 'C4' }, { string: 1, fret: 3 }])) throw new Error(JSON.stringify(notes));
+  });
+  test('bug fix: two notes on one string (malformed) are skipped by a range transpose, so no tie flag is moved onto the wrong note', () => {
+    const s = io2.parseInput({ tracks: [tab2([{ beats: [{ type: 'note', duration: 'whole', notes: [{ string: 1, fret: 0 }, { string: 1, fret: 0, tieStart: true }] }] }])] });
+    const r = go(s, sel1(s), -1);
+    if (r.changed || r.score !== s) throw new Error('the malformed beat was changed');
+  });
+}
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

@@ -32,6 +32,12 @@ const fretted = (n) => Number.isInteger(n.fret);
 const beatKey = (loc) => `${loc.track}:${loc.measure}:${loc.beat}`;
 const key = (loc, string) => `${beatKey(loc)}:${string}`;
 const sameBeat = (a, b) => a.track === b.track && a.measure === b.measure && a.beat === b.beat;
+/** Notes of `b` a selection transposes: fretted, with a string that no other note of the beat shares (malformed duplicates and stringless notes are skipped). */
+function movable(b) {
+  const seen = new Map();
+  for (const n of notesOf(b)) if (n.string != null) seen.set(n.string, (seen.get(n.string) ?? 0) + 1);
+  return (n) => fretted(n) && n.string != null && seen.get(n.string) === 1;
+}
 
 /** Transpose by `semis` semitones (see the header). */
 export function transpose(score, cursor, state, ctx, semis) {
@@ -61,8 +67,9 @@ export function transpose(score, cursor, state, ctx, semis) {
   let skipped = 0;
   eachSelectedBeat(score, parts, (b, loc) => {
     if (isRest(b)) return;
+    const can = movable(b);
     for (const n of notesOf(b)) {
-      if (fretted(n)) targets.push({ ...loc, n, grace: isGrace(b) });
+      if (can(n)) targets.push({ ...loc, n, grace: isGrace(b) });
       else skipped++;
     }
   });
@@ -88,8 +95,9 @@ export function transpose(score, cursor, state, ctx, semis) {
     if (isRest(b) || !Array.isArray(b.notes)) return b;
     const placed = moves.size ? moves.get(beatKey(loc)) : null;
     const drop = isGrace(b) ? ['pitch', 'tieStart', 'tieEnd'] : ['pitch'];
+    const can = movable(b);
     return { ...b, notes: b.notes.map((n) => {
-      if (!fretted(n)) return n;
+      if (!can(n)) return n;
       const to = placed?.get(n);
       return to ? { ...without(n, ...drop), string: to.string, fret: to.fret } : shifted(n);
     }) };
