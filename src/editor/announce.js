@@ -20,7 +20,7 @@ const fillWord = (f) => FILL_WORDS[f]?.word ?? f;
 /** The effect text of `def` for descriptor `d`: added, the step's words, or off; plus the suffix. */
 const effectText = (def, d) => `${d.added ? def.added : d.step >= 0 ? def.say[d.step] : def.off}${Object.hasOwn(SUFFIXES, d.suffix ?? '') ? SUFFIXES[d.suffix].text : ''}`;
 /** 'Palm mute on, 8 beats' / 'Accent, 8 beats, not shown on TAB only': the step's words, the count of `unit` (2.3.2: the tracks, the skipped ones), the suffix. */
-const rangeEffectText = (def, d) => `${d.step >= 0 ? def.say[d.step] : def.off}, ${plural(d.count, d.unit)}${onTracks(d.tracks)}${d.skippedTracks ? `, ${plural(d.skippedTracks, 'track')} without TAB skipped` : ''}${Object.hasOwn(SUFFIXES, d.suffix ?? '') ? SUFFIXES[d.suffix].text : ''}`;
+const rangeEffectText = (def, d) => `${d.step >= 0 ? def.say[d.step] : def.off}, ${plural(d.count, d.unit)}${onTracks(d.tracks)}${noTab(d.skippedTracks)}${Object.hasOwn(SUFFIXES, d.suffix ?? '') ? SUFFIXES[d.suffix].text : ''}`;
 /** ', hammer/pull, palm mute' (empty when there are none). */
 const effectsText = (list) => (list?.length ? `, ${list.join(', ')}` : '');
 
@@ -167,6 +167,8 @@ const MEASURE_TEXT = {
 const semitoneText = (n) => `${n > 0 ? 'up' : 'down'} ${Math.abs(n) === 12 ? 'an octave' : plural(Math.abs(n), 'semitone')}`;
 /** 2.3.2 column suffix: ' on 3 tracks' (empty without a track count). */
 const onTracks = (n) => (n ? ` on ${plural(n, 'track')}` : '');
+/** ', 1 track without TAB skipped' (empty for none). */
+const noTab = (n) => (n ? `, ${plural(n, 'track')} without TAB skipped` : '');
 /** ', 3 tracks' / ', 1 clip track not pasted' (empty without a count). */
 const tracksText = (n) => (n ? `, ${plural(n, 'track')}` : '');
 const notPasted = (n) => (n ? `, ${plural(n, 'clip track')} not pasted` : '');

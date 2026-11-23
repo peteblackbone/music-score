@@ -29,12 +29,12 @@ export function tempoIn(score, track, slices) {
   }).length;
 }
 
-/** `score` with each slice's beats [from, to) replaced by fn(beats) on track `track`, then its ties repaired unless `repair` is false (`score` itself when no slice has beats). Also used by the 2.3.1 range effects and transpose, which keep their ties themselves. */
+/** `score` with each slice's beats [from, to) replaced by fn(beats, slice) on track `track`, then its ties repaired unless `repair` is false (`score` itself when no slice has beats). Also used by the 2.3.1 range effects and transpose, which keep their ties themselves, and the 2.3.3 rhythm keys. */
 export function eachSlice(score, track, slices, fn, repair = true) {
   let out = score;
   for (const s of slices) {
     if (s.from >= s.to) continue;
-    out = updateBeats(out, { track, measure: s.measure }, (bs) => [...bs.slice(0, s.from), ...fn(bs.slice(s.from, s.to)), ...bs.slice(s.to)]);
+    out = updateBeats(out, { track, measure: s.measure }, (bs) => [...bs.slice(0, s.from), ...fn(bs.slice(s.from, s.to), s), ...bs.slice(s.to)]);
   }
   return out === score || !repair ? out : fixTiesIn(out, track, slices[0].measure, slices[slices.length - 1].measure);
 }
@@ -49,8 +49,8 @@ export function eachSelectedBeat(score, parts, fn) {
   }
 }
 
-/** A note beat as a rest of the same length (effects, unknown fields and tempo kept); rests unchanged. */
-const asRest = (b) => (isRest(b) ? b : { ...without(b, 'notes', 'slash'), type: 'rest' });
+/** A note beat as a rest of the same length (effects, unknown fields and tempo kept); rests unchanged. Also 2.3.3 R over a range. */
+export const asRest = (b) => (isRest(b) ? b : { ...without(b, 'notes', 'slash'), type: 'rest' });
 
 /**
  * `score` with the selection's graces removed and its note beats turned
