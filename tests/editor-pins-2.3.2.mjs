@@ -80,9 +80,9 @@ test('pin (c): a second Ctrl+A changes nothing and repeats "Selected all of Trac
 });
 
 // (d) Inverted in 2.3.2 commit 4 for measures clips; a beats clip with two entries stays refused.
-test('pin (d): parseClip of a measures clip with 2 track entries is clipInvalid (and a beats clip with 2 entries)', () => {
+test('pin (d), inverted in 2.3.2: parseClip of a measures clip with 2 track entries is a multi-track clip; a beats clip with 2 entries stays clipInvalid (not inverted)', () => {
   const entry = { tuning: TUNING, measures: [{ beats: [nt('whole')] }] };
-  eq(CL.parseClip(JSON.stringify({ type: 'music-score-clip', version: 1, kind: 'measures', tracks: [entry, entry] })), { refused: { id: 'clipInvalid' } });
+  eq(CL.parseClip(JSON.stringify({ type: 'music-score-clip', version: 1, kind: 'measures', tracks: [entry, entry] })), { clip: { kind: 'measures', tracks: [entry, entry] } });
   const beats = { tuning: TUNING, beats: [nt('quarter')] };
   eq(CL.parseClip(JSON.stringify({ type: 'music-score-clip', version: 1, kind: 'beats', tracks: [beats, beats] })), { refused: { id: 'clipInvalid' } });
 });

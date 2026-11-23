@@ -98,7 +98,7 @@ export const MESSAGES = Object.freeze({
   // 2.3 range edits
   rangeCleared: (d) => `${plural(d.count, 'beat')} changed to rest${d.count === 1 ? '' : 's'}${onTracks(d.tracks)}`,
   rangeAlreadyRests: () => 'Already rests',
-  copiedRests: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}, already rests`,
+  copiedRests: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}${tracksText(d.tracks)}, already rests`,
   rangeNoBeats: () => 'No beats to delete',
   rangeRemoved: (d) => `${plural(d.count, 'beat')} deleted${onTracks(d.tracks)}${tempoRemoved(d.tempoRemoved)}`,
   columnsDeleted: (d) => `${d.all ? 'All measures deleted, 1 empty measure left' : d.a === d.b ? `Measure ${d.a} deleted` : `Measures ${d.a} to ${d.b} deleted`}${tempoRemoved(d.tempoRemoved)}`,
@@ -117,17 +117,17 @@ export const MESSAGES = Object.freeze({
   reflowCrossing: (d) => `Beat ${d.beat} crosses the barline and stays`,
   reflowNothing: () => 'Nothing to reflow',
   // 2.3 clipboard
-  copied: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}`,
-  cut: (d) => `Cut ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}, now rests`,
-  pasted: (d) => `${d.kind === 'measures' ? `Inserted ${plural(d.count, 'measure')} at measure ${d.at}` : `Pasted ${plural(d.count, 'beat')}${d.replaced ? `, replaced ${d.replaced}` : ''}`}${droppedText(d.dropped)}${tempoRemoved(d.tempoRemoved)}`,
+  copied: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}${tracksText(d.tracks)}`,
+  cut: (d) => `Cut ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}${tracksText(d.tracks)}, now rests`,
+  pasted: (d) => `${d.kind === 'measures' ? `Inserted ${plural(d.count, 'measure')} at measure ${d.at}${tracksText(d.tracks)}${notPasted(d.droppedTracks)}` : `Pasted ${plural(d.count, 'beat')}${d.replaced ? `, replaced ${d.replaced}` : ''}`}${droppedText(d.dropped)}${tempoRemoved(d.tempoRemoved)}`,
   pastedOver: (d) => {
     const r = d.count - d.added;
     const span = (n) => (n === 1 ? `measure ${d.at}` : `measures ${d.at} to ${d.at + n - 1}`);
     const where = r > 0 ? `over ${span(r)}${d.added ? `, ${plural(d.added, 'measure')} added` : ''}` : `at the end, ${span(d.count)}`;
-    return `Pasted ${plural(d.count, 'measure')} ${where}${droppedText(d.dropped)}${tempoRemoved(d.tempoRemoved)}`;
+    return `Pasted ${plural(d.count, 'measure')} ${where}${tracksText(d.tracks)}${notPasted(d.droppedTracks)}${droppedText(d.dropped)}${tempoRemoved(d.tempoRemoved)}`;
   },
   pasteNeedsMeasures: () => 'Select whole measures to paste measures',
-  cutUnwritten: (d) => `Clipboard unavailable, nothing cut. ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')} copied in the editor`,
+  cutUnwritten: (d) => `Clipboard unavailable, nothing cut. ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}${tracksText(d.tracks)} copied in the editor`,
   nothingToCopy: () => 'Nothing to copy',
   nothingToPaste: () => 'Nothing to paste',
   notClip: () => 'Not a music-score clip',
@@ -163,6 +163,9 @@ const MEASURE_TEXT = {
 const semitoneText = (n) => `${n > 0 ? 'up' : 'down'} ${Math.abs(n) === 12 ? 'an octave' : plural(Math.abs(n), 'semitone')}`;
 /** 2.3.2 column suffix: ' on 3 tracks' (empty without a track count). */
 const onTracks = (n) => (n ? ` on ${plural(n, 'track')}` : '');
+/** ', 3 tracks' / ', 1 clip track not pasted' (empty without a count). */
+const tracksText = (n) => (n ? `, ${plural(n, 'track')}` : '');
+const notPasted = (n) => (n ? `, ${plural(n, 'clip track')} not pasted` : '');
 /** ', 2 pitch-only notes skipped' (empty for none). */
 const skippedText = (n) => (n ? `, ${plural(n, 'pitch-only note')} skipped` : '');
 /** ', 2 notes on missing strings dropped' (empty for none). */

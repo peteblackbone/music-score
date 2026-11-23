@@ -25,7 +25,9 @@
  *   and counted. At most LIMITS.measuresPerTrack measures. The cursor goes
  *   to the first position after the written measures, else the end of the
  *   last one.
- * Ties at the edges are repaired; the result is sanitized.
+ * Ties at the edges are repaired; the result is sanitized. 2.3.2: a
+ * one-track clip on a column selection goes to its top part only; clips
+ * with several tracks go to pasteColumns.js.
  */
 import { tracksOf, trackAt, measuresOf, measureAt, measureCount, beatsAt, isGrace, tuningOf, without, updateBeats, isBlankMeasure } from './access.js';
 import { leadingGraces } from './beats.js';
@@ -41,7 +43,7 @@ import { EDITOR_LIMITS } from './limits.js';
 const refuse = (id) => ({ refused: { id } });
 
 /** Clip measures fitted to `tuning`: `{ measures, dropped }`. */
-function fit(clip, tuning) {
+export function fit(clip, tuning) {
   const measures = clip.kind === 'beats' ? [{ beats: clip.beats }] : clip.measures;
   const r = retuneTrack({ tuning: clip.tuning ?? [...STANDARD_TUNING], measures }, [...tuning]);
   return { measures: r.track.measures ?? measures, dropped: r.removed };
@@ -51,6 +53,17 @@ function fit(clip, tuning) {
 export function targetMeasure(score, cursor) {
   const beats = beatsAt(score, cursor);
   return cursor.beat >= beats.length && beats.some((b) => !isGrace(b)) ? cursor.measure + 1 : cursor.measure;
+}
+
+/** `score` with clip measures `measures` written over track `ti` from measure `a` (padded with empty measures; each keeps its own fields, its beats and voices replaced), seams repaired. */
+export function overwriteMeasures(score, ti, a, measures) {
+  const k = measures.length;
+  const tracks = tracksOf(score).slice();
+  const ms = measuresOf(tracks[ti]).slice();
+  while (ms.length < a + k) ms.push({ beats: [] });
+  for (let i = 0; i < k; i++) ms[a + i] = { ...without(measureAt(tracks[ti], a + i) ?? {}, 'beats', 'voices'), ...measures[i] };
+  tracks[ti] = { ...tracks[ti], measures: ms };
+  return fixTiesIn({ ...score, tracks }, ti, a, a + k - 1);
 }
 
 /** A beats clip `beats` pasted at the cursor or the selection (see the header). */
@@ -111,12 +124,7 @@ export function pasteMeasures(score, cursor, sel, measures, dropped, insert = fa
     marks = tempoMarks(score).winners.filter((w) => w.track === ti && w.measure >= a && w.measure < Math.min(a + k, count));
     if (added > 0) out = insertMeasuresAt(score, count, added);
   }
-  const tracks = tracksOf(out).slice();
-  const ms = measuresOf(tracks[ti]).slice();
-  while (ms.length < a + k) ms.push({ beats: [] });
-  for (let i = 0; i < k; i++) ms[a + i] = { ...without(measureAt(tracks[ti], a + i) ?? {}, 'beats', 'voices'), ...measures[i] };
-  tracks[ti] = { ...tracks[ti], measures: ms };
-  out = fixTiesIn({ ...out, tracks }, ti, a, a + k - 1);
+  out = overwriteMeasures(out, ti, a, measures);
   let tempoRemoved = 0;
   if (over) ({ score: out, dropped: tempoRemoved } = rehomeTempo(out, ti, marks));
   out = sanitizeFixed(out);
@@ -128,7 +136,9 @@ export function pasteMeasures(score, cursor, sel, measures, dropped, insert = fa
 }
 
 /** Paste `clip` into `score` at `cursor` (with `sel`, a live selection, or null; `insert`: Insert paste): `{ score, cursor, announce }` or `{ refused }`. */
-export function applyPaste(score, cursor, sel, clip, { insert = false } = {}) {
+export function applyPaste(score, cursor, sel, clip, opts = {}) {
+  if (sel?.parts) return applyPaste(score, { ...cursor, track: sel.track }, sel.parts[0], clip, opts);
+  const { insert = false } = opts;
   const { measures, dropped } = fit(clip, tuningOf(trackAt(score, sel?.track ?? cursor.track)));
   return clip.kind === 'beats'
     ? pasteBeats(score, cursor, sel, measures[0].beats, dropped, insert)

@@ -11,7 +11,8 @@
  *
  * `internal` is the module-level clipboard every editor on the page shares
  * (always available; the fallback when the system clipboard has no clip).
- * Copy takes the selection, or the cursor beat with its leading graces.
+ * Copy takes the selection (2.3.2: a column, one clip track per selected
+ * track), or the cursor beat with its leading graces.
  * A paste event reads the custom type first, then text/plain that is a
  * clip, then the internal clipboard. Safari may fire no paste event on the
  * root, so a Ctrl+V keydown schedules an internal paste after 0 ms that a
@@ -22,7 +23,8 @@
  */
 import { CLIP_MIME, cursorRange, buildClip, parseClip, looksLikeClip } from './model/clip.js';
 import { applyPaste } from './model/paste.js';
-import { clearSlices } from './model/rangeEdit.js';
+import { pasteColumns } from './model/pasteColumns.js';
+import { clearParts } from './model/rangeEdit.js';
 import { exportedLength } from './model/io.js';
 import { EDITOR_LIMITS } from './model/limits.js';
 import { describe } from './announce.js';
@@ -49,7 +51,7 @@ export function installClipboard(Editor) {
   Object.defineProperty(Editor, 'looksLikeClip', { value: looksLikeClip, enumerable: true, writable: false, configurable: false });
   const def = (name, fn) => method(Editor, name, fn);
 
-  /** The clip of the selection or the cursor beat → `{ text, kind, count, range }`, or null on the slot. */
+  /** The clip of the selection or the cursor beat → `{ text, kind, count, tracks?, range }`, or null on the slot. */
   def('_clip', function clip() {
     const range = this._selection ?? cursorRange(this._model, this._cursor);
     return range && { ...buildClip(this._model, range), range };
@@ -60,7 +62,7 @@ export function installClipboard(Editor) {
     const c = this._clip();
     if (!c) { this._say(describe({ id: 'nothingToCopy' })); return null; }
     internal = c.text;
-    this._say(describe({ id: 'copied', kind: c.kind, count: c.count }));
+    this._say(describe({ id: 'copied', kind: c.kind, count: c.count, tracks: c.tracks }));
     return c.text;
   });
 
@@ -81,9 +83,9 @@ export function installClipboard(Editor) {
     const c = this._clip();
     if (!c) { this._say(describe({ id: 'nothingToCopy' })); return null; }
     internal = c.text;
-    if (event && !writeClip(data, c.text)) { this._sayKept(describe({ id: 'cutUnwritten', kind: c.kind, count: c.count })); return null; }
-    const r = clearSlices(this._model, c.range);
-    const announce = { id: 'cut', kind: c.kind, count: c.count };
+    if (event && !writeClip(data, c.text)) { this._sayKept(describe({ id: 'cutUnwritten', kind: c.kind, count: c.count, tracks: c.tracks })); return null; }
+    const r = clearParts(this._model, c.range);
+    const announce = { id: 'cut', kind: c.kind, count: c.count, tracks: c.tracks };
     if (r.score === this._model) this._say(describe({ ...announce, id: 'copiedRests' })); // only rests: copied, nothing to clear
     else this._applyModel('cut', 'cut', { score: r.score, cursor: { ...this._cursor, ...r.cursor }, announce });
     return c.text;
@@ -103,7 +105,7 @@ export function installClipboard(Editor) {
     if (src == null) return this._refused({ id: 'nothingToPaste' });
     const p = parseClip(src);
     if (p.refused) return this._refused(p.refused);
-    const r = applyPaste(this._model, this._cursor, this._selection, p.clip, { insert });
+    const r = (p.clip.tracks ? pasteColumns : applyPaste)(this._model, this._cursor, this._selection, p.clip, { insert });
     if (r.refused) return this._refused(r.refused);
     if (exportedLength(r.score) > EDITOR_LIMITS.jsonChars) return this._refused({ id: 'tooLarge' });
     return this._applyModel('paste', 'paste', r);
