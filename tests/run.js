@@ -223,6 +223,11 @@ for (const c of cases) {
   const { summary } = await import('./editor-rhythm.mjs');
   fail += summary();
 }
+// 2.3.3 edge cases and robustness at model level: columns with notation-only and hidden tracks, two voices, graces and the slot, L pairs, R round trips, nested tuplets, limits, the string fallback against an oracle, chords, refusals, ties, a seeded pass over odd content (tests/editor-rhythm-edge.mjs)
+{
+  const { summary } = await import('./editor-rhythm-edge.mjs');
+  fail += summary();
+}
 // 2.3.3 the same at controller level: wording, undo labels, the kept selection, read-only, the demo buttons, the cursor following a moved note, B10 over 300 steps (tests/editor-rhythm-dom.mjs)
 {
   const { summary } = await import('./editor-rhythm-dom.mjs');
