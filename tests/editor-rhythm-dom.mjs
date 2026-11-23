@@ -174,6 +174,10 @@ test('demo: the palette buttons call setDuration and the Dots / Triplet buttons 
   eq([beats(ed).map((b) => b.tuplet ?? null), spoken(), ed.getSelection().beatCount], [[3, 3, 3, null], 'Triplet on, 3 beats', 3]);
   ed.destroy();
 });
+test('the shortcuts panel says the rhythm keys, R and L act on a selection and that transpose moves a note to the nearest string', () => {
+  const html = fs.readFileSync(path.join(root, 'editor.html'), 'utf8');
+  for (const t of ['<p>With a selection: every selected beat.</p>', 'Rest / note (with a selection: every selected beat)', 'Tie to the previous note on this string (with a selection: tie or untie every pair of equal notes)', 'a note past fret 0 or the top fret moves to the nearest string']) ok(html.includes(t), t);
+});
 test('transpose: the cursor follows its note to the new string (with and without a selection); undo puts it back; a note that fits keeps the 2.3.1 wording', () => {
   const { ed, spoken } = mk({ tracks: [tab([{ beats: [nt('whole', 2, 0)] }, { beats: [nt('whole', 2, 3)] }])] });
   ed.setCursor({ string: 2 });
