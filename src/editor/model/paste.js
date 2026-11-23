@@ -66,6 +66,33 @@ export function overwriteMeasures(score, ti, a, measures) {
   return fixTiesIn({ ...score, tracks }, ti, a, a + k - 1);
 }
 
+/**
+ * The plan of a measures paste of `k` measures onto track indices `tracks`
+ * (shared by pasteMeasures and pasteColumns, so the two follow one rule):
+ * `{ a, over, added, marks, out }` (the start measure; overwrite or insert;
+ * the columns appended past the end; per track, its winning tempo marks on
+ * the measures overwritten; the score with the room made), or `{ refused }`.
+ * With no selection the target measure is taken on `cursor`'s track and an
+ * overwrite needs those measures blank on every track of `tracks`.
+ */
+export function planMeasures(score, cursor, sel, tracks, k, insert) {
+  if (!k) return refuse('nothingToPaste');
+  if (sel && !insert && sel.info.kind !== 'measures') return refuse('pasteNeedsMeasures');
+  const count = measureCount(score);
+  const a = sel ? sel.info.measures[0] : targetMeasure(score, cursor);
+  let over = !insert;
+  if (over && !sel) for (const ti of tracks) for (let i = 0; i < k && over; i++) over = isBlankMeasure(score, ti, a + i);
+  const added = over ? Math.max(0, a + k - count) : k;
+  if (count + added > EDITOR_LIMITS.measuresPerTrack) return refuse('tooLarge');
+  const winners = over ? tempoMarks(score).winners : [];
+  const marks = tracks.map((ti) => winners.filter((w) => w.track === ti && w.measure >= a && w.measure < Math.min(a + k, count)));
+  const out = !over ? insertMeasuresAt(score, a, k) : added > 0 ? insertMeasuresAt(score, count, added) : score;
+  return { a, over, added, marks, out };
+}
+
+/** Where the cursor goes after `k` measures written from `a` on track `ti` of `out`: the next measure's start, else the end of the last one written. */
+export const afterMeasures = (out, ti, a, k) => (a + k < measureCount(out) ? { measure: a + k, beat: 0 } : { measure: a + k - 1, beat: beatsAt(out, { track: ti, measure: a + k - 1 }).length });
+
 /** A beats clip `beats` pasted at the cursor or the selection (see the header). */
 export function pasteBeats(score, cursor, sel, beats, dropped, insert = false) {
   const ti = sel?.track ?? cursor.track;
@@ -99,36 +126,14 @@ export function pasteBeats(score, cursor, sel, beats, dropped, insert = false) {
 export function pasteMeasures(score, cursor, sel, measures, dropped, insert = false) {
   const ti = sel?.track ?? cursor.track;
   const k = measures.length;
-  if (!k) return refuse('nothingToPaste');
-  const count = measureCount(score);
-  let a;
-  let over;
-  if (insert) {
-    a = sel ? sel.info.measures[0] : targetMeasure(score, cursor);
-    over = false;
-  } else if (sel) {
-    if (sel.info.kind !== 'measures') return refuse('pasteNeedsMeasures');
-    a = sel.info.measures[0];
-    over = true;
-  } else {
-    a = targetMeasure(score, cursor);
-    over = true;
-    for (let i = 0; i < k && over; i++) over = isBlankMeasure(score, ti, a + i);
-  }
-  const added = over ? Math.max(0, a + k - count) : k;
-  if (count + added > EDITOR_LIMITS.measuresPerTrack) return refuse('tooLarge');
-  let out = score;
-  let marks = [];
-  if (!over) out = insertMeasuresAt(score, a, k);
-  else {
-    marks = tempoMarks(score).winners.filter((w) => w.track === ti && w.measure >= a && w.measure < Math.min(a + k, count));
-    if (added > 0) out = insertMeasuresAt(score, count, added);
-  }
-  out = overwriteMeasures(out, ti, a, measures);
+  const plan = planMeasures(score, cursor, sel, [ti], k, insert);
+  if (plan.refused) return plan;
+  const { a, over, added } = plan;
+  let out = overwriteMeasures(plan.out, ti, a, measures);
   let tempoRemoved = 0;
-  if (over) ({ score: out, dropped: tempoRemoved } = rehomeTempo(out, ti, marks));
+  if (over) ({ score: out, dropped: tempoRemoved } = rehomeTempo(out, ti, plan.marks[0]));
   out = sanitizeFixed(out);
-  const end = a + k < measureCount(out) ? { measure: a + k, beat: 0 } : { measure: a + k - 1, beat: beatsAt(out, { track: ti, measure: a + k - 1 }).length };
+  const end = afterMeasures(out, ti, a, k);
   const announce = over
     ? { id: 'pastedOver', count: k, at: a + 1, added, dropped, tempoRemoved }
     : { id: 'pasted', kind: 'measures', count: k, at: a + 1, dropped };

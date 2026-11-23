@@ -17,14 +17,10 @@
  * most LIMITS.measuresPerTrack measures; the result is sanitized. The cursor
  * goes to the first position after the written measures on the base track.
  */
-import { tracksOf, trackAt, measureCount, beatsAt, tuningOf, isVisible, isBlankMeasure } from './access.js';
-import { insertMeasuresAt } from './measures.js';
-import { tempoMarks, rehomeTempo } from './settings/tempo.js';
+import { tracksOf, trackAt, tuningOf, isVisible } from './access.js';
+import { rehomeTempo } from './settings/tempo.js';
 import { sanitizeFixed } from './io.js';
-import { EDITOR_LIMITS } from './limits.js';
-import { fit, overwriteMeasures, targetMeasure } from './paste.js';
-
-const refuse = (id) => ({ refused: { id } });
+import { fit, overwriteMeasures, planMeasures, afterMeasures } from './paste.js';
 
 /** The first `n` visible track indices from `base` upward. */
 function targetsFrom(score, base, n) {
@@ -38,29 +34,12 @@ function targetsFrom(score, base, n) {
 export function pasteColumns(score, cursor, sel, clip, { insert = false } = {}) {
   const base = sel ? sel.track : cursor.track;
   const k = clip.tracks[0].measures.length;
-  if (!k) return refuse('nothingToPaste');
-  if (sel && !insert && sel.info.kind !== 'measures') return refuse('pasteNeedsMeasures');
   const targets = targetsFrom(score, base, clip.tracks.length);
   const droppedTracks = clip.tracks.length - targets.length;
-  const count = measureCount(score);
-  let a;
-  let over;
-  if (sel) {
-    a = sel.info.measures[0];
-    over = !insert;
-  } else {
-    a = targetMeasure(score, { ...cursor, track: base });
-    over = !insert;
-    for (let t = 0; t < targets.length && over; t++) for (let i = 0; i < k && over; i++) over = isBlankMeasure(score, targets[t], a + i);
-  }
-  const added = over ? Math.max(0, a + k - count) : k;
-  if (count + added > EDITOR_LIMITS.measuresPerTrack) return refuse('tooLarge');
-  let marks = [];
-  if (over) {
-    const winners = tempoMarks(score).winners;
-    marks = targets.map((ti) => winners.filter((w) => w.track === ti && w.measure >= a && w.measure < Math.min(a + k, count)));
-  }
-  let out = !over ? insertMeasuresAt(score, a, k) : added > 0 ? insertMeasuresAt(score, count, added) : score;
+  const plan = planMeasures(score, { ...cursor, track: base }, sel, targets, k, insert);
+  if (plan.refused) return plan;
+  const { a, over, added, marks } = plan;
+  let out = plan.out;
   let dropped = 0;
   targets.forEach((ti, i) => {
     const f = fit({ kind: 'measures', ...clip.tracks[i] }, tuningOf(trackAt(out, ti)));
@@ -76,7 +55,7 @@ export function pasteColumns(score, cursor, sel, clip, { insert = false } = {}) 
     });
   }
   out = sanitizeFixed(out);
-  const end = a + k < measureCount(out) ? { measure: a + k, beat: 0 } : { measure: a + k - 1, beat: beatsAt(out, { track: base, measure: a + k - 1 }).length };
+  const end = afterMeasures(out, base, a, k);
   const tracks = targets.length;
   const announce = over
     ? { id: 'pastedOver', count: k, at: a + 1, added, dropped, tempoRemoved, tracks, droppedTracks }
