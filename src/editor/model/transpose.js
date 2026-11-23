@@ -34,7 +34,8 @@ export function transpose(score, cursor, state, ctx, semis) {
   if (!sel) {
     if (!hasTab(trackAt(score, cursor.track))) return refuse('needsTab');
     const n = cursorNote(score, cursor);
-    if (!n || !fretted(n)) return refuse('noNoteToTranspose');
+    if (!n) return refuse('noNoteToTranspose');
+    if (!fretted(n)) return refuse('pitchOnlyNote'); // a note with a pitch but no fret
     if (!fits(n)) return outOfRange(cursor.measure);
     const out = updateNote(untieNote(score, cursor), cursor, shifted);
     return { score: out, announce: { id: 'transposed', semitones: semis, count: 1, fret: n.fret + semis } };

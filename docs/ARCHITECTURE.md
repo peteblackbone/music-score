@@ -894,7 +894,7 @@ test. The `looksLikeClip` static is defined with `Object.defineProperty` in
 ### Selection model
 
 - `_selection` is `null` or `{ track, anchor, focus, slices, info }`. The focus is
-  always the cursor. A model change clears the selection; it is never remapped.
+  always the cursor. A model change clears the selection; it is never remapped. The one exception (2.3.1) is a `keepsSelection` command, which re-derives the selection from its anchor and focus.
 - `rangeSlices(score, track, anchor, focus)` cuts the range into one slice per
   measure, `{ measure, from, to, first, last }`. `[from, to)` are beat indices, and
   `first` and `last` say whether the slice starts at the measure's first position and
@@ -902,12 +902,12 @@ test. The `looksLikeClip` static is defined with `Object.defineProperty` in
   into (`leadingGraces`). The slot is never a selected beat: a range that ends on it
   runs to the last beat. This is one forward walk, so the cost is linear in measures.
 - `info.kind` is `'measures'` when every slice has both `first` and `last`, and
-  `'beats'` otherwise. `beatCount` counts main beats. Zero beats means no selection.
+  `'beats'` otherwise. `beatCount` counts main beats. A range with no main beat is a selection only when it covers a whole blank measure: then `kind` is `'measures'` and `beatCount` is 0 (2.3.1). Any other zero-beat range is `null`.
 - The select commands are moves with `kind: 'select'`. They return no score, so they
   run in read-only mode. `_extend(name)` keeps the anchor (the cursor, or the score
   start for Ctrl+A), moves the cursor to the focus, and emits `cursor` and then
   `selection` when the range changed. At an edge with no change it only speaks.
-- Clearing happens in five places. `_exec` clears when the model changed or the
+- Clearing happens in five places. From 2.3.1, a `keepsSelection` command keeps the selection (see `_settleSelection`). `_exec` clears when the model changed or the
   command is a plain move. `_step` clears before it looks for an undo or redo, so
   Ctrl+Z clears even when there is nothing to undo. `_moveTo` (clicks and `setCursor`)
   and `loadScore` clear. PageUp and PageDown are plain moves, so `_exec` clears them. `_applyModel` clears for settings calls
@@ -933,8 +933,8 @@ test. The `looksLikeClip` static is defined with `Object.defineProperty` in
   all or nothing, and with a selection the refused measures are skipped.
 - `reflow` finds the first main beat whose onset is at or past the measure length,
   takes it with its leading graces, and prepends them to the next measure. It appends
-  a measure first on the last measure. It repairs the seam with `fixTiesIn`, and it
-  does not cascade.
+  a measure first on the last measure. It repairs the seam with `fixTiesIn`. From 2.3.1 it
+  also splits a crossing beat and cascades (see "2.3.1 additions").
 
 ### Clip pipeline and security
 
@@ -1040,15 +1040,158 @@ checks that a `document` reference in either is caught.
 - The renderer is unchanged. It ignores the field, so the 82 snapshots stay
   byte-identical.
 
-### Extension points for 2.3.1
+### 2.3.1 additions
 
-- `eachSlice(score, track, slices, fn)` (rangeEdit.js) is the one loop that maps the
-  beats of a selection, and it repairs the ties. Effects over a selection and transpose
-  should call it, as `clearSlices` and `removeSlices` do.
+2.3.1 completes range editing: paste replaces or inserts, effects and transpose act on a
+selection, reflow splits and cascades, and a selection can cover blank measures. The
+user-facing description is in the README, under "Editing rules" and "Limitations in 2.3".
+The design sources are `.12sp/requirements-2.3.1.md` and `.12sp/design-2.3.1.md` (the
+decisions X1 to X14 are in the design). Where they differ from the code, the code is the
+reference. The one change to `ScoreEditor.js` is in `_exec`, which calls
+`this._settleSelection(name, r)`, so the class stays at its line budget.
+
+| File | 2.3.1 change |
+|---|---|
+| `model/transpose.js` | New. The `transpose` command. |
+| `model/reflowSplit.js` | New. `plainRun`, `splitBeat` and the field tables. |
+| `model/reflow.js` | `reflowStep` (one measure, with the split) and the cascade `reflow`. `fill` and `fillPlan` are unchanged. |
+| `model/paste.js` | Rewritten as `pasteBeats` and `pasteMeasures`, with `targetMeasure`. `applyPaste(…, { insert })`. |
+| `model/selection.js` | `blankRange`: a zero-beat selection of whole blank measures. |
+| `model/rangeEdit.js` | `eachSlice(…, repair)`. `removeRange` on a zero-beat selection gives `rangeNoBeats`. |
+| `model/effects.js` | `effectRange(def)`: the row over a selection. |
+| `model/access.js` | `isBlankMeasure`. |
+| `model/settings/tempo.js` | `mainBeatAt` and `rehomeTempo`. |
+| `model/ties.js` | `fixSeam` keeps a tie only between equal notes (`samePitch`). |
+| `model/commands.js` | `keepsSelection` on the effects and transpose. Effects use `ranged(…, effectRange)`. |
+| `selection.js` | `_settleSelection`. |
+| `clipboard.js` | `paste(input, options)`, `_pasteInsert` and `_takeInsert`. |
+| `keymap.js` | Transpose keys, Ctrl/Cmd+Shift+Home and End, `isInsertPasteKey`. |
+| `view.js` | The blur listener also calls `onClipboard('blur')`. |
+| `announce.js` | The wording of the new results. |
+
+#### Paste modes
+
+- `paste(input, options)` throws `TypeError` unless `options` is nullish or an object,
+  and passes `options.insert === true` to `_pasteFrom`.
+- The insert flag, `_pasteInsert`, is set on each `'pastekey'` from `isInsertPasteKey(e)`
+  (Ctrl or Cmd, Shift and V). Shift+Insert never sets it. `_takeInsert()` reads and
+  clears it on the native paste and on the 0 ms fallback. Blur and destroy clear it and
+  the fallback. A `'pasteseen'` whose event is already `defaultPrevented` (a paste the
+  host handled) also clears it, so the flag can't leak into a later paste (the security
+  review's F1). This goes beyond the design's list.
+- Keydown is never prevented for Ctrl+V or Ctrl+Shift+V. `keyToCommand` returns null for
+  both, so the browser delivers the paste event.
+- `applyPaste` takes its target track from `sel?.track ?? cursor.track`. This is the seam
+  for 2.3.2 (see below).
+- `targetMeasure(score, cursor)`: the cursor's measure, or the next one when the cursor is
+  on the slot of a measure with a main beat.
+- `isBlankMeasure(score, ti, mi)` (access.js): every voice holds only rests. A hole or a
+  column past the end is blank. A grace counts as a note.
+- `pasteMeasures` picks a start `a` and a mode:
+  - insert: `a` is the selection's first measure, else the target, and the columns are
+    inserted with `insertMeasuresAt`;
+  - a selection with Ctrl+V: the kind must be `'measures'`, otherwise `pasteNeedsMeasures`.
+    It overwrites from the selection's first measure;
+  - no selection: it overwrites when `a` to `a + k − 1` are all blank on the cursor track,
+    else inserts.
+- An overwrite collects the tempo winners of the cursor track in the range first. It
+  appends the columns past the end to every track with `insertMeasuresAt`, writes each
+  measure as `{ ...without(old, 'beats', 'voices'), ...clipMeasure }` (so the measure's
+  own fields stay, and voice 2 goes), repairs the ties with `fixTiesIn`, and calls
+  `rehomeTempo`.
+- `rehomeTempo(score, ti, marks)`: each winning mark goes back, raw, on the main beat at
+  its (measure, onset) on the cursor track. Failing that it tries the other tracks in
+  index order, and otherwise counts the mark as dropped. Moves are silent (X5).
+- The cursor after a measures paste goes to the first position after the written range,
+  or to the end of the last written measure when none follows (D-A8 and X3). A beats
+  paste puts the cursor after the pasted beats. A paste clears the selection (`_applyModel`)
+  in both modes, including an insert over a selection (X1).
+
+#### Blank-measure selections
+
+- `selectionRange` (model/selection.js): when a range has no main beat, `blankRange` keeps
+  only the whole slices. With none left the result is `null`. Otherwise the info is
+  `{ kind: 'measures', beatCount: 0, start: { measure: m0, beat: 0 }, end: { measure: m1, beat: 0 } }` (X8).
+- `removeRange` on a zero-beat selection says `rangeNoBeats` (X9). `clearSlices` returns the
+  same score when nothing changes, so Delete says "Already rests". Shift+Delete deletes the
+  whole columns.
+
+#### Effects and transpose over a selection
+
+- `commands.js`: the effect commands are `keep(edit(ranged(effectCommand(d), effectRange(d)), d.label))`,
+  and `transpose` is `keep(edit(transpose, 'transpose'))`. `keepsSelection` is the only flag.
+- `_exec` calls `_settleSelection(name, r)` (selection.js). When a `keepsSelection` command
+  has changed the model and a selection is live, it re-derives the selection from its
+  anchor and focus with `selectionRange`, and fires `selection` only when the info
+  changed. A null result drops the selection. Otherwise the 2.3.0 rule applies: clear
+  after a change or a plain move.
+- `effectRange(def)` (effects.js): the targets are the voice-1 non-grace beats of the
+  slices. A note row needs a `string` on a non-rest beat, and a TAB track. A beat row takes
+  the non-rest beats, plus the rests when `def.onRest`. The step is `nextStep` of the common
+  classification, or of −1 when they differ. `writeStep` runs on each target, so the
+  exclusive keys go per target. X never creates a note. The suffix other than `link` is
+  spoken once.
+- A known difference from the design: on a selection of blank measures, P, D and Shift+D
+  act on the rests, because those rows have `onRest`. The design's table (§3) expected a
+  refusal there. The code is the reference, and the README documents it.
+- `transpose(score, cursor, state, ctx, semis)` (transpose.js): with no selection it moves
+  the cursor note (TAB needed, `untieNote` first). With a selection it moves every voice-1
+  note with an integer `fret` in the non-rest beats, graces included, and counts the
+  pitch-only notes. `fits` checks `fret` and an integer `harmonicFret` against `maxFret`.
+  One target that doesn't fit refuses the whole range, with `transposeRange` at its measure.
+- Ties in a transpose: a main-beat tie is kept when both of its notes are moved (a `moved`
+  set of `measure:beat:string`). Otherwise `stripFlag` removes both flags, found with
+  `nextMainBeat` and `prevMainBeat`. Grace ties are left alone.
+- `eachSlice(score, track, slices, fn, repair = true)` (rangeEdit.js): `repair = false`
+  skips `fixTiesIn`. Effects and transpose pass `false`, because they manage ties
+  themselves (X10, X11).
+- keymap.js: the Ctrl branch maps ArrowUp and ArrowDown to `transpose` with ±1, and with
+  Shift to ±12. Shift+↑ and Shift+↓ without Ctrl stay unbound.
+
+#### Reflow split and cascade
+
+- `reflowSplit.js`: `plainRun(o, end)` is the fill rule's greedy choice of plain durations,
+  and it returns null when none fits. `splitBeat(beat, durations)` builds the pieces from
+  the field tables: `BEAT_EVERY` (type, palmMute, letRing, vibrato, hidden, slash) goes on
+  every piece. `BEAT_DROP` (duration, dots, notes) is rebuilt per piece. `NOTE_EVERY`
+  (string, fret, pitch, harmonicFret, mute, ghost, harmonic) goes on every piece.
+  `NOTE_LAST` (tieStart, hammerPull, slide, slideOut) goes on the last piece. Everything else
+  goes on the first piece. A note piece gets `tieStart` on all but the last, and `tieEnd`
+  on all but the first. A rest gets no notes and no ties (X12).
+- `reflowStep` (reflow.js), one measure: it splits only when the crossing beat has no
+  `tuplet` or `tuplets` key and both halves have a plain run. Otherwise the beat stays,
+  and the step reports `crossing`. Graces that lead into the next main beat move with it (`leadingGraces`, as in 2.3.0). Graces after the last main beat of the measure stay in it (X12).
+  It refuses with `tooLarge` past 2000 measures or 256 beats. It then repairs the seam with
+  `fixTiesIn(mi, mi + 1)`.
+- `reflow(score, cursor)`, the cascade: it runs the first measure, then each following
+  measure only while `measureFill` is `'over'`. A refusal at any step refuses the whole
+  reflow (all or nothing). The cursor follows its beat: `measure + 1`, at
+  `afterCount + (beat − from)`. One step is announced as `reflowed` (the 2.3.0 wording with
+  the split and crossing parts). Two or more are `reflowedMany` (X13). The selection is
+  ignored, and the edit clears it.
+- The cascade can take quadratic time in the worst case (a whole track of overfull
+  measures), so the 2.3.1 bench times it on 2000 measures.
+
+#### Keys (2.3.1)
+
+- `keymap.js`: Ctrl/Cmd+↑/↓ → `transpose` (±1). Ctrl/Cmd+Shift+↑/↓ → `transpose` (±12).
+  Ctrl/Cmd+Shift+Home/End → `selectScoreStart` and `selectScoreEnd`, the select commands
+  run by `_extend`. Shift+↑/↓ and Shift+R/I are still reserved for 2.3.2. Ctrl/Cmd+Shift+V
+  is not a command (see Paste modes).
+
+### Extension points for 2.3.2
+
+- Multi-track selection: `_selectionView()` gives `geometry.selectionShapes` the track,
+  `kind` and `slices`. A multi-track selection would need a track list there and a per-track
+  overlay. `rangeSlices` and `selectionRange` take one track.
+- Column clipboard: the clip envelope keeps `tracks` as an array. `parseClip` accepts
+  exactly one entry today (decision D13). A multi-track clip keeps the envelope and changes
+  only that check. Clip version 1 is unchanged in 2.3.1.
+- `applyPaste` already takes its track from `sel.track`. `pasteMeasures` writes only that
+  track's measures. Other tracks change only through `insertMeasuresAt` and `rehomeTempo`.
 - The clip envelope keeps `tracks` as an array. `parseClip` accepts exactly one entry
   today (decision D13). A multi-track clip keeps the envelope and changes only that check.
-- `reflow` refuses to split a beat that crosses the barline and announces it. Splitting
-  it into tied notes would replace that branch and use the `fixTiesIn` seam.
+- Shift+↑ and Shift+↓, and Shift+R and Shift+I, stay reserved in `keymap.js`.
 - `_selectionView()` gives `geometry.selectionShapes` the track, `kind` and `slices`.
   A multi-track selection would need a track list there, and a per-track overlay.
 
@@ -1068,3 +1211,4 @@ checks that a `document` reference in either is caught.
   `dispatch` and `listenerCount`, and exports `makeClipboardData(init)`.
 - The reserved-key assertions in `tests/editor-model.mjs` changed on purpose: Shift+←/→,
   Shift+Home/End, Ctrl+Shift+← and Ctrl+A are no longer unbound.
+- 2.3.1 tests: `tests/editor-pins-2.3.1.mjs` pins the 2.3.0 behaviour that 2.3.1 changes (each pin is labelled "inverted in 2.3.1" where it applies) and the reserved keys. `tests/editor-range.mjs` and `tests/editor-range-edge.mjs` cover the model: paste, blank-measure selections, effects and transpose over a selection, the reflow split and cascade, and the property runs. `tests/editor-range-dom.mjs` and `tests/editor-range-edge-dom.mjs` cover the controller: the insert flag's lifecycle, the keys, the announcements, read-only mode and the native paste path. The 2.3.1 design (§10) lists 2.3.0 tests in `tests/editor-select.mjs` and `tests/editor-select-dom.mjs` as deliberate updates.

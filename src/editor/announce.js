@@ -73,6 +73,7 @@ export const MESSAGES = Object.freeze({
   transposed: (d) => (d.fret != null ? `Fret ${d.fret}, ${semitoneText(d.semitones)}` : `Transposed ${plural(d.count, 'note')} ${semitoneText(d.semitones)}${skippedText(d.skipped)}`),
   transposeRange: (d) => `Can't transpose, measure ${d.measure} would go ${d.up ? `above fret ${d.max}` : 'below fret 0'}`,
   noNoteToTranspose: () => 'No note here',
+  pitchOnlyNote: () => 'Only fretted notes can be transposed',
   nothingToTranspose: (d) => `No fretted notes to transpose${skippedText(d.skipped)}`,
   // 2.2 settings
   noChange: () => 'No change',

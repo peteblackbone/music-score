@@ -561,6 +561,14 @@ test('E1 selectScoreStart / selectScoreEnd: from another track and a hole, on a 
     ok(fixSeam(pitches, A, B) === pitches, 'equal pitch-only notes: unchanged');
   });
 }
+{
+  const { describe } = await imp('src/editor/announce.js');
+  test('transpose on a pitch-only cursor note says only fretted notes can be transposed', () => {
+    const s = { tracks: [{ showTablature: true, tuning: ['E2','A2','D3','G3','B3','E4'], measures: [{ beats: [{ type: 'note', duration: 'whole', notes: [{ string: 1, pitch: 'E4' }] }] }] }] };
+    const r = runX('transpose', s, { track: 0, measure: 0, beat: 0, string: 1 }, null, 1);
+    eq([r.score === s, describe(r.announce)], [true, 'Only fretted notes can be transposed']);
+  });
+}
 // ---------- report ----------
 export function summary() {
   let fail = 0;

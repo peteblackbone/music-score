@@ -1,8 +1,8 @@
 # music-score
 
-Version 2.3.0 · MIT licence
+Version 2.3.1 · MIT licence
 
-A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL). From 2.0.0 it also includes a keyboard editor for tablature (`ScoreEditor`), and from 2.1.0 that editor can add playing techniques such as hammer-ons, slides, bends and accents from the keyboard. From 2.2.0 it can also change the score's header, its tracks, tuning and capo, time and key signatures, clef changes, repeats, endings, navigation marks, sections and tempo. From 2.3.0 it can also select a range of beats or whole measures from the keyboard, copy, cut and paste it, delete, fill and reflow a range, read tempo marks from every track, and mark a pickup measure. See [Editing scores](#editing-scores-scoreeditor).
+A small vanilla JavaScript library that draws music notation and guitar tablature as SVG in the browser. You describe a score as plain JSON, and the library renders it with the Bravura music font (SMuFL). From 2.0.0 it also includes a keyboard editor for tablature (`ScoreEditor`), and from 2.1.0 that editor can add playing techniques such as hammer-ons, slides, bends and accents from the keyboard. From 2.2.0 it can also change the score's header, its tracks, tuning and capo, time and key signatures, clef changes, repeats, endings, navigation marks, sections and tempo. From 2.3.0 it can also select a range of beats or whole measures from the keyboard, copy, cut and paste it, delete, fill and reflow a range, read tempo marks from every track, and mark a pickup measure. From 2.3.1 it can also paste over blank or selected measures, insert with Ctrl+Shift+V, transpose a selection, apply effects to a selection, and split a beat that crosses a barline when you reflow. See [Editing scores](#editing-scores-scoreeditor).
 
 - No build step and no dependencies. Plain ES modules.
 - Standard notation staves, tab staves, or both, stacked per track.
@@ -173,9 +173,9 @@ The pixel keys are not in `defaultTheme`. Reading or changing `renderer.theme.sy
 
 ## Editing scores (ScoreEditor)
 
-From 2.0.0, `ScoreEditor` lets a person type and edit tablature from the keyboard. It draws the score with the same renderer as above. Users can type frets, change rhythms, and add or delete measures, with undo and redo. From 2.3.0 they can also select a range, copy, cut and paste it, delete, fill and reflow a range. The editor keeps the score in memory and gives you the score as JSON. It stores nothing itself, so saving is up to your page.
+From 2.0.0, `ScoreEditor` lets a person type and edit tablature from the keyboard. It draws the score with the same renderer as above. Users can type frets, change rhythms, and add or delete measures, with undo and redo. From 2.3.0 they can also select a range, copy, cut and paste it, delete, fill and reflow a range. From 2.3.1 they can also transpose a range and apply effects to it. The editor keeps the score in memory and gives you the score as JSON. It stores nothing itself, so saving is up to your page.
 
-Editing notes is keyboard-only. A mouse click places the cursor, but there is no mouse pitch entry and no drag selection. Ranges are selected from the keyboard (Shift with the arrow keys, Ctrl+A). The settings from 2.2.0 are methods on the editor, and the demo's Score…, Tracks… and Measure… dialogs are mouse-friendly forms for them. See [Limitations in 2.3](#limitations-in-23).
+Editing notes is keyboard-only. A mouse click places the cursor, but there is no mouse pitch entry and no drag selection. Ranges are selected from the keyboard (Shift with the arrow keys, Ctrl+A, Ctrl+Shift+Home and Ctrl+Shift+End). The settings from 2.2.0 are methods on the editor, and the demo's Score…, Tracks… and Measure… dialogs are mouse-friendly forms for them. See [Limitations in 2.3](#limitations-in-23).
 
 ### Try the editor
 
@@ -185,8 +185,8 @@ Start the demo server as in [Running the demo](#running-the-demo), then open htt
 - **Example** loads `lead-riff`, `lead-solo-f` or `example-score`.
 - **Open JSON…** and **Download JSON** read and write a score file. Files over 5 MB are refused. A downloaded file is named after the title. Only letters, digits, spaces, hyphens and underscores are kept, and the name falls back to `score.json`.
 - **Undo** and **Redo**, a duration palette (whole to 64th, dots and triplet), and a **Read-only** checkbox.
-- An **Edit** group, with **Copy**, **Cut** and **Paste**, and a **Measures** group, with **Fill** and **Reflow** (both from 2.3.0). Copy is disabled only on the slot at the end of a measure. Cut is also disabled in read-only mode. Paste, Fill and Reflow are disabled in read-only mode too. Paste uses the editor's own clipboard, and reads the system clipboard only when the browser has already allowed it, so the page never asks for permission.
-- An **Effects** group of buttons, one for each effect key except Shift+S and Shift+B (see [Effects](#effects)). Each button presses its key, so the same refusals apply. A button shows the cursor's current state, such as "Slide: legato" or "Dynamic + (mf)", and the group is disabled in read-only mode.
+- An **Edit** group, with **Copy**, **Cut** and **Paste**, and a **Measures** group, with **Fill** and **Reflow** (both from 2.3.0). Copy is disabled only on the slot at the end of a measure. Cut is also disabled in read-only mode. Paste, Fill and Reflow are disabled in read-only mode too. Paste uses the editor's own clipboard, and reads the system clipboard only when the browser has already allowed it, so the page never asks for permission. From 2.3.1, **Paste as new measures** inserts the clip instead of replacing anything, and a **Transpose** group (**−1**, **+1**, **−12** and **+12**) moves the cursor note or the selection by a semitone or an octave, with the same keys as Ctrl+↑ and Ctrl+↓ (Ctrl+Shift+↑ and Ctrl+Shift+↓ for an octave). Paste as new measures and the Transpose buttons are disabled in read-only mode too.
+- An **Effects** group of buttons, one for each effect key except Shift+S and Shift+B (see [Effects](#effects)). Each button presses its key, so the same refusals apply, and with a selection live the button acts on the selection (from 2.3.1). A button shows the cursor's current state, such as "Slide: legato" or "Dynamic + (mf)", and the group is disabled in read-only mode.
 - **Score…**, **Tracks…** and **Measure…** open the settings dialogs, described under [Demo dialogs](#demo-dialogs). Apply makes the changes, and Cancel or Esc closes the dialog without changing anything. The three buttons are disabled in read-only mode (list actions in Tracks… apply at once).
 - A status bar that shows the track, measure, beat, string, fret, duration, fill and effects of the cursor, and from 2.2.0 the time signature, key and tempo. From 2.3.0 the tempo is the one in force on any track, and a Selection item shows the live selection, such as "6 beats, measures 2–3". The fill reads Pickup on a pickup measure.
 - **Autosave.** After each edit, undo or redo, the score is saved in this browser (localStorage key `music-score-editor:autosave`), 500 ms after the last change. Loading an example or a file is not saved until you edit. The next visit restores the saved score. If the saved data can't be read, the lead-riff example loads with a notice. If a restore never finishes drawing, the next visit in the same tab skips it.
@@ -257,12 +257,12 @@ A value that isn't a number falls back to the default. `maxFret` and `historyLim
 | `moveTrack(from, to)` | `true` or `false` | Moves a track to a new position. |
 | `updateMeasure(mi, patch, { track }?)` | `true` or `false` | Time and key signatures, clef, barline, repeats, endings, navigation marks, sections and the pickup flag (measure 1 only). See [Measure settings](#measure-settings). |
 | `setTempo(tempo)` | `true` or `false` | A tempo mark on the cursor beat, or `null` to remove it. It applies to every track, so other tracks' marks at the same point are replaced. See [Tempo mark](#tempo-mark). |
-| `getSelection()` | object or `null` | A copy of the selection: `{ kind, track, start, end, beatCount, measures }`, with `start` and `end` as `{ measure, beat }` and `measures` as `[first, last]`. `kind` is `'measures'` when the selection covers whole measures, otherwise `'beats'`. `null` when nothing is selected. |
+| `getSelection()` | object or `null` | A copy of the selection: `{ kind, track, start, end, beatCount, measures }`, with `start` and `end` as `{ measure, beat }` and `measures` as `[first, last]`. `kind` is `'measures'` when the selection covers whole measures, otherwise `'beats'`. A range of blank measures (measures with no note beat, such as empty measures) is a selection too, from 2.3.1: `kind` is `'measures'`, `beatCount` is `0`, and `start` and `end` are `{ measure, beat: 0 }` for its first and last measure. A range with no note beat and no whole measure is `null`. `null` when nothing is selected. |
 | `setSelection({ anchor, focus })` | the selection, as `getSelection()` | Selects from `anchor` to `focus`, both `{ track?, measure, beat }` and both inclusive. The cursor moves to `focus`. Throws `TypeError` for a missing or non-numeric value, and `RangeError` when the anchor is on another track. Values are clamped to the score. |
 | `clearSelection()` | `true` or `false` | Clears the selection. `false` when there was none. |
 | `copy()` | string or `null` | The clip JSON of the selection, or of the cursor beat when nothing is selected. Returns `null` on the end-of-measure position. Writes the editor's own clipboard only, not the system clipboard. Use the returned text with `navigator.clipboard` if you want that. |
 | `cut()` | string or `null` | Copies as `copy()` does, then turns the same beats into rests. Returns `null` when nothing was cut, for example in read-only mode. |
-| `paste(text?)` | `true` or `false` | Pastes a clip, from `text` when given, or from the editor's own clipboard otherwise. One undo step. Refusals are announced, and return `false`. |
+| `paste(text?, options?)` | `true` or `false` | Pastes a clip, from `text` when given, or from the editor's own clipboard otherwise. One undo step. Refusals are announced, and return `false`. `options` is an object or omitted; anything else throws `TypeError`. `{ insert: true }` makes an Insert paste (from 2.3.1), which replaces nothing. The replace and insert rules are under [Clipboard](#editing-rules). |
 | `getRemoveTrackImpact(ti)` | `{ notes, tempoMarks }` | The notes and the tempo marks that `removeTrack(ti)` would delete. Marks that move to another track are not counted. Changes nothing. |
 | `ScoreEditor.looksLikeClip(text)` | boolean | Static. Whether `text` is a music-score clip (JSON with the clip type, under the size limit). Use it to tell a clip from other clipboard text. |
 | `getMeasureSettings(mi, ti?)` | object | What is set and in force at a measure. Changes nothing. See [Reading the settings](#reading-the-settings). |
@@ -295,7 +295,7 @@ The selection and pickup fields of `getCursorInfo()` (2.3.0):
 |---|---|---|
 | `change` | After each change to the score, once the editor has redrawn. Cursor moves don't fire it. | `{ source, command?, message? }`. `source` is `'edit'`, `'undo'`, `'redo'` or `'load'`. For an edit, `command` names it, for example `'digit'`, `'deleteNote'` or `'moveRight'` (when Right added a measure). For a settings call, `command` is the method name, such as `'updateMeasure'`, and `message` is the text spoken for it. |
 | `cursor` | Straight away, on every cursor move. | `{ track, measure, beat, string, voice: 1 }`, counting from 0. |
-| `selection` | When the selection changes, and when it is cleared. It fires straight away, so a move or edit that clears a selection fires it before the `change` for that edit. It does not fire at an edge where the selection doesn't change. | The `getSelection()` object (see the Methods table above), or `null` when there is no selection. |
+| `selection` | When the selection changes, and when it is cleared. It fires straight away, so a move or edit that clears a selection fires it before the `change` for that edit. It does not fire at an edge where the selection doesn't change. From 2.3.1, an effect key or transpose on a selection keeps the selection, and this event fires only when the selection's `getSelection()` info changes. | The `getSelection()` object (see the Methods table above), or `null` when there is no selection. |
 
 For a key that edits the score and moves the cursor, `cursor` fires first, and `change` fires after the redraw. Read the score inside a `change` listener to get the new score.
 
@@ -315,7 +315,11 @@ The editor acts only while it has focus. Tab and Shift+Tab are never taken, so k
 | Ctrl+Shift+← / Ctrl+Shift+→ | Extend to the start of this measure, or of the previous one if the cursor is already there. Or to the end of this measure, or of the next one. |
 | Shift+Home / Shift+End | Extend the selection to the first / last beat of the measure. |
 | Ctrl+A | Select every measure of the cursor track. Works only while the score has focus. |
-| Ctrl+C / Ctrl+X / Ctrl+V | Copy, cut and paste, through the browser's copy, cut and paste events. Copy takes the selection, or the cursor beat when nothing is selected. Cut turns the beats into rests. Paste goes before the cursor, or replaces the selection. These keys work only while the score has focus, so click it first. |
+| Ctrl+C / Ctrl+X / Ctrl+V | Copy, cut and paste, through the browser's copy, cut and paste events. Copy takes the selection, or the cursor beat when nothing is selected. Cut turns the beats into rests. Paste replaces a selection, or overwrites blank measures, and otherwise goes before the cursor (see [Clipboard](#editing-rules)). These keys work only while the score has focus, so click it first. |
+| Ctrl+Shift+V | Insert paste: the same clip as Ctrl+V, but nothing is replaced. Measures go in as new measures and beats go in before the cursor or the selection (from 2.3.1). Only while the score has focus. |
+| Ctrl+↑ / Ctrl+↓ | Transpose the cursor note, or every fretted note in the selection, up or down one semitone (from 2.3.1). See [Transpose](#editing-rules). |
+| Ctrl+Shift+↑ / Ctrl+Shift+↓ | As Ctrl+↑ and Ctrl+↓, but by an octave (12 semitones) (from 2.3.1). |
+| Ctrl+Shift+Home / Ctrl+Shift+End | Extend the selection to the first position of the score, or the last position of the last measure, on the cursor track (from 2.3.1). When the cursor is already there, the editor says "Start of score" or "End of score". |
 | 0 to 9 (also on the keypad) | Fret on the cursor string. Two quick digits make a two-digit fret, such as 12. |
 | + or = | Shorter duration: halved, down to 64th. |
 | - | Longer duration: doubled, up to whole. |
@@ -329,7 +333,7 @@ The editor acts only while it has focus. Tab and Shift+Tab are never taken, so k
 | M | Insert an empty measure after the current one, in every track. |
 | Shift+M | Insert an empty measure before the current one, in every track. |
 | F | Fill the cursor measure with rests, so it reaches its time signature. With a selection, fill each of its measures. |
-| Shift+F | Reflow: move the beats that start at or past the end of the measure to the start of the next measure. |
+| Shift+F | Reflow: move the beats that start at or past the end of the measure to the start of the next measure. From 2.3.1, a beat that crosses the barline is split into tied pieces, and the reflow carries on through each following measure that is overfull. It ignores any selection. |
 | Shift+Delete or Shift+Backspace | Delete the current measure, in every track. With a selection of whole measures, delete those measures. With a selection of beats only, nothing changes and the editor says "Select whole measures first". |
 | H | Hammer-on or pull-off on / off. |
 | S | Slide → legato slide → off. |
@@ -356,7 +360,8 @@ Notes:
 - Keys are matched by the character they type, so they follow your keyboard layout.
 - 2.3.0 adds the selection, clipboard, F and Shift+F keys above. The settings dialogs open from their toolbar buttons, which Tab reaches.
 - Browser shortcuts are not taken: Ctrl+W, Ctrl+T, Ctrl+N, Ctrl+1 to 9 and the others. Alt combinations and the F-keys are not taken either. While the score has focus, Ctrl+A, Ctrl+Z and Ctrl+Y are taken by the editor, and Ctrl+C, Ctrl+X and Ctrl+V are handled as the editor's copy, cut and paste.
-- Shift+H, Shift+V, Shift+P, Shift+X, Shift+G and Shift+N do nothing, and Shift+R and Shift+I are reserved for 2.3.1. Shift with ← or → extends the selection, and Shift with Home or End extends it to the measure edge. Shift+↑ and Shift+↓ do nothing, and so do Ctrl+↑, Ctrl+↓, Ctrl+Shift+Home and Ctrl+Shift+End. These six are reserved for 2.3.1, which adds effects and transposing on a selection. The effect keys are listed in [Effects](#effects).
+- 2.3.1 binds Ctrl+↑, Ctrl+↓, Ctrl+Shift+↑, Ctrl+Shift+↓, Ctrl+Shift+Home and Ctrl+Shift+End, and Ctrl+Shift+V is the insert paste (above). The effect keys act on a live selection from 2.3.1 (see [Effects](#effects)).
+- Shift+H, Shift+V, Shift+P, Shift+X, Shift+G and Shift+N do nothing. Shift+↑ and Shift+↓, and Shift+R and Shift+I, are reserved for 2.3.2 and do nothing. Shift with ← or → extends the selection, and Shift with Home or End extends it to the measure edge. The effect keys are listed in [Effects](#effects).
 
 ### Editing rules
 
@@ -381,6 +386,8 @@ Notes:
 - Insert adds a rest before the beat, and before its grace notes, and moves the cursor onto it.
 
 **Ties.** L ties the cursor note to the note on the same string in the previous beat. That beat can be the last beat of the previous measure. The tied note takes that note's fret. Press L on the tied note again to remove the tie. With no note to tie to, the editor says "Nothing to tie to". Changing the fret of a tied note, or deleting it, removes its tie.
+
+**Ties at edited seams (2.3.1).** When an edit joins two notes across a barline or a beat, a tie is kept only when the two notes match. Both notes with a fret must have the same fret, and both pitch-only notes must have the same pitch. A tie between two fretted notes with different frets, or two pitch-only notes with different pitches, is removed from both notes. A tie between a fretted note and a pitch-only note is kept. Ties at seams that no edit touches are not changed.
 
 **Durations, dots and triplets.** These change the beat under the cursor only. Nothing else in the measure moves, so a measure can end up too full or too empty. The status bar shows the fill of the measure as Under, Full or Over. The score draws an underfull measure with a dashed line below the staff, and an overfull measure with a red band. An empty measure has no mark. Moving onto a beat picks up its duration and dots, so the next note you type uses them. On the end-of-measure position, the duration and dots change the next note instead. Triplet does nothing on the end-of-measure position, and nothing on a beat with nested tuplets.
 
@@ -407,16 +414,29 @@ Notes:
 
 **Selection.** Shift with ←, →, Home or End starts a selection at the cursor and extends it. Ctrl+Shift+← or → extends it to a measure boundary, and Ctrl+A selects every measure of the cursor track. Both ends of a selection are inclusive, so a one-beat selection is allowed. A selection covers one track and voice 1, and it can cross barlines. Grace notes go with the main beat they lead into. The overlay draws a tint and an outline, which are visible without colour. The `selection` event reports each change (see [Events](#events)), and the status bar and the spoken text describe it, such as "Selected measure 2 beat 3 to measure 3 beat 1, 6 beats".
 
-- A selection is cleared by a plain move (arrows, Home, End, PageUp, PageDown), a click, Esc, undo, redo, a load, a settings change, and any edit that changes the score. Ctrl+Z and Ctrl+Y clear it even when there is nothing to undo or redo.
+From 2.3.1, a range that covers blank measures is a selection too, even with no note beat in it. A blank measure has only rests (hidden rests included) or nothing in it, and a column past the end of the score counts as blank. Shift+→ across three blank measures selects them, and the editor says "Selected measures 5 to 7, no beats". Such a selection has `beatCount` 0 (see [Methods](#methods)). Ctrl+A on an empty track selects its measures. A range that covers part of one measure with no note beat is still no selection.
+
+- A selection is cleared by a plain move (arrows, Home, End, PageUp, PageDown), a click, Esc, undo, redo, a load, a settings change, and any edit that changes the score. The exception is an effect key or transpose, which keeps the selection when it changes the score (2.3.1). Ctrl+Z and Ctrl+Y clear it even when there is nothing to undo or redo.
 - A refused command and an edit that changes nothing keep it.
-- Effect keys act on the cursor beat only, and they clear the selection. Effects on a whole selection are planned for 2.3.1.
+- Effect keys and transpose act on the whole selection, and keep it when they change the score (2.3.1).
+- Delete, Ctrl+Delete, Shift+Delete and Fill act on the selection, and clear it when they change the score. Reflow ignores the selection and clears it when it changes the score.
+- Duration, dots, triplet, R and L act on the cursor beat only, and clear the selection when they change the score.
 
 **Clipboard.** Copy, cut and paste use the browser's own clipboard events, so they work only while the score has focus. Copy takes the selection, or the cursor beat with its grace notes when nothing is selected. Cut copies the same beats and then turns them into rests, as Delete does. If the browser refuses to write the system clipboard during a cut, nothing is cut and the editor says so. Paste reads a music-score clip from the system clipboard when there is one, and otherwise pastes the editor's own last copy. That editor clipboard is shared by every editor on the page. So Ctrl+V pastes the last copy even when the system clipboard holds other text, and says "Nothing to paste" when there is no copy at all. Copy, cut and paste announce what they did, such as "Copied 6 beats" or "Pasted 6 beats, replaced 4".
 
 - A clip is JSON with `"type": "music-score-clip"`, `"version": 1`, a `"kind"` of `"beats"` or `"measures"`, and one entry in `"tracks"` holding the track's tuning and its beats or measures. The system clipboard gets the same JSON as `application/x-music-score+json` and as `text/plain`, so a clip copied in one editor pastes into another editor in another tab, and other apps see the text.
 - A clip keeps notes, beat and note effects, ties, grace notes, hidden rests, rhythm slashes, and text such as chord symbols and lyrics. A measures clip also keeps voice 2. It drops tempo marks, time and key signatures, clefs, barlines, repeats, endings, jumps, sections, segno, coda and pickup.
-- A beats clip goes in before the cursor beat and its grace notes, or at the end of the measure on the slot. If a selection is live, the pasted beats replace it. The cursor ends after the pasted beats. If the measure now holds more beats than it should, it shows as Over, and Reflow moves the extra beats on.
-- A measures clip goes in as new measures before the cursor's measure, in every track. The other tracks get empty measures. With a selection, the new measures go before its first measure.
+- A beats clip goes in before the cursor beat and its grace notes, or at the end of the measure on the slot. If a selection is live, Ctrl+V replaces it, and Ctrl+Shift+V keeps the selected beats and inserts before the selection's start (the selection is cleared). Replacing a selection of blank measures also replaces their rests, and no beats are reported as replaced. The cursor ends after the pasted beats. If the measure now holds more beats than it should, it shows as Over, and Reflow moves the extra beats on.
+- A measures clip either overwrites measures or inserts new ones (2.3.1):
+  - Ctrl+V on a measures selection overwrites measures, starting at the selection's first measure, for as many measures as the clip has. A shorter clip leaves the rest of the selection as it was, and a longer clip overwrites the measures after the selection too. Other tracks are not touched.
+  - Ctrl+V on a beats selection is refused with "Select whole measures to paste measures", and the selection stays.
+  - Ctrl+V with no selection overwrites the cursor's measure and the measures after it, when all of them are blank on the cursor track. Otherwise it inserts, as in 2.3.0. On the end-of-measure slot of a measure that has notes, the paste starts at the next measure.
+  - Ctrl+Shift+V always inserts: the new measures go in before the cursor's measure, or before the selection's first measure, in every track. On the end-of-measure slot of a measure that has notes, they go after that measure. The other tracks get empty measures.
+  - An overwrite that runs past the end of the score appends empty columns to every track, so the paste leaves no empty measure at the end. For example, a 3-measure clip on a blank last measure overwrites that measure and appends 2.
+  - An overwrite replaces the measure's notes and its voice 2, and keeps the measure's time and key signatures, clef, barline, repeats, endings, navigation marks, section and pickup.
+  - A tempo mark on an overwritten beat moves to the pasted beat at the same point on the same track, or else to the lowest-numbered other track with a beat there. A mark with nowhere to go is removed, and the announcement says how many, such as ", 1 tempo mark removed".
+  - After a measures paste, the cursor goes to the first position of the measure after the pasted measures, or to the end of the last pasted measure when there is none. The selection is cleared.
+  - The announcements read, for example, "Pasted 3 measures over measures 5 to 7", "Pasted 2 measures at the end, measures 9 to 10", or "Inserted 2 measures at measure 5".
 - Notes on strings the target track doesn't have are dropped, and the count is announced. A beat left with no notes becomes a rest. Where the target's tuning differs, a note given by string and fret loses its written pitch, so it sounds from the new tuning. A note given only by pitch is kept. A different time signature is not adjusted, so the measure shows as Under or Over. A tie with no partner after the paste is removed.
 - A paste is refused, and nothing changes, when the text is not a music-score clip, is a clip version this editor doesn't know, is over 5 MB or breaks the editor's limits, or would give a measure more than 256 beats or the score more than 2,000 measures. Malformed JSON, a `__proto__` key and similar input are refused the same way. A refusal is announced.
 - Each paste, cut and range delete is one undo step.
@@ -425,15 +445,18 @@ Notes:
 - Delete or Backspace turns the selected beats into rests of the same lengths. Their effects stay. If the selection is already all rests, nothing changes, there is no undo step and the editor says "Already rests" (a cut says "Copied 3 beats, already rests").
 - Ctrl+Delete or Ctrl+Backspace removes the selected beats and their grace notes. The later beats move up to fill the space.
 - Shift+Delete deletes the measures of a selection that covers whole measures, in every track. With a beats-only selection it is refused with "Select whole measures first", and the selection stays.
+- On a selection of blank measures (2.3.1), Delete says "Already rests" and changes nothing, Ctrl+Delete says "No beats to delete", and Shift+Delete deletes the measures.
 - Ties at both edges are repaired. Tempo marks on the removed beats are counted in the announcement, such as "3 beats deleted, 1 tempo mark removed".
 
 **Fill (F).** Adds rests to the end of the cursor measure, so it reaches its time signature. With a selection, it fills each measure of the selection. At each position, the rest is the largest plain duration that fits and that the position allows, from whole to 64th, with no dots or triplets. In 4/4 with a dotted quarter, F adds an eighth rest, then a half rest. Fill refuses a measure that is already full ("Measure already full"), overfull ("Measure overfull, try Reflow"), a pickup measure ("Pickup measure, not filled"), and a gap that plain rests can't fill, such as the rest of an unfinished triplet ("Finish the tuplet first"). With a selection, the refused measures are skipped and the announcement says how many were filled.
 
-**Reflow (Shift+F).** Works on the cursor measure and track, and ignores any selection. It moves the beats that start at or past the end of the measure, with their grace notes, to the start of the next measure. It moves one measure per press and doesn't carry on through later measures. On the last measure, it first adds an empty measure in every track. A beat that starts before the barline but runs past it stays where it is, and the announcement says so, as in "Beat 3 crosses the barline and stays". Splitting such a beat into tied notes is planned for 2.3.1. If the cursor's beat moves, the cursor moves with it. Ties at the barline are repaired, and one reflow is one undo step.
+**Reflow (Shift+F).** Works on the cursor measure and track, and ignores any selection. It moves the beats that start at or past the end of the measure, with their grace notes, to the start of the next measure. A beat that starts before the barline but runs past it is split at the barline into tied notes (2.3.1), when plain durations can write both parts. Each part is an undotted duration from whole to 64th, so a dotted note becomes plain notes: a dotted half that starts on beat 4 of 4/4 becomes a quarter tied to a half. Each note of a chord is tied across the split, and a rest is split without ties. The part after the barline moves to the next measure. A tuplet beat, or one that plain durations can't write, stays where it is, and the announcement says so, as in "Beat 3 crosses the barline and stays". The split pieces keep their fields as follows. The first piece keeps the beat's tempo, chord symbol, lyrics, dynamic, articulations, slide in, bend and the tie from before it. The last piece keeps its tie to what follows, its hammer-on or pull-off, slide and slide out. Every piece keeps its strings, frets, pitches, harmonics, mute, ghost, palm mute, let ring, vibrato, hidden and slash marks. Dots are not kept. Grace notes go with the beat they lead into, as in 2.3.0, and grace notes after the last beat of the measure stay in it.
+
+Reflow then carries on into each following measure while that measure is overfull (a cascade), and stops at the first measure that isn't. It never pulls beats back into an earlier measure. A cascade is one undo step, and its announcement reads, for example, "Reflowed 4 measures, 1 measure added". On the last measure, it first adds an empty measure in every track. If the reflow would take a measure past 256 beats, or the score past 2000 measures, nothing changes and the editor says the score would be too large. If the cursor's beat moves, the cursor moves with it. Ties at the barline are repaired, and one reflow is one undo step.
 
 **Pickup.** A pickup (lead-in) measure is shorter than its time signature. Turn it on with the Pickup measure checkbox in Measure… (shown at measure 1 only), or with `updateMeasure(0, { pickup: true })`. Only measure 1 can be a pickup, and the setting applies to every track. A pickup gets no underfull line in the editor, its status bar fill reads "Pickup", and Fill skips it. Measure numbers still count it as measure 1. Inserting a measure before measure 1 (Shift+M), or deleting measure 1, removes the pickup flag. The renderer doesn't draw a pickup, so the drawn score looks the same with or without it.
 
-**Tempo.** A tempo mark applies to the whole score. The tempo in force at a beat is the latest mark at or before that point on any track. Hidden tracks count. Where two tracks have marks at the same point, the lower-numbered track's mark is the one in force. The status bar, `getCursorInfo().tempo` and the Measure… dialog show it on any track. `setTempo` writes the mark on the cursor beat and removes the other marks at that same point on other tracks, so there is one mark there, and one undo step restores all of them. `setTempo(null)` removes every mark at that point. Removing a track moves its tempo marks to the lowest-numbered other track that has a beat at the same point. A mark with no such beat is removed, and the announcement says how many, such as ", 1 tempo mark removed". Moving a track changes no tempo marks, but it can change which mark is in force if a file has more than one mark at the same point.
+**Tempo.** A tempo mark applies to the whole score. The tempo in force at a beat is the latest mark at or before that point on any track. Hidden tracks count. Where two tracks have marks at the same point, the lower-numbered track's mark is the one in force. The status bar, `getCursorInfo().tempo` and the Measure… dialog show it on any track. `setTempo` writes the mark on the cursor beat and removes the other marks at that same point on other tracks, so there is one mark there, and one undo step restores all of them. `setTempo(null)` removes every mark at that point. Removing a track moves its tempo marks to the lowest-numbered other track that has a beat at the same point. A mark with no such beat is removed, and the announcement says how many, such as ", 1 tempo mark removed". Moving a track changes no tempo marks, but it can change which mark is in force if a file has more than one mark at the same point. A paste over measures (2.3.1) moves the marks on the beats it overwrites in the same way, and only a mark with nowhere to go is removed (see [Clipboard](#editing-rules)).
 
 **Read-only mode.** Read-only mode lets people move the cursor and read the score, and refuses every edit with the message "Read-only". Selecting and copying still work. Undo and redo are off. Settings calls are refused with the same message, though bad arguments still throw. `loadScore()` still replaces the score.
 
@@ -446,7 +469,11 @@ Effect keys add a playing technique to a note or a beat. Each key steps through 
 - Turning an effect off removes its field from the JSON. The editor never writes `false`.
 - Each press is one undo step. Effects don't move the cursor or change the current duration.
 - Effects can go on any note, including a tied one.
-- With a selection live, an effect key still acts on the cursor beat only, and it clears the selection. Effects on a whole selection are planned for 2.3.1.
+- **Effects over a selection (2.3.1).** With a selection live, an effect key acts on the whole selection and keeps it.
+  - Note effects act on every voice-1 note with a string in the selected beats, so each note of a chord is changed. They need a TAB staff, as they do on a single note. Beat effects act on every selected beat. Rests are included only for P, D and Shift+D. Grace notes and voice 2 are not changed, and X never adds a note: it turns the dead note on or off for the notes that exist.
+  - The selection moves together. If every target has the same value, including all off, each target moves to its next value. Otherwise each target moves to the value a press writes on an empty target: the first value of the cycle, mf for D, mp for Shift+D, full for B and release for Shift+B. Each press is one undo step, labelled with the effect's name.
+  - The spoken text gives the new value and the count, such as "Palm mute on, 8 beats", "Hammer-on/pull-off on, 6 notes" or "Accent, 8 beats, not shown on TAB only". The link suffix ("no next note on this string") is not spoken for a selection.
+  - A selection with nothing to act on is refused, and the selection is kept. Note effects over rests only say "No notes in the selection", and so do beat effects other than P, D and Shift+D. P, D and Shift+D over measures with no beats at all say "No beats in the selection". On a selection of blank measures (only rests), P, D and Shift+D change the rests.
 
 The table shows what each key writes, in the score format described under [Score format](#score-format).
 
@@ -500,6 +527,19 @@ Moving the cursor speaks the effects at the new position, after the duration. Up
 - A dead note is drawn as an x (as `(x)` when it is also a ghost note). It is never drawn as a harmonic, even if it has one in the JSON.
 - Dynamics and hairpins are never drawn on a TAB-only track.
 - Articulations on a TAB-only track are drawn above the TAB staff only when the track has `"tabArticulations": true`. The editor doesn't set this, so set it in the JSON.
+
+#### Transpose
+
+Transpose moves notes by semitones (from 2.3.1). A note stays on its string, and only its fret changes.
+
+- **Keys.** Ctrl+↑ and Ctrl+↓ move by one semitone. Ctrl+Shift+↑ and Ctrl+Shift+↓ move by 12 semitones, an octave. Cmd works in place of Ctrl. The demo's Transpose buttons send the same keys.
+- **The cursor note.** With no selection, the note on the cursor string moves, and the editor says the new fret, such as "Fret 6, up 1 semitone". This needs a TAB staff. On a rest, an empty string or the end-of-measure position, the editor says "No note here". A note with only a written pitch (no fret) says "Only fretted notes can be transposed". Ties on the note are removed, on both notes.
+- **A selection.** With a selection, every note that has a fret moves, in voice 1 and in the selected beats, grace notes included. It works on a track with or without a TAB staff. Notes given only by pitch are skipped, and the announcement counts them, such as "Transposed 14 notes up 1 semitone, 2 pitch-only notes skipped". Voice 2 is not changed.
+- **All or nothing.** If any fret, or any harmonic fret, would go below 0 or above `maxFret` (24 by default), nothing changes and there is no undo step. The editor names the first measure with the problem, such as "Can't transpose, measure 3 would go above fret 24".
+- **What stays.** A note that moves loses its `pitch`, so it sounds from its string, fret and the track's tuning. Its mute, harmonic, bend and other effects stay. A harmonic fret moves by the same amount.
+- **Ties.** On a selection, a tie is kept when both of its notes move. A tie to a note outside the selection is removed from both notes. Ties on grace notes are not changed.
+- **Natural harmonics.** A natural harmonic keeps its harmonic setting and moves with its fret, so after a transpose it can sit on a fret that isn't a harmonic node. The editor doesn't check this, so listen or look at the tab.
+- **Undo and selection.** A transpose is one undo step labelled "transpose". The selection is kept.
 
 ### Score and track settings
 
@@ -775,32 +815,34 @@ When the editor loses focus, the cursor is drawn dimmer.
 
 ### Limitations in 2.3
 
-- **A selection covers one track, and voice 1 only.** Ctrl+A selects the cursor track. Shift+PageUp and Shift+PageDown are not bound, and a selection can't reach another track or voice 2. Multi-track selection is planned for 2.3.1.
-- **No effects or transposing on a selection yet.** Effect keys act on the cursor beat and clear the selection. Effects and transposing on a selection are planned for 2.3.1. Changing the tuning or the capo still never transposes the music.
+- **A selection covers one track, and voice 1 only.** Ctrl+A selects the cursor track. Shift+PageUp and Shift+PageDown are not bound, and a selection can't reach another track or voice 2. Multi-track selection and a column clipboard are planned for 2.3.2.
+- **Transposing keeps strings and skips pitch-only notes.** Transposing moves frets along a string, so a note can't be moved to another string. Pitch-only notes, chord symbols and key signatures are not transposed. Pitch-only notes are counted in the announcement.
 - **No mouse selection.** Dragging does not select. A click places the cursor and clears the selection.
-- **Reflow doesn't split a beat that crosses a barline.** Such a beat stays where it is, and the announcement says so. Reflow works on one measure per press and doesn't carry on through later measures. Splitting the beat into tied notes is planned for 2.3.1.
+- **Reflow splits only into plain durations.** A beat that crosses a barline is split into undotted, untupleted pieces, tied together. A tuplet beat stays where it is, and the announcement says so. Reflow never pulls beats back into an earlier measure, and it doesn't reflow again after a paste.
 - **Copy and paste need the score to have focus.** Touch devices have no copy and paste. Paste Special and an ASCII-TAB text export are not offered. The text the editor writes to the system clipboard is the clip JSON, not tablature.
 - **The demo's Paste button doesn't ask for permission.** It pastes the editor's own clipboard, and reads the system clipboard only when the browser already allows it. Ctrl+V reads the system clipboard through the browser's paste event, so it can paste a clip from another tab.
 - **A clip holds one track.** It keeps what is listed under [Clipboard](#editing-rules), and drops tempo, signatures, clefs, barlines, repeats, endings, jumps, sections, segno, coda and pickup. A pasted clip is not adjusted to the target's time signature, and copying tempo or settings inside a clip is not offered.
 - **Shadow DOM.** An editor inside a shadow root checks its own focus, but its copy, cut and paste events are listened for on `document`. That path has a test, but it has not been checked in a browser. Test it in your page before you rely on it.
 - **Pickup is not drawn and does not renumber.** The drawn score shows no pickup mark, and measure numbers still count a pickup as measure 1. Pickup-aware numbering and shortening the last measure are not offered.
 - **Only the effects in [Effects](#effects) can be entered.** These can't be entered from the keyboard yet: tremolo picking, tap, slap and pop, trill, artificial and tapped harmonics, fermata, tenuto, hairpins, whammy bar, fade and wah, ornaments and fingering. Explicit `h` and `p` hammer values and up and down slide values can't be written either, and neither can custom bend amounts. Existing values in the JSON are kept as they are.
-- **No effects on a range yet.** Effects go on one note or one beat at a time. With a selection live, an effect key acts on the cursor beat only. Effects on a selection come in 2.3.1.
+- **Effects on a selection act on voice 1 only.** Voice 2 and grace notes are not changed by an effect key, and the selection can't reach another track.
 - **No mouse pitch entry or dragging.** Clicks only place the cursor.
 - **No voice 2 or grace note editing.** These stay as they are in the file, and no effect can be set on them.
 - **No tuplets other than the triplet toggle.**
 - **No playback and no import.** Guitar Pro and other formats are not read.
-- **Measures are not reflowed automatically.** Underfull and overfull measures are shown, not fixed. Shift+F moves the overflow of one measure to the next, one press at a time (see Reflow under [Editing rules](#editing-rules)).
+- **Measures are not reflowed automatically.** Underfull and overfull measures are shown, not fixed. Shift+F moves the overflow of the cursor measure on to the following measures in one press, for as long as each one is overfull (see Reflow under [Editing rules](#editing-rules)).
 - **Speed.** Each edit redraws the whole score. A score with 100 measures on two tracks took about 30 ms per keystroke in Node, and about 90 ms in headless Chrome. Very long scores may feel slow.
 - **Touch input.** Editing needs a hardware keyboard.
 - **Settings have no keys and no forms in the library.** The settings are methods. The demo's dialogs are the only forms, and the library has no settings UI of its own.
-- **Transposing is not done.** Changing the tuning or the capo never transposes the music, and frets don't adjust for the capo. Changing the tuning changes the pitches of the notes that keep their frets.
+- **Tuning and capo don't transpose the music.** Changing the tuning or the capo never transposes the music, and frets don't adjust for the capo. Changing the tuning changes the pitches of the notes that keep their frets. To move notes, use Ctrl+↑ and Ctrl+↓ (see Transpose under [Editing rules](#editing-rules)).
+- **Natural harmonics can land off a node after a transpose.** The editor moves a harmonic's fret with the note and does not check whether it still sits on a harmonic node.
+- **Ctrl+Shift+V depends on the browser.** The insert paste comes from the browser's paste event. Where that event is not sent, the editor pastes its own clipboard through a fallback, which is not the system clipboard. Test it in the browsers your page supports.
 - **Time and key signatures apply to every track.** A signature change is written for the whole column. A track can't have its own time or key signature changes inside a measure, and the score-level and track-level time and key signatures can't be edited directly. Measures are not reflowed when a time signature changes.
 - **Clefs change only at the start of a measure.** The opening clef is set with `updateTrack`. Mid-measure clefs are not supported.
 - **One barline per measure.** A measure can't have both a repeat start and a repeat end.
 - **Only standard jump texts can be set.** A custom jump already in the file is kept and reported as custom. Measure-repeat signs are not set.
 - **No writtenOctaveUp or instrument field.** The editor doesn't set them.
-- **Planned for later releases.** For 2.3.1: effects and transposing on a selection, multi-track selection and a column clipboard, and reflow that splits crossing beats into tied notes. After that: playback, mouse pitch entry on notation, voice 2 and grace-note entry, editing chord symbols and lyrics in the editor, and file import.
+- **Planned for later releases.** For 2.3.2: multi-track selection and a column clipboard, and Shift+↑ and Shift+↓, Shift+R and Shift+I, which stay reserved until then. After that: playback, mouse pitch entry on notation, voice 2 and grace-note entry, editing chord symbols and lyrics in the editor, and file import.
 
 ## Score format
 
@@ -1695,6 +1737,33 @@ It prints `ALL PASSED` and exits with code 0 on success.
 
 ## Changelog
 
+### 2.3.1 — 2026-11-23
+
+Range editing is complete. Paste can replace a selection or blank measures, or insert with Ctrl+Shift+V. Effect keys and transpose act on a selection and keep it. Reflow splits a beat that crosses a barline into tied notes, and carries on through each following overfull measure. A selection can cover blank measures, and Ctrl+Shift+Home and Ctrl+Shift+End select to the ends of the score. Each change is one undo step and is announced. See [Editing rules](#editing-rules) and [Limitations in 2.3](#limitations-in-23).
+
+Rendering is unchanged. The renderer draws the same SVG as in 2.3.0, and every existing snapshot is byte-identical. The score format is unchanged, and clips are still version 1.
+
+New:
+
+- Ctrl+Shift+V is the insert paste. It pastes like Ctrl+V, but nothing is replaced: measures go in as new measures, and beats go in before the cursor or the selection. The method is `paste(text, { insert: true })`.
+- Ctrl+↑ and Ctrl+↓ transpose the cursor note, or every fretted note in the selection, by a semitone. Ctrl+Shift+↑ and Ctrl+Shift+↓ move by an octave.
+- Effect keys act on a selection. Note effects act on the voice-1 notes of the selected beats, and beat effects on the selected beats. X never adds a note.
+- A selection can cover blank measures, with no note beat. `getSelection()` reports it with `beatCount: 0`.
+- Reflow splits a beat that crosses the barline into tied pieces, when plain durations can write it. Shift+F then carries on through each following measure that is overfull.
+- Ctrl+Shift+Home and Ctrl+Shift+End extend a selection to the start and the end of the score.
+- The demo page has a Paste as new measures button and a Transpose group. The keyboard shortcuts panel lists the new keys.
+
+Behaviour changes from 2.3.0:
+
+- Ctrl+V and `paste()` with a measures clip now overwrite instead of inserting when there is a measures selection, or when the measures at the cursor are blank. A measures clip on a measures selection used to go in before the selection. To insert as before, use `paste(text, { insert: true })` or Ctrl+Shift+V.
+- A beats paste over a selection of blank measures replaces their rests too, and no beats are reported as replaced. A beats paste over a selection with beats still says "replaced" for the beats it replaced.
+- `paste(text, options)` throws a `TypeError` when `options` is not an object.
+- Effect keys act on the whole selection and keep it. Before, they acted on the cursor beat and cleared the selection.
+- Shift+F splits a beat that crosses the barline, where it used to stay. It also carries on through each following overfull measure, where it used to move one measure per press. A cascade is announced as "Reflowed N measures".
+- `getSelection()` returns an object, not `null`, for a range of blank measures: `kind: 'measures'`, `beatCount: 0`, and `start` and `end` at beat 0. Ctrl+A on an empty track now selects it, and Shift+→ across blank measures selects them. Before, these said "Nothing to select".
+- At an edited seam, a tie is removed when its two notes differ: different frets, or different pitches for pitch-only notes. A tie between a fretted note and a pitch-only note is kept. Before, such ties were kept. Ties at seams that no edit touches are not changed.
+- Ctrl+↑, Ctrl+↓, Ctrl+Shift+Home and Ctrl+Shift+End were left to the browser. They are now editor keys.
+
 ### 2.3.0 — 2026-11-23
 
 Selection, clipboard and range editing. The editor can now select a range of beats, or whole measures, from the keyboard. It can copy, cut and paste the selection, through the system clipboard as well as its own. It can delete, fill and reflow a range, and it reads tempo marks from every track. It can also mark a pickup measure. Each change is one undo step and is announced. See [Editing rules](#editing-rules) and [Limitations in 2.3](#limitations-in-23).
@@ -2020,7 +2089,7 @@ Initial public release.
 - `src/`: the renderer. Rendering runs normalize, then layout, then draw.
   - `MusicScoreRenderer.js`: the entry point (the `MusicScoreRenderer` class). It runs the pipeline and mounts the SVG.
   - `hitMap.js`: the hit map behind `getHitMap()` and `hitTest()`. It builds plain data from the last render.
-  - `editor/`: the `ScoreEditor` keyboard editor (2.0.0), with its effect keys (2.1.0), its settings API (2.2.0), and its selection, clipboard, range edits, fill, reflow, score-wide tempo and pickup (2.3.0). Its files and their roles are listed in `docs/ARCHITECTURE.md`, under "Editor (2.0.0)", "Editor effects (2.1.0)", "Editor settings (2.2.0)" and "Editor selection and clipboard (2.3.0)".
+  - `editor/`: the `ScoreEditor` keyboard editor (2.0.0), with its effect keys (2.1.0), its settings API (2.2.0), and its selection, clipboard, range edits, fill, reflow, score-wide tempo and pickup (2.3.0), and its paste modes, transpose, effects over a selection and reflow split (2.3.1). Its files and their roles are listed in `docs/ARCHITECTURE.md`, under "Editor (2.0.0)", "Editor effects (2.1.0)", "Editor settings (2.2.0)" and "Editor selection and clipboard (2.3.0, with the 2.3.1 notes)".
   - `normalize.js`: fills in score defaults (sticky time and key signatures, barlines, measure count, pitch from string and fret, written and sounding pitch, `tabRhythm`, padded measures).
   - `harmonics.js`: guitar harmonic kinds and the helpers that layout, drawing and labels share.
   - `directions.js`: the playing direction fields (let ring, pick strokes, strum, arpeggio, tap, slap, pop, whammy, rake, trill, slide in and out, the bend grammar) and their canonical values.
@@ -2093,7 +2162,7 @@ Initial public release.
 - `tests/`: snapshot tests, unit checks, engraving checks, assertions and structural guards (`run.js`, `units.mjs`, `engraving.mjs`, `articulations.mjs`, `structure.mjs`), the test hooks and DOM shim the runner uses (`hooks.mjs`, `dom-shim.mjs`), the characterization fixtures (`fixtures/characterization.js`), and the saved snapshots (`snapshots/`).
 - `index.html`: the demo page. `lead-riff.html` and `lead-solo-f.html`: demo pages for the lead-riff and lead-solo examples. `editor.html`: the keyboard editor demo.
 - `docs/features.html`: feature summary page with live examples (serve over http, like the demo).
-- `docs/ARCHITECTURE.md`: design notes for the module boundaries. The editor (2.0.0, with its effects in 2.1.0, its settings in 2.2.0 and its selection and clipboard in 2.3.0) is described there. Import, playback and the other proposed layers are not built yet.
+- `docs/ARCHITECTURE.md`: design notes for the module boundaries. The editor (2.0.0, with its effects in 2.1.0, its settings in 2.2.0 and its selection and clipboard in 2.3.0, with the 2.3.1 additions) is described there. Import, playback and the other proposed layers are not built yet.
 
 ## License
 
