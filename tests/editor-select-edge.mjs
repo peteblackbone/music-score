@@ -105,7 +105,7 @@ test('a beats selection across an empty measure and a hole counts only main beat
   eq(t.ed.getCursor().measure, 0);
   stable(t.ed);
 });
-test('selection on a slot-only empty measure: a lone slot is no selection and Shift+Right never appends a measure', () => {
+test('selection on a slot-only empty measure: 2.3.1: a lone slot selects its blank measure (no beats) and Shift+Right never appends a measure', () => {
   const t = mk({ tracks: [tab([{ beats: [] }, { beats: [nt('whole')] }])] });
   eq(t.press(key('ArrowRight', SHIFT)), [true]);
   t.ed.setCursor({ measure: 1, beat: 0 });
@@ -114,7 +114,7 @@ test('selection on a slot-only empty measure: a lone slot is no selection and Sh
   eq(t.ed.getSelection().beatCount, 1);
   const u = mk({ tracks: [tab([{ beats: [] }])] });
   u.press(key('ArrowRight', SHIFT));
-  eq(u.ed.getSelection(), null, 'the slot alone holds no main beat');
+  eq(u.ed.getSelection(), { kind: 'measures', track: 0, start: { measure: 0, beat: 0 }, end: { measure: 0, beat: 0 }, beatCount: 0, measures: [0, 0] }, '2.3.1: the slot alone is the whole blank measure');
 });
 const twoVoice = () => ({ tracks: [tab([
   { voices: [{ beats: f(4) }, { beats: [nt('whole', 3, 7)] }] },
@@ -381,12 +381,12 @@ test('repeated paste events with no data paste the internal clipboard each time'
   eq(v1(ms(t.ed)[1]).length, 2);
   t.ed.destroy();
 });
-test('a measures clip pasted with a selection inserts before the selection\'s first measure and leaves the selected beats; the cursor goes to the original measure; other tracks get empty measures', () => {
+test('a measures clip pasted with a selection and the insert option inserts before the selection\'s first measure and leaves the selected beats; the cursor goes to the original measure; other tracks get empty measures', () => {
   const t = mk({ tracks: [tab([{ beats: f(4) }, { beats: f(3) }]), tab([{ beats: [nt('whole')] }, { beats: [nt('whole')] }], { name: 'B' })] });
   sel(t.ed, P(0, 0), P(0, 3));
   const clipJson = t.ed.copy();
   sel(t.ed, P(1, 0), P(1, 2));
-  t.ed.paste(clipJson);
+  t.ed.paste(clipJson, { insert: true });
   eq(ms(t.ed).map((m) => v1(m).length), [4, 4, 3]);
   eq(ms(t.ed, 1).map((m) => v1(m).length), [1, 0, 1]);
   eq(t.ed.getCursor().measure, 2);
@@ -409,9 +409,9 @@ test('a measures clip pasted at measure 1 drops the pickup flag and leaves the c
 });
 test('the 2000-measure boundary for a measures clip: 1999 + 1 pastes, 2000 + 1 is refused and announced', () => {
   const a = mk({ tracks: [tab(Array.from({ length: 1999 }, () => ({ beats: [] })))] });
-  eq(a.ed.paste(clipText('measures', [{ beats: [nt('whole')] }])), true);
+  eq(a.ed.paste(clipText('measures', [{ beats: [nt('whole')] }]), { insert: true }), true);
   eq(ms(a.ed).length, 2000);
-  eq(a.ed.paste(clipText('measures', [{ beats: [] }])), false);
+  eq(a.ed.paste(clipText('measures', [{ beats: [] }]), { insert: true }), false);
   eq(ms(a.ed).length, 2000);
   ok(/too large/i.test(a.say()), a.say());
 });
@@ -533,24 +533,24 @@ test('fill on a beats selection fills every measure the selection touches, not j
 // =====================================================================================================
 const reflowKey = key('F', SHIFT);
 test('reflow with graces at the boundary: the grace before the first beat past the barline moves with it', () => {
-  const t = mk({ tracks: [tab([{ beats: [...f(4), grace(), nt('quarter', 1, 7)] }, { beats: [nt('whole', 2, 2)] }])] });
+  const t = mk({ tracks: [tab([{ beats: [...f(4), grace(), nt('quarter', 1, 7)] }, { beats: [nt('half', 2, 2)] }])] });
   t.press(reflowKey);
-  eq(ms(t.ed).map((m) => m.beats.map((b) => b.type[0])), [['n', 'n', 'n', 'n'], ['g', 'n', 'n']]);
+  eq(ms(t.ed).map((m) => m.beats.map((b) => b.type[0])), [['n', 'n', 'n', 'n'], ['g', 'n', 'n']], '2.3.1: measure 2 is not left overfull, so no cascade');
   ok(/Moved 1 beat to measure 2/.test(t.say()), t.say());
 });
 test('reflow with a crossing beat and overflow after it: the beats at or past the barline move, the crossing beat stays, the announcement names it; cursor on a moved beat follows, cursor before it stays', () => {
-  const beats = [nt('quarter'), nt('quarter'), nt('quarter'), nt('half'), nt('quarter', 1, 7)];
-  const a = mk({ tracks: [tab([{ beats }, { beats: [nt('whole', 2, 2)] }])] });
+  const beats = [nt('quarter'), nt('quarter'), nt('quarter'), nt('half', 1, 0, { tuplet: 3 }), nt('quarter', 1, 7)]; // 2.3.1: a triplet, which is never split
+  const a = mk({ tracks: [tab([{ beats }, { beats: [nt('half', 2, 2)] }])] });
   a.ed.setCursor({ measure: 0, beat: 4 });
   a.press(reflowKey);
   eq(ms(a.ed).map((m) => m.beats.length), [4, 2]);
   eq(a.ed.getCursor(), { track: 0, measure: 1, beat: 0, string: a.ed.getCursor().string }, 'follows its beat');
   ok(/beat 4 crosses the barline and stays/.test(a.say()), a.say());
-  const b = mk({ tracks: [tab([{ beats }, { beats: [nt('whole', 2, 2)] }])] });
+  const b = mk({ tracks: [tab([{ beats }, { beats: [nt('half', 2, 2)] }])] });
   b.ed.setCursor({ measure: 0, beat: 1 });
   b.press(reflowKey);
   eq([b.ed.getCursor().measure, b.ed.getCursor().beat], [0, 1], 'cursor before the moved part stays');
-  const c = mk({ tracks: [tab([{ beats: [nt('quarter'), nt('quarter'), nt('quarter'), nt('half')] }])] });
+  const c = mk({ tracks: [tab([{ beats: [nt('quarter'), nt('quarter'), nt('quarter'), nt('half', 1, 0, { tuplet: 3 })] }])] });
   c.press(reflowKey);
   ok(/crosses the barline/.test(c.say()) && ms(c.ed).length === 1, 'only a crossing beat: nothing moves, no measure added');
   eq(c.ed.canUndo(), false);
@@ -559,11 +559,11 @@ test('reflow with a crossing beat and overflow after it: the beats at or past th
   ok(/Nothing to reflow|nothing/i.test(d.say()), 'a full measure: nothing to move');
   eq(d.ed.canUndo(), false);
 });
-test('reflow does not cascade: the next measure may become overfull and stays so; a 3/4 measure uses its own capacity; ties across the new barline are kept when they pair and repaired otherwise', () => {
+test('2.3.1: reflow cascades while the next measure is overfull; a 3/4 measure uses its own capacity; ties across the new barline are kept when they pair and repaired otherwise', () => {
   const t = mk({ tracks: [tab([{ beats: [...f(3), tn('quarter', 1, 7, { tieEnd: true })], timeSignature: { beats: 3, beatType: 4 } }, { beats: f(3) }])] });
   t.press(reflowKey);
-  eq(ms(t.ed).map((m) => m.beats.length), [3, 4], 'one measure per press');
-  eq(t.ed.getMeasureFill(0, 1), 'over');
+  eq(ms(t.ed).map((m) => m.beats.length), [3, 3, 1], 'measure 2 became overfull, so the cascade moved its last beat on');
+  eq(t.ed.getMeasureFill(0, 1), 'full');
   eq(ms(t.ed)[1].beats[0].notes[0].tieEnd, undefined, 'a tieEnd with no tieStart before it is repaired');
   const u = mk({ tracks: [tab([{ beats: [...f(3), tn('quarter', 1, 0, { tieStart: true }), tn('quarter', 1, 0, { tieEnd: true })], timeSignature: { beats: 3, beatType: 4 } }])] });
   u.ed.setCursor({ measure: 0, beat: 0 });
@@ -604,7 +604,7 @@ test('reflow ignores a selection (design D18): it acts on the cursor measure (th
   sel(t.ed, P(2, 0), P(1, 3));
   eq(t.ed.getCursor().measure, 1, 'the focus is the cursor');
   t.press(reflowKey);
-  eq(ms(t.ed).map((m) => m.beats.length), [5, 4, 5], 'only the cursor measure reflowed');
+  eq(ms(t.ed).map((m) => m.beats.length), [5, 4, 4, 1], 'from the cursor measure on (2.3.1 cascade); measure 1, the other end of the selection, is untouched');
   eq(t.ed.getSelection(), null);
 });
 
@@ -1022,7 +1022,7 @@ test('two editors share the internal clipboard across loadScore and destroy of t
 // =====================================================================================================
 // Keymap, selection clearing by settings calls, API argument handling
 // =====================================================================================================
-test('keymap (D1, D7): of Ctrl / Cmd + letter only Z, Y and A are bound (Ctrl+C / X / V never, so the native events fire); Alt and Ctrl+Shift+other stay unbound; the 2.3.1 reservations stay free', async () => {
+test('keymap (D1, D7): of Ctrl / Cmd + letter only Z, Y and A are bound (Ctrl+C / X / V never, so the native events fire); Alt and Ctrl+Shift+other stay unbound; the keys still reserved after 2.3.1 stay free', async () => {
   const { keyToCommand } = await imp('src/editor/keymap.js');
   const bound = new Set();
   for (const m of [CTRL, { metaKey: true }, { ctrlKey: true, shiftKey: true }, { ctrlKey: true, altKey: true }, { altKey: true }, { altKey: true, shiftKey: true }]) {
@@ -1031,7 +1031,7 @@ test('keymap (D1, D7): of Ctrl / Cmd + letter only Z, Y and A are bound (Ctrl+C 
     }
   }
   eq([...bound].sort(), ['ctrl a selectAll', 'ctrl y redo', 'ctrl z undo', 'ctrl+shift y redo', 'ctrl+shift z redo', 'meta a selectAll', 'meta y redo', 'meta z undo']);
-  for (const [k, m] of [['Insert', CTRL], ['Insert', SHIFT], ['Home', { ctrlKey: true, shiftKey: true }], ['End', { ctrlKey: true, shiftKey: true }], ['ArrowUp', SHIFT], ['ArrowDown', SHIFT], ['ArrowUp', CTRL], ['ArrowDown', CTRL], ['Tab', {}], ['F5', {}], ['f', { altKey: true }], ['F', { ctrlKey: true, shiftKey: true }], ['ArrowLeft', { shiftKey: true, altKey: true }], ['R', SHIFT], ['I', SHIFT]]) {
+  for (const [k, m] of [['Insert', CTRL], ['Insert', SHIFT], ['ArrowUp', SHIFT], ['ArrowDown', SHIFT], ['Tab', {}], ['F5', {}], ['f', { altKey: true }], ['F', { ctrlKey: true, shiftKey: true }], ['ArrowLeft', { shiftKey: true, altKey: true }], ['R', SHIFT], ['I', SHIFT]]) {
     eq(keyToCommand(key(k, m)), null, `${k} ${JSON.stringify(m)}`);
   }
   eq(keyToCommand(key('f')).name, 'fill');

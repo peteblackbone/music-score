@@ -71,6 +71,17 @@ export function beatsOf(m, voice = 1) {
   return Array.isArray(m.beats) ? m.beats : [];
 }
 
+/**
+ * Whether track `ti`'s measure `mi` has no note beat in any voice (2.3.1
+ * paste): only rests (hidden ones too) or nothing. A hole or a column past
+ * the end is blank; a grace counts as a note.
+ */
+export function isBlankMeasure(score, ti, mi) {
+  const m = measureAt(trackAt(score, ti), mi);
+  const lists = voicesOf(m) ? m.voices.map((v) => (Array.isArray(v?.beats) ? v.beats : [])) : [beatsOf(m)];
+  return lists.every((bs) => bs.every(isRest));
+}
+
 /** Beats of the measure and voice of `loc`. */
 export const beatsAt = (score, loc) => beatsOf(measureAt(trackAt(score, loc.track), loc.measure), voiceOf(loc));
 /** The beat at `loc` (null on the append slot). */

@@ -6,7 +6,9 @@
  * read-only mode), 'history' (undo / redo, run by the controller),
  * 'buffer' (Escape, `cancelsBuffer`) and 2.3 'select' (moves that extend
  * the selection, run by the controller's _extend; `fromStart`: Select all).
- * With a selection (ctx.selection) the three delete keys act on the range (model/rangeEdit.js). History commands name their `step`. Commands that can change the model carry their undo
+ * With a selection (ctx.selection) the three delete keys act on the range (model/rangeEdit.js), and (2.3.1) the effect
+ * keys act on every selected beat or note (effects.js effectRange); `keepsSelection` marks the commands after
+ * which the controller keeps the selection, re-derived, instead of clearing it. History commands name their `step`. Commands that can change the model carry their undo
  * `label`: a string, or a function of the command's announce descriptor. run() clamps the resulting cursor, clears the digit
  * buffer after anything but a digit, and re-syncs the current duration
  * when the position or the model changed.
@@ -20,16 +22,18 @@ import { shorter, longer, setDuration, cycleDots, toggleTriplet, toggleRest, del
 import { insertMeasureAfter, insertMeasureBefore, deleteMeasure } from './measures.js';
 import { trackAt, isVisible } from './access.js';
 import { EFFECTS } from './effectTable.js';
-import { effectCommand } from './effects.js';
+import { effectCommand, effectRange } from './effects.js';
 import {
-  selectLeft, selectRight, selectMeasureStart, selectMeasureEnd, selectPrevMeasure, selectNextMeasure, selectAll,
+  selectLeft, selectRight, selectMeasureStart, selectMeasureEnd, selectPrevMeasure, selectNextMeasure, selectAll, selectScoreStart, selectScoreEnd,
 } from './selection.js';
 import { ranged, clearRange, removeRange, deleteSelectedColumns } from './rangeEdit.js';
 import { fill, reflow } from './reflow.js';
+import { transpose } from './transpose.js';
 
 const nav = (fn, label) => ({ fn, kind: 'nav', label });
 const edit = (fn, label) => ({ fn, kind: 'edit', label });
 const select = (fn, extra) => ({ fn, kind: 'select', ...extra });
+const keep = (c) => ({ ...c, keepsSelection: true });
 
 export const COMMANDS = Object.freeze({
   moveLeft: nav(moveLeft),
@@ -60,8 +64,9 @@ export const COMMANDS = Object.freeze({
   deleteMeasure: edit(ranged(deleteMeasure, deleteSelectedColumns), (d) => (d?.id === 'columnsDeleted' ? 'delete measures' : 'delete measure')),
   fill: edit(fill, 'fill'),
   reflow: edit(reflow, 'reflow'),
-  // 2.1 effects, one command per row of effectTable.js
-  ...Object.fromEntries(EFFECTS.map((d) => [d.name, edit(effectCommand(d), d.label)])),
+  transpose: keep(edit(transpose, 'transpose')), // 2.3.1, arg: semitones
+  // 2.1 effects, one command per row of effectTable.js; 2.3.1: over the selection when there is one
+  ...Object.fromEntries(EFFECTS.map((d) => [d.name, keep(edit(ranged(effectCommand(d), effectRange(d)), d.label))])),
   // 2.3 selection
   selectLeft: select(selectLeft),
   selectRight: select(selectRight),
@@ -70,6 +75,8 @@ export const COMMANDS = Object.freeze({
   selectPrevMeasure: select(selectPrevMeasure),
   selectNextMeasure: select(selectNextMeasure),
   selectAll: select(selectAll, { fromStart: true }),
+  selectScoreStart: select(selectScoreStart),
+  selectScoreEnd: select(selectScoreEnd),
   undo: { fn: null, kind: 'history', step: 'undo' },
   redo: { fn: null, kind: 'history', step: 'redo' },
   clearBuffer: { fn: null, kind: 'buffer', cancelsBuffer: true },

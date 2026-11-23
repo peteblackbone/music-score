@@ -11,13 +11,19 @@
  *
  * Reflow moves the beats whose onset is at or past the measure's length
  * (with their leading graces) to the start of the next measure, adding a
- * measure to every track on the last one. A beat that crosses the barline
- * stays. One measure per press, no cascade. Ties at the seams are
- * repaired; tempo marks stay on their beats.
+ * measure to every track on the last one. 2.3.1: a beat that crosses the
+ * barline is split into tied pieces of plain durations (reflowSplit.js),
+ * the part after the barline moving on; a tuplet beat, or one plain
+ * durations can't write, stays. Then Reflow carries on into each following
+ * measure while it is overfull (a cascade, all or nothing against the
+ * limits, one result); it never pulls beats back. Trailing graces after a
+ * split beat stay. Ties at the seams are repaired; tempo marks stay on
+ * their beats; the cursor follows its beat.
  */
 import { R, ZERO, add, sub, cmp } from '../../rational.js';
 import { beatsAt, isGrace, isPickup, measureCount, updateBeats, mainBeatNumber } from './access.js';
-import { beatR, measureTotal, timeSignatureAt } from './fill.js';
+import { beatR, measureTotal, timeSignatureAt, measureFill } from './fill.js';
+import { plainRun, splitBeat } from './reflowSplit.js';
 import { DURATIONS } from './durations.js';
 import { leadingGraces } from './beats.js';
 import { appendMeasure } from './measures.js';
@@ -74,37 +80,81 @@ export function fill(score, cursor, state, ctx) {
   return { score: out, announce: { id: 'filledMany', count: filled, total, rests: added } };
 }
 
-/** Shift+F: move the overflow of the cursor measure to the next measure (see the header). */
-export function reflow(score, cursor) {
-  const loc = { track: cursor.track, measure: cursor.measure };
+/**
+ * One measure of Reflow (see the header) on `loc` (`{ track, measure }`):
+ * `{ score, count, added, split, crossing, from, afterCount }` (count: main
+ * beats moved; split / crossing: the beat number of a split / staying beat;
+ * from: the first index that moved; afterCount: the split pieces that open
+ * the next measure), `{ crossing }` with nothing to move, or `{ refused }`.
+ */
+function reflowStep(score, loc) {
   const beats = beatsAt(score, loc);
   const C = capacity(score, loc);
   let t = ZERO;
   let k = -1;
-  let crossing = null;
-  for (let i = 0; i < beats.length && k < 0; i++) {
+  let cross = -1;
+  let span = null;
+  for (let i = 0; i < beats.length; i++) {
     if (isGrace(beats[i])) continue;
     if (cmp(t, C) >= 0) { k = i; break; }
     const end = add(t, beatR(beats[i]));
-    if (cmp(end, C) > 0) crossing = mainBeatNumber(beats, i);
+    if (cmp(end, C) > 0) { cross = i; span = [t, end]; }
     t = end;
   }
-  if (k < 0) return { announce: crossing ? { id: 'reflowCrossing', beat: crossing } : { id: 'reflowNothing' } };
-  const from = leadingGraces(beats, k);
-  const moved = beats.slice(from);
-  const count = moved.filter((b) => !isGrace(b)).length;
+  let before = null;
+  let pieces = null;
+  if (cross >= 0 && !('tuplet' in beats[cross]) && !('tuplets' in beats[cross])) {
+    before = plainRun(span[0], C);
+    const after = before && plainRun(ZERO, sub(span[1], C));
+    if (after) pieces = splitBeat(beats[cross], [...before, ...after]);
+  }
+  const crossing = cross >= 0 && !pieces ? mainBeatNumber(beats, cross) : null;
+  const from = k >= 0 ? leadingGraces(beats, k) : beats.length;
+  if (!pieces && k < 0) return { crossing };
+  const kept = pieces ? [...beats.slice(0, cross), ...pieces.slice(0, before.length), ...beats.slice(cross + 1, from)] : beats.slice(0, from);
+  const afterPieces = pieces ? pieces.slice(before.length) : [];
+  const moved = [...afterPieces, ...beats.slice(from)];
   let out = score;
-  const added = cursor.measure === measureCount(score) - 1;
+  const added = loc.measure === measureCount(score) - 1;
   if (added) {
-    if (measureCount(score) >= EDITOR_LIMITS.measuresPerTrack) return { announce: { id: 'tooLarge' } };
+    if (measureCount(score) >= EDITOR_LIMITS.measuresPerTrack) return { refused: 'tooLarge' };
     out = appendMeasure(out);
   }
-  const next = { track: cursor.track, measure: cursor.measure + 1 };
-  if (beatsAt(out, next).length + moved.length > EDITOR_LIMITS.beatsPerVoice) return { announce: { id: 'tooLarge' } };
-  out = updateBeats(out, loc, (bs) => bs.slice(0, from));
+  const next = { track: loc.track, measure: loc.measure + 1 };
+  if (kept.length > EDITOR_LIMITS.beatsPerVoice || beatsAt(out, next).length + moved.length > EDITOR_LIMITS.beatsPerVoice) return { refused: 'tooLarge' };
+  out = updateBeats(out, loc, () => kept);
   out = updateBeats(out, next, (bs) => [...moved, ...bs]);
-  out = fixTiesIn(out, cursor.track, cursor.measure, cursor.measure + 1);
-  const follows = cursor.beat >= from && cursor.beat < beats.length;
-  const c = follows ? { ...cursor, measure: cursor.measure + 1, beat: cursor.beat - from } : { ...cursor, beat: Math.min(cursor.beat, from) };
-  return { score: out, cursor: c, announce: { id: 'reflowed', count, to: cursor.measure + 2, crossing, added } };
+  out = fixTiesIn(out, loc.track, loc.measure, loc.measure + 1);
+  const count = moved.filter((b) => !isGrace(b)).length;
+  return { score: out, count, added, split: pieces ? mainBeatNumber(beats, cross) : null, crossing, from, afterCount: afterPieces.length };
+}
+
+/** Shift+F: reflow the cursor measure, then each following measure while it is overfull (see the header). */
+export function reflow(score, cursor) {
+  const track = cursor.track;
+  let out = score;
+  let c = cursor;
+  let steps = 0;
+  let added = 0;
+  let split = 0;
+  let crossing = null;
+  let first = null;
+  for (let mi = cursor.measure; mi < measureCount(out); mi++) {
+    if (mi > cursor.measure && measureFill(out, { track, measure: mi }) !== 'over') break;
+    const st = reflowStep(out, { track, measure: mi });
+    if (st.refused) return { announce: { id: st.refused } };
+    if (st.crossing) crossing ??= { measure: mi + 1, beat: st.crossing };
+    if (!st.score) break;
+    steps++;
+    first ??= st;
+    if (st.added) added++;
+    if (st.split) split++;
+    out = st.score;
+    if (c.measure === mi && c.beat >= st.from) c = { ...c, measure: mi + 1, beat: st.afterCount + (c.beat - st.from) };
+  }
+  if (!steps) return { announce: crossing ? { id: 'reflowCrossing', beat: crossing.beat } : { id: 'reflowNothing' } };
+  if (steps === 1) {
+    return { score: out, cursor: c, announce: { id: 'reflowed', count: first.count, to: cursor.measure + 2, crossing: first.crossing, added: first.added, split: first.split } };
+  }
+  return { score: out, cursor: c, announce: { id: 'reflowedMany', count: steps, added, split, crossing } };
 }

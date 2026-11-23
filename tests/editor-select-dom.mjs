@@ -94,7 +94,7 @@ test('criterion 9: Ctrl+Shift+Right extends to the next measure boundary, Shift+
   press(key('ArrowLeft', SHIFT));
   eq([ed.getSelection().beatCount, spoken()], [1, 'Selected measure 1 beat 3, 1 beat']);
 });
-test('criterion 10 / R3: Ctrl+A selects every measure of the cursor track (kind measures) and scrolls to the end; on a track with no beats it says "Nothing to select"', () => {
+test('criterion 10 / R3: Ctrl+A selects every measure of the cursor track (kind measures) and scrolls to the end; 2.3.1: on a track with no beats it selects every measure, no beats', () => {
   const { ed, press, spoken, events } = mk(fixture());
   ed.setCursor({ measure: 1, beat: 2 });
   events.length = 0;
@@ -105,8 +105,8 @@ test('criterion 10 / R3: Ctrl+A selects every measure of the cursor track (kind 
   eq(events.map((e) => e[0]), ['cursor', 'selection']);
   const empty = mk({ tracks: [{ name: 'E', showTablature: true, measures: [{ beats: [] }, { beats: [] }] }] });
   eq(empty.press(key('a', CTRL)), [true]);
-  eq([empty.ed.getSelection(), empty.spoken()], [null, 'Nothing to select']);
-  eq(empty.events.filter((e) => e[0] === 'selection').length, 0);
+  eq([empty.ed.getSelection(), empty.spoken()], [{ kind: 'measures', track: 0, start: { measure: 0, beat: 0 }, end: { measure: 1, beat: 0 }, beatCount: 0, measures: [0, 1] }, 'Selected all of Track 1 E, 2 measures']);
+  eq(empty.events.filter((e) => e[0] === 'selection').length, 1);
 });
 test('criterion 11: a plain move, Esc, a click, undo, redo, loadScore and any edit clear the selection with selection(null) first; Esc is consumed only while something is live; refused and no-op edits keep it', () => {
   const sel = (m) => { m.ed.setSelection({ anchor: { measure: 0, beat: 0 }, focus: { measure: 0, beat: 2 } }); m.events.length = 0; };
@@ -293,12 +293,15 @@ test('criterion 28 / D8: ties at both edges repaired; Shift+Delete on a beats se
   }
   eq(ro.ed.getSelection().beatCount, 3);
 });
-test('effect keys and other edits act on the cursor beat and clear the selection (D6); a no-op edit keeps it', () => {
+test('2.3.1: effect keys act on every selected beat and keep the selection; other edits act on the cursor beat and clear the selection (D6); a no-op edit keeps it', () => {
   const { ed, press } = mk(fixture());
   selectMeasure2to3(ed);
   press('v');
+  eq(ed.getSelection().measures, [1, 2], 'kept');
+  eq(ed.getScore().tracks[0].measures.slice(1, 3).map((m) => m.beats.map((b) => b.vibrato ?? null)), [[true, null, true], [true]], 'every selected main beat, not the grace');
+  press('.');
   eq(ed.getSelection(), null);
-  eq(ed.getScore().tracks[0].measures[2].beats[0].vibrato, true, 'on the cursor beat (the focus)');
+  eq(ed.getScore().tracks[0].measures[2].beats[0].dots, 1, 'on the cursor beat (the focus)');
   selectMeasure2to3(ed);
   ed.setDuration('whole');
   ok(ed.getSelection() !== null, 'the cursor beat is already a whole: no change keeps the selection');
@@ -328,11 +331,11 @@ test('criterion 37: F is refused on an unfinished triplet gap and on a pickup me
   eq(p.ed.getMeasureFill(0, 1), 'full', 'measure 2 still fills');
 });
 test('criterion 38: Shift+F moves the overflow, adds a measure on the last one, leaves a crossing beat with an announcement; one undo step; read-only refuses', () => {
-  const { ed, press, spoken } = mk({ tracks: [{ name: 'G', showTablature: true, measures: [{ beats: [nt('half'), nt('half', 1, 0, { dots: 1 }), nt('quarter'), nt('8th')] }] }] });
+  const { ed, press, spoken } = mk({ tracks: [{ name: 'G', showTablature: true, measures: [{ beats: [nt('half'), nt('quarter'), nt('half', 1, 0, { tuplet: 3 }), nt('quarter'), nt('8th')] }] }] });
   const before = ed._model;
   eq(press(key('F', SHIFT)), [true]);
-  eq(ed.getScore().tracks[0].measures.map((m) => m.beats.length), [2, 2]);
-  eq(spoken(), 'Measure 2 added, moved 2 beats to it, beat 2 crosses the barline and stays', 'still overfull: no fill suffix');
+  eq(ed.getScore().tracks[0].measures.map((m) => m.beats.length), [3, 2]);
+  eq(spoken(), 'Measure 2 added, moved 2 beats to it, beat 3 crosses the barline and stays', '2.3.1: a crossing triplet stays; still overfull: no fill suffix');
   ed.undo();
   ok(ed._model === before, 'one undo step, the added measure included');
   eq(spoken(), 'Undo: reflow');
@@ -407,7 +410,7 @@ test('criteria 17 / 18 / 25: a beats clip pastes before the cursor beat (one und
   eq(ed.getScore().tracks.map((t) => t.measures.length), [6, 4]);
   eq(ed.getScore().tracks[0].measures[2].beats[0].notes[0].fret, 7);
   eq(ed.getScore().tracks[1].measures, [{ beats: [nt('whole', 4, 3)] }, { beats: [] }, { beats: [] }, { beats: [] }]);
-  eq([ed.getCursor().measure, spoken()], [4, 'Pasted 2 measures at measure 3']);
+  eq([ed.getCursor().measure, spoken()], [4, 'Inserted 2 measures at measure 3']);
   ok(sanitizeScore(ed._model) === ed._model);
   ed.destroy();
 });
@@ -444,7 +447,7 @@ test('criteria 20-22: notes on string 7 into a 6-string track are dropped and co
   eq(ed.getScore().tracks[0].measures[0].beats, [{ type: 'note', duration: 'quarter', notes: [{ string: 6, fret: 1 }] }, { type: 'rest', duration: 'quarter' }]);
   eq(spoken(), 'Pasted 2 beats, 2 notes on missing strings dropped');
   ed.paste(clipText('measures', [{ beats: [nt('whole')], timeSignature: { beats: 3, beatType: 4 }, barline: 'final', segno: true, pickup: true, section: 'A' }]));
-  eq(ed.getScore().tracks[0].measures[0], { beats: [nt('whole')] });
+  eq(ed.getScore().tracks[0].measures[1], { beats: [nt('whole')] }, '2.3.1: from the slot the paste goes after the measure');
 });
 test('criterion 23: hostile clips change nothing and are refused with an announcement (malformed, wrong type or version, an array, __proto__, over 5 MB, over the limits)', () => {
   const { ed, spoken } = mk(fixture());
@@ -466,7 +469,7 @@ test('criterion 24: a paste past jsonChars, 2000 measures or 256 beats per voice
   const big = mk({ tracks: [{ showTablature: true, measures: [{ beats: Array.from({ length: 255 }, () => nt('64th')) }] }] });
   eq([big.ed.paste(clipText('beats', [nt('64th'), nt('64th')])), big.spoken()], [false, 'The score would be too large']);
   const many = mk({ tracks: [{ showTablature: true, measures: Array.from({ length: 1999 }, () => ({ beats: [] })) }] });
-  eq([many.ed.paste(clipText('measures', [{ beats: [] }, { beats: [] }])), many.spoken()], [false, 'The score would be too large']);
+  eq([many.ed.paste(clipText('measures', [{ beats: [] }, { beats: [] }]), { insert: true }), many.spoken()], [false, 'The score would be too large']);
   const wide = mk({ zz: 'x'.repeat(EDITOR_LIMITS.jsonChars - 20000), tracks: [{ showTablature: true, measures: [{ beats: [] }] }] });
   const clip = clipText('beats', [{ ...nt('quarter'), pad: 'y'.repeat(30000) }]);
   ok(clip.length < EDITOR_LIMITS.jsonChars);
@@ -680,7 +683,7 @@ test('demo helpers: Selection status text, clip text check, the Remove confirm w
 test('demo markup: Edit group (Copy, Cut, Paste) between History and Settings, Measures group (Fill, Reflow) after Duration, Selection status after Beat, the pickup checkbox in the Time signature fieldset, Tempo under All tracks, shortcut sections in order', () => {
   const at = (s) => html.indexOf(s);
   ok(at('aria-label="History"') < at('aria-label="Edit"') && at('aria-label="Edit"') < at('aria-label="Settings"'));
-  for (const [id, title] of [['copy-btn', 'Ctrl+C'], ['cut-btn', 'Ctrl+X'], ['paste-btn', 'Paste before the cursor (Ctrl+V)'], ['fill-btn', 'Fill the measure with rests (F)'], ['reflow-btn', 'Move overflow to the next measure (Shift+F)']]) {
+  for (const [id, title] of [['copy-btn', 'Ctrl+C'], ['cut-btn', 'Ctrl+X'], ['paste-btn', 'Paste over the selected or blank measures, else before the cursor (Ctrl+V)'], ['fill-btn', 'Fill the measure with rests (F)'], ['reflow-btn', 'Move overflow to the next measure (Shift+F)']]) {
     ok(new RegExp(`<button type="button" id="${id}" title="[^"]*${title.replace(/[()+]/g, '\\$&')}`).test(html), id);
   }
   ok(at('aria-label="Duration"') < at('aria-label="Measures"') && at('aria-label="Measures"') < at('id="readonly"'));
@@ -690,11 +693,11 @@ test('demo markup: Edit group (Copy, Cut, Paste) between History and Settings, M
   ok(at('<legend>Navigation</legend>') < at('id="ms-tempo-set"') && at('id="ms-tempo-set"') < at('id="ms-track-heading"'));
   ok(html.includes('Applies to every track. A mark at this beat on another track is replaced.'));
   const sections = [...html.matchAll(/<section><h3>([^<]+)<\/h3>/g)].map((x) => x[1]);
-  eq(sections, ['Move', 'Selection', 'Enter', 'Rhythm', 'Edit', 'Clipboard', 'Measures', 'Effects', 'Settings', 'History']);
+  eq(sections, ['Move', 'Selection', 'Enter', 'Rhythm', 'Edit', 'Clipboard', 'Measures', 'Transpose', 'Effects', 'Settings', 'History'], '2.3.1 adds Transpose');
 });
 test('demo wiring: buttons call the public API, Copy / Cut also try navigator.clipboard (refusal ignored), Paste reads the system clipboard only with the permission granted; disabled states; a focused button that turns disabled hands focus on', async () => {
   const mkBtn = (id) => ({ id, disabled: false, handlers: [], addEventListener(t, f) { this.handlers.push(f); }, focus() { fake.activeElement = this; }, click(detail = 0) { return Promise.all(this.handlers.map((f) => f({ detail }))); } });
-  const els = Object.fromEntries(['copy-btn', 'cut-btn', 'paste-btn', 'fill-btn', 'reflow-btn'].map((id) => [id, mkBtn(id)]));
+  const els = Object.fromEntries(['copy-btn', 'cut-btn', 'paste-btn', 'paste-new-btn', 'fill-btn', 'reflow-btn', 'transpose-down-1-btn', 'transpose-up-1-btn', 'transpose-down-12-btn', 'transpose-up-12-btn'].map((id) => [id, mkBtn(id)]));
   els['st-selection'] = { textContent: '' };
   const writes = [];
   let state = 'prompt';

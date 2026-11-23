@@ -6,7 +6,7 @@
  *   host.viewScore() · host.cursorInfo() · host.fills() · host.selection() · host.afterRender()
  *   host.onKey(e) → bool · host.onClick(hit) · host.onFocusChange(focused)
  *   host.onClipboard(kind, e) → bool  (2.3: copy / cut / paste on document while the root has focus;
- *     'pastekey' on a paste shortcut; 'pasteseen' on any native paste, before the focus checks; 'destroy')
+ *     'pastekey' on a paste shortcut; 'pasteseen' on any native paste, before the focus checks; 'blur'; 'destroy')
  *
  * DOM (ui.md §2), all inside the container:
  *   div.music-score-editor[tabindex=0][role=application]   (focus stays here)
@@ -95,7 +95,7 @@ export class EditorView {
       }
     }
     this._listen(this.root, 'focus', () => this.host.onFocusChange(true));
-    this._listen(this.root, 'blur', () => this.host.onFocusChange(false));
+    this._listen(this.root, 'blur', () => { this.host.onFocusChange(false); this.host.onClipboard('blur'); });
     this._listen(this.renderHost, 'mousedown', (e) => this._mouseDown(e));
 
     // One re-render once the fonts are ready (the Bravura face may still be loading on first paint).

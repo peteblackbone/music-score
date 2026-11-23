@@ -19,6 +19,8 @@ const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 const fillWord = (f) => FILL_WORDS[f]?.word ?? f;
 /** The effect text of `def` for descriptor `d`: added, the step's words, or off; plus the suffix. */
 const effectText = (def, d) => `${d.added ? def.added : d.step >= 0 ? def.say[d.step] : def.off}${Object.hasOwn(SUFFIXES, d.suffix ?? '') ? SUFFIXES[d.suffix].text : ''}`;
+/** 'Palm mute on, 8 beats' / 'Accent, 8 beats, not shown on TAB only': the step's words, the count of `unit`, the suffix. */
+const rangeEffectText = (def, d) => `${d.step >= 0 ? def.say[d.step] : def.off}, ${plural(d.count, d.unit)}${Object.hasOwn(SUFFIXES, d.suffix ?? '') ? SUFFIXES[d.suffix].text : ''}`;
 /** ', hammer/pull, palm mute' (empty when there are none). */
 const effectsText = (list) => (list?.length ? `, ${list.join(', ')}` : '');
 
@@ -63,6 +65,16 @@ export const MESSAGES = Object.freeze({
   noTrack: () => 'No visible track',
   needsNote: () => 'Needs a note',
   effect: (d) => (Object.hasOwn(EFFECT_BY_NAME, d.name) ? effectText(EFFECT_BY_NAME[d.name], d) : ''),
+  // 2.3.1 effects over a selection: the step's words, the count, the suffix once
+  effectRange: (d) => (Object.hasOwn(EFFECT_BY_NAME, d.name) ? rangeEffectText(EFFECT_BY_NAME[d.name], d) : ''),
+  noNotesInSelection: () => 'No notes in the selection',
+  noBeatsInSelection: () => 'No beats in the selection',
+  // 2.3.1 transpose
+  transposed: (d) => (d.fret != null ? `Fret ${d.fret}, ${semitoneText(d.semitones)}` : `Transposed ${plural(d.count, 'note')} ${semitoneText(d.semitones)}${skippedText(d.skipped)}`),
+  transposeRange: (d) => `Can't transpose, measure ${d.measure} would go ${d.up ? `above fret ${d.max}` : 'below fret 0'}`,
+  noNoteToTranspose: () => 'No note here',
+  pitchOnlyNote: () => 'Only fretted notes can be transposed',
+  nothingToTranspose: (d) => `No fretted notes to transpose${skippedText(d.skipped)}`,
   // 2.2 settings
   noChange: () => 'No change',
   scoreUpdated: (d) => `${!d.key ? 'Score settings updated' : FLAG_KEYS.includes(d.key) ? `${d.label} ${d.on ? 'on' : 'off'}` : `${d.label} ${d.on ? 'set' : 'removed'}`}${d.mmrOn ? ', shown when rendered, not in the editor' : ''}`,
@@ -87,6 +99,7 @@ export const MESSAGES = Object.freeze({
   rangeCleared: (d) => `${plural(d.count, 'beat')} changed to rest${d.count === 1 ? '' : 's'}`,
   rangeAlreadyRests: () => 'Already rests',
   copiedRests: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}, already rests`,
+  rangeNoBeats: () => 'No beats to delete',
   rangeRemoved: (d) => `${plural(d.count, 'beat')} deleted${tempoRemoved(d.tempoRemoved)}`,
   columnsDeleted: (d) => `${d.all ? 'All measures deleted, 1 empty measure left' : d.a === d.b ? `Measure ${d.a} deleted` : `Measures ${d.a} to ${d.b} deleted`}${tempoRemoved(d.tempoRemoved)}`,
   needsMeasureSelection: () => 'Select whole measures first',
@@ -99,13 +112,21 @@ export const MESSAGES = Object.freeze({
   fillPickup: () => 'Pickup measure, not filled',
   fillCannot: () => "Plain rests can't fill this measure",
   nothingToFill: () => 'Nothing to fill',
-  reflowed: (d) => `${d.added ? `Measure ${d.to} added, moved ${plural(d.count, 'beat')} to it` : `Moved ${plural(d.count, 'beat')} to measure ${d.to}`}${d.crossing ? `, beat ${d.crossing} crosses the barline and stays` : ''}`,
+  reflowed: (d) => `${d.added ? `Measure ${d.to} added, moved ${plural(d.count, 'beat')} to it` : `Moved ${plural(d.count, 'beat')} to measure ${d.to}`}${d.split ? `, beat ${d.split} split at the barline` : ''}${d.crossing ? `, beat ${d.crossing} crosses the barline and stays` : ''}`,
+  reflowedMany: (d) => `Reflowed ${plural(d.count, 'measure')}${d.added ? `, ${plural(d.added, 'measure')} added` : ''}${d.split ? `, ${plural(d.split, 'beat')} split` : ''}${d.crossing ? `, measure ${d.crossing.measure} beat ${d.crossing.beat} crosses the barline and stays` : ''}`,
   reflowCrossing: (d) => `Beat ${d.beat} crosses the barline and stays`,
   reflowNothing: () => 'Nothing to reflow',
   // 2.3 clipboard
   copied: (d) => `Copied ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}`,
   cut: (d) => `Cut ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')}, now rests`,
-  pasted: (d) => `Pasted ${d.kind === 'measures' ? `${plural(d.count, 'measure')} at measure ${d.at}` : `${plural(d.count, 'beat')}${d.replaced != null ? `, replaced ${d.replaced}` : ''}`}${d.dropped ? `, ${plural(d.dropped, 'note')} on missing strings dropped` : ''}${d.tempoRemoved ? `, ${plural(d.tempoRemoved, 'tempo mark')} removed` : ''}`,
+  pasted: (d) => `${d.kind === 'measures' ? `Inserted ${plural(d.count, 'measure')} at measure ${d.at}` : `Pasted ${plural(d.count, 'beat')}${d.replaced ? `, replaced ${d.replaced}` : ''}`}${droppedText(d.dropped)}${tempoRemoved(d.tempoRemoved)}`,
+  pastedOver: (d) => {
+    const r = d.count - d.added;
+    const span = (n) => (n === 1 ? `measure ${d.at}` : `measures ${d.at} to ${d.at + n - 1}`);
+    const where = r > 0 ? `over ${span(r)}${d.added ? `, ${plural(d.added, 'measure')} added` : ''}` : `at the end, ${span(d.count)}`;
+    return `Pasted ${plural(d.count, 'measure')} ${where}${droppedText(d.dropped)}${tempoRemoved(d.tempoRemoved)}`;
+  },
+  pasteNeedsMeasures: () => 'Select whole measures to paste measures',
   cutUnwritten: (d) => `Clipboard unavailable, nothing cut. ${plural(d.count, d.kind === 'measures' ? 'measure' : 'beat')} copied in the editor`,
   nothingToCopy: () => 'Nothing to copy',
   nothingToPaste: () => 'Nothing to paste',
@@ -138,6 +159,12 @@ const MEASURE_TEXT = {
   pickup: (v) => (v ? 'Pickup' : 'Pickup removed'),
 };
 
+/** 'up 1 semitone' / 'down an octave'. */
+const semitoneText = (n) => `${n > 0 ? 'up' : 'down'} ${Math.abs(n) === 12 ? 'an octave' : plural(Math.abs(n), 'semitone')}`;
+/** ', 2 pitch-only notes skipped' (empty for none). */
+const skippedText = (n) => (n ? `, ${plural(n, 'pitch-only note')} skipped` : '');
+/** ', 2 notes on missing strings dropped' (empty for none). */
+const droppedText = (n) => (n ? `, ${plural(n, 'note')} on missing strings dropped` : '');
 /** ', 1 tempo mark removed' / ', 2 tempo marks removed' (empty for none). */
 export const tempoRemoved = (n) => (n ? `, ${n} tempo mark${n === 1 ? '' : 's'} removed` : '');
 /** 'Track 2 Bass' / 'Track 2'. */

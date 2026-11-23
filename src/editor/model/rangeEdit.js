@@ -26,14 +26,14 @@ export function tempoIn(score, track, slices) {
   }).length;
 }
 
-/** `score` with each slice's beats [from, to) replaced by fn(beats) on track `track`, then its ties repaired (`score` itself when no slice has beats). Exported for range edits to come (2.3.1 effects and transpose). */
-export function eachSlice(score, track, slices, fn) {
+/** `score` with each slice's beats [from, to) replaced by fn(beats) on track `track`, then its ties repaired unless `repair` is false (`score` itself when no slice has beats). Also used by the 2.3.1 range effects and transpose, which keep their ties themselves. */
+export function eachSlice(score, track, slices, fn, repair = true) {
   let out = score;
   for (const s of slices) {
     if (s.from >= s.to) continue;
     out = updateBeats(out, { track, measure: s.measure }, (bs) => [...bs.slice(0, s.from), ...fn(bs.slice(s.from, s.to)), ...bs.slice(s.to)]);
   }
-  return out === score ? score : fixTiesIn(out, track, slices[0].measure, slices[slices.length - 1].measure);
+  return out === score || !repair ? out : fixTiesIn(out, track, slices[0].measure, slices[slices.length - 1].measure);
 }
 
 /** A note beat as a rest of the same length (effects, unknown fields and tempo kept); rests unchanged. */
@@ -75,8 +75,9 @@ export function clearRange(score, cursor, state, ctx) {
   return { score: r.score, cursor: { ...cursor, ...r.cursor }, announce: { id, count: r.count } };
 }
 
-/** Ctrl+Delete / Ctrl+Backspace with a selection. */
+/** Ctrl+Delete / Ctrl+Backspace with a selection; a zero-beat selection (blank measures) has no beats to delete. */
 export function removeRange(score, cursor, state, ctx) {
+  if (!ctx.selection.info.beatCount) return { announce: { id: 'rangeNoBeats' } };
   const r = removeSlices(score, ctx.selection);
   return { score: r.score, cursor: { ...cursor, ...r.cursor }, announce: { id: 'rangeRemoved', count: r.count, tempoRemoved: r.tempoRemoved } };
 }

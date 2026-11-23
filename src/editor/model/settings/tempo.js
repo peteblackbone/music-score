@@ -12,6 +12,9 @@
  * - migrateTempo / lostTempoMarks: removeTrack moves each winning mark of
  *   the removed track to the lowest other track with a voice-1 main beat at
  *   exactly that onset, else counts it as dropped.
+ * - rehomeTempo (2.3.1): a paste that overwrites measures puts each winning
+ *   mark it replaced on the pasted beat at that onset, else on the lowest
+ *   other track with one, else counts it as dropped.
  */
 import { tempoOf } from '../../../expression.js';
 import { ZERO, add, cmp } from '../../../rational.js';
@@ -113,7 +116,7 @@ export function setTempo(score, cursor, value) {
 }
 
 /** Index of the voice-1 main beat of track `ti` measure `mi` at exactly `onset`, or -1. */
-function mainBeatAt(score, ti, mi, onset) {
+export function mainBeatAt(score, ti, mi, onset) {
   let t = ZERO;
   const beats = beatsOf(measureAt(trackAt(score, ti), mi));
   for (let k = 0; k < beats.length; k++) {
@@ -137,6 +140,31 @@ function moves(score, ti) {
     }
     return { mark: w, track: -1, beat: -1 };
   });
+}
+
+/**
+ * `{ score, dropped }`: each of `marks` (winners read before track `ti` was
+ * overwritten) written raw to the main beat at its (measure, onset) on
+ * track `ti`, else on the first other track in index order with one, else
+ * counted as dropped. A moved mark is not announced.
+ */
+export function rehomeTempo(score, ti, marks) {
+  const n = tracksOf(score).length;
+  const order = [ti, ...Array.from({ length: n }, (_, k) => k).filter((k) => k !== ti)];
+  let out = score;
+  let dropped = 0;
+  for (const w of marks) {
+    let done = false;
+    for (const k of order) {
+      const beat = mainBeatAt(out, k, w.measure, w.onset);
+      if (beat < 0) continue;
+      out = updateBeat(out, { track: k, measure: w.measure, beat }, (b) => withField(b, 'tempo', w.raw));
+      done = true;
+      break;
+    }
+    if (!done) dropped++;
+  }
+  return { score: out, dropped };
 }
 
 /** The tempo marks removing track `ti` would drop (no writes). */

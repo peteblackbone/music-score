@@ -151,7 +151,8 @@ test('selectionRange: info shape, kinds, beat counts, null without a main beat; 
   eq(a.info, { kind: 'beats', track: 0, start: { measure: 0, beat: 2 }, end: { measure: 1, beat: 1 }, beatCount: 4, measures: [0, 1] });
   const m = SEL.selectionRange(s, 0, P(0, 0), P(3, 0));
   eq([m.info.kind, m.info.beatCount, m.info.measures], ['measures', 6, [0, 3]]);
-  eq(SEL.selectionRange(s, 0, P(1, 3), P(2, 0)), null, 'slot to empty measure: no beats');
+  eq(SEL.selectionRange(s, 0, P(1, 3), P(2, 0)).info, { kind: 'measures', track: 0, start: { measure: 2, beat: 0 }, end: { measure: 2, beat: 0 }, beatCount: 0, measures: [2, 2] }, '2.3.1: slot to empty measure: the empty measure, no beats');
+  eq(SEL.selectionRange(s, 0, P(1, 3), P(1, 3)), null, 'a zero-beat range inside a non-blank measure is still null');
   eq(SEL.selectionRange(s, 0, P(2, 0), P(3, 0)).info.measures, [2, 3], 'a measures range keeps its first measure even with no beat in it');
   eq(SEL.selectionRange(s, 0, P(1, 3), P(3, 0)).info.measures, [3, 3], 'a beats range spans its selected beats only');
   const info = SEL.selectionInfo(a);
@@ -174,7 +175,7 @@ test('select commands: Left / Right like the moves (Right never appends), measur
   eq(go('selectNextMeasure', cur(0, 3, 0)).announce, { id: 'endOfScore' });
   eq(go('selectAll', cur(0, 1, 1)).cursor, cur(0, 3, 0));
   eq(SEL.startOf(s, cur(0, 2, 0)), P(0, 0));
-  ok(Object.entries(CMD.COMMANDS).filter(([, d]) => d.kind === 'select').length === 7 && CMD.COMMANDS.selectAll.fromStart);
+  ok(Object.entries(CMD.COMMANDS).filter(([, d]) => d.kind === 'select').length === 9 && CMD.COMMANDS.selectAll.fromStart, '2.3.1 adds selectScoreStart / selectScoreEnd');
 });
 test('selection words: across measures, in one measure, one beat, measures (one / several), Select all (with and without a name)', () => {
   const s = selFixture();
@@ -319,10 +320,10 @@ test('reflow: beats at or past the barline (with their graces) move to the start
   const r2 = run('reflow', last, cur(0, 0, 0), null);
   eq([r2.score.tracks[0].measures.length, r2.score.tracks[1].measures.length, describe(r2.announce)], [2, 2, 'Measure 2 added, moved 1 beat to it']);
   eq(r2.cursor, cur(0, 0, 0));
-  const cross = model({ tracks: [tab([{ beats: [nt('half'), nt('half', 1, 0, { dots: 1 }), nt('quarter')] }])] });
-  eq(describe(run('reflow', cross, cur(0, 0, 0), null).announce), 'Measure 2 added, moved 1 beat to it, beat 2 crosses the barline and stays');
-  const only = model({ tracks: [tab([{ beats: [nt('half'), nt('half', 1, 0, { dots: 1 })] }, { beats: [] }])] });
-  eq(describe(run('reflow', only, cur(0, 0, 0), null).announce), 'Beat 2 crosses the barline and stays');
+  const cross = model({ tracks: [tab([{ beats: [nt('half'), nt('quarter'), nt('half', 1, 0, { tuplet: 3 }), nt('quarter')] }])] });
+  eq(describe(run('reflow', cross, cur(0, 0, 0), null).announce), 'Measure 2 added, moved 1 beat to it, beat 3 crosses the barline and stays', '2.3.1: a crossing triplet stays');
+  const only = model({ tracks: [tab([{ beats: [nt('half'), nt('quarter'), nt('half', 1, 0, { tuplet: 3 })] }, { beats: [] }])] });
+  eq(describe(run('reflow', only, cur(0, 0, 0), null).announce), 'Beat 3 crosses the barline and stays');
   eq(describe(run('reflow', one([nt('half')]), cur(0, 0, 0), null).announce), 'Nothing to reflow');
 });
 test('reflow: two-voice measures move voice 1 only; the 2000-measure and 256-beat limits refuse', () => {
@@ -449,23 +450,24 @@ test('applyPaste fits the clip to the track: 7 strings into 6 drops (counted, an
   eq(v1(PA.applyPaste(s, cur(0, 0, 0), null, parse(drop)).score, 0, 0)[0].notes, [{ string: 1, fret: 0 }, { string: 2, fret: 1, pitch: 'C4' }], 'only the retuned string loses pitch');
   ok(!JSON.stringify(r.score).includes('tempo'));
 });
-test('applyPaste measures: inserted before the cursor measure (the selection\'s first) in every track, other tracks get empty measures, no measure fields, carried fields at measure 1 kept; cursor on the original measure', () => {
+test('applyPaste measures: inserted before the cursor measure (the selection\'s first with the insert option) in every track, other tracks get empty measures, no measure fields, carried fields at measure 1 kept; cursor on the original measure', () => {
   const s = model({ tracks: [tab([{ beats: [nt('whole')], timeSignature: { beats: 3, beatType: 4 } }, { beats: [nt('half')] }]), tab([{ beats: [nt('whole')] }], { name: 'B' })] });
   const clip = parse(clipText('measures', [{ beats: [nt('half', 2, 2)] }, { voices: [{ beats: [nt('whole', 3, 3)] }, { beats: [nt('whole', 4, 4)] }] }]));
   const r = PA.applyPaste(s, cur(0, 0, 0), null, clip);
   eq(r.score.tracks[0].measures, [{ timeSignature: { beats: 3, beatType: 4 }, beats: [nt('half', 2, 2)] }, { voices: [{ beats: [nt('whole', 3, 3)] }, { beats: [nt('whole', 4, 4)] }] }, { beats: [nt('whole')] }, { beats: [nt('half')] }]);
   eq(r.score.tracks[1].measures, [{ beats: [] }, { beats: [] }, { beats: [nt('whole')] }]);
-  eq([r.cursor.measure, describe(r.announce)], [2, 'Pasted 2 measures at measure 1']);
+  eq([r.cursor, describe(r.announce)], [cur(0, 2, 0), 'Inserted 2 measures at measure 1'], '2.3.1: the insert wording; the cursor on the first position after the pasted measures');
   ok(sanitizeScore(r.score) === r.score);
   const sel = SEL.selectionRange(s, 0, P(1, 0), P(0, 0));
-  eq(PA.applyPaste(s, cur(0, 0, 0), sel, clip).announce.at, 1, 'before the selection\'s first measure');
+  const ins = PA.applyPaste(s, cur(0, 0, 0), sel, clip, { insert: true });
+  eq([ins.announce.id, ins.announce.at, ins.cursor], ['pasted', 1, cur(0, 2, 0)], 'before the selection\'s first measure');
 });
 test('applyPaste limits: 256 beats in a measure and 2000 measures are refused; an empty clip pastes nothing', () => {
   const s = six([{ beats: Array.from({ length: 255 }, () => nt('64th')) }]);
   eq(PA.applyPaste(s, cur(0, 0, 0), null, parse(clipText('beats', [nt('quarter'), nt('quarter')]))), { refused: { id: 'tooLarge' } });
   ok(PA.applyPaste(s, cur(0, 0, 0), null, parse(clipText('beats', [nt('quarter')]))).score, '256 is fine');
   const big = model({ tracks: [tab(Array.from({ length: L.measuresPerTrack - 1 }, () => ({ beats: [] })))] });
-  eq(PA.applyPaste(big, cur(0, 0, 0), null, parse(clipText('measures', [{ beats: [] }, { beats: [] }]))), { refused: { id: 'tooLarge' } });
+  eq(PA.applyPaste(big, cur(0, 0, 0), null, parse(clipText('measures', [{ beats: [] }, { beats: [] }])), { insert: true }), { refused: { id: 'tooLarge' } });
   eq(PA.applyPaste(s, cur(0, 0, 0), null, parse(clipText('beats', []))), { refused: { id: 'nothingToPaste' } });
 });
 
@@ -524,7 +526,8 @@ test('B10 (2.3): 6 start scores x 2000 random steps mixing commands, selection, 
         const r = CMD.run(name, s, c, state, { maxFret: 24, now: i * 1000, twoDigitDelayMs: 800, allowAppend: true, selection: sel }, Math.floor(rnd() * 10));
         state = r.state;
         if (r.changed) { next = r; if (sel && ['deleteNote', 'deleteBeat', 'deleteMeasure', 'fill'].includes(name)) ranged++; } else c = r.cursor;
-        if (r.changed || CMD.COMMANDS[name].kind === 'nav') sel = null;
+        if (r.changed && sel && CMD.COMMANDS[name].keepsSelection) sel = SEL.selectionRange(r.score, sel.track, sel.anchor, sel.focus); // 2.3.1: re-derived
+        else if (r.changed || CMD.COMMANDS[name].kind === 'nav') sel = null;
       }
       if (next) {
         s = next.score;

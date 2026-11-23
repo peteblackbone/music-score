@@ -13,8 +13,13 @@
  * `_extend`, also in read-only mode. Every model change, plain move,
  * click, undo / redo and load clears the selection (`_dropSelection`,
  * which fires `selection` with null first); a refused or no-op edit keeps
- * it. Esc clears it (`_escape`). DOM-free: the view draws it. Copy, cut
- * and paste come from clipboard.js (installed here).
+ * it. 2.3.1: a command flagged `keepsSelection` (the effects and transpose,
+ * model/commands.js) keeps it after a change, re-derived from the same
+ * anchor and focus on the new model (`_settleSelection`; `selection` fires
+ * only when its info changed). A selection may cover no beat at all: a
+ * zero-beat selection of blank measures (beatCount 0). Esc clears it
+ * (`_escape`). DOM-free: the view draws it. Copy, cut and paste come from
+ * clipboard.js (installed here).
  */
 import { COMMANDS, run } from './model/commands.js';
 import { selectionRange, selectionInfo, selectionWords, startOf } from './model/selection.js';
@@ -93,6 +98,21 @@ export function installSelection(Editor) {
     if (edge && same(prev, sel) && sel) this._say(describe(edge)); // at an edge with nothing new: say the edge
     else if (sel) this._say(describe(selectionWords(this._model, sel, all && sel.info.kind === 'measures')));
     else this._say(describe({ id: prev ? 'selectionCleared' : 'nothingToSelect' }));
+  });
+
+  /** After command `name` ran with result `r` (_exec): keep the selection, re-derived, after a change by a keepsSelection command (true), else clear it after a change or a plain move. */
+  def('_settleSelection', function settle(name, r) {
+    const cmd = COMMANDS[name];
+    if (r.changed && cmd.keepsSelection && this._selection) {
+      const prev = this._selection;
+      const next = selectionRange(this._model, prev.track, prev.anchor, prev.focus);
+      if (!next) return this._dropSelection();
+      this._selection = next;
+      if (!same(prev, next)) this._events.emit('selection', selectionInfo(next));
+      return true;
+    }
+    if (r.changed || cmd.kind === 'nav') this._dropSelection(cmd.kind === 'nav');
+    return false;
   });
 
   /** Esc: end a two-digit entry, else clear the selection (announced); true when either was live. */

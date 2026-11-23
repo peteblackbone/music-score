@@ -214,7 +214,7 @@ export class ScoreEditor {
     this._model = r.score;
     this._cursor = r.cursor;
     this._state = r.state;
-    if (r.changed || COMMANDS[name].kind === 'nav') this._dropSelection(COMMANDS[name].kind === 'nav');
+    this._settleSelection(name, r);
     if (r.changed) {
       this._record(name, before, r);
       this._modelChanged('edit', name);

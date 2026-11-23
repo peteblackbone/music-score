@@ -49,6 +49,13 @@ export function stripFlag(score, loc, flag) {
  * string `string`, or on every string either has: unless A's note has
  * `tieStart` and B's note has `tieEnd`, both flags are removed.
  */
+/** A tie joins equal notes: same fret when both have one, same pitch when both are pitch-only; otherwise kept. */
+const samePitch = (a, b) => {
+  if (typeof a.fret === 'number' && typeof b.fret === 'number') return a.fret === b.fret;
+  if (a.fret == null && b.fret == null && typeof a.pitch === 'string' && typeof b.pitch === 'string') return a.pitch.trim() === b.pitch.trim();
+  return true;
+};
+
 export function fixSeam(score, A, B, string = null) {
   const a = A ? beatAt(score, A) : null;
   const b = B ? beatAt(score, B) : null;
@@ -57,7 +64,7 @@ export function fixSeam(score, A, B, string = null) {
   for (const s of strings) {
     const na = a ? noteOn(a, s) : null;
     const nb = b ? noteOn(b, s) : null;
-    if (na?.tieStart && nb?.tieEnd) continue;
+    if (na?.tieStart && nb?.tieEnd && samePitch(na, nb)) continue;
     if (na?.tieStart) out = stripFlag(out, locAt(A, { string: s }), 'tieStart');
     if (nb?.tieEnd) out = stripFlag(out, locAt(B, { string: s }), 'tieEnd');
   }

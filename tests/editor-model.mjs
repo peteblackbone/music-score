@@ -653,15 +653,15 @@ const LETTERS_AZ = 'abcdefghijklmnopqrstuvwxyz'.split('');
 const effectLetters = (shift) => Object.keys(EFFECT_KEYS).filter((k) => k.startsWith('Shift+') === shift).map((k) => k.slice(shift ? 6 : 0));
 const UNBOUND = LETTERS_AZ.filter((l) => !['r', 'l', 'i', 'm', 'f', ...effectLetters(false)].includes(l)); // 2.3: F fills
 const SHIFT_UNBOUND = LETTERS_AZ.filter((l) => !['m', 'f', ...effectLetters(true)].includes(l)); // 2.3: Shift+F reflows
-test('keymap: never consumes Tab, Alt, F-keys, IME, browser Ctrl combos (Ctrl+C / X / V stay native), keys reserved for 2.3.1 (Shift+Up / Down, Ctrl+Up, Ctrl+Shift+Up / Home, Shift+R / I) and unbound letters', () => {
+test('keymap: never consumes Tab, Alt, F-keys, IME, browser Ctrl combos (Ctrl+C / X / V and Ctrl+Shift+V stay native), keys still reserved after 2.3.1 (Shift+Up / Down, Shift+R / I) and unbound letters', () => {
   ok(UNBOUND.length === 11 && SHIFT_UNBOUND.length === 19 && SHIFT_UNBOUND.includes('r') && SHIFT_UNBOUND.includes('i'), `unbound ${UNBOUND} / Shift+${SHIFT_UNBOUND}`);
   const none = [
     ['Tab'], ['Tab', { shiftKey: true }], ['ArrowLeft', { altKey: true }], ['ArrowRight', { altKey: true }], ['r', { altKey: true }],
     ['F1'], ['F5'], ['F12'], ['a', { isComposing: true }], ['Process'], ['Dead'],
     ...['w', 't', 'n', 'l', 'p', 's', 'i', 'm', 'r', 'c', 'v', 'x', 'f'].map((k) => [k, { ctrlKey: true }]), ['a', { ctrlKey: true, shiftKey: true }], ['Insert', { ctrlKey: true }], ['Insert', { shiftKey: true }],
     ...['1', '5', '9'].map((k) => [k, { ctrlKey: true }]),
-    ['PageUp', { ctrlKey: true }], ['PageDown', { ctrlKey: true }], ['ArrowUp', { ctrlKey: true }], ['ArrowUp', { ctrlKey: true, shiftKey: true }],
-    ['ArrowUp', { shiftKey: true }], ['ArrowDown', { shiftKey: true }], ['Home', { ctrlKey: true, shiftKey: true }], ['PageUp', { shiftKey: true }],
+    ['PageUp', { ctrlKey: true }], ['PageDown', { ctrlKey: true }], ['V', { ctrlKey: true, shiftKey: true }], ['PageUp', { ctrlKey: true, shiftKey: true }],
+    ['ArrowUp', { shiftKey: true }], ['ArrowDown', { shiftKey: true }], ['PageUp', { shiftKey: true }],
     // letters bound neither by 2.0 (R, L, I, M / Shift+M) nor by an effect row; Shift+R and Shift+I stay reserved
     ...UNBOUND.map((k) => [k]), ...SHIFT_UNBOUND.map((k) => [k.toUpperCase(), { shiftKey: true }]),
     [' '], ['Enter'], [''], [undefined],
