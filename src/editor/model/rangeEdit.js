@@ -84,7 +84,7 @@ export function removeSlices(score, sel) {
 /** The single-track parts of selection `sel`: a column's parts, else `[sel]`. */
 export const partsOf = (sel) => sel.parts ?? [sel];
 /** `{ tracks: n }` for a column selection (the announcement suffix), else nothing. */
-export const onTracks = (sel) => (sel.parts ? { tracks: sel.parts.length } : {});
+export const tracksField = (sel) => (sel.parts ? { tracks: sel.parts.length } : {});
 
 /** clearSlices over every part of `sel`: `{ score, cursor, count }`, the cursor (with its track) from the top part. */
 export function clearParts(score, sel) {
@@ -115,14 +115,14 @@ export function removeParts(score, sel) {
 export function clearRange(score, cursor, state, ctx) {
   const r = clearParts(score, ctx.selection);
   const id = r.score === score ? 'rangeAlreadyRests' : 'rangeCleared'; // nothing to change: say so
-  return { score: r.score, cursor: { ...cursor, ...r.cursor }, announce: { id, count: r.count, ...onTracks(ctx.selection) } };
+  return { score: r.score, cursor: { ...cursor, ...r.cursor }, announce: { id, count: r.count, ...tracksField(ctx.selection) } };
 }
 
 /** Ctrl+Delete / Ctrl+Backspace with a selection; a zero-beat selection (blank measures) has no beats to delete. */
 export function removeRange(score, cursor, state, ctx) {
   if (!ctx.selection.info.beatCount) return { announce: { id: 'rangeNoBeats' } };
   const r = removeParts(score, ctx.selection);
-  return { score: r.score, cursor: { ...cursor, ...r.cursor }, announce: { id: 'rangeRemoved', count: r.count, tempoRemoved: r.tempoRemoved, ...onTracks(ctx.selection) } };
+  return { score: r.score, cursor: { ...cursor, ...r.cursor }, announce: { id: 'rangeRemoved', count: r.count, tempoRemoved: r.tempoRemoved, ...tracksField(ctx.selection) } };
 }
 
 /** Shift+Delete with a selection: refused unless it covers whole measures; then those columns go from every track. */

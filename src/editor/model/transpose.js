@@ -19,7 +19,7 @@
  */
 import { trackAt, hasTab, isGrace, isRest, notesOf, cursorNote, updateNote, without } from './access.js';
 import { untieNote, nextMainBeat, prevMainBeat, stripFlag } from './ties.js';
-import { eachSlice, eachSelectedBeat, partsOf, onTracks } from './rangeEdit.js';
+import { eachSlice, eachSelectedBeat, partsOf, tracksField } from './rangeEdit.js';
 
 const refuse = (id, extra) => ({ announce: { id, ...extra } });
 const fretted = (n) => Number.isInteger(n.fret);
@@ -70,5 +70,5 @@ export function transpose(score, cursor, state, ctx, semis) {
       if (p) out = stripFlag(out, { ...p, string: x.n.string }, other);
     }
   }
-  return { score: out, announce: { id: 'transposed', semitones: semis, count: targets.length, skipped, ...onTracks(sel) } };
+  return { score: out, announce: { id: 'transposed', semitones: semis, count: targets.length, skipped, ...tracksField(sel) } };
 }
