@@ -1350,3 +1350,110 @@ differ from the code, the code is the reference (see "Where the code differs fro
 - The reserved-key assertions in `tests/editor-model.mjs` changed on purpose: Shift+←/→,
   Shift+Home/End, Ctrl+Shift+← and Ctrl+A are no longer unbound.
 - 2.3.1 tests: `tests/editor-pins-2.3.1.mjs` pins the 2.3.0 behaviour that 2.3.1 changes (each pin is labelled "inverted in 2.3.1" where it applies) and the reserved keys. `tests/editor-range.mjs` and `tests/editor-range-edge.mjs` cover the model: paste, blank-measure selections, effects and transpose over a selection, the reflow split and cascade, and the property runs. `tests/editor-range-dom.mjs` and `tests/editor-range-edge-dom.mjs` cover the controller: the insert flag's lifecycle, the keys, the announcements, read-only mode and the native paste path. The 2.3.1 design (§10) lists 2.3.0 tests in `tests/editor-select.mjs` and `tests/editor-select-dom.mjs` as deliberate updates.
+
+### 2.3.3 additions
+
+2.3.3 adds the rhythm keys over a selection, and the transpose fallback that moves a note to
+another string. The user-facing description is in the README, under "Editing rules" ("Rhythm over
+a selection (2.3.3)" and "Transpose to another string (2.3.3)") and "Limitations in 2.3". The
+design sources are `.12sp/requirements-2.3.3.md` (D8, D9, criteria 23 to 34) and
+`.12sp/design-2.3.3.md` (D-R1 to D-R6, D-T1 to D-T7). Where they differ from the code, the code is
+the reference (see "Where the code differs from the design").
+
+| File | 2.3.3 change |
+|---|---|
+| `model/rhythmRange.js` | New. The range forms of the rhythm keys: `shorterRange`, `longerRange`, `setDurationRange`, `dotsRange`, `tripletRange`, `restRange`, `tieRange`, plus the helpers `mainBeats` and `mapMain`. |
+| `model/stringMove.js` | New. `midiOf`, `isHarmonic` and `placeMoves`. It imports only `tuningOf` from `access.js`. |
+| `model/transpose.js` | The no-selection path falls back to `placeMoves` for a note that doesn't fit. The selection path groups the misfits by beat, places them all before any write, applies the moved-tie rule, and moves the cursor with its note. |
+| `model/rangeEdit.js` | `eachSlice` passes the slice to `fn` as its second argument. `asRest` is exported. |
+| `model/commands.js` | Seven entries wrapped as `keep(edit(ranged(single, range), label))`: `toggleTie`, `shorter`, `longer`, `setDuration`, `cycleDots`, `toggleTriplet` and `toggleRest`. |
+| `announce.js` | New ids `durationLimit`, `rangeDuration`, `rangeDots`, `rangeTriplet`, `rangeToRest`, `rangeToNote`, `rangeTie`. New helper `movedText`. `noTab` is factored out of `rangeEffectText` with the same output. `transposeRange` adds the harmonic suffix. |
+| `editor.html` | Shortcut wording for the rhythm keys, R, L and the transpose keys. |
+
+`ScoreEditor.js` and `selection.js` need no change. `setDuration` already runs through `_exec`, and
+`_ctx()` already passes `selection`. `_settleSelection` already keeps a selection for a command
+flagged `keepsSelection`.
+
+#### Rhythm over a selection
+
+- `mainBeats(score, parts)` walks the selected beats with `eachSelectedBeat` and keeps the non-grace
+  ones as `{ b, loc }`. The slot, graces and voice 2 are never targets.
+- `mapMain(score, parts, fn, repair)` runs once per part, through `eachSlice` with the slice
+  argument, so `fn` receives each beat's location. Graces are returned unchanged. With `repair`, the
+  ties of a changed part are repaired over its measures (`fixTiesIn`). When nothing changes, the
+  same score comes back, so there is no undo step (D-R6), but the key still speaks.
+- `restRange` and `tieRange` work on the TAB parts only (`tabParts`). A column selection gets the
+  `{ tracks, skippedTracks }` fields from the same helper. Every other rhythm key gets `tracksField`.
+- `tieRange` finds its pairs (`tiePairs`) with the neighbour rule of `ties.js` (`nextMainBeat`). A
+  rest breaks adjacency. It writes only the tie flags, through `mapMain` without repair (D-R5).
+  `restRange` runs with repair.
+- `ranged` (rangeEdit.js) picks the range form when `ctx.selection` is set. `keep` sets
+  `keepsSelection`.
+
+#### Transpose to another string
+
+`stringMove.js`:
+
+- `midiOf(p)` uses the sanitize pitch rule and the step and alteration tables. It returns
+  `(octave + 1) * 12 + step + alter`, or NaN. It is a local copy of `midiNumber(parsePitch(p))` from
+  `src/pitch.js`, which the model may not import (import rule 3 under "Import rules"). `tests/editor-rhythm.mjs` checks it
+  against `pitch.js` for every valid pitch, including `x`, `##`, `bb`, octaves −1 and 10, and padded
+  strings.
+- `openMidis(track)` caches the open-string MIDI numbers per tuning array in a `WeakMap`, string 1
+  first.
+- `placeMoves(track, beatNotes, movers, semis, max)` takes the strings of the beat's notes that
+  stay put (every non-mover with a string, voice 1 only). It sorts the movers by string, ascending,
+  and each takes the free string nearest its own whose fret for the same pitch is in `0..max`. Ties
+  go to the lower fret, then the lower string. It returns `Map(note → { string, fret })`, or null
+  when a mover has no place.
+
+`transpose.js`:
+
+- No selection. The checks run in order: `needsTab`, `noNoteToTranspose`, `pitchOnlyNote`. A note
+  that fits takes the 2.3.2 path, unchanged. A harmonic that doesn't fit is refused with
+  `transposeRange {harmonic: true}`. Otherwise `placeMoves` runs over the notes of `beatAt(cursor)`.
+  A null result is `transposeRange`. On success the note loses its `pitch`, takes the new string and
+  fret, its ties are removed (`untieNote`), the cursor's `string` follows, and the result is
+  `{ count: 1, moved: 1 }`.
+- Selection. Each target is `movable` when it has a fret and a string, and no other note of its beat
+  shares that string. Every other note is counted as `skipped`.
+  1. The misfits are grouped by beat, in target order. A harmonic misfit is refused with
+     `transposeRange {harmonic: true}`, and `placeMoves` runs over the beat's notes. A null result
+     refuses, naming the track (on a column) and the measure.
+  2. All or nothing. Nothing is written until every group has a placement. Placements are keyed by
+     beat, then by note.
+  3. The write runs `eachSlice` with the slice. A moved note becomes
+     `{ ...without(n, 'pitch', ...), string, fret }`, and a moved grace also loses `tieStart` and
+     `tieEnd`. Every other movable note is shifted as before.
+  4. Ties apply to main notes only. For each tie flag, the partner is found on the original score
+     (`nextMainBeat` or `prevMainBeat`). The tie is kept when the partner was transposed and either
+     neither note moved, or both moved to the same string and fret. Otherwise both flags are removed
+     at the notes' final strings (`stripFlag`).
+  5. The cursor follows its note when that note moved.
+  6. The announcement is `{ count, moved, skipped, ...tracksField }`. The text order is the track
+     suffix, then "moved", then "skipped" (D-T7).
+
+#### Where the code differs from the design
+
+- The announcement's `moved` is the number of notes moved (`placed.size` summed over the beats). The
+  design wrote `moves.size`, which would count beats.
+- Stringless and duplicate-string notes are skipped and counted, not refused (D-T6 in the design).
+  The fix was made in commit 7761042, and the status file records it.
+- The `skippedText` helper in `announce.js` always words the count as "pitch-only note(s) skipped".
+  It is also used for stringless and duplicate-string notes, so the wording is wrong for those.
+- A moved grace note loses its own tie flags. Its partner's tie is not checked, because the tie loop
+  leaves graces out. The design lists this as a risk. No test covers it.
+
+#### Tests
+
+- `tests/editor-pins-2.3.3.mjs` pins the 2.3.2 behaviour that 2.3.3 changes, and the behaviour it
+  keeps (the design's pins (a) to (f)).
+- `tests/editor-rhythm.mjs` covers criteria 23 to 34, `midiOf` against `pitch.js`, the mainBeats and
+  mapMain rules, and the B10 and E12 property runs.
+- `tests/editor-rhythm-edge.mjs` covers the column and two-voice cases, graces at range edges, the
+  greedy placement, ties, moved graces and a seeded robustness pass.
+- `tests/editor-rhythm-dom.mjs` covers the controller: the wording, undo labels, the kept selection,
+  read-only mode and the cursor following a moved note.
+- `tests/bench-editor.mjs` times the rhythm keys over a full 4-track by 2000-measure column, and a
+  transpose that moves every note of a chord.
+

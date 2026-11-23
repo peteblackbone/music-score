@@ -591,6 +591,7 @@ test('robustness by hand: 1-string and 12-string tunings, duplicate strings in a
   const SEL2 = await imp('src/editor/model/selection.js');
   const CMD2 = await imp('src/editor/model/commands.js');
   const { sanitizeScore: san } = await imp('src/sanitize.js');
+  const await_describe = await imp('src/editor/announce.js');
   const tab2 = (measures) => ({ name: 'Gtr', showTablature: true, measures });
   const st2 = () => ({ duration: 'quarter', dots: 0, digit: null });
   const sel1 = (s) => SEL2.selectionRange(s, 0, { measure: 0, beat: 0 }, { measure: 0, beat: 0 });
@@ -606,6 +607,8 @@ test('robustness by hand: 1-string and 12-string tunings, duplicate strings in a
     const s = io2.parseInput({ tracks: [tab2([{ beats: [{ type: 'note', duration: 'whole', notes: [{ string: 1, fret: 0 }, { string: 1, fret: 0, tieStart: true }] }] }])] });
     const r = go(s, sel1(s), -1);
     if (r.changed || r.score !== s) throw new Error('the malformed beat was changed');
+    const { describe } = await_describe;
+    if (describe(r.announce) !== 'No fretted notes to transpose, 2 notes without their own string skipped') throw new Error(describe(r.announce));
   });
 }
 

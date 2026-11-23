@@ -64,16 +64,18 @@ export function transpose(score, cursor, state, ctx, semis) {
   }
   const parts = partsOf(sel);
   const targets = [];
-  let skipped = 0;
+  let skipped = 0; // pitch-only notes
+  let unusable = 0; // fretted notes with no string, or sharing a string with another note of the beat
   eachSelectedBeat(score, parts, (b, loc) => {
     if (isRest(b)) return;
     const can = movable(b);
     for (const n of notesOf(b)) {
       if (can(n)) targets.push({ ...loc, n, grace: isGrace(b) });
+      else if (fretted(n)) unusable++;
       else skipped++;
     }
   });
-  if (!targets.length) return refuse('nothingToTranspose', { skipped });
+  if (!targets.length) return refuse('nothingToTranspose', { skipped, unusable });
   const moves = new Map(); // 'track:measure:beat' → Map(note → { string, fret }) of the beat's moved notes
   let moved = 0;
   const misfits = targets.filter((x) => !fits(x.n));
@@ -123,6 +125,6 @@ export function transpose(score, cursor, state, ctx, semis) {
   return {
     score: out,
     ...(follow ? { cursor: { ...cursor, string: follow.string } } : {}),
-    announce: { id: 'transposed', semitones: semis, count: targets.length, moved, skipped, ...tracksField(sel) },
+    announce: { id: 'transposed', semitones: semis, count: targets.length, moved, skipped, unusable, ...tracksField(sel) },
   };
 }
