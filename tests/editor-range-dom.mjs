@@ -96,7 +96,7 @@ test('criterion 6: Ctrl+Shift+V inserts, with the native event and through the f
   for (const k of [key('v', CTRL), key('V', { ctrlKey: true, shiftKey: true }), key('v', { metaKey: true, shiftKey: true })]) eq(keyToCommand(k), null);
   eq([isInsertPasteKey(key('V', { metaKey: true, shiftKey: true })), isInsertPasteKey(key('v', CTRL)), isInsertPasteKey(key('Insert', SHIFT)), isInsertPasteKey(key('V', { ctrlKey: true, shiftKey: true, altKey: true }))], [true, false, false, false]);
 });
-test('criterion 6: the insert flag is one-shot: a paste takes it, every paste keydown sets or clears it, Shift+Insert never inserts, blur and destroy clear it and the fallback, a paste the page handled keeps it', () => {
+test('criterion 6: the insert flag is one-shot: a paste takes it, every paste keydown sets or clears it, Shift+Insert never inserts, blur and destroy clear it and the fallback, a paste the page handled clears it', () => {
   const t = mk(four());
   t.ed.focus();
   const down = (k) => t.rootEl.dispatch('keydown', { ...k, target: t.rootEl });
@@ -119,7 +119,7 @@ test('criterion 6: the insert flag is one-shot: a paste takes it, every paste ke
   t.ed.focus();
   down(CSV);
   document.dispatch('paste', { defaultPrevented: true, clipboardData: makeClipboardData({ [CLIP_MIME]: BEAT9 }) });
-  eq([t.ed._pasteInsert, t.ed._pasteTimer, t.ed.canUndo()], [true, null, false], 'pasteseen cancels the fallback and keeps the flag');
+  eq([t.ed._pasteInsert, t.ed._pasteTimer, t.ed.canUndo()], [false, null, false], 'a paste the page handled cancels the fallback and clears the flag (2.3.1 review F1)');
   const d = mk(four());
   d.ed.focus();
   d.rootEl.dispatch('keydown', { ...CSV, target: d.rootEl });

@@ -55,7 +55,7 @@ export function targetMeasure(score, cursor) {
 
 /** A beats clip `beats` pasted at the cursor or the selection (see the header). */
 export function pasteBeats(score, cursor, sel, beats, dropped, insert = false) {
-  const ti = cursor.track;
+  const ti = sel?.track ?? cursor.track;
   const count = beats.filter((b) => !isGrace(b)).length;
   if (!beats.length) return refuse('nothingToPaste');
   let out = score;
@@ -84,7 +84,7 @@ export function pasteBeats(score, cursor, sel, beats, dropped, insert = false) {
 
 /** A measures clip `measures` pasted over or before the start measure (see the header). */
 export function pasteMeasures(score, cursor, sel, measures, dropped, insert = false) {
-  const ti = cursor.track;
+  const ti = sel?.track ?? cursor.track;
   const k = measures.length;
   if (!k) return refuse('nothingToPaste');
   const count = measureCount(score);
@@ -129,7 +129,7 @@ export function pasteMeasures(score, cursor, sel, measures, dropped, insert = fa
 
 /** Paste `clip` into `score` at `cursor` (with `sel`, a live selection, or null; `insert`: Insert paste): `{ score, cursor, announce }` or `{ refused }`. */
 export function applyPaste(score, cursor, sel, clip, { insert = false } = {}) {
-  const { measures, dropped } = fit(clip, tuningOf(trackAt(score, cursor.track)));
+  const { measures, dropped } = fit(clip, tuningOf(trackAt(score, sel?.track ?? cursor.track)));
   return clip.kind === 'beats'
     ? pasteBeats(score, cursor, sel, measures[0].beats, dropped, insert)
     : pasteMeasures(score, cursor, sel, measures, dropped, insert);

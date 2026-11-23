@@ -545,6 +545,22 @@ test('E1 selectScoreStart / selectScoreEnd: from another track and a hole, on a 
   eq(CMD.run('selectScoreEnd', one, cur(0, 0, 0), st(), { allowAppend: false }).announce, { id: 'endOfScore' });
 });
 
+// ---------- 2.3.1 review F2: a seam keeps a tie only between equal notes ----------
+{
+  const { fixSeam } = await imp('src/editor/model/ties.js');
+  test('F2: fixSeam strips a tie between different frets and keeps one between equal frets or pitch-only notes', () => {
+    const mk = (fa, fb) => ({ tracks: [{ tuning: ['E2','A2','D3','G3','B3','E4'], measures: [{ beats: [
+      { type: 'note', duration: 'half', notes: [{ string: 1, ...fa, tieStart: true }] },
+      { type: 'note', duration: 'half', notes: [{ string: 1, ...fb, tieEnd: true }] } ] }] }] });
+    const flags = (s) => s.tracks[0].measures[0].beats.map((b) => [!!b.notes[0].tieStart, !!b.notes[0].tieEnd]);
+    const A = { track: 0, measure: 0, beat: 0 }; const B = { track: 0, measure: 0, beat: 1 };
+    eq(flags(fixSeam(mk({ fret: 2 }, { fret: 7 }), A, B)), [[false, false], [false, false]]);
+    const same = mk({ fret: 5 }, { fret: 5 });
+    ok(fixSeam(same, A, B) === same, 'equal frets: unchanged');
+    const pitches = mk({ pitch: 'E4' }, { pitch: 'E4' });
+    ok(fixSeam(pitches, A, B) === pitches, 'equal pitch-only notes: unchanged');
+  });
+}
 // ---------- report ----------
 export function summary() {
   let fail = 0;

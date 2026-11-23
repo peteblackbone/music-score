@@ -128,7 +128,7 @@ export function installClipboard(Editor) {
   /**
    * View notifications: 'pastekey' (a paste shortcut on the root: set the
    * insert flag from it and schedule the fallback), 'pasteseen' (any native
-   * paste: cancel the fallback, keep the flag), 'blur' and 'destroy' (clear
+   * paste: cancel the fallback; a paste the page already handled also clears the flag), 'blur' and 'destroy' (clear
    * both), or a native event `e` of `kind` ('copy' | 'cut' | 'paste') while
    * the root has focus. True when the event was handled (the view then
    * cancels its default action).
@@ -140,7 +140,8 @@ export function installClipboard(Editor) {
       this._schedulePasteFallback();
       return false;
     }
-    if (kind === 'blur' || kind === 'destroy') this._pasteInsert = false;
+    // a paste the host page already handled never reaches 'paste': drop the flag so it can't leak into a later paste
+    if (kind === 'blur' || kind === 'destroy' || (kind === 'pasteseen' && e?.defaultPrevented)) this._pasteInsert = false;
     if (kind === 'pasteseen' || kind === 'blur' || kind === 'destroy' || kind === 'paste') this._cancelPasteFallback();
     if (this._destroyed || kind === 'pasteseen' || kind === 'blur' || kind === 'destroy') return false;
     const data = e?.clipboardData;
