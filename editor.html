@@ -106,7 +106,7 @@
           <button type="button" id="copy-btn" title="Copy the selection, or the beat (Ctrl+C)">Copy</button>
           <button type="button" id="cut-btn" title="Cut the selection, or the beat (Ctrl+X)">Cut</button>
           <button type="button" id="paste-btn" title="Paste over the selected or blank measures, else before the cursor (Ctrl+V)">Paste</button>
-          <button type="button" id="paste-new-btn" title="Insert without replacing (Ctrl+Shift+V)">Paste as new measures</button>
+          <button type="button" id="paste-new-btn" title="Insert measures or beats without replacing anything (Ctrl+Shift+V)">Paste as new measures</button>
         </div>
         <span class="sep" aria-hidden="true"></span>
         <div class="group" role="group" aria-label="Settings">
@@ -224,7 +224,7 @@
         <section><h3>Clipboard</h3><dl>
           <dt>Ctrl+C</dt><dd>Copy</dd>
           <dt>Ctrl+X</dt><dd>Cut (the beats become rests)</dd>
-          <dt>Ctrl+V</dt><dd>Paste: measures go over the selected or blank measures (else before the cursor); beats go before the cursor, replacing a selection</dd>
+          <dt>Ctrl+V</dt><dd>Paste: measures go over the selected or blank measures (else before the cursor); beats go before the cursor, replacing a selection; measures onto a beats selection are refused</dd>
           <dt>Ctrl+Shift+V</dt><dd>Paste as new measures or beats, replacing nothing</dd>
         </dl><p>Click the score first.</p></section>
         <section><h3>Measures</h3><dl>

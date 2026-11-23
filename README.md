@@ -1762,7 +1762,7 @@ Behaviour changes from 2.3.0:
 - Shift+F splits a beat that crosses the barline, where it used to stay. It also carries on through each following overfull measure, where it used to move one measure per press. A cascade is announced as "Reflowed N measures".
 - `getSelection()` returns an object, not `null`, for a range of blank measures: `kind: 'measures'`, `beatCount: 0`, and `start` and `end` at beat 0. Ctrl+A on an empty track now selects it, and Shift+→ across blank measures selects them. Before, these said "Nothing to select".
 - At an edited seam, a tie is removed when its two notes differ: different frets, or different pitches for pitch-only notes. A tie between a fretted note and a pitch-only note is kept. Before, such ties were kept. Ties at seams that no edit touches are not changed.
-- Ctrl+↑, Ctrl+↓, Ctrl+Shift+Home and Ctrl+Shift+End were left to the browser. They are now editor keys.
+- Ctrl+↑, Ctrl+↓, Ctrl+Shift+↑, Ctrl+Shift+↓, Ctrl+Shift+Home and Ctrl+Shift+End were left to the browser. They are now editor keys.
 
 ### 2.3.0 — 2026-11-23
 

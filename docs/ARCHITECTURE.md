@@ -1135,7 +1135,7 @@ reference. The one change to `ScoreEditor.js` is in `_exec`, which calls
   act on the rests, because those rows have `onRest`. The design's table (§3) expected a
   refusal there. The code is the reference, and the README documents it.
 - `transpose(score, cursor, state, ctx, semis)` (transpose.js): with no selection it moves
-  the cursor note (TAB needed, `untieNote` first). With a selection it moves every voice-1
+  the cursor note (TAB needed, `untieNote` first; a note with no fret is refused as `pitchOnlyNote`). With a selection it moves every voice-1
   note with an integer `fret` in the non-rest beats, graces included, and counts the
   pitch-only notes. `fits` checks `fret` and an integer `harmonicFret` against `maxFret`.
   One target that doesn't fit refuses the whole range, with `transposeRange` at its measure.

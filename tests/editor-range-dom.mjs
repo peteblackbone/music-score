@@ -252,7 +252,7 @@ const html = fsMod.readFileSync(path.join(root, 'editor.html'), 'utf8');
 const TRANSPOSE_IDS = ['transpose-down-1-btn', 'transpose-up-1-btn', 'transpose-down-12-btn', 'transpose-up-12-btn'];
 test('criterion 29: markup: Paste as new measures after Paste, the Paste title, a Transpose group after Measures with labelled buttons naming their keys, the new shortcuts', () => {
   const at = (s) => html.indexOf(s);
-  ok(/<button type="button" id="paste-new-btn" title="Insert without replacing \(Ctrl\+Shift\+V\)">Paste as new measures<\/button>/.test(html));
+  ok(/<button type="button" id="paste-new-btn" title="Insert measures or beats without replacing anything \(Ctrl\+Shift\+V\)">Paste as new measures<\/button>/.test(html));
   ok(at('id="paste-btn"') < at('id="paste-new-btn"') && at('id="paste-new-btn"') < at('aria-label="Settings"'));
   ok(html.includes('id="paste-btn" title="Paste over the selected or blank measures, else before the cursor (Ctrl+V)"'));
   ok(at('aria-label="Measures"') < at('aria-label="Transpose"') && at('aria-label="Transpose"') < at('id="readonly"'));
