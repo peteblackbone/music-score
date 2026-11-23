@@ -13,8 +13,10 @@
  * / Right and Ctrl+A; F fills, Shift+F reflows. 2.3.1: Ctrl+Up / Down
  * transpose by a semitone, Ctrl+Shift+Up / Down by an octave, Ctrl+Shift+
  * Home / End select to the start / end of the score; Ctrl+Shift+V is the
- * Insert paste (a native paste, never a command). Reserved for later:
- * Shift+Up / Down, Shift+R / I (any other Ctrl+Shift key is unbound).
+ * Insert paste (a native paste, never a command). 2.3.2: Shift+Up / Down
+ * and Shift+PageUp / PageDown extend the selection to the previous / next
+ * visible track. Reserved for later: Shift+R / I (any other Ctrl+Shift key
+ * is unbound).
  * The effect letters come from EFFECT_KEYS (the rows of model/effectTable.js).
  */
 import { EFFECT_KEYS } from './model/effectTable.js';
@@ -31,7 +33,10 @@ const CTRL = {
   ArrowLeft: 'prevMeasure', ArrowRight: 'nextMeasure', Home: 'scoreStart', End: 'scoreEnd',
   Delete: 'deleteBeat', Backspace: 'deleteBeat',
 };
-const SHIFT = { ArrowLeft: 'selectLeft', ArrowRight: 'selectRight', Home: 'selectMeasureStart', End: 'selectMeasureEnd' };
+const SHIFT = {
+  ArrowLeft: 'selectLeft', ArrowRight: 'selectRight', Home: 'selectMeasureStart', End: 'selectMeasureEnd',
+  ArrowUp: 'selectPrevTrack', PageUp: 'selectPrevTrack', ArrowDown: 'selectNextTrack', PageDown: 'selectNextTrack',
+};
 const CTRL_SHIFT = { ArrowLeft: 'selectPrevMeasure', ArrowRight: 'selectNextMeasure', Home: 'selectScoreStart', End: 'selectScoreEnd' };
 const NO_SHIFT = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown', 'Insert']);
 const LETTERS = { r: 'toggleRest', l: 'toggleTie', i: 'insertBeat' };

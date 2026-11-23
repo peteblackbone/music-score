@@ -73,7 +73,7 @@ test('holes and empty measures: Ctrl+A over [beat, hole, empty, beat] is a measu
   const s = () => ({ tracks: [tab([{ beats: [nt('whole')] }, null, { beats: [] }, { beats: [nt('whole', 2, 2)] }])] });
   const t = mk(s());
   t.press(key('a', CTRL));
-  eq(t.ed.getSelection(), { kind: 'measures', track: 0, start: P(0, 0), end: P(3, 0), beatCount: 2, measures: [0, 3] });
+  eq(t.ed.getSelection(), { kind: 'measures', track: 0, start: P(0, 0), end: P(3, 0), beatCount: 2, measures: [0, 3], tracks: [0] });
   const clip = JSON.parse(t.ed.copy());
   eq(clip.kind, 'measures');
   eq(clip.tracks[0].measures.map((m) => m.beats.length), [1, 0, 0, 1]);
@@ -114,7 +114,7 @@ test('selection on a slot-only empty measure: 2.3.1: a lone slot selects its bla
   eq(t.ed.getSelection().beatCount, 1);
   const u = mk({ tracks: [tab([{ beats: [] }])] });
   u.press(key('ArrowRight', SHIFT));
-  eq(u.ed.getSelection(), { kind: 'measures', track: 0, start: { measure: 0, beat: 0 }, end: { measure: 0, beat: 0 }, beatCount: 0, measures: [0, 0] }, '2.3.1: the slot alone is the whole blank measure');
+  eq(u.ed.getSelection(), { kind: 'measures', track: 0, start: { measure: 0, beat: 0 }, end: { measure: 0, beat: 0 }, beatCount: 0, measures: [0, 0], tracks: [0] }, '2.3.1: the slot alone is the whole blank measure');
 });
 const twoVoice = () => ({ tracks: [tab([
   { voices: [{ beats: f(4) }, { beats: [nt('whole', 3, 7)] }] },
@@ -1031,7 +1031,7 @@ test('keymap (D1, D7): of Ctrl / Cmd + letter only Z, Y and A are bound (Ctrl+C 
     }
   }
   eq([...bound].sort(), ['ctrl a selectAll', 'ctrl y redo', 'ctrl z undo', 'ctrl+shift y redo', 'ctrl+shift z redo', 'meta a selectAll', 'meta y redo', 'meta z undo']);
-  for (const [k, m] of [['Insert', CTRL], ['Insert', SHIFT], ['ArrowUp', SHIFT], ['ArrowDown', SHIFT], ['Tab', {}], ['F5', {}], ['f', { altKey: true }], ['F', { ctrlKey: true, shiftKey: true }], ['ArrowLeft', { shiftKey: true, altKey: true }], ['R', SHIFT], ['I', SHIFT]]) {
+  for (const [k, m] of [['Insert', CTRL], ['Insert', SHIFT], ['Tab', {}], ['F5', {}], ['f', { altKey: true }], ['F', { ctrlKey: true, shiftKey: true }], ['ArrowLeft', { shiftKey: true, altKey: true }], ['R', SHIFT], ['I', SHIFT]]) {
     eq(keyToCommand(key(k, m)), null, `${k} ${JSON.stringify(m)}`);
   }
   eq(keyToCommand(key('f')).name, 'fill');

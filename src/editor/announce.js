@@ -93,6 +93,9 @@ export const MESSAGES = Object.freeze({
   selectedBeats: (d) => `Selected measure ${d.m1} beat ${d.b1}${d.m1 !== d.m2 ? ` to measure ${d.m2} beat ${d.b2}` : d.b1 !== d.b2 ? ` to beat ${d.b2}` : ''}, ${beatsText(d.count)}`,
   selectedMeasures: (d) => `Selected measure${d.a !== d.b ? `s ${d.a} to ${d.b}` : ` ${d.a}`}, ${beatsText(d.count)}`,
   selectedAll: (d) => `Selected all of ${trackText(d)}, ${plural(d.measures, 'measure')}`,
+  // 2.3.2 column selection: 'Selected measures 2 to 3, tracks 1 to 3, 1 hidden track skipped'
+  selectedColumns: (d) => `Selected measure${d.a !== d.b ? `s ${d.a} to ${d.b}` : ` ${d.a}`}, tracks ${d.t1} to ${d.t2}${d.hidden > 0 ? `, ${plural(d.hidden, 'hidden track')} skipped` : ''}`,
+  selectedAllTracks: () => 'Selected all measures, all tracks',
   selectionCleared: () => 'Selection cleared',
   nothingToSelect: () => 'Nothing to select',
   // 2.3 range edits

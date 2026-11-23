@@ -175,7 +175,7 @@ test('select commands: Left / Right like the moves (Right never appends), measur
   eq(go('selectNextMeasure', cur(0, 3, 0)).announce, { id: 'endOfScore' });
   eq(go('selectAll', cur(0, 1, 1)).cursor, cur(0, 3, 0));
   eq(SEL.startOf(s, cur(0, 2, 0)), P(0, 0));
-  ok(Object.entries(CMD.COMMANDS).filter(([, d]) => d.kind === 'select').length === 9 && CMD.COMMANDS.selectAll.fromStart, '2.3.1 adds selectScoreStart / selectScoreEnd');
+  ok(Object.entries(CMD.COMMANDS).filter(([, d]) => d.kind === 'select').length === 11 && CMD.COMMANDS.selectAll.fromStart, '2.3.1 adds selectScoreStart / selectScoreEnd, 2.3.2 selectPrevTrack / selectNextTrack');
 });
 test('selection words: across measures, in one measure, one beat, measures (one / several), Select all (with and without a name)', () => {
   const s = selFixture();

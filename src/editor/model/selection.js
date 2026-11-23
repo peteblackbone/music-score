@@ -94,8 +94,8 @@ export function selectionRange(score, ti, anchor, focus) {
   return { track: ti, anchor: a, focus: f, slices, info };
 }
 
-/** A copy of the public info of `sel` (null without one). */
-export const selectionInfo = (sel) => (sel ? { ...sel.info, start: { ...sel.info.start }, end: { ...sel.info.end }, measures: [...sel.info.measures] } : null);
+/** A copy of the public info of `sel` (null without one); 2.3.2: `tracks`, the selected tracks ascending (`[track]` for one). */
+export const selectionInfo = (sel) => (sel ? { ...sel.info, start: { ...sel.info.start }, end: { ...sel.info.end }, measures: [...sel.info.measures], tracks: sel.info.tracks ? [...sel.info.tracks] : [sel.info.track] } : null);
 
 
 /** The announcement descriptor of selection `sel` (`all`: made by Select all). */

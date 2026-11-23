@@ -198,5 +198,10 @@ for (const c of cases) {
   const { summary } = await import('./editor-columns.mjs');
   fail += summary();
 }
+// 2.3.2 the same at controller level: track extends, column moves, Ctrl+A twice, the column band, clipboard events, range edits, wording (tests/editor-columns-dom.mjs)
+{
+  const { summary } = await import('./editor-columns-dom.mjs');
+  fail += await summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);

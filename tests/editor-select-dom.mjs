@@ -72,7 +72,7 @@ test('criterion 8: from beat 1, Shift+Right three times selects beats 1-4; each 
   press(key('ArrowRight', SHIFT), key('ArrowRight', SHIFT));
   eq(events.map((e) => e[0]), ['cursor', 'selection', 'cursor', 'selection', 'cursor', 'selection']);
   eq(selEvents(events), [2, 3, 4]);
-  eq(ed.getSelection(), { kind: 'measures', track: 0, start: { measure: 0, beat: 0 }, end: { measure: 0, beat: 3 }, beatCount: 4, measures: [0, 0] });
+  eq(ed.getSelection(), { kind: 'measures', track: 0, start: { measure: 0, beat: 0 }, end: { measure: 0, beat: 3 }, beatCount: 4, measures: [0, 0], tracks: [0] });
   eq(spoken(), 'Selected measure 1, 4 beats');
   eq(ed.getCursorInfo().selection, ed.getSelection());
   eq(ed.getCursor().beat, 3, 'the focus is the cursor');
@@ -90,7 +90,7 @@ test('criterion 9: Ctrl+Shift+Right extends to the next measure boundary, Shift+
   press(key('ArrowLeft', { ctrlKey: true, shiftKey: true }), key('ArrowLeft', { ctrlKey: true, shiftKey: true }));
   eq(ed.getSelection().start, { measure: 0, beat: 0 });
   press(key('End', SHIFT));
-  eq(ed.getSelection(), { kind: 'beats', track: 0, start: { measure: 0, beat: 2 }, end: { measure: 0, beat: 3 }, beatCount: 2, measures: [0, 0] });
+  eq(ed.getSelection(), { kind: 'beats', track: 0, start: { measure: 0, beat: 2 }, end: { measure: 0, beat: 3 }, beatCount: 2, measures: [0, 0], tracks: [0] });
   press(key('ArrowLeft', SHIFT));
   eq([ed.getSelection().beatCount, spoken()], [1, 'Selected measure 1 beat 3, 1 beat']);
 });
@@ -99,13 +99,13 @@ test('criterion 10 / R3: Ctrl+A selects every measure of the cursor track (kind 
   ed.setCursor({ measure: 1, beat: 2 });
   events.length = 0;
   eq(press(key('a', CTRL)), [true]);
-  eq(ed.getSelection(), { kind: 'measures', track: 0, start: { measure: 0, beat: 0 }, end: { measure: 3, beat: 0 }, beatCount: 8, measures: [0, 3] });
+  eq(ed.getSelection(), { kind: 'measures', track: 0, start: { measure: 0, beat: 0 }, end: { measure: 3, beat: 0 }, beatCount: 8, measures: [0, 3], tracks: [0] });
   eq(ed.getCursor(), { track: 0, measure: 3, beat: 1, string: 1 }, 'focus on the last position (the slot of an underfull measure)');
   eq(spoken(), 'Selected all of Track 1 Guitar, 4 measures');
   eq(events.map((e) => e[0]), ['cursor', 'selection']);
   const empty = mk({ tracks: [{ name: 'E', showTablature: true, measures: [{ beats: [] }, { beats: [] }] }] });
   eq(empty.press(key('a', CTRL)), [true]);
-  eq([empty.ed.getSelection(), empty.spoken()], [{ kind: 'measures', track: 0, start: { measure: 0, beat: 0 }, end: { measure: 1, beat: 0 }, beatCount: 0, measures: [0, 1] }, 'Selected all of Track 1 E, 2 measures']);
+  eq([empty.ed.getSelection(), empty.spoken()], [{ kind: 'measures', track: 0, start: { measure: 0, beat: 0 }, end: { measure: 1, beat: 0 }, beatCount: 0, measures: [0, 1], tracks: [0] }, 'Selected all of Track 1 E, 2 measures']);
   eq(empty.events.filter((e) => e[0] === 'selection').length, 1);
 });
 test('criterion 11: a plain move, Esc, a click, undo, redo, loadScore and any edit clear the selection with selection(null) first; Esc is consumed only while something is live; refused and no-op edits keep it', () => {
@@ -223,7 +223,6 @@ test('setSelection / getSelection / clearSelection: checks, clamping, one track,
   throws(() => ed.setSelection({ anchor: { measure: 0 }, focus: { measure: 0, beat: 0 } }), TypeError);
   throws(() => ed.setSelection({ anchor: { measure: 0, beat: NaN }, focus: { measure: 0, beat: 0 } }), TypeError);
   throws(() => ed.setSelection({ anchor: { measure: 0, beat: 0, track: '1' }, focus: { measure: 0, beat: 0 } }), TypeError);
-  throws(() => ed.setSelection({ anchor: { track: 1, measure: 0, beat: 0 }, focus: { track: 0, measure: 0, beat: 0 } }), RangeError, 'A selection covers one track');
   eq(events.length, 0, 'a throw changes nothing');
   const info = ed.setSelection({ anchor: { measure: -5, beat: -1 }, focus: { measure: 99, beat: 99 } });
   eq([info.kind, info.measures, ed.getCursor().measure], ['measures', [0, 3], 3]);
@@ -232,6 +231,8 @@ test('setSelection / getSelection / clearSelection: checks, clamping, one track,
   eq(ed.getSelection().measures, [0, 3]);
   eq(ed.setSelection({ anchor: { track: 1, measure: 0, beat: 0 }, focus: { track: 1, measure: 0, beat: 0 } }).track, 1);
   eq(ed.getCursor().track, 1);
+  const col = ed.setSelection({ anchor: { track: 1, measure: 0, beat: 0 }, focus: { track: 0, measure: 0, beat: 0 } }); // 2.3.2: two tracks are a column selection
+  eq([col.kind, col.track, col.tracks, col.measures, ed.getCursor().track], ['measures', 0, [0, 1], [0, 0], 0]);
   eq([ed.clearSelection(), ed.clearSelection()], [true, false]);
 });
 test('a two-digit entry: a select key ends it; Esc ends the entry before it clears the selection', () => {

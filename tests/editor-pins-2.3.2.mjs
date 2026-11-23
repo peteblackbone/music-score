@@ -27,10 +27,6 @@ const eq = (a, b, m = '') => {
   const x = JSON.stringify(a), y = JSON.stringify(b);
   if (x !== y) throw new Error(`${m} expected ${y}, got ${x}`);
 };
-const throws = (fn, type, m = '') => {
-  try { fn(); } catch (e) { if (!(e instanceof type)) throw new Error(`${m} expected ${type.name}, got ${e}`); return; }
-  throw new Error(`${m} expected ${type.name}, nothing thrown`);
-};
 
 const nt = (duration, string = 1, fret = 0) => ({ type: 'note', duration, notes: [{ string, fret }] });
 const tab = (measures, extra = {}) => ({ name: 'Gtr', showTablature: true, ...extra, measures });
@@ -50,32 +46,34 @@ function mk(score) {
 const twoTracks = () => ({ tracks: [tab([{ beats: [nt('half'), nt('half')] }, { beats: [nt('whole')] }]), tab([{ beats: [nt('whole')] }, { beats: [nt('whole')] }], { name: 'B' })] });
 
 // (a) Inverted in 2.3.2 commit 5: setSelection accepts the two ends on different tracks (a column selection).
-test('pin (a): setSelection with anchor and focus on different tracks throws a RangeError and changes nothing', () => {
+test('pin (a), inverted in 2.3.2: setSelection with anchor and focus on different tracks returns a column selection and moves the cursor to the focus', () => {
   const { ed } = mk(twoTracks());
-  throws(() => ed.setSelection({ anchor: { track: 0, measure: 0, beat: 0 }, focus: { track: 1, measure: 1, beat: 0 } }), RangeError);
-  eq([ed.getSelection(), ed.getCursor()], [null, { track: 0, measure: 0, beat: 0, string: 1 }]);
+  const info = ed.setSelection({ anchor: { track: 0, measure: 0, beat: 0 }, focus: { track: 1, measure: 1, beat: 0 } });
+  eq(info, { kind: 'measures', track: 0, start: { measure: 0, beat: 0 }, end: { measure: 1, beat: 0 }, beatCount: 5, measures: [0, 1], tracks: [0, 1] });
+  eq([ed.getSelection(), ed.getCursor()], [info, { track: 1, measure: 1, beat: 0, string: 1 }]);
   ed.destroy();
 });
 
 // (b) Inverted in 2.3.2 commit 5: Shift+Up / Down and Shift+PageUp / PageDown extend the selection to the previous / next track.
-test('pin (b): Shift+ArrowUp / ArrowDown / PageUp / PageDown map to no command and handleKey returns false', () => {
+test('pin (b), inverted in 2.3.2: Shift+ArrowUp / PageUp map to selectPrevTrack, Shift+ArrowDown / PageDown to selectNextTrack, and handleKey consumes them', () => {
   const { ed } = mk(twoTracks());
-  for (const k of ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown']) {
-    eq(keyToCommand(key(k, { shiftKey: true })), null, k);
-    eq(ed.handleKey(key(k, { shiftKey: true })), false, k);
-  }
-  eq([ed.getSelection(), ed.getCursor().track], [null, 0]);
+  eq(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown'].map((k) => keyToCommand(key(k, { shiftKey: true }))), [{ name: 'selectPrevTrack' }, { name: 'selectNextTrack' }, { name: 'selectPrevTrack' }, { name: 'selectNextTrack' }]);
+  eq(ed.handleKey(key('ArrowDown', { shiftKey: true })), true);
+  eq([ed.getSelection().tracks, ed.getCursor().track], [[0, 1], 1]);
+  for (const k of ['PageUp', 'ArrowUp', 'PageDown']) eq(ed.handleKey(key(k, { shiftKey: true })), true, k);
   ed.destroy();
 });
 
 // (c) Inverted in 2.3.2 commit 5: the second Ctrl+A selects every measure of every visible track.
-test('pin (c): a second Ctrl+A changes nothing and repeats "Selected all of Track 1 Gtr, 2 measures"', () => {
+test('pin (c), inverted in 2.3.2: the second Ctrl+A selects every measure of every visible track ("Selected all measures, all tracks"); a third changes nothing and says it again', () => {
   const { ed, spoken } = mk(twoTracks());
   ed.handleKey(key('a', { ctrlKey: true }));
-  const first = ed.getSelection();
   eq(spoken(), 'Selected all of Track 1 Gtr, 2 measures');
   ed.handleKey(key('a', { ctrlKey: true }));
-  eq([ed.getSelection(), spoken()], [first, 'Selected all of Track 1 Gtr, 2 measures']);
+  const all = ed.getSelection();
+  eq([all.tracks, all.measures, all.beatCount, spoken()], [[0, 1], [0, 1], 5, 'Selected all measures, all tracks']);
+  ed.handleKey(key('a', { ctrlKey: true }));
+  eq([ed.getSelection(), spoken()], [all, 'Selected all measures, all tracks']);
   ed.destroy();
 });
 
@@ -123,11 +121,11 @@ test('pin (f): exact selectionShapes of a beats selection across two system brea
 });
 
 // (g) Inverted in 2.3.2 commit 5: `tracks: [0]` is appended.
-test('pin (g): the exact 2.3.1 getSelection() object of a single-track selection', () => {
+test('pin (g), inverted in 2.3.2: the 2.3.1 getSelection() object of a single-track selection with `tracks: [0]` appended last', () => {
   const { ed } = mk(twoTracks());
   ed.setSelection({ anchor: { measure: 0, beat: 1 }, focus: { measure: 1, beat: 0 } });
-  eq(ed.getSelection(), { kind: 'beats', track: 0, start: { measure: 0, beat: 1 }, end: { measure: 1, beat: 0 }, beatCount: 2, measures: [0, 1] });
-  eq(Object.keys(ed.getSelection()), ['kind', 'track', 'start', 'end', 'beatCount', 'measures']);
+  eq(ed.getSelection(), { kind: 'beats', track: 0, start: { measure: 0, beat: 1 }, end: { measure: 1, beat: 0 }, beatCount: 2, measures: [0, 1], tracks: [0] });
+  eq(Object.keys(ed.getSelection()), ['kind', 'track', 'start', 'end', 'beatCount', 'measures', 'tracks']);
   ed.destroy();
 });
 
