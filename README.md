@@ -850,7 +850,7 @@ When the editor loses focus, the cursor is drawn dimmer.
 - **Rhythm keys act on the cursor beat only, until 2.3.3.** Duration, dots, triplet, R, L and fret entry ignore a column selection. Rhythm over a range is planned for 2.3.3.
 - **Transpose keeps strings until 2.3.3.** Transposing moves frets along a string, so a note can't move to another string. Transpose to another string is planned for 2.3.3.
 - **Older editors refuse multi-track clips.** An editor from before 2.3.2 refuses a column clip with "Not a music-score clip". Copy and paste columns between editors on the same version.
-- **A full-score column copy can exceed 5 MB.** Such a copy is still written, but it can't be pasted back. A cut of it still turns the beats into rests, so use Ctrl+Z to bring them back. Copy a smaller range instead.
+- **A full-score column copy can exceed 5 MB.** Such a copy is still written, but it can't be pasted back. A cut of that size copies the clip and clears nothing, so no beats are lost. Copy a smaller range instead.
 - **No beat-level column selection.** A column covers whole measures on each track. A range of beats can't cover more than one track.
 - **Column inserts and deletes reach hidden tracks.** A hidden track is never selected, but M, Shift+M, a paste that inserts measures, and Shift+Delete on a column change its measures too. A tempo mark moved by a paste can land on a hidden track.
 - **Reflow splits only into plain durations.** A beat that crosses a barline is split into undotted, untupleted pieces, tied together. A tuplet beat stays where it is, and the announcement says so. Reflow never pulls beats back into an earlier measure, and it doesn't reflow again after a paste.
@@ -877,7 +877,7 @@ When the editor loses focus, the cursor is drawn dimmer.
 - **One barline per measure.** A measure can't have both a repeat start and a repeat end.
 - **Only standard jump texts can be set.** A custom jump already in the file is kept and reported as custom. Measure-repeat signs are not set.
 - **No writtenOctaveUp or instrument field.** The editor doesn't set them.
-- **Planned for later releases.** For 2.3.3: rhythm over a range, and transpose to another string. Shift+R and Shift+I stay reserved until then. After that: playback, mouse pitch entry on notation, voice 2 and grace-note entry, editing chord symbols and lyrics in the editor, and file import.
+- **Planned for later releases.** For 2.3.3: rhythm over a range, and transpose to another string. Shift+R and Shift+I stay reserved until then. After that: playback; then chord symbols, lyrics, a repeat start and end on one measure, and bend amounts; then mouse pitch entry on notation; then voice 2 and grace-note entry; then file import.
 
 ## Score format
 
@@ -1795,6 +1795,7 @@ Behaviour changes from 2.3.1:
 - `setSelection()` no longer throws a `RangeError` when the anchor and the focus are on different tracks. It selects a column.
 - `getSelection()` adds `tracks`. `track` is unchanged, and equals `tracks[0]`. For a column selection, `beatCount` is the total over its tracks, and `start` and `end` are `{ measure, beat: 0 }`. A single-track selection keeps its fields, with `tracks` added.
 - `paste()` accepts a clip with more than one track. Editors from 2.3.1 refuse such a clip.
+- A copy or cut over 5 MB is announced with ", too large to paste back", and a cut of that size clears nothing. In 2.3.1 such a cut turned the beats into rests.
 - On a measure with one position (a whole note in 4/4, or an empty measure), Ctrl+Shift+→ or ← with nothing selected now selects that measure first. Before, the first press went on to the next measure. Measures with more positions work as before.
 
 ### 2.3.1 — 2026-11-23

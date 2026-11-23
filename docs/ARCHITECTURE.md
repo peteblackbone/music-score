@@ -324,7 +324,7 @@ The design sources are `.12sp/requirements-2.0.md`, `.12sp/design.md` and
    keeps (`this._hitSource`). `getHitMap()` builds plain data from that summary
    when it is called. The SVG, normalize and layout do not change.
 2. **Pure model.** `src/editor/model/*`, `keymap.js`, `announce.js`,
-   `geometry.js`, `style.js`, `options.js` and `emitter.js`. A command takes
+   `geometry.js`, `selectionShapes.js`, `style.js`, `options.js` and `emitter.js`. A command takes
    `(score, cursor, state, ctx)` and returns the next state. None of these
    files touch the DOM.
 3. **Controller.** `ScoreEditor.js` (the public class), `view.js` (the wrapper
@@ -370,7 +370,7 @@ the same file: it breaks the rule on purpose and checks that the check fails.
 
 1. Nothing in `src/` outside `src/editor/` imports from `src/editor/`. The root
    `index.js` may.
-2. The pure files (`model/*`, `keymap.js`, `announce.js`, `geometry.js`,
+2. The pure files (`model/*`, `keymap.js`, `announce.js`, `geometry.js`, `selectionShapes.js`,
    `style.js`, `options.js` and `emitter.js`) contain no `document`, `window`,
    `requestAnimationFrame` or `addEventListener` tokens.
 3. Files under `model/` import from outside `src/editor/` only
