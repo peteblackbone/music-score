@@ -1367,7 +1367,7 @@ the reference (see "Where the code differs from the design").
 | `model/transpose.js` | The no-selection path falls back to `placeMoves` for a note that doesn't fit. The selection path groups the misfits by beat, places them all before any write, applies the moved-tie rule, and moves the cursor with its note. |
 | `model/rangeEdit.js` | `eachSlice` passes the slice to `fn` as its second argument. `asRest` is exported. |
 | `model/commands.js` | Seven entries wrapped as `keep(edit(ranged(single, range), label))`: `toggleTie`, `shorter`, `longer`, `setDuration`, `cycleDots`, `toggleTriplet` and `toggleRest`. |
-| `announce.js` | New ids `durationLimit`, `rangeDuration`, `rangeDots`, `rangeTriplet`, `rangeToRest`, `rangeToNote`, `rangeTie`. New helper `movedText`. `noTab` is factored out of `rangeEffectText` with the same output. `transposeRange` adds the harmonic suffix. |
+| `announce.js` | New ids `durationLimit`, `rangeDuration`, `rangeDots`, `rangeTriplet`, `rangeToRest`, `rangeToNote`, `rangeTie`. New helpers `movedText` and `unusableText`; `transposed` and `nothingToTranspose` carry `unusable`. `noTab` is factored out of `rangeEffectText` with the same output. `transposeRange` adds the harmonic suffix. |
 | `editor.html` | Shortcut wording for the rhythm keys, R, L and the transpose keys. |
 
 `ScoreEditor.js` and `selection.js` need no change. `setDuration` already runs through `_exec`, and
@@ -1416,7 +1416,7 @@ flagged `keepsSelection`.
   fret, its ties are removed (`untieNote`), the cursor's `string` follows, and the result is
   `{ count: 1, moved: 1 }`.
 - Selection. Each target is `movable` when it has a fret and a string, and no other note of its beat
-  shares that string. Every other note is counted as `skipped`.
+  shares that string. Notes without a fret are counted as `skipped`; fretted notes with no string or a shared string are `unusable`.
   1. The misfits are grouped by beat, in target order. A harmonic misfit is refused with
      `transposeRange {harmonic: true}`, and `placeMoves` runs over the beat's notes. A null result
      refuses, naming the track (on a column) and the measure.
@@ -1430,17 +1430,17 @@ flagged `keepsSelection`.
      neither note moved, or both moved to the same string and fret. Otherwise both flags are removed
      at the notes' final strings (`stripFlag`).
   5. The cursor follows its note when that note moved.
-  6. The announcement is `{ count, moved, skipped, ...tracksField }`. The text order is the track
-     suffix, then "moved", then "skipped" (D-T7).
+  6. The announcement is `{ count, moved, skipped, unusable, ...tracksField }`. The text order is the track
+     suffix, then "moved", then "skipped", then "unusable" (D-T7).
 
 #### Where the code differs from the design
 
 - The announcement's `moved` is the number of notes moved (`placed.size` summed over the beats). The
   design wrote `moves.size`, which would count beats.
 - Stringless and duplicate-string notes are skipped and counted, not refused (D-T6 in the design).
-  The fix was made in commit 7761042, and the status file records it.
-- The `skippedText` helper in `announce.js` always words the count as "pitch-only note(s) skipped".
-  It is also used for stringless and duplicate-string notes, so the wording is wrong for those.
+  The fix was made in commit 5a4ce6d, and the status file records it.
+- Stringless and duplicate-string notes are counted as `unusable` and worded by `unusableText`
+  (", N notes without their own string skipped"), separately from the pitch-only `skipped` count.
 - A moved grace note loses its own tie flags. Its partner's tie is not checked, because the tie loop
   leaves graces out. The design lists this as a risk. No test covers it.
 

@@ -589,7 +589,8 @@ Transpose moves notes by semitones (from 2.3.1). A note stays on its string, and
 - A moved note goes to the nearest string that plays the same pitch under the track's tuning, at a fret within the range, and that has no other note in the same beat once the notes that stay put are placed. "Nearest" means the fewest strings away. Where two strings are equally near, the lower fret wins. The notes of a chord that must move are placed in string order, from string 1 (the highest) down, so the first placed takes its best string and the rest have to fit around it.
 - The placement is greedy, so a chord can be refused even when a different arrangement of its strings would work. In that case nothing changes, and the editor names the measure. The fix is to change the frets by hand.
 - Voice 2 notes are ignored when the editor checks whether a string is free, so a moved note can share a string with a voice-2 note in the same beat.
-- A harmonic never moves to another string, and neither does a note with no string. If one of them would have to move, the whole transpose is refused, and the message adds "harmonics stay on their string".
+- A harmonic never moves to another string. If one would have to move, the whole transpose is refused, and the message adds "harmonics stay on their string". Notes with no string are skipped (see A selection above).
+- Only the notes that would leave the fret range move, so a chord can end up spread over strings in a shape that is hard to play (for example an open A chord a semitone down). Undo, or transpose a few notes at a time, when that happens.
 - Ties on a moved note are kept only when both partners end on the same string and fret, as above.
 - The cursor follows its note when the note moves. For example, on standard tuning, the B on string 2 at fret 0 moved down a semitone goes to string 3 at fret 3, and the editor says "Transposed 1 note down 1 semitone, 1 moved to another string".
 - On a selection, the moves are all or nothing across every selected track.
@@ -903,7 +904,7 @@ When the editor loses focus, the cursor is drawn dimmer.
 - **One barline per measure.** A measure can't have both a repeat start and a repeat end.
 - **Only standard jump texts can be set.** A custom jump already in the file is kept and reported as custom. Measure-repeat signs are not set.
 - **No writtenOctaveUp or instrument field.** The editor doesn't set them.
-- **Planned for later releases.** Shift+R and Shift+I stay reserved. After that: playback; then chord symbols, lyrics, a repeat start and end on one measure, and bend amounts; then mouse pitch entry on notation; then voice 2 and grace-note entry; then file import.
+- **Planned for later releases.** Shift+R and Shift+I stay reserved. Next: playback; then chord symbols, lyrics, a repeat start and end on one measure, and bend amounts; then mouse pitch entry on notation; then voice 2 and grace-note entry; then file import.
 
 ## Score format
 
