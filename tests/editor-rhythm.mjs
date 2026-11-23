@@ -337,6 +337,117 @@ test('criterion 34: a harmonic (harmonic or harmonicFret) that would leave the r
   eq(said(run('transpose', c, cur(1, 0, 0), COL.columnRange(c, T(0, 0, 0), T(1, 0, 0)), -1)), "Can't transpose, measure 1 on track 1 would go below fret 0, harmonics stay on their string");
 });
 
+// ---------- B10 / E12 (2.3.3) ----------
+const C = await imp('src/editor/model/cursor.js');
+const { exampleScore } = await imp('examples/example-score.js');
+const { leadRiff } = await imp('examples/lead-riff.js');
+const { defaultScore } = await imp('src/editor/model/defaultScore.js');
+function mulberry32(a) {
+  return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const chord = (duration, ...sf) => ({ type: 'note', duration, notes: sf.map(([string, fret]) => ({ string, fret })) });
+const B10_START = () => [
+  ['default', defaultScore()], ['lead-riff', model(leadRiff)], ['example-score', model(exampleScore)], ['cols', cols()], ['eqq', eqq()],
+  ['low', model({ tracks: [
+    tab([{ beats: [chord('quarter', [1, 0], [2, 0], [3, 0]), grace(), nt('quarter', 6, 0), tn('quarter', 2, 1, { tieStart: true }), tn('quarter', 2, 1, { tieEnd: true })] },
+      { voices: [{ beats: [nt('half', 1, 24), nt('half', 2, 0, { tempo: 80 })] }, { beats: [nt('whole', 4, 0)] }] }, null, { beats: [] }]),
+    { name: 'Notes', measures: [{ beats: [{ type: 'note', duration: 'half', notes: [{ pitch: 'C4' }, { string: 2, fret: 22 }] }, nt('half', 3, 0, { tuplets: [3, 3] })] }, { beats: [nt('whole', 1, 1)] }] },
+    tab([{ beats: [nt('whole', 4, 0)] }, { beats: [rest('whole'), rest('half')] }], { name: 'Bass', tuning: ['E1', 'A1', 'D2', 'G2'], showStandardNotation: false }),
+  ] })],
+];
+const RHYTHM = ['shorter', 'longer', 'setDuration', 'cycleDots', 'toggleTriplet', 'toggleRest', 'toggleTie'];
+const EDITS = [...RHYTHM, ...RHYTHM, 'transpose', 'transpose', 'transpose', 'transpose', 'digit', 'deleteNote', 'insertBeat', 'fill'];
+const NAVS = ['moveLeft', 'moveRight', 'moveUp', 'moveDown', 'nextMeasure', 'prevMeasure', 'prevTrack', 'nextTrack', 'scoreStart'];
+const SELECTS = ['selectPrevTrack', 'selectNextTrack', 'selectLeft', 'selectRight', 'selectRight', 'selectMeasureEnd', 'selectNextMeasure', 'selectPrevMeasure', 'selectAll', 'selectAll', 'selectScoreEnd'];
+const SEMIS = [1, -1, -1, 12, -12, -12, 3, -5];
+const DURS = ['whole', 'half', 'quarter', '8th', '16th', '32nd', '64th'];
+/** The controller's _extend at model level (selection.js): Ctrl+A twice, the one-position measure step, edgeKeeps. */
+function extend(s, c, state, sel, name) {
+  const cmd = CMD.COMMANDS[name];
+  if (cmd.fromStart && COL.coversTrack(s, sel)) {
+    const all = COL.allTracks(s, c);
+    if (all) return { c: all.cursor, state: C.syncDuration(s, all.cursor, state), sel: COL.selectionOf(s, all.anchor, all.cursor) };
+  }
+  const here = { track: c.track, measure: c.measure, beat: c.beat };
+  if (cmd.measureStep && !sel && C.positions(s, c).length === 1) return { c, state, sel: COL.selectionOf(s, here, c) };
+  const anchor = cmd.fromStart ? { track: c.track, ...SEL.startOf(s, c) } : COL.anchorOf(sel) ?? here;
+  const r = CMD.run(name, s, c, state, { allowAppend: false, selection: sel });
+  if (cmd.edgeKeeps && !r.moved) return { c, state: r.state, sel };
+  return { c: r.cursor, state: r.state, sel: COL.selectionOf(s, anchor, r.cursor) };
+}
+test('B10 (2.3.3): 6 start scores x 2000 steps mixing selections (columns too), every rhythm key and transpose keep sanitizeScore(model) === model, a valid cursor and a re-derivable selection; undo all restores the start, redo all the end; each start has more than 100 range edits and more than 20 string moves', () => {
+  const rnd = mulberry32(20261233);
+  const pick = (xs) => xs[Math.floor(rnd() * xs.length)];
+  let columns = 0;
+  for (const [label, start] of B10_START()) {
+    let s = start;
+    let c = C.clampCursor(s, cur(0, 0, 0));
+    let state = st();
+    let sel = null;
+    const history = [];
+    const seen = { range: 0, moves: 0 };
+    for (let i = 0; i < 2000; i++) {
+      const before = { s, c };
+      let next = null;
+      if (rnd() < 0.35) {
+        ({ c, state, sel } = extend(s, c, state, sel, pick(SELECTS)));
+      } else {
+        const name = rnd() < 0.15 ? pick(NAVS) : pick(EDITS);
+        const arg = name === 'transpose' ? pick(SEMIS) : name === 'setDuration' ? pick(DURS) : Math.floor(rnd() * 10);
+        const r = CMD.run(name, s, c, state, { ...ctx(sel), now: i * 1000 }, arg);
+        state = r.state;
+        if (r.changed) {
+          next = r;
+          if (sel && RHYTHM.includes(name)) seen.range++;
+          if (sel?.parts) columns++;
+          seen.moves += r.announce?.moved ?? 0;
+        } else c = r.cursor;
+        if (r.changed && sel && CMD.COMMANDS[name].keepsSelection) sel = COL.selectionOf(r.score, COL.anchorOf(sel), COL.focusOf(sel));
+        else if (r.changed || CMD.COMMANDS[name].kind === 'nav') sel = null;
+      }
+      if (next) {
+        s = next.score;
+        c = C.clampCursor(s, next.cursor ?? c);
+        state = C.syncDuration(s, c, state);
+        history.push({ before, after: { s, c } });
+      }
+      ok(sanitizeScore(s) === s, `${label} step ${i}: sanitize identity`);
+      eq(C.clampCursor(s, c), c, `${label} step ${i}: valid cursor`);
+      if (sel) eq(COL.selectionOf(s, COL.anchorOf(sel), COL.focusOf(sel))?.info, sel.info, `${label} step ${i}: valid selection`);
+    }
+    ok(seen.range > 100 && seen.moves > 20, `${label}: ${JSON.stringify(seen)}`);
+    const end = s;
+    for (let k = history.length - 1; k >= 0; k--) { ok(history[k].after.s === s); s = history[k].before.s; }
+    ok(s === start, `${label}: undo all restores the start`);
+    for (const h of history) s = h.after.s;
+    ok(s === end, `${label}: redo all reaches the end`);
+  }
+  ok(columns > 20, `${columns} column edits`);
+});
+test('E12 (2.3.3): unknown fields survive every rhythm key over a range (R to rests: the notes go with theirs) and every string move', () => {
+  const x = { keep: [1, { deep: true }] };
+  const trk = (name, f, extra = {}) => ({ x, name, showTablature: true, ...extra, measures: [
+    { x, beats: [{ x, type: 'note', duration: 'quarter', notes: [{ x, string: 2, fret: f }] }, { x, type: 'note', duration: 'quarter', notes: [{ x, string: 2, fret: f }] }] },
+    { x, voices: [{ x, beats: [{ x, type: 'note', duration: 'half', notes: [{ x, string: 2, fret: f }] }] }, { x, beats: [] }] },
+  ] });
+  const s0 = model({ x, tracks: [trk('A', 0), trk('B', 0)] });
+  const count = (v) => (Array.isArray(v) ? v.reduce((a, y) => a + count(y), 0) : v && typeof v === 'object' ? (JSON.stringify(v.x) === JSON.stringify(x) ? 1 : 0) + Object.values(v).reduce((a, y) => a + count(y), 0) : 0);
+  const n0 = count(s0);
+  const col = COL.columnRange(s0, T(0, 0, 0), T(1, 1, 0));
+  for (const [name, arg] of [['shorter'], ['longer'], ['setDuration', 'half'], ['cycleDots'], ['toggleTriplet'], ['toggleTie']]) {
+    const r = run(name, s0, cur(1, 1, 0), col, arg);
+    ok(r.changed, name);
+    eq(count(r.score), n0, name);
+  }
+  const rests = run('toggleRest', s0, cur(1, 1, 0), col);
+  eq(count(rests.score), n0 - 6, 'R: the 6 notes go with their fields, the beats keep theirs');
+  eq(count(run('toggleRest', rests.score, cur(1, 1, 0), COL.columnRange(rests.score, T(0, 0, 0), T(1, 1, 0))).score), n0 - 6, 'R back to notes: the beats keep theirs');
+  const moved = run('transpose', s0, cur(1, 1, 0), col, -1);
+  eq([moved.announce.moved, count(moved.score)], [6, n0], 'every note moved, every field kept');
+  const one = run('transpose', s0, cur(0, 0, 0, 2), null, -1);
+  eq([one.announce.moved, count(one.score)], [1, n0]);
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

@@ -223,5 +223,10 @@ for (const c of cases) {
   const { summary } = await import('./editor-rhythm.mjs');
   fail += summary();
 }
+// 2.3.3 the same at controller level: wording, undo labels, the kept selection, read-only, the demo buttons, the cursor following a moved note, B10 over 300 steps (tests/editor-rhythm-dom.mjs)
+{
+  const { summary } = await import('./editor-rhythm-dom.mjs');
+  fail += await summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);

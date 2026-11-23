@@ -167,3 +167,46 @@ console.log(`J2: cursor-only move max median ${Math.max(...rows.map((r) => r.mov
   }
   console.log(`2.3.2 column operations: ${over ? `${over} OVER` : 'all OK'}`);
 }
+// 2.3.3: the rhythm keys over a full column of 4 tracks x 2000 measures (quarter notes), transpose -1 of 5-note
+// chords at fret 0 where every note moves to another string, and a transpose refused in the last measure; model
+// work only (target <= 200 ms each).
+{
+  const { run } = await imp('src/editor/model/commands.js');
+  const { parseInput } = await imp('src/editor/model/io.js');
+  const { selectionOf } = await imp('src/editor/model/columns.js');
+  const q = (s, f) => ({ type: 'note', duration: 'quarter', notes: [{ string: s, fret: f }] });
+  const chord = (n) => ({ type: 'note', duration: 'quarter', notes: Array.from({ length: n }, (_, k) => ({ string: k + 1, fret: 0 })) });
+  const tracks = (beat) => parseInput({ tracks: Array.from({ length: 4 }, (_, ti) => ({
+    name: `T${ti + 1}`, showTablature: true,
+    measures: Array.from({ length: 2000 }, (_, mi) => ({ beats: Array.from({ length: 4 }, (_, k) => beat(ti, mi, k)) })),
+  })) });
+  const score = tracks((ti, mi, k) => q(1 + ((mi + ti) % 6), (mi + (k >> 1)) % 12)); // pairs of equal notes for L
+  const chords = tracks(() => chord(5));
+  const stuck = tracks((ti, mi) => chord(ti === 3 && mi === 1999 ? 6 : 5)); // the last beat to check has a 6-note chord
+  const st = { duration: 'quarter', dots: 0, digit: null };
+  const cursor = { track: 3, measure: 1999, beat: 0, string: 1 };
+  const ctx = (s) => ({ maxFret: 24, now: 0, twoDigitDelayMs: 800, allowAppend: true, selection: selectionOf(s, { track: 0, measure: 0, beat: 0 }, { track: 3, measure: 1999, beat: 0 }) });
+  const cs = ctx(score);
+  const said = {};
+  const ops = {
+    'shorter (+)': () => run('shorter', score, cursor, st, cs),
+    'longer (-)': () => run('longer', score, cursor, st, cs),
+    'setDuration (8th)': () => run('setDuration', score, cursor, st, cs, '8th'),
+    'cycleDots (.)': () => run('cycleDots', score, cursor, st, cs),
+    'toggleTriplet (/)': () => run('toggleTriplet', score, cursor, st, cs),
+    'toggleRest (R)': () => run('toggleRest', score, cursor, st, cs),
+    'toggleTie (L)': () => run('toggleTie', score, cursor, st, cs),
+    'transpose -1, all move': () => run('transpose', chords, cursor, st, ctx(chords), -1),
+    'transpose refused at the end': () => run('transpose', stuck, cursor, st, ctx(stuck), -1),
+  };
+  console.log('\n2.3.3 (4 tracks x 2000 measures, model work, median of 7; target <= 200 ms):');
+  let over = 0;
+  for (const [name, fn] of Object.entries(ops)) {
+    const ts = [];
+    for (let i = 0; i < RUNS; i++) ts.push(time(() => { said[name] = fn().announce; }));
+    const m = median(ts);
+    if (m > 200) over++;
+    console.log(`  ${name.padEnd(30)}${m.toFixed(1).padStart(8)} ms ${m <= 200 ? 'OK' : 'OVER'}  ${said[name]?.id}${said[name]?.moved ? ` (${said[name].moved} moved)` : ''}${said[name]?.measure ? ` (measure ${said[name].measure})` : ''}`);
+  }
+  console.log(`2.3.3 rhythm keys and string moves: ${over ? `${over} OVER` : 'all OK'}`);
+}
