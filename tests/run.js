@@ -203,5 +203,15 @@ for (const c of cases) {
   const { summary } = await import('./editor-columns-dom.mjs');
   fail += await summary();
 }
+// 2.3.2 edge cases at model level: hidden tracks, short tracks, tunings, two voices, pickup, paste mapping, transpose, effects, hostile clips (tests/editor-columns-edge.mjs)
+{
+  const { summary } = await import('./editor-columns-edge.mjs');
+  fail += summary();
+}
+// 2.3.2 edge cases at controller level: extending across the anchor, Ctrl+A, setSelection, one-beat rule, band geometry, read-only, refusals, undo (tests/editor-columns-edge-dom.mjs)
+{
+  const { summary } = await import('./editor-columns-edge-dom.mjs');
+  fail += await summary();
+}
 console.log(fail ?`\n${fail} FAILED` : '\nALL PASSED');
 process.exit(fail ? 1 : 0);
