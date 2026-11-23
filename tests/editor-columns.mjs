@@ -431,6 +431,124 @@ test('criterion 22: transpose covers every selected track (TAB or not), all or n
   eq([v1(half.score, 2, 0)[0].notes[0], v1(half.score, 2, 1)[0].notes[0]], [{ string: 1, fret: 2 }, { string: 1, fret: 1 }], 'a tie to an untransposed note goes on both sides');
 });
 
+// ---------- B10 / E12 (2.3.2) ----------
+const RE = await imp('src/editor/model/rangeEdit.js');
+const { exampleScore } = await imp('examples/example-score.js');
+const { leadRiff } = await imp('examples/lead-riff.js');
+const { defaultScore } = await imp('src/editor/model/defaultScore.js');
+const { EFFECTS } = await imp('src/editor/model/effectTable.js');
+const grace = () => ({ type: 'grace', duration: '16th', notes: [{ string: 2, fret: 3 }] });
+const B10_START = () => [
+  ['default', defaultScore()], ['lead-riff', model(leadRiff)], ['example-score', model(exampleScore)], ['four', four()], ['three', three()],
+  ['rich', model({ tracks: [
+    tab([{ beats: [nt('quarter'), grace(), nt('quarter', 2, 2, { notes: [{ string: 2, fret: 2, tieStart: true }] }), rest('quarter'), nt('quarter', 1, 0, { dots: 1 })] },
+      { voices: [{ beats: [grace(), nt('half', 2, 2, { notes: [{ string: 2, fret: 2, tieEnd: true }] }), nt('half', 1, 0, { tempo: 80 })] }, { beats: [nt('whole', 4, 0)] }] }, null, { beats: [] }]),
+    { name: 'Notes', measures: [{ beats: [{ type: 'note', duration: 'half', notes: [{ pitch: 'C4' }, { string: 2, fret: 22 }] }] }, { beats: [nt('whole', 1, 1, { tempo: 70 })] }] },
+    tab([{ beats: [] }], { tuning: BASS, showStandardNotation: false }),
+  ] })],
+];
+const EDITS = ['digit', 'deleteNote', 'deleteNote', 'deleteBeat', 'deleteBeat', 'deleteMeasure', 'toggleRest', 'insertBeat', 'insertMeasureAfter', 'fill', 'fill', 'reflow', 'transpose', 'transpose', 'transpose', ...EFFECTS.map((d) => d.name)];
+const NAVS = ['moveLeft', 'moveRight', 'moveDown', 'nextMeasure', 'prevMeasure', 'prevTrack', 'nextTrack', 'scoreStart'];
+const SELECTS = ['selectPrevTrack', 'selectNextTrack', 'selectNextTrack', 'selectPrevTrack', 'selectLeft', 'selectRight', 'selectMeasureStart', 'selectMeasureEnd', 'selectPrevMeasure', 'selectNextMeasure', 'selectAll', 'selectAll', 'selectScoreStart', 'selectScoreEnd'];
+const SEMIS = [1, -1, 12, -12];
+/** The controller's _extend at model level (selection.js): Ctrl+A twice, D10, the normal path with edgeKeeps. */
+function extend(s, c, state, sel, name) {
+  const cmd = CMD.COMMANDS[name];
+  if (cmd.fromStart && COL.coversTrack(s, sel)) {
+    const all = COL.allTracks(s, c);
+    if (all) return { c: all.cursor, state: C.syncDuration(s, all.cursor, state), sel: COL.selectionOf(s, all.anchor, all.cursor), all: true };
+  }
+  const here = { track: c.track, measure: c.measure, beat: c.beat };
+  if (cmd.measureStep && !sel && C.positions(s, c).length === 1) return { c, state, sel: COL.selectionOf(s, here, c) };
+  const anchor = cmd.fromStart ? { track: c.track, ...SEL.startOf(s, c) } : COL.anchorOf(sel) ?? here;
+  const r = CMD.run(name, s, c, state, { allowAppend: false, selection: sel });
+  if (cmd.edgeKeeps && !r.moved) return { c, state: r.state, sel };
+  return { c: r.cursor, state: r.state, sel: COL.selectionOf(s, anchor, r.cursor) };
+}
+test('B10 (2.3.2): 6 start scores (one with a hidden, a notation-only and a 4-string track) x 2000 steps mixing track extends, column moves, Ctrl+A twice, column copy / cut / paste, Delete, Ctrl+Delete, Shift+Delete, F, effects and transpose keep sanitizeScore(model) === model, a valid cursor and a re-derivable selection; undo all restores the start, redo all the end', () => {
+  const rnd = mulberry32(20261123);
+  const pick = (xs) => xs[Math.floor(rnd() * xs.length)];
+  for (const [label, start] of B10_START()) {
+    let s = start;
+    let c = C.clampCursor(s, cur(0, 0, 0));
+    let state = st();
+    let sel = null;
+    let clipboard = null;
+    const history = [];
+    const seen = { column: 0, all: 0, colEdit: 0, colPaste: 0, colCut: 0, colCopy: 0 };
+    const multi = s.tracks.filter((t) => t.showTablature || t.showStandardNotation !== false).length > 1;
+    for (let i = 0; i < 2000; i++) {
+      const r0 = rnd();
+      const before = { s, c };
+      let next = null;
+      if (r0 < 0.3) {
+        const x = extend(s, c, state, sel, pick(SELECTS));
+        ({ c, state, sel } = x);
+        if (x.all) seen.all++;
+        if (sel?.parts) seen.column++;
+      } else if (r0 < 0.36) {
+        const range = sel ?? CL.cursorRange(s, c);
+        if (range) { clipboard = CL.buildClip(s, range).text; if (sel?.parts) seen.colCopy++; }
+      } else if (r0 < 0.40) {
+        const range = sel ?? CL.cursorRange(s, c);
+        if (range) {
+          clipboard = CL.buildClip(s, range).text;
+          const r = RE.clearParts(s, range);
+          if (r.score !== s) { next = { score: r.score, cursor: { ...c, ...r.cursor } }; if (sel?.parts) seen.colCut++; sel = null; }
+        }
+      } else if (r0 < 0.50) {
+        if (clipboard) {
+          const clip = CL.parseClip(clipboard).clip; // a beats clip of more than 256 beats is refused (2.3)
+          const r = clip ? (clip.tracks ? PC.pasteColumns : PA.applyPaste)(s, c, sel, clip, { insert: rnd() < 0.4 }) : { refused: true };
+          if (!r.refused && io.exportedLength(r.score) <= L.jsonChars) { next = r; if (clip.tracks) seen.colPaste++; sel = null; }
+        }
+      } else {
+        const name = rnd() < 0.2 ? pick(NAVS) : pick(EDITS);
+        const r = CMD.run(name, s, c, state, { maxFret: 24, now: i * 1000, twoDigitDelayMs: 800, allowAppend: true, selection: sel }, name === 'transpose' ? pick(SEMIS) : Math.floor(rnd() * 10));
+        state = r.state;
+        if (r.changed) { next = r; if (sel?.parts) seen.colEdit++; } else c = r.cursor;
+        if (r.changed && sel && CMD.COMMANDS[name].keepsSelection) sel = COL.selectionOf(r.score, COL.anchorOf(sel), COL.focusOf(sel));
+        else if (r.changed || CMD.COMMANDS[name].kind === 'nav') sel = null;
+      }
+      if (next) {
+        s = next.score;
+        c = C.clampCursor(s, next.cursor ?? c);
+        state = C.syncDuration(s, c, state);
+        history.push({ before, after: { s, c } });
+      }
+      ok(sanitizeScore(s) === s, `${label} step ${i}: sanitize identity`);
+      eq(C.clampCursor(s, c), c, `${label} step ${i}: valid cursor`);
+      if (sel) eq(COL.selectionOf(s, COL.anchorOf(sel), COL.focusOf(sel))?.info, sel.info, `${label} step ${i}: valid selection`);
+      if (sel?.parts) ok(sel.tracks.every((ti) => s.tracks[ti].showTablature || s.tracks[ti].showStandardNotation !== false), `${label} step ${i}: visible tracks only`);
+    }
+    if (multi) ok(seen.column > 50 && seen.all > 5 && seen.colEdit > 10 && seen.colPaste > 5 && seen.colCopy > 5 && history.length > 300, `${label}: ${JSON.stringify(seen)}, ${history.length} steps`);
+    const end = s;
+    for (let k = history.length - 1; k >= 0; k--) { ok(history[k].after.s === s); s = history[k].before.s; }
+    ok(s === start, `${label}: undo all restores the start`);
+    for (const h of history) s = h.after.s;
+    ok(s === end, `${label}: redo all reaches the end`);
+  }
+});
+test('E12 (2.3.2): unknown fields survive column Delete, Ctrl+Delete (beat fields go with their beats), F, effects, transpose, a column cut and an overwrite column paste (measure-level ones kept) when the operation does not own them', () => {
+  const x = { keep: [1, { deep: true }] };
+  const trk = (name, f) => ({ x, name, showTablature: true, measures: [
+    { x, beats: [{ x, type: 'note', duration: 'half', notes: [{ x, string: 1, fret: f }] }] },
+    { x, voices: [{ x, beats: [{ x, type: 'note', duration: 'half', notes: [{ x, string: 2, fret: f }] }] }, { x, beats: [] }] },
+    { x, beats: [] },
+  ] });
+  const s0 = model({ x, tracks: [trk('A', 1), trk('B', 2)] });
+  const count = (v) => (Array.isArray(v) ? v.reduce((a, y) => a + count(y), 0) : v && typeof v === 'object' ? (JSON.stringify(v.x) === JSON.stringify(x) ? 1 : 0) + Object.values(v).reduce((a, y) => a + count(y), 0) : 0);
+  const n0 = count(s0);
+  const col = COL.columnRange(s0, T(0, 0, 0), T(1, 1, 0));
+  for (const name of ['fill', 'palmMute', 'deadNote']) eq(count(run(name, s0, cur(1, 1, 0), col).score), n0, name);
+  eq(count(run('transpose', s0, cur(1, 1, 0), col, 3).score), n0, 'transpose');
+  eq(count(run('deleteNote', s0, cur(1, 1, 0), col).score), n0 - 4, 'Delete keeps the beat fields on the rests; the 4 notes go with theirs');
+  eq(count(run('deleteBeat', s0, cur(1, 1, 0), col).score), n0 - 8, 'Ctrl+Delete: 4 beats and 4 notes go');
+  const clip = CL.parseClip(CL.buildClip(s0, col).text).clip;
+  const over = PC.pasteColumns(s0, cur(0, 2, 0), null, clip);
+  eq([over.announce.id, count(over.score)], ['pastedOver', n0 + 8], 'the blank measure 3 and its new measure 4 keep their own fields on both tracks; the pasted beats and notes bring theirs');
+});
+
 // ---------- report ----------
 export function summary() {
   let fail = 0;

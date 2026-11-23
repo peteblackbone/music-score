@@ -124,3 +124,46 @@ console.log(`J2: cursor-only move max median ${Math.max(...rows.map((r) => r.mov
   console.log(`2.3.1 (2000 measures x 1 track, keystroke without render): Ctrl+A ${median(selT).toFixed(1)} ms | Ctrl+Up / Ctrl+Shift+Up over the selection ${median(trans).toFixed(1)} ms`);
   console.log(`2.3.1 (200 measures x 2 tracks, with render): P over 1600 beats ${median(fx).toFixed(1)} ms | paste 100 measures over a measures selection ${median(over).toFixed(1)} ms`);
 }
+// 2.3.2: column operations on 4 tracks x 2000 measures (quarter notes), model work only (target <= 200 ms each):
+// selectionOf over everything, buildClip + parseClip of that column, an overwrite pasteColumns of it, clearParts,
+// removeParts, F, an effect (P), transpose.
+{
+  const { run } = await imp('src/editor/model/commands.js');
+  const { parseInput } = await imp('src/editor/model/io.js');
+  const { selectionOf } = await imp('src/editor/model/columns.js');
+  const { buildClip, parseClip } = await imp('src/editor/model/clip.js');
+  const { pasteColumns } = await imp('src/editor/model/pasteColumns.js');
+  const { clearParts, removeParts } = await imp('src/editor/model/rangeEdit.js');
+  const q = (s, f) => ({ type: 'note', duration: 'quarter', notes: [{ string: s, fret: f }] });
+  const score = parseInput({ tracks: Array.from({ length: 4 }, (_, ti) => ({
+    name: `T${ti + 1}`, showTablature: true,
+    measures: Array.from({ length: 2000 }, (_, mi) => ({ beats: Array.from({ length: mi % 7 === 0 ? 3 : 4 }, (_, k) => q(1 + ((mi + k + ti) % 6), (mi + k) % 12)) })),
+  })) });
+  const st = { duration: 'quarter', dots: 0, digit: null };
+  const anchor = { track: 0, measure: 0, beat: 0 };
+  const focus = { track: 3, measure: 1999, beat: 0 };
+  const cursor = { track: 3, measure: 1999, beat: 0, string: 1 };
+  const sel = selectionOf(score, anchor, focus);
+  const clip = parseClip(buildClip(score, sel).text).clip;
+  const ctx = { maxFret: 24, now: 0, twoDigitDelayMs: 800, allowAppend: true, selection: sel };
+  const ops = {
+    selectionOf: () => selectionOf(score, anchor, focus),
+    'buildClip + parseClip': () => parseClip(buildClip(score, sel).text),
+    'pasteColumns (overwrite)': () => pasteColumns(score, cursor, sel, clip),
+    clearParts: () => clearParts(score, sel),
+    removeParts: () => removeParts(score, sel),
+    fill: () => run('fill', score, cursor, st, ctx),
+    'effect (P)': () => run('palmMute', score, cursor, st, ctx),
+    transpose: () => run('transpose', score, cursor, st, ctx, 1),
+  };
+  console.log('\n2.3.2 (4 tracks x 2000 measures, model work, median of 7; target <= 200 ms):');
+  let over = 0;
+  for (const [name, fn] of Object.entries(ops)) {
+    const ts = [];
+    for (let i = 0; i < RUNS; i++) ts.push(time(fn));
+    const m = median(ts);
+    if (m > 200) over++;
+    console.log(`  ${name.padEnd(26)}${m.toFixed(1).padStart(8)} ms ${m <= 200 ? 'OK' : 'OVER'}`);
+  }
+  console.log(`2.3.2 column operations: ${over ? `${over} OVER` : 'all OK'}`);
+}

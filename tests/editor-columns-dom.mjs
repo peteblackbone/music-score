@@ -391,6 +391,46 @@ test('criterion 35: with nothing selected on a one-position measure, Ctrl+Shift+
   t.ed.destroy();
 });
 
+// ---------- B10 (controller) ----------
+const { clampCursor } = await imp('src/editor/model/cursor.js');
+const { selectionOf, anchorOf, focusOf } = await imp('src/editor/model/columns.js');
+test('B10 (2.3.2 controller, 300 steps): track extends, column moves, Ctrl+A twice, copy / cut / paste events and the fallback on columns, the delete keys, F, effects and transpose keep sanitizeScore(model) === model, a valid cursor and a re-derivable selection; undo all restores the start, redo all the end', () => {
+  function mulberry32(a) {
+    return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  const rnd = mulberry32(2322);
+  const pick = (xs) => xs[Math.floor(rnd() * xs.length)];
+  const KEYS = [key('ArrowDown', SHIFT), key('ArrowUp', SHIFT), key('PageDown', SHIFT), key('PageUp', SHIFT), key('ArrowRight', SHIFT), key('ArrowLeft', SHIFT), key('Home', SHIFT), key('End', SHIFT),
+    key('ArrowRight', CS), key('ArrowLeft', CS), key('End', CS), key('Home', CS), key('a', CTRL), key('a', CTRL), key('Escape'),
+    key('Delete'), key('Delete', CTRL), key('Delete', SHIFT), key('f'), key('F', SHIFT), key('p'), key('x'), key('h'), key('ArrowUp', CTRL), key('ArrowDown', CS),
+    key('ArrowRight'), key('ArrowDown'), key('PageDown'), key('PageUp'), key('5'), key('m'), key('Insert')];
+  const t = mk(withHidden(), { historyLimit: 1000 });
+  t.ed.focus();
+  const start = t.ed._model;
+  let columns = 0;
+  for (let i = 0; i < 300; i++) {
+    const r = rnd();
+    if (r < 0.08) fire('copy');
+    else if (r < 0.12) fire('cut');
+    else if (r < 0.18) { t.down(key('v', CTRL)); if (rnd() < 0.5) fire('paste'); }
+    else if (r < 0.22) { t.down(key('V', CS)); if (rnd() < 0.5) fire('paste'); }
+    else t.ed.handleKey(pick(KEYS));
+    t.clock.advance(1000);
+    ok(sanitizeScore(t.ed._model) === t.ed._model, `step ${i}`);
+    eq(clampCursor(t.ed._model, t.ed._cursor), t.ed._cursor, `step ${i}: valid cursor`);
+    const sel = t.ed._selection;
+    if (sel) eq(selectionOf(t.ed._model, anchorOf(sel), focusOf(sel))?.info, sel.info, `step ${i}: valid selection`);
+    if (sel?.parts) { columns++; ok(!sel.tracks.includes(1), 'the hidden track is never selected'); }
+  }
+  ok(columns > 20, `${columns} column steps`);
+  const end = t.ed._model;
+  while (t.ed.undo());
+  ok(t.ed._model === start, 'undo all');
+  while (t.ed.redo());
+  ok(t.ed._model === end, 'redo all');
+  t.ed.destroy();
+});
+
 // ---------- report ----------
 export async function summary() {
   let fail = 0;
